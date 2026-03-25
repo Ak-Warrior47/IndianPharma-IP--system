@@ -1,19 +1,17 @@
-# TOP OF app.py
 from gevent import monkey
 monkey.patch_all()
+
 import os
-from flask import Flask, render_template... # other imports follow
 from flask import Flask, render_template, request, redirect, url_for, flash, session, send_file
 from flask_sqlalchemy import SQLAlchemy
 from flask_socketio import SocketIO
 from werkzeug.security import generate_password_hash, check_password_hash
 from datetime import datetime, date, timedelta
-from apscheduler.schedulers.background import BackgroundScheduler
 from functools import wraps
 import zipfile, io, atexit
 
+# Keep your other imports here (utils, etc.)
 from utils import generate_visual_pdf, calculate_kra_grade, calculate_efficiency_score
-
 app = Flask(__name__)
 app.secret_key = "ip_pharma_ultra_secure_v4"
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///pharma_v5.db'
