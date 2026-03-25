@@ -1,3 +1,8 @@
+# TOP OF app.py
+from gevent import monkey
+monkey.patch_all()
+import os
+from flask import Flask, render_template... # other imports follow
 from flask import Flask, render_template, request, redirect, url_for, flash, session, send_file
 from flask_sqlalchemy import SQLAlchemy
 from flask_socketio import SocketIO
@@ -11,7 +16,7 @@ from utils import generate_visual_pdf, calculate_kra_grade, calculate_efficiency
 
 app = Flask(__name__)
 app.secret_key = "ip_pharma_ultra_secure_v4"
-app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///pharma_v4.db'
+app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///pharma_v5.db'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
 db       = SQLAlchemy(app)
@@ -306,35 +311,33 @@ def bulk_zip():
 def health(): return {"status": "Pharma IP v4"}, 200
 
 def seed_db():
-    db.create_all()
     def make(name, email, pw, stype='picker', admin=False):
-        if Employee.query.filter_by(email=email).first(): return Employee.query.filter_by(email=email).first()
-        e = Employee(name=name, email=email, staff_type=stype, is_admin=admin,
-                     role='Admin' if admin else f'Operations {stype.title()}')
+        user = Employee.query.filter_by(email=email).first()
+        if user:
+            return user
+        e = Employee(name=name, email=email, staff_type=stype, is_admin=admin)
         e.set_password(pw)
-        db.session.add(e); db.session.flush(); return e
+        db.session.add(e)
+        db.session.commit()
+        return e
 
-    make("System Admin",  "admin@pharmaip.com",  "admin123", admin=True)
-    p1 = make("Rahul Sharma", "rahul@pharmaip.com", "test1234", stype='picker')
-    if p1 and not KPIEntry.query.filter_by(emp_id=p1.id).first():
-        for d, b, pk, ms, bx, sw in [
-            (6,40,195,5,10,1.5),(5,42,210,2,12,1.4),(4,38,188,8,9,1.6),
-            (3,45,220,1,14,1.3),(2,41,200,4,11,1.5),(1,44,215,3,13,1.4),(0,46,225,2,15,1.3)]:
-            db.session.add(KPIEntry(emp_id=p1.id,bills=b,picked=pk,missed=ms,
-                boxes=bx,sweep=sw,entry_date=date.today()-timedelta(days=d)))
-    c1 = make("Priya Patel", "priya@pharmaip.com", "test1234", stype='checker')
-    if c1 and not KPIEntry.query.filter_by(emp_id=c1.id).first():
-        for d, b, pk, ms, bx, sw, ck, er, cm in [
-            (6,30,160,18,8,2.0,178,14,90),(5,28,172,12,7,1.8,184,10,85),
-            (4,33,190,6,10,1.6,196,6,80),(3,29,168,14,6,1.9,182,12,88),
-            (2,35,195,9,11,1.5,204,8,82),(1,31,180,10,9,1.7,190,9,86),
-            (0,36,200,7,12,1.4,207,7,78)]:
-            db.session.add(KPIEntry(emp_id=c1.id,bills=b,picked=pk,missed=ms,boxes=bx,
-                sweep=sw,checked=ck,errors_found=er,check_time=round(cm/60,3),
-                entry_date=date.today()-timedelta(days=d)))
-    db.session.commit()
-    print("Seeds: admin@pharmaip.com/admin123 | rahul@pharmaip.com/test1234 | priya@pharmaip.com/test1234")
+    # Create users
+    make("System Admin", "admin@pharmaip.com", "admin123", admin=True)
+    make("Rahul Sharma", "rahul@pharmaip.com", "test1234", stype='picker')
+    make("Priya Patel", "priya@pharmaip.com", "test1234", stype='checker')
+    
+    print("Database Seeded Successfully.")
 
 if __name__ == '__main__':
-    with app.app_context(): seed_db()
-    socketio.run(app, debug=True, port=5000)
+    with app.app_context():
+        # 1. This creates the new v5 database file (fixing the 500 error)
+        db.create_all()  
+        
+        # 2. This adds your users (Admin, Rahul, Priya)
+        seed_db()        
+    
+    # 3. Dynamic Port: Render uses a random port, Local uses 5000
+    port = int(os.environ.get("PORT", 5000))
+    
+    # 4. Start the server with host 0.0.0.0 for Render compatibility
+    socketio.run(app, debug=True, host='0.0.0.0', port=port)

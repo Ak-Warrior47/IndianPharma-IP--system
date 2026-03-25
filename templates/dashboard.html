@@ -210,7 +210,13 @@ body{font-family:'Inter',sans-serif;background:#f8fafc;color:#0f172a;min-height:
 </div>
 {% endif %}
 </div>
-
+<div class="mb-4 p-3 bg-light border rounded">
+    <label class="form-label fw-bold">Select Your Role for this Entry:</label>
+    <select name="active_role" id="roleSelect" class="form-select border-primary" onchange="toggleRoleFields()">
+        <option value="picker" {% if staff_type == 'picker' %}selected{% endif %}>📦 Picker (Picking & Packing)</option>
+        <option value="checker" {% if staff_type == 'checker' %}selected{% endif %}>📋 Checker (Error Verification)</option>
+    </select>
+</div> 
 <script>
 function lc(){
   const p=parseFloat(document.getElementById('ip').value)||0;
