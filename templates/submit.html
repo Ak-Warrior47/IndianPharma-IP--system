@@ -1,0 +1,458 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>KPI Entry | Indian Pharma IP</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <script src="https://unpkg.com/@phosphor-icons/web"></script>
+    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.5.1/dist/confetti.browser.min.js"></script>
+    <style>
+        * { box-sizing: border-box; }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background: #f8fafc;
+            color: #0f172a;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+
+        .page-wrapper {
+            width: 100%;
+            max-width: 560px;
+        }
+
+        /* Top bar */
+        .top-bar {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 1.5rem;
+        }
+
+        .top-brand {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .top-mark {
+            width: 38px;
+            height: 38px;
+            background: #0f172a;
+            color: white;
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1rem;
+            flex-shrink: 0;
+        }
+
+        .top-brand-name {
+            font-size: 0.85rem;
+            font-weight: 800;
+            color: #0f172a;
+            line-height: 1.1;
+        }
+
+        .top-brand-sub {
+            font-size: 0.65rem;
+            color: #94a3b8;
+            font-weight: 600;
+            letter-spacing: 1px;
+            text-transform: uppercase;
+        }
+
+        .logout-link {
+            font-size: 0.75rem;
+            color: #94a3b8;
+            text-decoration: none;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            transition: color 0.2s;
+        }
+        .logout-link:hover { color: #0f172a; }
+
+        /* Main card */
+        .submit-card {
+            background: #ffffff;
+            border: 1.5px solid #e2e8f0;
+            border-radius: 20px;
+            padding: 2rem;
+            box-shadow: 0 4px 24px rgba(0,0,0,0.05);
+        }
+
+        .card-header-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 1.5rem;
+            padding-bottom: 1.25rem;
+            border-bottom: 1px solid #f1f5f9;
+        }
+
+        .card-title {
+            font-size: 1rem;
+            font-weight: 800;
+            color: #0f172a;
+            margin: 0;
+        }
+
+        .specialist-badge {
+            background: #f1f5f9;
+            color: #475569;
+            font-size: 0.7rem;
+            font-weight: 700;
+            padding: 4px 10px;
+            border-radius: 99px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        /* KRA live display */
+        .kra-display {
+            background: #0f172a;
+            color: white;
+            border-radius: 14px;
+            padding: 1.25rem 1.5rem;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 1.5rem;
+        }
+
+        .kra-label {
+            font-size: 0.65rem;
+            font-weight: 700;
+            letter-spacing: 2px;
+            text-transform: uppercase;
+            color: rgba(255,255,255,0.5);
+            margin-bottom: 4px;
+        }
+
+        .kra-score {
+            font-size: 2.2rem;
+            font-weight: 800;
+            letter-spacing: -2px;
+            line-height: 1;
+        }
+
+        .kra-grade {
+            font-size: 0.7rem;
+            font-weight: 700;
+            letter-spacing: 1.5px;
+            text-transform: uppercase;
+            padding: 5px 12px;
+            border-radius: 8px;
+            border: 1px solid rgba(255,255,255,0.15);
+        }
+
+        /* Form */
+        .form-label {
+            font-weight: 700;
+            font-size: 0.68rem;
+            color: #64748b;
+            text-transform: uppercase;
+            letter-spacing: 0.8px;
+            margin-bottom: 5px;
+        }
+
+        .form-control.ip-input {
+            border: 1.5px solid #e2e8f0;
+            border-radius: 10px;
+            padding: 10px 14px;
+            font-size: 0.95rem;
+            font-weight: 600;
+            color: #0f172a;
+            background: #f8fafc;
+            transition: all 0.2s;
+        }
+
+        .form-control.ip-input:focus {
+            border-color: #0f172a;
+            background: #ffffff;
+            box-shadow: 0 0 0 4px rgba(15,23,42,0.06);
+        }
+
+        .helper {
+            font-size: 0.7rem;
+            font-weight: 700;
+            color: #64748b;
+            margin-top: 4px;
+            letter-spacing: 0.5px;
+        }
+
+        .section-divider {
+            height: 1px;
+            background: #f1f5f9;
+            margin: 1.25rem 0;
+        }
+
+        .btn-submit {
+            width: 100%;
+            background: #0f172a;
+            color: white;
+            border: none;
+            border-radius: 12px;
+            padding: 14px;
+            font-weight: 800;
+            font-size: 0.9rem;
+            letter-spacing: 0.5px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+            transition: all 0.2s;
+            cursor: pointer;
+            margin-top: 0.75rem;
+        }
+
+        .btn-submit:hover {
+            background: #1e293b;
+            transform: translateY(-1px);
+            box-shadow: 0 8px 20px rgba(15,23,42,0.2);
+        }
+
+        .btn-submit:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
+        }
+
+        .alert-msg {
+            border-radius: 10px;
+            padding: 10px 14px;
+            font-size: 0.85rem;
+            font-weight: 500;
+            margin-bottom: 1rem;
+            border: none;
+        }
+
+        /* Success overlay */
+        #success-overlay {
+            display: none;
+            position: fixed;
+            inset: 0;
+            background: #ffffff;
+            z-index: 9999;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 12px;
+            text-align: center;
+            padding: 20px;
+        }
+
+        .success-icon {
+            width: 72px;
+            height: 72px;
+            background: #f0fdf4;
+            border: 2px solid #bbf7d0;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 2.2rem;
+            color: #16a34a;
+        }
+
+        .success-title {
+            font-size: 1.4rem;
+            font-weight: 800;
+            color: #0f172a;
+            margin: 0;
+        }
+
+        .success-sub {
+            font-size: 0.9rem;
+            color: #64748b;
+            margin: 0;
+        }
+
+        .btn-next {
+            background: #0f172a;
+            color: white;
+            border: none;
+            border-radius: 12px;
+            padding: 12px 32px;
+            font-weight: 700;
+            font-size: 0.9rem;
+            cursor: pointer;
+            margin-top: 8px;
+            transition: all 0.2s;
+        }
+
+        .btn-next:hover { background: #1e293b; }
+    </style>
+</head>
+<body>
+
+<!-- Success Overlay -->
+<div id="success-overlay">
+    <div class="success-icon"><i class="ph-fill ph-check-circle"></i></div>
+    <h2 class="success-title">Data Synced</h2>
+    <p class="success-sub">Metrics recorded for 48-hour KRA analysis.</p>
+    <button class="btn-next" onclick="location.reload()">
+        <i class="ph ph-plus me-2"></i>Add Next Entry
+    </button>
+</div>
+
+<div class="page-wrapper">
+    <!-- Top bar -->
+    <div class="top-bar">
+        <div class="top-brand">
+            <div class="top-mark"><i class="ph-fill ph-dna"></i></div>
+            <div>
+                <div class="top-brand-name">Indian Pharma IP</div>
+                <div class="top-brand-sub">KPI Terminal</div>
+            </div>
+        </div>
+        <a href="/logout" class="logout-link">
+            <i class="ph ph-sign-out"></i> Logout
+        </a>
+    </div>
+
+    <div class="submit-card">
+        <div class="card-header-row">
+            <h1 class="card-title">Submit Daily KPI</h1>
+            <span class="specialist-badge">{{ user_name }}</span>
+        </div>
+
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                {% for category, message in messages %}
+                <div class="alert-msg alert alert-{{ category }}">{{ message }}</div>
+                {% endfor %}
+            {% endif %}
+        {% endwith %}
+
+        <!-- Live KRA display -->
+        <div class="kra-display">
+            <div>
+                <div class="kra-label">Live Accuracy KPI</div>
+                <div class="kra-score" id="liveScore">—</div>
+            </div>
+            <div class="kra-grade" id="liveGrade">AWAITING INPUT</div>
+        </div>
+
+        <form method="POST" id="kpiForm" oninput="liveCalc()">
+            <div class="row g-3">
+                <div class="col-6">
+                    <label class="form-label">Sales Bills</label>
+                    <input type="number" name="bills" class="form-control ip-input"
+                           placeholder="0" min="0" required>
+                </div>
+                <div class="col-6">
+                    <label class="form-label">CS in Purchase</label>
+                    <input type="number" name="boxes" class="form-control ip-input"
+                           placeholder="0" min="0" required>
+                </div>
+
+                <div class="col-6">
+                    <label class="form-label" style="color:#16a34a">Items Picked</label>
+                    <input type="number" name="picked" id="inp_picked"
+                           class="form-control ip-input" placeholder="0" min="0" required>
+                </div>
+                <div class="col-6">
+                    <label class="form-label" style="color:#dc2626">Items Missed</label>
+                    <input type="number" name="missed" id="inp_missed"
+                           class="form-control ip-input" placeholder="0" min="0" required>
+                </div>
+
+                <div class="col-12">
+                    <label class="form-label">Sweeping Time (minutes)</label>
+                    <input type="number" name="sweep_mins" id="inp_sweep"
+                           class="form-control ip-input" placeholder="e.g. 90" min="0" required>
+                    <div class="helper" id="sweepHelper">— decimal hours</div>
+                </div>
+
+                <div class="col-12">
+                    <div class="section-divider"></div>
+                    <label class="form-label">Entry Date</label>
+                    <input type="date" name="date" class="form-control ip-input"
+                           value="{{ today }}" required>
+                </div>
+            </div>
+
+            <button type="submit" class="btn-submit" id="subBtn">
+                <i class="ph-bold ph-paper-plane-tilt"></i>
+                <span id="btnText">SYNC PERFORMANCE LOG</span>
+            </button>
+        </form>
+    </div>
+</div>
+
+<script>
+    function liveCalc() {
+        const p     = parseFloat(document.getElementById('inp_picked').value) || 0;
+        const m     = parseFloat(document.getElementById('inp_missed').value) || 0;
+        const mins  = parseFloat(document.getElementById('inp_sweep').value)  || 0;
+        const total = p + m;
+        const score = total > 0 ? (p / total * 100) : null;
+
+        const scoreEl = document.getElementById('liveScore');
+        const gradeEl = document.getElementById('liveGrade');
+
+        if (score !== null) {
+            scoreEl.textContent = score.toFixed(1) + '%';
+            if (score >= 98) {
+                gradeEl.textContent = 'ELITE';
+                gradeEl.style.color = '#86efac';
+                gradeEl.style.borderColor = 'rgba(134,239,172,0.3)';
+            } else if (score >= 95) {
+                gradeEl.textContent = 'PROFICIENT';
+                gradeEl.style.color = '#93c5fd';
+                gradeEl.style.borderColor = 'rgba(147,197,253,0.3)';
+            } else if (score >= 85) {
+                gradeEl.textContent = 'SATISFACTORY';
+                gradeEl.style.color = '#fcd34d';
+                gradeEl.style.borderColor = 'rgba(252,211,77,0.3)';
+            } else {
+                gradeEl.textContent = 'RE-TRAINING';
+                gradeEl.style.color = '#fca5a5';
+                gradeEl.style.borderColor = 'rgba(252,165,165,0.3)';
+            }
+        } else {
+            scoreEl.textContent = '—';
+            gradeEl.textContent = 'AWAITING INPUT';
+            gradeEl.style.color = '';
+            gradeEl.style.borderColor = '';
+        }
+
+        // Minutes → decimal hours
+        const hrs = (mins / 60).toFixed(2);
+        document.getElementById('sweepHelper').textContent =
+            mins > 0 ? hrs + ' decimal hours' : '— decimal hours';
+    }
+
+    document.getElementById('kpiForm').onsubmit = function() {
+        const btn = document.getElementById('subBtn');
+        document.getElementById('btnText').textContent = 'Syncing to HQ...';
+        btn.disabled = true;
+    };
+
+    // Trigger success overlay on flash success
+    {% with messages = get_flashed_messages(category_filter=["success"]) %}
+        {% if messages %}
+        document.getElementById('success-overlay').style.display = 'flex';
+        confetti({
+            particleCount: 120,
+            spread: 65,
+            origin: { y: 0.6 },
+            colors: ['#0f172a', '#64748b', '#94a3b8', '#ffffff']
+        });
+        {% endif %}
+    {% endwith %}
+</script>
+</body>
+</html>
