@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>Dashboard | Indian Pharma IP</title>
+<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<script src="https://unpkg.com/@phosphor-icons/web"></script>
+<script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.5.1/dist/confetti.browser.min.js"></script>
+<style>
+*{box-sizing:border-box}
+body{font-family:'Inter',sans-serif;background:#f8fafc;color:#0f172a;min-height:100vh}
+.topbar{background:#fff;border-bottom:1px solid #e2e8f0;padding:0 1.5rem;height:58px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:100}
+.mark{width:36px;height:36px;background:#0f172a;color:#fff;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:1rem;flex-shrink:0}
+.brand-name{font-size:.85rem;font-weight:800;color:#0f172a}
+.brand-sub{font-size:.6rem;color:#94a3b8;font-weight:600;letter-spacing:1px;text-transform:uppercase}
+.pill{display:inline-flex;align-items:center;gap:5px;padding:5px 12px;border-radius:99px;font-size:.7rem;font-weight:700;text-transform:uppercase;letter-spacing:.5px}
+.pill-picker{background:#f0fdf4;color:#15803d}
+.pill-checker{background:#eff6ff;color:#1d4ed8}
+.logout-link{color:#94a3b8;font-size:.75rem;font-weight:600;text-decoration:none;display:flex;align-items:center;gap:4px}
+.logout-link:hover{color:#0f172a}
+.page{max-width:1100px;margin:0 auto;padding:1.5rem}
+.submitted-banner{background:#0f172a;color:#fff;border-radius:16px;padding:1.5rem 2rem;display:flex;align-items:center;justify-content:space-between;margin-bottom:1.5rem}
+.sub-left h2{font-size:1.2rem;font-weight:800;margin:0}
+.sub-left p{font-size:.8rem;color:rgba(255,255,255,.6);margin:4px 0 0}
+.sub-check{width:48px;height:48px;background:rgba(255,255,255,.1);border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:1.5rem}
+.submit-card{background:#fff;border:1.5px solid #e2e8f0;border-radius:18px;padding:1.5rem;margin-bottom:1.5rem}
+.card-title{font-size:.85rem;font-weight:800;margin:0 0 1rem}
+.kra-bar{background:#0f172a;color:#fff;border-radius:12px;padding:1rem 1.25rem;display:flex;align-items:center;justify-content:space-between;margin-bottom:1.25rem}
+.kra-score{font-size:2rem;font-weight:800;letter-spacing:-2px;line-height:1}
+.kra-label{font-size:.6rem;font-weight:700;letter-spacing:2px;color:rgba(255,255,255,.5);text-transform:uppercase}
+.kra-grade{font-size:.68rem;font-weight:700;letter-spacing:1px;text-transform:uppercase;padding:5px 10px;border-radius:7px;border:1px solid rgba(255,255,255,.15)}
+.fl{font-weight:700;font-size:.65rem;color:#64748b;text-transform:uppercase;letter-spacing:.8px;margin-bottom:5px;display:block}
+.fi{border:1.5px solid #e2e8f0;border-radius:10px;padding:9px 12px;font-size:.9rem;font-weight:600;color:#0f172a;background:#f8fafc;width:100%;transition:all .2s;outline:none}
+.fi:focus{border-color:#0f172a;background:#fff;box-shadow:0 0 0 4px rgba(15,23,42,.06)}
+.helper{font-size:.65rem;font-weight:700;color:#64748b;margin-top:3px}
+.section-sep{height:1px;background:#f1f5f9;margin:1rem 0}
+.btn-submit{width:100%;background:#0f172a;color:#fff;border:none;border-radius:11px;padding:13px;font-weight:800;font-size:.85rem;letter-spacing:.5px;display:flex;align-items:center;justify-content:center;gap:8px;transition:all .2s;cursor:pointer;margin-top:.75rem}
+.btn-submit:hover{background:#1e293b;transform:translateY(-1px)}
+.btn-submit:disabled{opacity:.6;cursor:not-allowed;transform:none}
+.stats-tabs{display:flex;gap:6px;margin-bottom:1rem}
+.tab-btn{padding:6px 14px;border-radius:8px;border:1px solid #e2e8f0;background:#fff;font-size:.75rem;font-weight:700;color:#64748b;cursor:pointer;transition:all .2s}
+.tab-btn.active{background:#0f172a;color:#fff;border-color:#0f172a}
+.tab-panel{display:none}.tab-panel.active{display:block}
+.stat-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:.75rem;margin-bottom:1rem}
+.stat-card{background:#fff;border:1px solid #e2e8f0;border-radius:14px;padding:1rem}
+.stat-label{font-size:.6rem;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:1px;margin-bottom:4px}
+.stat-val{font-size:1.5rem;font-weight:800;color:#0f172a;letter-spacing:-1px;line-height:1}
+.stat-sub{font-size:.7rem;color:#64748b;margin-top:2px}
+.stat-card.highlight{background:#0f172a}
+.stat-card.highlight .stat-label{color:rgba(255,255,255,.5)}
+.stat-card.highlight .stat-val{color:#fff}
+.stat-card.highlight .stat-sub{color:rgba(255,255,255,.5)}
+.potential-box{background:#f8fafc;border:1px dashed #cbd5e1;border-radius:12px;padding:1rem;margin-top:.75rem}
+.pot-title{font-size:.65rem;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:1px;margin-bottom:.5rem}
+.pot-row{display:flex;justify-content:space-between;align-items:center;margin-bottom:.4rem}
+.pot-key{font-size:.78rem;color:#475569}
+.pot-val{font-size:.78rem;font-weight:700;color:#0f172a}
+.progress-label{display:flex;justify-content:space-between;font-size:.65rem;color:#94a3b8;margin-bottom:3px}
+.progress-bar-bg{height:6px;background:#e2e8f0;border-radius:99px;overflow:hidden}
+.progress-bar-fill{height:100%;border-radius:99px;background:#0f172a}
+.progress-bar-fill.pot{background:#cbd5e1}
+.lb-header{padding:.75rem 1rem;border-bottom:1px solid #f1f5f9;display:flex;justify-content:space-between;align-items:center}
+.lb-title{font-size:.8rem;font-weight:800;margin:0}
+.rank-badge{background:#0f172a;color:#fff;font-size:.65rem;font-weight:700;padding:3px 8px;border-radius:6px}
+.lb-row{display:flex;align-items:center;padding:.6rem 1rem;border-bottom:.5px solid #f8fafc}
+.lb-row:last-child{border-bottom:none}
+.lb-row.me{background:#f8fafc}
+.lb-rank{font-size:.8rem;font-weight:800;min-width:24px;color:#94a3b8}
+.lb-rank.top{color:#0f172a}
+.lb-name{font-size:.82rem;font-weight:600;flex:1;margin:0 .5rem}
+.lb-score{font-size:.82rem;font-weight:800;color:#0f172a}
+.grade-sm{font-size:.6rem;font-weight:700;padding:2px 6px;border-radius:5px;background:#f1f5f9;color:#475569;text-transform:uppercase;margin-left:4px}
+.log-table{width:100%;border-collapse:collapse;font-size:.8rem}
+.log-table th{font-size:.65rem;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:.8px;padding:8px 10px;border-bottom:1px solid #f1f5f9;background:#f8fafc}
+.log-table td{padding:8px 10px;border-bottom:.5px solid #f8fafc}
+.acc-badge{display:inline-block;padding:2px 7px;border-radius:5px;font-size:.72rem;font-weight:700}
+.acc-hi{background:#f0fdf4;color:#15803d}.acc-ok{background:#fffbeb;color:#b45309}.acc-lo{background:#fff1f2;color:#be123c}
+#sov{display:none;position:fixed;inset:0;background:#fff;z-index:9999;flex-direction:column;align-items:center;justify-content:center;gap:12px;text-align:center;padding:20px}
+.alert-msg{border-radius:10px;padding:10px 14px;font-size:.82rem;font-weight:500;margin-bottom:1rem}
+</style>
+</head>
+<body>
+<div id="sov">
+  <div style="width:72px;height:72px;background:#f0fdf4;border:2px solid #bbf7d0;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:2.2rem;color:#16a34a">
+    <i class="ph-fill ph-check-circle"></i></div>
+  <h2 style="font-size:1.4rem;font-weight:800;margin:0">Data Synced!</h2>
+  <p style="color:#64748b;margin:0">Metrics recorded for 48-hr KRA analysis.</p>
+  <button onclick="location.reload()" style="background:#0f172a;color:#fff;border:none;border-radius:12px;padding:12px 32px;font-weight:700;cursor:pointer;margin-top:8px">View My Stats</button>
+</div>
+<nav class="topbar">
+  <div class="d-flex align-items-center gap-2">
+    <div class="mark"><i class="ph-fill ph-dna"></i></div>
+    <div><div class="brand-name">Indian Pharma IP</div><div class="brand-sub">Staff Dashboard</div></div>
+  </div>
+  <div class="d-flex align-items-center gap-3">
+    <span class="pill pill-{{staff_type}}"><i class="ph-bold ph-{% if staff_type=='picker' %}package{% else %}magnifying-glass{% endif %}"></i> {{staff_type|title}}</span>
+    <a href="/logout" class="logout-link"><i class="ph ph-sign-out"></i> Logout</a>
+  </div>
+</nav>
+<div class="page">
+{% with messages=get_flashed_messages(with_categories=true) %}{% if messages %}{% for cat,msg in messages %}<div class="alert-msg alert alert-{{cat}}">{{msg}}</div>{% endfor %}{% endif %}{% endwith %}
+
+{% if today_entry %}
+<div class="submitted-banner">
+  <div class="sub-left">
+    <h2>Today's data is submitted ✓</h2>
+    <p>Come back tomorrow to log the next entry. Your live stats are below.</p>
+  </div>
+  <div class="sub-check"><i class="ph-fill ph-check-circle"></i></div>
+</div>
+{% else %}
+<div class="submit-card">
+  <h3 class="card-title">Submit Today's KPIs — <span style="color:#64748b;font-weight:500">{{user_name}}</span></h3>
+  <div class="kra-bar">
+    <div><div class="kra-label">Live Accuracy</div><div class="kra-score" id="ls">—</div></div>
+    <div class="kra-grade" id="lg">AWAITING INPUT</div>
+  </div>
+  <form method="POST" id="kf" oninput="lc()">
+    <div class="row g-2">
+      <div class="col-6"><label class="fl">Sales Bills</label><input type="number" name="bills" class="fi" placeholder="0" min="0" required></div>
+      <div class="col-6"><label class="fl">CS in Purchase</label><input type="number" name="boxes" class="fi" placeholder="0" min="0" required></div>
+      <div class="col-6"><label class="fl" style="color:#16a34a">Items Picked</label><input type="number" name="picked" id="ip" class="fi" placeholder="0" min="0" required></div>
+      <div class="col-6"><label class="fl" style="color:#dc2626">Items Missed</label><input type="number" name="missed" id="im" class="fi" placeholder="0" min="0" required></div>
+      <div class="col-12"><label class="fl">Sweeping Time (minutes)</label><input type="number" name="sweep_mins" id="isw" class="fi" placeholder="e.g. 90" min="0" required><div class="helper" id="swh">— decimal hours</div></div>
+      {% if staff_type == 'checker' %}
+      <div class="col-12"><div class="section-sep"></div><p style="font-size:.72rem;font-weight:700;color:#1d4ed8;margin-bottom:.5rem"><i class="ph-bold ph-magnifying-glass"></i> CHECKER-SPECIFIC METRICS</p></div>
+      <div class="col-6"><label class="fl">Items Checked / Verified</label><input type="number" name="checked" id="ick" class="fi" placeholder="0" min="0"></div>
+      <div class="col-6"><label class="fl">Errors / Discrepancies Found</label><input type="number" name="errors_found" id="ier" class="fi" placeholder="0" min="0"></div>
+      <div class="col-12"><label class="fl">Check Time (minutes)</label><input type="number" name="check_mins" id="ict" class="fi" placeholder="e.g. 60" min="0"><div class="helper" id="cth">— decimal hours</div></div>
+      {% else %}
+      <input type="hidden" name="checked" value="0"><input type="hidden" name="errors_found" value="0"><input type="hidden" name="check_mins" value="0">
+      {% endif %}
+    </div>
+    <button type="submit" class="btn-submit" id="sb"><i class="ph-bold ph-paper-plane-tilt"></i><span id="sbt">SYNC PERFORMANCE LOG</span></button>
+  </form>
+</div>
+{% endif %}
+
+{% if a_stats %}
+<div class="submit-card">
+  <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+    <h3 class="card-title mb-0">Performance Analytics</h3>
+    <div class="stats-tabs">
+      <button class="tab-btn active" onclick="showTab('day',this)">Today</button>
+      <button class="tab-btn" onclick="showTab('week',this)">Week</button>
+      <button class="tab-btn" onclick="showTab('month',this)">Month</button>
+      <button class="tab-btn" onclick="showTab('all',this)">All-Time</button>
+    </div>
+  </div>
+  {% for pid,stats in [('day',d_stats),('week',w_stats),('month',m_stats),('all',a_stats)] %}
+  <div class="tab-panel {% if pid=='day' %}active{% endif %}" id="tab-{{pid}}">
+    {% if stats %}
+    <div class="stat-grid">
+      <div class="stat-card highlight"><div class="stat-label">Efficiency Score</div><div class="stat-val">{{stats.eff_score}}</div><div class="stat-sub">out of 100</div></div>
+      <div class="stat-card"><div class="stat-label">KRA Grade</div><div class="stat-val" style="font-size:1rem;padding-top:6px">{{stats.grade}}</div></div>
+      <div class="stat-card"><div class="stat-label">Pick Accuracy</div><div class="stat-val">{{stats.pick_acc}}%</div><div class="stat-sub">{{stats.tp}} picked, {{stats.tm}} missed</div></div>
+      <div class="stat-card"><div class="stat-label">{% if staff_type=='picker' %}Pick Speed{% else %}Check Speed{% endif %}</div><div class="stat-val">{% if staff_type=='picker' %}{{stats.pick_speed}}{% else %}{{stats.ck_speed}}{% endif %}</div><div class="stat-sub">items/hr</div></div>
+      {% if staff_type=='checker' %}<div class="stat-card"><div class="stat-label">Error Detection %</div><div class="stat-val">{{stats.check_acc}}%</div><div class="stat-sub">{{stats.ter}} errors / {{stats.tck}} checked</div></div>{% endif %}
+      <div class="stat-card"><div class="stat-label">Bills</div><div class="stat-val">{{stats.tb}}</div></div>
+      <div class="stat-card"><div class="stat-label">CS in Purchase</div><div class="stat-val">{{stats.tbx}}</div></div>
+      <div class="stat-card"><div class="stat-label">Days Logged</div><div class="stat-val">{{stats.days}}</div></div>
+    </div>
+    <div class="potential-box">
+      <div class="pot-title"><i class="ph-bold ph-lightning"></i> Potential Analysis — Benchmark vs Current</div>
+      <div class="pot-row"><span class="pot-key">Actual items handled</span><span class="pot-val">{{stats.ti}}</span></div>
+      <div class="pot-row"><span class="pot-key">Benchmark potential items</span><span class="pot-val">{{stats.potential_items}}</span></div>
+      <div class="pot-row"><span class="pot-key">Current efficiency score</span><span class="pot-val">{{stats.eff_score}} / 100</span></div>
+      <div class="pot-row"><span class="pot-key">Max achievable efficiency</span><span class="pot-val">{{stats.potential_eff}} / 100</span></div>
+      <div class="progress-label mt-2"><span>Current</span><span>Potential</span></div>
+      <div class="progress-bar-bg"><div class="progress-bar-fill" style="width:{{stats.eff_score}}%"></div></div>
+      <div class="progress-bar-bg mt-1"><div class="progress-bar-fill pot" style="width:{{stats.potential_eff}}%"></div></div>
+    </div>
+    {% else %}<p style="color:#94a3b8;font-size:.85rem;text-align:center;padding:1.5rem 0">No data for this period yet.</p>{% endif %}
+  </div>
+  {% endfor %}
+</div>
+{% endif %}
+
+{% if leaderboard %}
+<div class="submit-card">
+  <div class="lb-header"><h3 class="lb-title"><i class="ph-bold ph-trophy"></i> {{staff_type|title}} Leaderboard</h3><span class="rank-badge">Your Rank: #{{my_rank}}</span></div>
+  {% for item in leaderboard %}
+  <div class="lb-row {% if item.name==user_name %}me{% endif %}">
+    <div class="lb-rank {% if loop.index<=3 %}top{% endif %}">#{{loop.index}}</div>
+    <div class="lb-name">{{item.name}}{% if item.name==user_name %} <span style="font-size:.6rem;color:#94a3b8">(you)</span>{% endif %}</div>
+    <div><span class="lb-score">{{item.score}}</span><span class="grade-sm">{{item.grade}}</span></div>
+  </div>
+  {% endfor %}
+</div>
+{% endif %}
+
+{% if recent %}
+<div class="submit-card">
+  <h3 class="card-title">Recent Entries</h3>
+  <div style="overflow-x:auto">
+    <table class="log-table">
+      <thead><tr><th>Date</th><th>Bills</th><th>Picked</th><th>Missed</th><th>Accuracy</th><th>Speed/hr</th><th>CS</th><th>Sweep hrs</th>{% if staff_type=='checker' %}<th>Checked</th><th>Errors</th>{% endif %}</tr></thead>
+      <tbody>
+      {% for e in recent %}
+      <tr><td>{{e.entry_date}}</td><td>{{e.bills}}</td><td>{{e.picked}}</td><td>{{e.missed}}</td>
+        <td><span class="acc-badge {% if e.accuracy>=95 %}acc-hi{% elif e.accuracy>=85 %}acc-ok{% else %}acc-lo{% endif %}">{{e.accuracy}}%</span></td>
+        <td>{{e.pick_speed}}</td><td>{{e.boxes}}</td><td>{{e.sweep}}h</td>
+        {% if staff_type=='checker' %}<td>{{e.checked}}</td><td>{{e.errors_found}}</td>{% endif %}
+      </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endif %}
+</div>
+
+<script>
+function lc(){
+  const p=parseFloat(document.getElementById('ip').value)||0;
+  const m=parseFloat(document.getElementById('im').value)||0;
+  const sw=parseFloat(document.getElementById('isw').value)||0;
+  const t=p+m,sc=t>0?(p/t*100):null;
+  const ls=document.getElementById('ls'),lg=document.getElementById('lg');
+  if(sc!==null){ls.textContent=sc.toFixed(1)+'%';
+    if(sc>=98){lg.textContent='ELITE';lg.style.color='#86efac';}
+    else if(sc>=95){lg.textContent='PROFICIENT';lg.style.color='#93c5fd';}
+    else if(sc>=88){lg.textContent='SATISFACTORY';lg.style.color='#fcd34d';}
+    else{lg.textContent='RE-TRAINING';lg.style.color='#fca5a5';}
+  }else{ls.textContent='—';lg.textContent='AWAITING INPUT';lg.style.color='';}
+  document.getElementById('swh').textContent=sw>0?(sw/60).toFixed(2)+' decimal hours':'— decimal hours';
+  const ct=document.getElementById('ict');
+  if(ct)document.getElementById('cth').textContent=(parseFloat(ct.value)||0)>0?((parseFloat(ct.value)/60).toFixed(2)+' hrs'):'— decimal hours';
+}
+function showTab(id,btn){
+  document.querySelectorAll('.tab-panel').forEach(p=>p.classList.remove('active'));
+  document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));
+  document.getElementById('tab-'+id).classList.add('active');
+  btn.classList.add('active');
+}
+if(document.getElementById('kf'))document.getElementById('kf').onsubmit=function(){
+  const b=document.getElementById('sb');document.getElementById('sbt').textContent='Syncing...';b.disabled=true;
+};
+</script>
+{% with messages=get_flashed_messages(category_filter=["success"]) %}{% if messages %}
+<script>document.getElementById('sov').style.display='flex';confetti({particleCount:120,spread:65,origin:{y:.6},colors:['#0f172a','#64748b','#94a3b8','#ffffff']});</script>
+{% endif %}{% endwith %}
+</body></html>

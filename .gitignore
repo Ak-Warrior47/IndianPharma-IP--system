@@ -3,9 +3,4 @@ __pycache__/
 *.db
 .env
 venv/
-.venv/
-*.egg-info/
-dist/
-build/
-reports/
-.DS_Store
+pharma_v4.db

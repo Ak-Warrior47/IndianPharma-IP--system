@@ -4,219 +4,337 @@ from flask_socketio import SocketIO
 from werkzeug.security import generate_password_hash, check_password_hash
 from datetime import datetime, date, timedelta
 from apscheduler.schedulers.background import BackgroundScheduler
-import zipfile
-import io
-import atexit
-import os
+from functools import wraps
+import zipfile, io, atexit
 
-from utils import generate_visual_pdf, calculate_kra_grade
+from utils import generate_visual_pdf, calculate_kra_grade, calculate_efficiency_score
 
 app = Flask(__name__)
-app.secret_key = "ip_pharma_ultra_secure_99"
-
-# ─────────────────────────────────────────
-#  DATABASE CONFIGURATION (Render + Local)
-# ─────────────────────────────────────────
-app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get('DATABASE_URL', 'sqlite:///pharma_v3.db')
-
-# Fix for Render's postgres:// vs postgresql:// requirement
-if app.config['SQLALCHEMY_DATABASE_URI'].startswith("postgres://"):
-    app.config['SQLALCHEMY_DATABASE_URI'] = app.config['SQLALCHEMY_DATABASE_URI'].replace("postgres://", "postgresql://", 1)
-
+app.secret_key = "ip_pharma_ultra_secure_v4"
+app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///pharma_v4.db'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
-db = SQLAlchemy(app)
+db       = SQLAlchemy(app)
 socketio = SocketIO(app, cors_allowed_origins="*")
 
-# ─────────────────────────────────────────
-#  MODELS
-# ─────────────────────────────────────────
 class Employee(db.Model):
     __tablename__ = 'employees'
     id            = db.Column(db.Integer, primary_key=True)
     name          = db.Column(db.String(100), nullable=False)
     email         = db.Column(db.String(100), unique=True, nullable=False, index=True)
     password_hash = db.Column(db.String(255), nullable=False)
-    role          = db.Column(db.String(100), default="Operations Specialist")
+    staff_type    = db.Column(db.String(20), default='picker')
+    role          = db.Column(db.String(100), default='Operations Specialist')
     is_admin      = db.Column(db.Boolean, default=False)
     entries       = db.relationship('KPIEntry', backref='owner', lazy=True)
-
-    def set_password(self, password):
-        self.password_hash = generate_password_hash(password)
-
-    def check_password(self, password):
-        return check_password_hash(self.password_hash, password)
+    def set_password(self, pw):   self.password_hash = generate_password_hash(pw)
+    def check_password(self, pw): return check_password_hash(self.password_hash, pw)
 
 class KPIEntry(db.Model):
-    __tablename__ = 'kpi_entries'
-    id           = db.Column(db.Integer, primary_key=True)
-    emp_id       = db.Column(db.Integer, db.ForeignKey('employees.id'), nullable=False)
-    bills        = db.Column(db.Integer, default=0)
-    picked       = db.Column(db.Integer, default=0)
-    missed       = db.Column(db.Integer, default=0)
-    boxes        = db.Column(db.Integer, default=0)
-    sweep        = db.Column(db.Float,   default=0.0)
-    entry_date   = db.Column(db.Date,    nullable=False, index=True)
-    report_sent  = db.Column(db.Boolean, default=False)
-
+    __tablename__  = 'kpi_entries'
+    id             = db.Column(db.Integer, primary_key=True)
+    emp_id         = db.Column(db.Integer, db.ForeignKey('employees.id'), nullable=False)
+    bills          = db.Column(db.Integer, default=0)
+    picked         = db.Column(db.Integer, default=0)
+    missed         = db.Column(db.Integer, default=0)
+    boxes          = db.Column(db.Integer, default=0)
+    sweep          = db.Column(db.Float,   default=0.0)
+    checked        = db.Column(db.Integer, default=0)
+    errors_found   = db.Column(db.Integer, default=0)
+    check_time     = db.Column(db.Float,   default=0.0)
+    entry_date     = db.Column(db.Date, nullable=False, index=True)
+    report_sent    = db.Column(db.Boolean, default=False)
     __table_args__ = (db.UniqueConstraint('emp_id', 'entry_date', name='_emp_date_uc'),)
 
     @property
     def accuracy(self):
-        total = self.picked + self.missed
-        return round((self.picked / total * 100), 1) if total > 0 else 0.0
+        t = self.picked + self.missed
+        return round(self.picked / t * 100, 1) if t > 0 else 0.0
+    @property
+    def pick_speed(self):
+        hrs = self.sweep if self.sweep > 0 else 1
+        return round((self.picked + self.missed) / hrs, 1)
+    @property
+    def check_rate(self):
+        if self.checked == 0: return 0.0
+        return round(self.errors_found / self.checked * 100, 1)
 
-# ─────────────────────────────────────────
-#  DATABASE INIT & SEEDING (Runs on Startup)
-# ─────────────────────────────────────────
-def init_db():
-    with app.app_context():
-        db.create_all()
-        
-        # Seed Admin
-        if not Employee.query.filter_by(email="admin@pharmaip.com").first():
-            admin = Employee(name="System Admin", email="admin@pharmaip.com", is_admin=True)
-            admin.set_password("admin123")
-            db.session.add(admin)
-            db.session.commit()
+def login_required(f):
+    @wraps(f)
+    def d(*a, **kw):
+        if 'user_id' not in session: return redirect(url_for('login'))
+        return f(*a, **kw)
+    return d
 
-        # Seed Rahul
-        if not Employee.query.filter_by(email="rahul@pharmaip.com").first():
-            emp1 = Employee(name="Rahul Sharma", email="rahul@pharmaip.com", role="Operations Specialist")
-            emp1.set_password("test1234")
-            db.session.add(emp1)
-            db.session.commit()
+def admin_required(f):
+    @wraps(f)
+    def d(*a, **kw):
+        if not session.get('is_admin'):
+            flash("Admin access required.", "danger")
+            return redirect(url_for('dashboard'))
+        return f(*a, **kw)
+    return d
 
-        # Seed Priya
-        if not Employee.query.filter_by(email="priya@pharmaip.com").first():
-            emp2 = Employee(name="Priya Patel", email="priya@pharmaip.com", role="Operations Specialist")
-            emp2.set_password("test1234")
-            db.session.add(emp2)
-            db.session.commit()
+def build_analytics(entries, staff_type='picker'):
+    if not entries: return None
+    tp  = sum(e.picked       for e in entries)
+    tm  = sum(e.missed       for e in entries)
+    ti  = tp + tm
+    tb  = sum(e.bills        for e in entries)
+    tbx = sum(e.boxes        for e in entries)
+    ts  = round(sum(e.sweep  for e in entries), 2)
+    tck = sum(e.checked      for e in entries)
+    ter = sum(e.errors_found for e in entries)
+    tct = round(sum(e.check_time for e in entries), 2)
 
-# Execute Database Init
-init_db()
+    pick_acc   = round(tp / ti * 100, 1)      if ti  > 0 else 0.0
+    pick_speed = round(ti / ts, 1)             if ts  > 0 else 0.0
+    check_acc  = round(ter / tck * 100, 1)     if tck > 0 else 0.0
+    ck_speed   = round(tck / tct, 1)           if tct > 0 else 0.0
 
-# ─────────────────────────────────────────
-#  AUTOMATION & HELPERS
-# ─────────────────────────────────────────
+    eff_score  = calculate_efficiency_score(staff_type, pick_acc, pick_speed, check_acc, tct, tck)
+    grade, feedback = calculate_kra_grade(tp, tm, tbx, staff_type)
+
+    # Potential
+    if staff_type == 'picker':
+        bench_speed = 200.0
+        bench_acc   = 98.0
+        potential_items = round(bench_speed * ts)
+        potential_eff   = round(min(100, eff_score + max(0, (bench_acc - pick_acc) * 0.5 + (bench_speed - pick_speed) * 0.1)), 1)
+    else:
+        bench_speed = 150.0
+        bench_acc   = 100.0
+        potential_items = round(bench_speed * tct) if tct > 0 else tck
+        potential_eff   = round(min(100, eff_score + max(0, (bench_acc - check_acc) * 0.5)), 1)
+
+    return dict(
+        tp=tp, tm=tm, ti=ti, tb=tb, tbx=tbx, ts=ts,
+        tck=tck, ter=ter, tct=tct,
+        pick_acc=pick_acc, pick_speed=pick_speed,
+        check_acc=check_acc, ck_speed=ck_speed,
+        eff_score=eff_score, grade=grade, feedback=feedback,
+        potential_items=potential_items, potential_eff=potential_eff,
+        days=len(entries)
+    )
+
+def period_entries(emp_id, period):
+    today = date.today()
+    start = {
+        'day':   today,
+        'week':  today - timedelta(days=6),
+        'month': today - timedelta(days=29)
+    }.get(period, today)
+    return KPIEntry.query.filter(
+        KPIEntry.emp_id == emp_id,
+        KPIEntry.entry_date >= start,
+        KPIEntry.entry_date <= today
+    ).order_by(KPIEntry.entry_date.desc()).all()
+
 def auto_report_job():
     with app.app_context():
-        target_date = date.today() - timedelta(days=2)
-        pending = KPIEntry.query.filter_by(entry_date=target_date, report_sent=False).all()
-        for entry in pending:
-            entry.report_sent = True
+        target  = date.today() - timedelta(days=2)
+        pending = KPIEntry.query.filter_by(entry_date=target, report_sent=False).all()
+        for e in pending:
+            emp = Employee.query.get(e.emp_id)
+            if emp: print(f"[48HR] {emp.name} — {target}")
+            e.report_sent = True
         db.session.commit()
 
 scheduler = BackgroundScheduler(daemon=True)
-scheduler.add_job(func=auto_report_job, trigger="interval", hours=24, id="auto_report")
+scheduler.add_job(auto_report_job, 'interval', hours=24, id='auto_report')
 scheduler.start()
 atexit.register(lambda: scheduler.shutdown(wait=False))
 
-def login_required(f):
-    from functools import wraps
-    @wraps(f)
-    def decorated(*args, **kwargs):
-        if 'user_id' not in session:
-            return redirect(url_for('login'))
-        return f(*args, **kwargs)
-    return decorated
-
-def admin_required(f):
-    from functools import wraps
-    @wraps(f)
-    def decorated(*args, **kwargs):
-        if not session.get('is_admin'):
-            flash("Access denied: Admin only.", "danger")
-            return redirect(url_for('submit_kpi'))
-        return f(*args, **kwargs)
-    return decorated
-
-# ─────────────────────────────────────────
-#  ROUTES
-# ─────────────────────────────────────────
-@app.route("/", methods=["GET", "POST"])
+@app.route('/', methods=['GET', 'POST'])
 def login():
     if 'user_id' in session:
-        return redirect(url_for('admin_dashboard' if session.get('is_admin') else 'submit_kpi'))
-    if request.method == "POST":
+        return redirect(url_for('admin_dashboard' if session.get('is_admin') else 'dashboard'))
+    if request.method == 'POST':
         email = request.form.get('email', '').lower().strip()
         user  = Employee.query.filter_by(email=email).first()
         if user and user.check_password(request.form.get('password', '')):
-            session['user_id']   = user.id
-            session['user_name'] = user.name
-            session['is_admin']  = user.is_admin
-            return redirect(url_for('admin_dashboard' if user.is_admin else 'submit_kpi'))
-        flash("Invalid credentials. Please try again.", "danger")
-    return render_template("login.html")
+            session.update({'user_id': user.id, 'user_name': user.name,
+                            'staff_type': user.staff_type, 'is_admin': user.is_admin})
+            return redirect(url_for('admin_dashboard' if user.is_admin else 'dashboard'))
+        flash("Invalid credentials.", "danger")
+    return render_template('login.html')
 
-@app.route("/submit", methods=["GET", "POST"])
-@login_required
-def submit_kpi():
-    if request.method == "POST":
-        try:
-            picked     = int(request.form.get('picked', 0))
-            missed     = int(request.form.get('missed', 0))
-            sweep_mins = float(request.form.get('sweep_mins', 0))
-            new_entry = KPIEntry(
-                emp_id     = session['user_id'],
-                bills      = int(request.form.get('bills', 0)),
-                picked     = picked,
-                missed     = missed,
-                boxes      = int(request.form.get('boxes', 0)),
-                sweep      = round(sweep_mins / 60, 2),
-                entry_date = datetime.strptime(request.form['date'], "%Y-%m-%d").date()
-            )
-            db.session.add(new_entry)
-            db.session.commit()
-            
-            total = picked + missed
-            eff = round((picked / total * 100), 1) if total > 0 else 0.0
-            if eff < 85:
-                socketio.emit('admin_alert', {'name': session['user_name'], 'eff': eff, 'msg': 'Accuracy Drop'})
-            flash("Metrics recorded successfully.", "success")
-        except Exception:
-            db.session.rollback()
-            flash("Entry already exists for this date.", "warning")
-    return render_template("submit.html", user_name=session['user_name'], today=date.today())
-
-@app.route("/admin")
-@login_required
-@admin_required
-def admin_dashboard():
-    employees = Employee.query.filter_by(is_admin=False).all()
-    data = []
-    for emp in employees:
-        logs = KPIEntry.query.filter_by(emp_id=emp.id).order_by(KPIEntry.entry_date.desc()).all()
-        avg_acc = round(sum(e.accuracy for e in logs) / len(logs), 1) if logs else 0.0
-        grade, _ = calculate_kra_grade(sum(e.picked for e in logs), sum(e.missed for e in logs), sum(e.boxes for e in logs))
-        data.append({
-            'emp': emp, 'logs': logs, 'avg': avg_acc, 'grade': grade, 'count': len(logs),
-            'total_boxes': sum(e.boxes for e in logs), 'total_sweep': round(sum(e.sweep for e in logs), 2),
-        })
-    return render_template("admin.html", data=data)
-
-@app.route("/download/<int:emp_id>")
-@login_required
-@admin_required
-def download_report(emp_id):
-    emp = Employee.query.get_or_404(emp_id)
-    logs = KPIEntry.query.filter_by(emp_id=emp_id).order_by(KPIEntry.entry_date.desc()).all()
-    if not logs:
-        flash("No data available.", "warning")
-        return redirect(url_for('admin_dashboard'))
-    payload = {
-        'bills': sum(e.bills for e in logs), 'picked': sum(e.picked for e in logs),
-        'missed': sum(e.missed for e in logs), 'cs_purchase': sum(e.boxes for e in logs),
-        'sweep_hours': round(sum(e.sweep for e in logs), 2), 'entries': logs,
-    }
-    pdf_buffer = generate_visual_pdf(emp.name, payload)
-    return send_file(pdf_buffer, mimetype='application/pdf', as_attachment=True, download_name=f"KRA_{emp.name}.pdf")
-
-@app.route("/logout")
+@app.route('/logout')
 def logout():
     session.clear()
     return redirect(url_for('login'))
 
-if __name__ == "__main__":
-    socketio.run(app, debug=True)
+@app.route('/dashboard', methods=['GET', 'POST'])
+@login_required
+def dashboard():
+    emp_id     = session['user_id']
+    staff_type = session.get('staff_type', 'picker')
+    today      = date.today()
+    today_entry = KPIEntry.query.filter_by(emp_id=emp_id, entry_date=today).first()
+
+    if request.method == 'POST' and not today_entry:
+        try:
+            picked = int(request.form.get('picked', 0))
+            missed = int(request.form.get('missed', 0))
+            ne = KPIEntry(
+                emp_id       = emp_id,
+                bills        = int(request.form.get('bills', 0)),
+                picked       = picked, missed=missed,
+                boxes        = int(request.form.get('boxes', 0)),
+                sweep        = round(float(request.form.get('sweep_mins', 0)) / 60, 3),
+                checked      = int(request.form.get('checked', 0)),
+                errors_found = int(request.form.get('errors_found', 0)),
+                check_time   = round(float(request.form.get('check_mins', 0)) / 60, 3),
+                entry_date   = today
+            )
+            db.session.add(ne)
+            db.session.commit()
+            today_entry = ne
+            total = picked + missed
+            eff   = round(picked / total * 100, 1) if total > 0 else 0.0
+            if eff < 85:
+                socketio.emit('admin_alert', {'name': session['user_name'], 'eff': eff, 'type': staff_type})
+            flash("Today's metrics recorded successfully.", "success")
+        except Exception:
+            db.session.rollback()
+            flash("Error saving. Please try again.", "warning")
+
+    all_entries = KPIEntry.query.filter_by(emp_id=emp_id).order_by(KPIEntry.entry_date.desc()).all()
+    d_stats = build_analytics(period_entries(emp_id, 'day'),   staff_type)
+    w_stats = build_analytics(period_entries(emp_id, 'week'),  staff_type)
+    m_stats = build_analytics(period_entries(emp_id, 'month'), staff_type)
+    a_stats = build_analytics(all_entries, staff_type)
+
+    peers   = Employee.query.filter_by(staff_type=staff_type, is_admin=False).all()
+    lb      = []
+    for p in peers:
+        pe = KPIEntry.query.filter_by(emp_id=p.id).all()
+        if not pe: continue
+        ps = build_analytics(pe, p.staff_type)
+        lb.append({'name': p.name, 'score': ps['eff_score'], 'grade': ps['grade'],
+                   'pick_acc': ps['pick_acc'], 'pick_speed': ps['pick_speed'],
+                   'check_acc': ps['check_acc']})
+    lb.sort(key=lambda x: x['score'], reverse=True)
+    my_rank = next((i+1 for i,x in enumerate(lb) if x['name']==session['user_name']), '-')
+
+    return render_template('dashboard.html',
+        user_name=session['user_name'], staff_type=staff_type,
+        today=today, today_entry=today_entry,
+        d_stats=d_stats, w_stats=w_stats, m_stats=m_stats, a_stats=a_stats,
+        leaderboard=lb, my_rank=my_rank,
+        recent=all_entries[:10]
+    )
+
+@app.route('/admin')
+@login_required
+@admin_required
+def admin_dashboard():
+    employees = Employee.query.filter_by(is_admin=False).all()
+    today = date.today()
+    rows = []
+    for emp in employees:
+        ents = KPIEntry.query.filter_by(emp_id=emp.id).order_by(KPIEntry.entry_date.desc()).all()
+        d_ent = [e for e in ents if e.entry_date == today]
+        w_ent = [e for e in ents if e.entry_date >= today-timedelta(days=6)]
+        m_ent = [e for e in ents if e.entry_date >= today-timedelta(days=29)]
+        rows.append(dict(
+            emp=emp,
+            stats  =build_analytics(ents,  emp.staff_type),
+            d_stats=build_analytics(d_ent, emp.staff_type),
+            w_stats=build_analytics(w_ent, emp.staff_type),
+            m_stats=build_analytics(m_ent, emp.staff_type),
+            count=len(ents)
+        ))
+    pickers  = sorted([r for r in rows if r['emp'].staff_type=='picker'  and r['stats']],
+                      key=lambda x: x['stats']['eff_score'], reverse=True)
+    checkers = sorted([r for r in rows if r['emp'].staff_type=='checker' and r['stats']],
+                      key=lambda x: x['stats']['eff_score'], reverse=True)
+    return render_template('admin.html', rows=rows, pickers=pickers, checkers=checkers)
+
+@app.route('/download/<int:emp_id>')
+@login_required
+@admin_required
+def download_report(emp_id):
+    emp   = Employee.query.get_or_404(emp_id)
+    ents  = KPIEntry.query.filter_by(emp_id=emp_id).order_by(KPIEntry.entry_date.asc()).all()
+    if not ents:
+        flash("No data for this employee.", "warning")
+        return redirect(url_for('admin_dashboard'))
+    today = date.today()
+    d_ent = [e for e in ents if e.entry_date == today]
+    w_ent = [e for e in ents if e.entry_date >= today-timedelta(days=6)]
+    m_ent = [e for e in ents if e.entry_date >= today-timedelta(days=29)]
+    payload = dict(
+        all_entries=ents,
+        all_stats  =build_analytics(ents,  emp.staff_type),
+        day_stats  =build_analytics(d_ent, emp.staff_type),
+        week_stats =build_analytics(w_ent, emp.staff_type),
+        month_stats=build_analytics(m_ent, emp.staff_type),
+        staff_type =emp.staff_type,
+    )
+    buf = generate_visual_pdf(emp.name, payload)
+    return send_file(buf, mimetype='application/pdf', as_attachment=True,
+                     download_name=f"KRA_{emp.name.replace(' ','_')}.pdf")
+
+@app.route('/bulk_zip')
+@login_required
+@admin_required
+def bulk_zip():
+    employees = Employee.query.filter_by(is_admin=False).all()
+    zbuf      = io.BytesIO()
+    today     = date.today()
+    with zipfile.ZipFile(zbuf, 'w', zipfile.ZIP_DEFLATED) as zf:
+        for emp in employees:
+            ents = KPIEntry.query.filter_by(emp_id=emp.id).order_by(KPIEntry.entry_date.asc()).all()
+            if not ents: continue
+            d_ent = [e for e in ents if e.entry_date == today]
+            w_ent = [e for e in ents if e.entry_date >= today-timedelta(days=6)]
+            m_ent = [e for e in ents if e.entry_date >= today-timedelta(days=29)]
+            payload = dict(all_entries=ents,
+                all_stats=build_analytics(ents,emp.staff_type),
+                day_stats=build_analytics(d_ent,emp.staff_type),
+                week_stats=build_analytics(w_ent,emp.staff_type),
+                month_stats=build_analytics(m_ent,emp.staff_type),
+                staff_type=emp.staff_type)
+            pdf = generate_visual_pdf(emp.name, payload)
+            zf.writestr(f"KRA_{emp.name.replace(' ','_')}.pdf", pdf.read())
+    zbuf.seek(0)
+    return send_file(zbuf, mimetype='application/zip', as_attachment=True,
+                     download_name='All_KRA_Reports.zip')
+
+@app.route('/health')
+def health(): return {"status": "Pharma IP v4"}, 200
+
+def seed_db():
+    db.create_all()
+    def make(name, email, pw, stype='picker', admin=False):
+        if Employee.query.filter_by(email=email).first(): return Employee.query.filter_by(email=email).first()
+        e = Employee(name=name, email=email, staff_type=stype, is_admin=admin,
+                     role='Admin' if admin else f'Operations {stype.title()}')
+        e.set_password(pw)
+        db.session.add(e); db.session.flush(); return e
+
+    make("System Admin",  "admin@pharmaip.com",  "admin123", admin=True)
+    p1 = make("Rahul Sharma", "rahul@pharmaip.com", "test1234", stype='picker')
+    if p1 and not KPIEntry.query.filter_by(emp_id=p1.id).first():
+        for d, b, pk, ms, bx, sw in [
+            (6,40,195,5,10,1.5),(5,42,210,2,12,1.4),(4,38,188,8,9,1.6),
+            (3,45,220,1,14,1.3),(2,41,200,4,11,1.5),(1,44,215,3,13,1.4),(0,46,225,2,15,1.3)]:
+            db.session.add(KPIEntry(emp_id=p1.id,bills=b,picked=pk,missed=ms,
+                boxes=bx,sweep=sw,entry_date=date.today()-timedelta(days=d)))
+    c1 = make("Priya Patel", "priya@pharmaip.com", "test1234", stype='checker')
+    if c1 and not KPIEntry.query.filter_by(emp_id=c1.id).first():
+        for d, b, pk, ms, bx, sw, ck, er, cm in [
+            (6,30,160,18,8,2.0,178,14,90),(5,28,172,12,7,1.8,184,10,85),
+            (4,33,190,6,10,1.6,196,6,80),(3,29,168,14,6,1.9,182,12,88),
+            (2,35,195,9,11,1.5,204,8,82),(1,31,180,10,9,1.7,190,9,86),
+            (0,36,200,7,12,1.4,207,7,78)]:
+            db.session.add(KPIEntry(emp_id=c1.id,bills=b,picked=pk,missed=ms,boxes=bx,
+                sweep=sw,checked=ck,errors_found=er,check_time=round(cm/60,3),
+                entry_date=date.today()-timedelta(days=d)))
+    db.session.commit()
+    print("Seeds: admin@pharmaip.com/admin123 | rahul@pharmaip.com/test1234 | priya@pharmaip.com/test1234")
+
+if __name__ == '__main__':
+    with app.app_context(): seed_db()
+    socketio.run(app, debug=True, port=5000)
