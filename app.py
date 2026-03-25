@@ -15,7 +15,7 @@ import zipfile, io, atexit
 from utils import generate_visual_pdf, calculate_kra_grade, calculate_efficiency_score
 app = Flask(__name__)
 app.secret_key = "ip_pharma_ultra_secure_v4"
-app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///pharma_v5.db'
+app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///pharma_v6.db'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
 db       = SQLAlchemy(app)
@@ -329,14 +329,19 @@ def seed_db():
 
 if __name__ == '__main__':
     with app.app_context():
-        # 1. This creates the new v5 database file (fixing the 500 error)
-        db.create_all()  
-        
-        # 2. This adds your users (Admin, Rahul, Priya)
-        seed_db()        
+        db.create_all()
+        # Call the logic directly to ensure the Admin/Rahul/Priya are created
+        if not Employee.query.filter_by(email="admin@pharmaip.com").first():
+            admin = Employee(name="System Admin", email="admin@pharmaip.com", is_admin=True)
+            admin.set_password("admin123")
+            db.session.add(admin)
+            
+        if not Employee.query.filter_by(email="rahul@pharmaip.com").first():
+            rahul = Employee(name="Rahul Sharma", email="rahul@pharmaip.com", staff_type='picker')
+            rahul.set_password("test1234")
+            db.session.add(rahul)
+
+        db.session.commit()
     
-    # 3. Dynamic Port: Render uses a random port, Local uses 5000
     port = int(os.environ.get("PORT", 5000))
-    
-    # 4. Start the server with host 0.0.0.0 for Render compatibility
     socketio.run(app, debug=True, host='0.0.0.0', port=port)
