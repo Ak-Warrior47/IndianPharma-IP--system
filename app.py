@@ -224,6 +224,15 @@ def start_scheduler():
 def init_db():
     with app.app_context():
         try:
+            # 1. DROP EVERYTHING to clear the old schema mismatch
+            db.drop_all() 
+            
+            # 2. Recreate tables with the new 'staff_type' column
+            db.create_all()
+
+            def make(name, email, pw, stype='picker', admin=False):
+                # ... rest of your existing make function ...
+        try:
             db.create_all()
 
             def make(name, email, pw, stype='picker', admin=False):
