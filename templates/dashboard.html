@@ -9,7 +9,41 @@
 <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.5.1/dist/confetti.browser.min.js"></script>
 <style>
 *{box-sizing:border-box}
-body{font-family:'Inter',sans-serif;background:#f8fafc;color:#0f172a;min-height:100vh}
+body{font-family:'Inter',sans-serif;background:#0f0c29;background:linear-gradient(135deg,#0f0c29,#1a1a2e,#16213e);color:#fff;min-height:100vh}
+.topbar{background:rgba(255,255,255,0.06) !important;backdrop-filter:blur(20px);border-bottom:1px solid rgba(255,255,255,0.1) !important}
+.brand-name{color:#fff !important}.brand-sub{color:rgba(255,255,255,.5) !important}
+.logout-link{color:rgba(255,255,255,.5) !important}.logout-link:hover{color:#fff !important}
+.pill-picker{background:rgba(21,128,61,.25) !important;color:#86efac !important;border:1px solid rgba(21,128,61,.3)}
+.pill-checker{background:rgba(29,78,216,.25) !important;color:#93c5fd !important;border:1px solid rgba(29,78,216,.3)}
+.submit-card{background:rgba(255,255,255,0.06) !important;backdrop-filter:blur(16px);border:1px solid rgba(255,255,255,0.12) !important;color:#fff}
+.stat-card{background:rgba(255,255,255,0.06) !important;border:1px solid rgba(255,255,255,0.1) !important}
+.stat-label{color:rgba(255,255,255,.5) !important}.stat-val{color:#fff !important}.stat-sub{color:rgba(255,255,255,.4) !important}
+.stat-card.highlight{background:rgba(255,255,255,0.15) !important}
+.card-title{color:#fff !important}.kra-bar{background:rgba(255,255,255,0.12) !important;border:1px solid rgba(255,255,255,0.2)}
+.fl{color:rgba(255,255,255,.5) !important}
+.fi{background:rgba(255,255,255,0.06) !important;border:1px solid rgba(255,255,255,0.14) !important;color:#fff !important}
+.fi:focus{border-color:rgba(255,255,255,0.4) !important;background:rgba(255,255,255,0.1) !important;box-shadow:0 0 0 3px rgba(255,255,255,0.06) !important}
+.fi::placeholder{color:rgba(255,255,255,.25) !important}
+.helper{color:rgba(255,255,255,.4) !important}
+.btn-submit{background:#fff !important;color:#0f172a !important}
+.btn-submit:hover{background:rgba(255,255,255,.9) !important}
+.potential-box{background:rgba(255,255,255,0.04) !important;border:1px dashed rgba(255,255,255,0.15) !important}
+.pot-title{color:rgba(255,255,255,.5) !important}.pot-key{color:rgba(255,255,255,.6) !important}.pot-val{color:#fff !important}
+.progress-bar-bg{background:rgba(255,255,255,0.1) !important}
+.progress-bar-fill{background:#fff !important}.progress-bar-fill.pot{background:rgba(255,255,255,0.3) !important}
+.tab-btn{background:rgba(255,255,255,0.06) !important;border:1px solid rgba(255,255,255,.12) !important;color:rgba(255,255,255,.6) !important}
+.tab-btn.active{background:rgba(255,255,255,0.18) !important;color:#fff !important;border-color:rgba(255,255,255,.3) !important}
+.lb-header{border-bottom:1px solid rgba(255,255,255,.08) !important}
+.lb-title{color:#fff !important}.rank-badge{background:rgba(255,255,255,0.15) !important}
+.lb-row{border-bottom:.5px solid rgba(255,255,255,.06) !important}.lb-row.me{background:rgba(255,255,255,0.06) !important}
+.lb-rank{color:rgba(255,255,255,.4) !important}.lb-rank.top{color:#fff !important}
+.lb-name{color:rgba(255,255,255,.85) !important}.lb-score{color:#fff !important}
+.grade-sm{background:rgba(255,255,255,0.1) !important;color:rgba(255,255,255,.6) !important}
+.log-table th{color:rgba(255,255,255,.5) !important;background:rgba(255,255,255,0.04) !important;border-bottom:1px solid rgba(255,255,255,.08) !important}
+.log-table td{border-bottom:.5px solid rgba(255,255,255,.05) !important;color:rgba(255,255,255,.8)}
+.submitted-banner{background:rgba(255,255,255,0.1) !important;border:1px solid rgba(255,255,255,0.2) !important}
+.section-sep{background:rgba(255,255,255,0.08) !important}
+#sov{background:linear-gradient(135deg,#0f0c29,#1a1a2e) !important}
 .topbar{background:#fff;border-bottom:1px solid #e2e8f0;padding:0 1.5rem;height:58px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:100}
 .mark{width:36px;height:36px;background:#0f172a;color:#fff;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:1rem;flex-shrink:0}
 .brand-name{font-size:.85rem;font-weight:800;color:#0f172a}
@@ -210,13 +244,7 @@ body{font-family:'Inter',sans-serif;background:#f8fafc;color:#0f172a;min-height:
 </div>
 {% endif %}
 </div>
-<div class="mb-4 p-3 bg-light border rounded">
-    <label class="form-label fw-bold">Select Your Role for this Entry:</label>
-    <select name="active_role" id="roleSelect" class="form-select border-primary" onchange="toggleRoleFields()">
-        <option value="picker" {% if staff_type == 'picker' %}selected{% endif %}>📦 Picker (Picking & Packing)</option>
-        <option value="checker" {% if staff_type == 'checker' %}selected{% endif %}>📋 Checker (Error Verification)</option>
-    </select>
-</div> 
+
 <script>
 function lc(){
   const p=parseFloat(document.getElementById('ip').value)||0;

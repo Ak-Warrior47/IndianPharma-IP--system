@@ -3,4 +3,3 @@ __pycache__/
 *.db
 .env
 venv/
-pharma_v4.db

@@ -1,96 +1,324 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0">
-<title>Secure Access | Indian Pharma IP</title>
-<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>Pharma IP | Secure Access</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
 <script src="https://unpkg.com/@phosphor-icons/web"></script>
 <style>
-*{box-sizing:border-box}
-body{font-family:'Inter',sans-serif;background:#fff;
-  background-image:linear-gradient(rgba(0,0,0,0.04) 1px,transparent 1px),linear-gradient(90deg,rgba(0,0,0,0.04) 1px,transparent 1px);
-  background-size:40px 40px;min-height:100vh;display:flex;align-items:center;justify-content:center;padding:20px}
-.wrap{width:100%;max-width:420px}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --glass-bg:rgba(255,255,255,0.08);
+  --glass-border:rgba(255,255,255,0.18);
+  --glass-shadow:0 8px 32px rgba(0,0,0,0.37);
+  --blur:blur(18px);
+  --text:#ffffff;
+  --text-muted:rgba(255,255,255,0.6);
+  --text-dim:rgba(255,255,255,0.35);
+  --accent:#ffffff;
+  --input-bg:rgba(255,255,255,0.06);
+  --input-border:rgba(255,255,255,0.14);
+  --input-focus:rgba(255,255,255,0.28);
+}
+html,body{height:100%;font-family:'Inter',sans-serif}
+
+/* Animated gradient background */
+body{
+  min-height:100vh;
+  display:flex;align-items:center;justify-content:center;
+  padding:20px;
+  background:linear-gradient(135deg,#0f0c29,#302b63,#24243e);
+  background-size:400% 400%;
+  animation:gradShift 12s ease infinite;
+  overflow:hidden;
+  position:relative;
+}
+@keyframes gradShift{
+  0%{background-position:0% 50%}
+  50%{background-position:100% 50%}
+  100%{background-position:0% 50%}
+}
+
+/* Floating orbs */
+.orb{position:fixed;border-radius:50%;filter:blur(80px);opacity:.25;pointer-events:none;animation:float 8s ease-in-out infinite}
+.orb1{width:400px;height:400px;background:#7c3aed;top:-100px;left:-100px;animation-delay:0s}
+.orb2{width:350px;height:350px;background:#2563eb;bottom:-80px;right:-80px;animation-delay:3s}
+.orb3{width:250px;height:250px;background:#db2777;top:50%;left:50%;transform:translate(-50%,-50%);animation-delay:6s}
+@keyframes float{0%,100%{transform:translateY(0) scale(1)}50%{transform:translateY(-30px) scale(1.05)}}
+
+.page-wrap{width:100%;max-width:460px;position:relative;z-index:10}
+
+/* Glass card */
+.glass-card{
+  background:var(--glass-bg);
+  backdrop-filter:var(--blur);
+  -webkit-backdrop-filter:var(--blur);
+  border:1px solid var(--glass-border);
+  border-radius:28px;
+  padding:2.5rem 2rem;
+  box-shadow:var(--glass-shadow);
+  animation:slideUp .6s cubic-bezier(.16,1,.3,1);
+}
+@keyframes slideUp{from{opacity:0;transform:translateY(28px)}to{opacity:1;transform:translateY(0)}}
+
+/* Brand */
 .brand{text-align:center;margin-bottom:2rem}
-.mark{display:inline-flex;align-items:center;justify-content:center;width:56px;height:56px;
-  background:#0f172a;color:#fff;border-radius:16px;font-size:1.5rem;margin-bottom:1rem}
-.brand h1{font-size:1.4rem;font-weight:800;color:#0f172a;letter-spacing:-0.5px;margin:0}
-.brand p{font-size:.7rem;color:#94a3b8;font-weight:600;letter-spacing:2px;text-transform:uppercase;margin-top:4px}
-.card{background:#fff;border:1.5px solid #e2e8f0;border-radius:24px;padding:2.5rem 2rem;
-  box-shadow:0 4px 24px rgba(0,0,0,.06);animation:fadeUp .5s cubic-bezier(.16,1,.3,1)}
-@keyframes fadeUp{from{opacity:0;transform:translateY(20px)}to{opacity:1;transform:translateY(0)}}
-.fl{font-weight:700;font-size:.68rem;color:#64748b;text-transform:uppercase;letter-spacing:1px;margin-bottom:6px}
+.brand-logo{
+  display:inline-flex;align-items:center;justify-content:center;
+  width:64px;height:64px;border-radius:20px;
+  background:rgba(255,255,255,0.12);
+  border:1px solid rgba(255,255,255,0.2);
+  font-size:1.8rem;color:#fff;margin-bottom:1rem;
+  box-shadow:0 0 30px rgba(124,58,237,.4);
+}
+.brand h1{font-size:1.5rem;font-weight:800;color:#fff;letter-spacing:-.5px}
+.brand p{font-size:.7rem;color:var(--text-muted);font-weight:600;letter-spacing:2px;text-transform:uppercase;margin-top:4px}
+
+/* Flash messages */
+.flash-msg{
+  background:rgba(239,68,68,.15);
+  border:1px solid rgba(239,68,68,.35);
+  color:#fca5a5;
+  border-radius:12px;padding:10px 14px;
+  font-size:.82rem;font-weight:500;margin-bottom:1.25rem;
+  display:flex;align-items:center;gap:8px;
+}
+
+/* Form labels */
+.fl{display:block;font-size:.65rem;font-weight:700;color:var(--text-muted);
+  text-transform:uppercase;letter-spacing:1px;margin-bottom:6px}
+
+/* Input groups */
 .ig{position:relative;margin-bottom:1rem}
-.ii{position:absolute;left:14px;top:50%;transform:translateY(-50%);color:#94a3b8;font-size:1.1rem;pointer-events:none;z-index:2}
-.fi{width:100%;padding:12px 16px 12px 42px;border:1.5px solid #e2e8f0;border-radius:12px;
-  background:#f8fafc;font-size:.95rem;font-weight:500;color:#0f172a;transition:all .2s;outline:none}
-.fi:focus{border-color:#0f172a;background:#fff;box-shadow:0 0 0 4px rgba(15,23,42,.06)}
-.tpw{position:absolute;right:12px;top:50%;transform:translateY(-50%);background:none;border:none;
-  color:#94a3b8;cursor:pointer;padding:4px;z-index:2}
-.tpw:hover{color:#0f172a}
-.btn-login{width:100%;background:#0f172a;color:#fff;border:none;border-radius:12px;padding:14px;
-  font-weight:700;font-size:.9rem;letter-spacing:.5px;display:flex;align-items:center;
-  justify-content:center;gap:10px;transition:all .2s;cursor:pointer;margin-top:.5rem}
-.btn-login:hover{background:#1e293b;transform:translateY(-1px);box-shadow:0 8px 20px rgba(15,23,42,.2)}
-.btn-login:disabled{opacity:.6;cursor:not-allowed;transform:none}
-.err{background:#fff1f2;border:1px solid #fecdd3;color:#9f1239;border-radius:10px;
-  padding:10px 14px;font-size:.85rem;font-weight:500;margin-bottom:1.25rem;display:flex;align-items:center;gap:8px}
-.hr{display:flex;justify-content:space-between;align-items:center;margin:.5rem 0 1rem}
-.form-check-label{font-size:.8rem;color:#64748b;font-weight:500}
-.form-check-input:checked{background-color:#0f172a;border-color:#0f172a}
-.foot{text-align:center;font-size:.68rem;color:#94a3b8;font-weight:600;letter-spacing:1.5px;margin-top:1rem}
+.ii{position:absolute;left:14px;top:50%;transform:translateY(-50%);
+  color:rgba(255,255,255,.4);font-size:1.05rem;pointer-events:none;z-index:2}
+.fi{
+  width:100%;padding:13px 16px 13px 42px;
+  background:var(--input-bg);
+  border:1px solid var(--input-border);
+  border-radius:14px;
+  color:#fff;font-size:.92rem;font-weight:500;
+  outline:none;transition:all .2s;
+  font-family:'Inter',sans-serif;
+}
+.fi::placeholder{color:rgba(255,255,255,.3)}
+.fi:focus{border-color:var(--input-focus);background:rgba(255,255,255,.1);box-shadow:0 0 0 3px rgba(255,255,255,.06)}
+
+.tpw{position:absolute;right:12px;top:50%;transform:translateY(-50%);
+  background:none;border:none;color:rgba(255,255,255,.4);cursor:pointer;padding:4px;z-index:2}
+.tpw:hover{color:#fff}
+
+/* Role selector — MCQ style */
+.role-section{margin-bottom:1.25rem}
+.role-title{font-size:.65rem;font-weight:700;color:var(--text-muted);text-transform:uppercase;
+  letter-spacing:1px;margin-bottom:.6rem;display:block}
+.role-grid{display:grid;grid-template-columns:1fr 1fr;gap:.6rem}
+.role-option{position:relative;cursor:pointer}
+.role-option input[type=radio]{position:absolute;opacity:0;width:0;height:0}
+.role-card{
+  border:1.5px solid rgba(255,255,255,.12);
+  border-radius:14px;
+  padding:.85rem 1rem;
+  display:flex;flex-direction:column;align-items:center;gap:.4rem;
+  transition:all .2s;
+  text-align:center;
+  background:rgba(255,255,255,.04);
+  cursor:pointer;
+}
+.role-card:hover{border-color:rgba(255,255,255,.3);background:rgba(255,255,255,.08)}
+.role-icon{font-size:1.4rem;line-height:1}
+.role-name{font-size:.8rem;font-weight:700;color:#fff}
+.role-desc{font-size:.65rem;color:var(--text-muted);line-height:1.3}
+.role-option input:checked ~ .role-card{
+  border-color:rgba(255,255,255,.7);
+  background:rgba(255,255,255,.14);
+  box-shadow:0 0 16px rgba(255,255,255,.1);
+}
+.role-option input:checked ~ .role-card .role-name{color:#fff}
+.role-check{
+  position:absolute;top:8px;right:8px;
+  width:18px;height:18px;
+  background:rgba(255,255,255,0);
+  border:1.5px solid rgba(255,255,255,.2);
+  border-radius:50%;display:flex;align-items:center;justify-content:center;
+  font-size:.6rem;color:transparent;transition:all .2s;
+}
+.role-option input:checked ~ .role-card .role-check{
+  background:#fff;border-color:#fff;color:#0f172a;
+}
+
+/* Remember row */
+.rm-row{display:flex;justify-content:space-between;align-items:center;margin:.4rem 0 1rem}
+.rm-label{display:flex;align-items:center;gap:7px;font-size:.78rem;color:var(--text-muted);cursor:pointer;font-weight:500}
+.rm-check{width:16px;height:16px;border-radius:5px;border:1.5px solid rgba(255,255,255,.25);
+  background:rgba(255,255,255,.06);appearance:none;cursor:pointer;transition:all .2s;flex-shrink:0}
+.rm-check:checked{background:#fff;border-color:#fff}
+
+/* Submit button */
+.btn-login{
+  width:100%;padding:14px;
+  background:#fff;color:#0f172a;
+  border:none;border-radius:14px;
+  font-size:.9rem;font-weight:800;letter-spacing:.3px;
+  display:flex;align-items:center;justify-content:center;gap:10px;
+  cursor:pointer;transition:all .25s;margin-top:.5rem;
+}
+.btn-login:hover{background:rgba(255,255,255,.9);transform:translateY(-2px);box-shadow:0 8px 25px rgba(255,255,255,.2)}
+.btn-login:active{transform:translateY(0)}
+.btn-login:disabled{opacity:.5;cursor:not-allowed;transform:none}
+.btn-login .arrow{transition:transform .2s}
+.btn-login:hover .arrow{transform:translateX(4px)}
+
+/* Footer */
+.glass-footer{text-align:center;margin-top:1.25rem;font-size:.65rem;color:var(--text-dim);
+  font-weight:600;letter-spacing:1.5px;text-transform:uppercase}
+
+/* Hint box */
+.hint-box{
+  background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);
+  border-radius:12px;padding:.75rem 1rem;margin-bottom:1.25rem;
+  font-size:.72rem;color:var(--text-muted);line-height:1.5;
+}
+.hint-box strong{color:#fff;display:block;margin-bottom:4px;font-size:.72rem}
+
+/* Divider */
+.divider{display:flex;align-items:center;gap:8px;margin:.75rem 0;
+  font-size:.65rem;color:var(--text-dim);font-weight:600;letter-spacing:1px}
+.divider::before,.divider::after{content:'';flex:1;height:1px;background:rgba(255,255,255,.1)}
+
+@media(max-width:400px){.glass-card{padding:2rem 1.25rem}.role-grid{grid-template-columns:1fr 1fr}}
 </style>
 </head>
 <body>
-<div class="wrap">
-  <div class="brand">
-    <div class="mark"><i class="ph-fill ph-dna"></i></div>
-    <h1>Indian Pharma IP</h1>
-    <p>Operational Gateway v4.0</p>
-  </div>
-  <div class="card">
-    {% with messages=get_flashed_messages(with_categories=true) %}{% if messages %}
-      {% for cat,msg in messages %}<div class="err"><i class="ph-fill ph-warning-circle"></i>{{msg}}</div>{% endfor %}
-    {% endif %}{% endwith %}
-    <form method="POST" id="lf">
-      <div class="mb-3">
-        <label class="fl">Corporate Email</label>
+
+<!-- Background orbs -->
+<div class="orb orb1"></div>
+<div class="orb orb2"></div>
+<div class="orb orb3"></div>
+
+<div class="page-wrap">
+  <div class="glass-card">
+
+    <!-- Brand -->
+    <div class="brand">
+      <div class="brand-logo"><i class="ph-fill ph-dna"></i></div>
+      <h1>Indian Pharma IP</h1>
+      <p>Operational Gateway v5.0</p>
+    </div>
+
+    <!-- Flash messages -->
+    {% with messages=get_flashed_messages(with_categories=true) %}
+    {% if messages %}{% for cat,msg in messages %}
+    <div class="flash-msg" role="alert">
+      <i class="ph-fill ph-warning-circle"></i> {{ msg }}
+    </div>
+    {% endfor %}{% endif %}{% endwith %}
+
+    <!-- Login form -->
+    <form method="POST" id="lf" novalidate>
+
+      <!-- Email -->
+      <div class="mb-1" style="margin-bottom:.05rem">
+        <label class="fl" for="email">Corporate Email</label>
         <div class="ig">
-          <input type="email" name="email" class="fi" placeholder="employee@pharmaip.com" required autofocus>
-          <i class="ph ph-envelope ii"></i>
+          <input type="email" name="email" id="email" class="fi"
+                 placeholder="employee@pharmaip.com"
+                 autocomplete="email" required autofocus
+                 aria-label="Corporate Email">
+          <i class="ph ph-envelope ii" aria-hidden="true"></i>
         </div>
       </div>
-      <div class="mb-1">
-        <label class="fl">Password</label>
-        <div class="ig">
-          <input type="password" name="password" id="pi" class="fi" placeholder="••••••••" required>
-          <i class="ph ph-lock-key ii"></i>
-          <button type="button" class="tpw" onclick="tp()"><i class="ph ph-eye" id="ei"></i></button>
+
+      <!-- Password -->
+      <div style="margin-bottom:1rem">
+        <label class="fl" for="passw">Password</label>
+        <div class="ig" style="margin-bottom:0">
+          <input type="password" name="password" id="passw" class="fi"
+                 placeholder="••••••••"
+                 autocomplete="current-password" required
+                 aria-label="Password">
+          <i class="ph ph-lock-key ii" aria-hidden="true"></i>
+          <button type="button" class="tpw" onclick="togglePw()" aria-label="Toggle password visibility">
+            <i class="ph ph-eye" id="eyeicon" aria-hidden="true"></i>
+          </button>
         </div>
       </div>
-      <div class="hr">
-        <div class="form-check">
-          <input class="form-check-input" type="checkbox" id="rm">
-          <label class="form-check-label" for="rm">Stay signed in</label>
+
+      <div class="divider">CHOOSE YOUR ROLE</div>
+
+      <!-- Role MCQ selector -->
+      <div class="role-section" role="radiogroup" aria-label="Select your role">
+        <div class="role-grid">
+
+          <label class="role-option" aria-label="Picker — item speed and accuracy">
+            <input type="radio" name="staff_type" value="picker" checked>
+            <div class="role-card">
+              <div class="role-check"><i class="ph-bold ph-check"></i></div>
+              <div class="role-icon">📦</div>
+              <div class="role-name">Picker</div>
+              <div class="role-desc">Item speed<br>& accuracy</div>
+            </div>
+          </label>
+
+          <label class="role-option" aria-label="Checker — verification and accuracy">
+            <input type="radio" name="staff_type" value="checker">
+            <div class="role-card">
+              <div class="role-check"><i class="ph-bold ph-check"></i></div>
+              <div class="role-icon">🔍</div>
+              <div class="role-name">Checker</div>
+              <div class="role-desc">Verification<br>& accuracy</div>
+            </div>
+          </label>
+
         </div>
+        <p style="font-size:.65rem;color:rgba(255,255,255,.35);margin-top:.5rem;text-align:center">
+          You can change your role anytime from this screen
+        </p>
       </div>
-      <button type="submit" class="btn-login" id="ab">
-        <span id="bt">SIGN IN</span><i class="ph-bold ph-arrow-right" id="bi"></i>
+
+      <!-- Remember me -->
+      <div class="rm-row">
+        <label class="rm-label">
+          <input type="checkbox" class="rm-check" id="rem" name="remember">
+          Stay signed in
+        </label>
+      </div>
+
+      <button type="submit" class="btn-login" id="loginbtn">
+        <span id="btntext">SIGN IN</span>
+        <i class="ph-bold ph-arrow-right arrow" id="btnicon" aria-hidden="true"></i>
       </button>
+
     </form>
+
+    <!-- Test credentials hint -->
+    <div class="hint-box" style="margin-top:1.25rem">
+      <strong>Test Credentials</strong>
+      Admin: admin@pharmaip.com / admin123<br>
+      Picker: rahul@pharmaip.com / test1234<br>
+      Checker: priya@pharmaip.com / test1234
+    </div>
+
   </div>
-  <div class="foot">SECURED · INDIAN PHARMACEUTICALS IP © 2026</div>
+  <div class="glass-footer">Secured · Indian Pharmaceuticals IP © 2026</div>
 </div>
+
 <script>
-function tp(){
-  const i=document.getElementById('pi'),e=document.getElementById('ei');
+function togglePw(){
+  const i=document.getElementById('passw'), ic=document.getElementById('eyeicon');
   i.type=i.type==='password'?'text':'password';
-  e.className=i.type==='text'?'ph ph-eye-slash':'ph ph-eye';
+  ic.className=i.type==='text'?'ph ph-eye-slash':'ph ph-eye';
 }
-document.getElementById('lf').onsubmit=function(){
-  const b=document.getElementById('ab');
-  b.disabled=true;document.getElementById('bt').textContent='VERIFYING...';
-};
+document.getElementById('lf').addEventListener('submit',function(e){
+  const email=document.getElementById('email').value.trim();
+  const pw=document.getElementById('passw').value;
+  if(!email||!pw){e.preventDefault();return;}
+  const b=document.getElementById('loginbtn');
+  b.disabled=true;
+  document.getElementById('btntext').textContent='SIGNING IN...';
+  document.getElementById('btnicon').className='ph ph-circle-notch ph-spin';
+});
 </script>
-</body></html>
+</body>
+</html>
