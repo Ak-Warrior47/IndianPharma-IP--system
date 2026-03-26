@@ -9,6 +9,9 @@ from werkzeug.security import generate_password_hash, check_password_hash
 from datetime import datetime, date, timedelta
 from apscheduler.schedulers.background import BackgroundScheduler
 from functools import wraps
+import eventlet
+from datetime import datetime, date, timedelta
+# ... keep your other imports ...
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -224,16 +227,12 @@ def start_scheduler():
 def init_db():
     with app.app_context():
         try:
-            # 1. DROP EVERYTHING to clear the old schema mismatch
+            # 1. DELETE OLD TABLES: Fixes the 'staff_type' column error
             db.drop_all() 
             
-            # 2. Recreate tables with the new 'staff_type' column
+            # 2. CREATE NEW TABLES: Builds everything correctly
             db.create_all()
-
-            def make(name, email, pw, stype='picker', admin=False):
-                # ... rest of your existing make function ...
-        try:
-            db.create_all()
+            logger.info("Database recreated with new schema.")
 
             def make(name, email, pw, stype='picker', admin=False):
                 existing = Employee.query.filter_by(email=email).first()
@@ -245,13 +244,15 @@ def init_db():
                 )
                 emp.set_password(pw)
                 db.session.add(emp)
-                db.session.flush()
+                db.session.flush() # Flushes so ID is available for KPI seeding
                 return emp
 
-            make('System Admin',  'admin@pharmaip.com',  'admin123', admin=True)
-
+            # 3. SEED USERS
+            make('System Admin', 'admin@pharmaip.com', 'admin123', admin=True)
+            
             p1 = make('Rahul Sharma', 'rahul@pharmaip.com', 'test1234', stype='picker')
-            if p1 and not KPIEntry.query.filter_by(emp_id=p1.id).first():
+            if p1:
+                # Seed Rahul's last 7 days of data
                 for d_ago, b, pk, ms, bx, sw in [
                     (6,40,195,5,10,1.5),(5,42,210,2,12,1.4),(4,38,188,8,9,1.6),
                     (3,45,220,1,14,1.3),(2,41,200,4,11,1.5),(1,44,215,3,13,1.4),(0,46,225,2,15,1.3)]:
@@ -261,7 +262,8 @@ def init_db():
                     ))
 
             c1 = make('Priya Patel', 'priya@pharmaip.com', 'test1234', stype='checker')
-            if c1 and not KPIEntry.query.filter_by(emp_id=c1.id).first():
+            if c1:
+                # Seed Priya's last 7 days of data
                 for d_ago, b, pk, ms, bx, sw, ck, er, cm in [
                     (6,30,160,18,8,2.0,178,14,90),(5,28,172,12,7,1.8,184,10,85),
                     (4,33,190,6,10,1.6,196,6,80),(3,29,168,14,6,1.9,182,12,88),
@@ -274,15 +276,13 @@ def init_db():
                     ))
 
             db.session.commit()
-            logger.info('DB seeded successfully')
+            logger.info('DB Reset and Seeded successfully')
         except Exception as e:
             logger.error(f'DB init error: {e}')
             db.session.rollback()
 
-
-# Run init at import time (works for both gunicorn and python app.py)
+# Ensure this is called at the end of your file
 init_db()
-start_scheduler()
 
 
 # ══════════════════════════════════════════
