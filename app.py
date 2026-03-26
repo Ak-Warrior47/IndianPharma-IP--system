@@ -1,3 +1,6 @@
+import eventlet
+eventlet.monkey_patch()  # This MUST be the first thing in the file
+# ... the rest of your code stays exactly the same ...
 import os, logging, zipfile, io, atexit
 from flask import Flask, render_template, request, redirect, url_for, flash, session, send_file, jsonify
 from flask_sqlalchemy import SQLAlchemy
