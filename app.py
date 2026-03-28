@@ -1,5 +1,5 @@
 import eventlet
-eventlet.monkey_patch()  # THIS MUST BE THE ABSOLUTE FIRST LINE
+eventlet.monkey_patch() # THIS MUST BE THE ABSOLUTE FIRST LINE
 
 import os
 import logging
@@ -552,15 +552,20 @@ def bulk_zip():
 def health():
     return jsonify(status="Pharma IP v6 Operational"), 200
 
+redirect(url_for("login"))
+
 @app.errorhandler(404)
 def not_found(e):
+    # If logged in, stay on dashboard. DO NOT send back to login.
+    if "user_id" in session:
+        return redirect(url_for("admin_dashboard" if session.get("is_admin") else "dashboard"))
     return redirect(url_for("login"))
 
 @app.errorhandler(500)
 def server_error(e):
-    logger.error(f"500: {e}")
     db.session.rollback()
-    flash("An internal error occurred. Please try again.", "danger")
+    # Log the error so you can see it in Render logs
+    logger.error(f"Server Error: {e}")
     return redirect(url_for("login"))
 
 if __name__ == "__main__":
