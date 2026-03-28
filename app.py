@@ -1,8 +1,6 @@
 import eventlet
 eventlet.monkey_patch()  # MUST BE ABSOLUTE FIRST LINE
 
-from werkzeug.middleware.proxy_fix import ProxyFix
-app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_port=1)
 import os, logging, zipfile, io, atexit, json
 from flask import Flask, render_template, request, redirect, url_for, flash, session, send_file, jsonify
 from flask_sqlalchemy import SQLAlchemy
@@ -16,8 +14,13 @@ from functools import wraps
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+# 1. CREATE APP FIRST
 app = Flask(__name__)
+
+# 2. PROXYFIX SECOND (You had this floating at the top before!)
 app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_port=1)
+
+# 3. CONFIGS THIRD
 app.secret_key = os.environ.get("SECRET_KEY", "ip_pharma_final_secure_change_in_prod")
 
 db_url = os.environ.get("DATABASE_URL", "sqlite:///pharma_final.db")
@@ -28,9 +31,9 @@ app.config["SQLALCHEMY_DATABASE_URI"] = db_url
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 app.config["SQLALCHEMY_ENGINE_OPTIONS"] = {"pool_pre_ping": True, "pool_recycle": 300}
 
+# 4. EXTENSIONS FOURTH
 db       = SQLAlchemy(app)
 socketio = SocketIO(app, cors_allowed_origins="*", async_mode="eventlet")
-
 
 # ══════════════════════════════════════════════════
 #  MODELS
