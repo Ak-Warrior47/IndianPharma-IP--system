@@ -317,14 +317,17 @@ start_scheduler()
 # ══════════════════════════════════════════════════
 # ── Authentication Decorators (Add this now!) ──────────
 @app.route("/", methods=["GET", "POST"])
-def index():  # <--- RENAME THIS (was likely 'login' before)
+def index():
     if "user_id" not in session:
         return redirect(url_for("login"))
-    return redirect(url_for("dashboard"))
-@app.route("/", methods=["GET", "POST"])
+    # Check if admin or regular user to send to right dashboard
+    return redirect(url_for("admin_dashboard" if session.get("is_admin") else "dashboard"))
+
+@app.route("/login", methods=["GET", "POST"]) # <--- CHANGE THIS FROM "/" TO "/login"
 def login():
     if "user_id" in session:
         return redirect(url_for("admin_dashboard" if session.get("is_admin") else "dashboard"))
+    # ... rest of your login logic ...
     if request.method == "POST":
         try:
             email       = request.form.get("email", "").lower().strip()
