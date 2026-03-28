@@ -1,6 +1,8 @@
 import eventlet
 eventlet.monkey_patch()  # MUST BE ABSOLUTE FIRST LINE
 
+from werkzeug.middleware.proxy_fix import ProxyFix
+app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_port=1)
 import os, logging, zipfile, io, atexit, json
 from flask import Flask, render_template, request, redirect, url_for, flash, session, send_file, jsonify
 from flask_sqlalchemy import SQLAlchemy
@@ -574,19 +576,25 @@ def health():
 
 
 # ── Error handlers ──────────────────────────────────
+# ── Error handlers (Fixed to prevent loops) ────────────────
 @app.errorhandler(404)
 def not_found(e):
+    # If they are logged in, send them to their specific home
     if "user_id" in session:
-        return redirect(url_for("admin_dashboard" if session.get("is_admin") else "dashboard"))
+        try:
+            target = "admin_dashboard" if session.get("is_admin") else "dashboard"
+            return redirect(url_for(target))
+        except:
+            return redirect(url_for("login"))
     return redirect(url_for("login"))
-
 
 @app.errorhandler(500)
 def server_error(e):
     logger.error(f"500 error: {e}")
     db.session.rollback()
-    flash("An internal error occurred. Please try again.", "danger")
-    return redirect(url_for("login"))
+    # If a 500 happens, CLEAR session and go to login to reset the state
+    session.clear() 
+    return render_template("login.html"), 500
 
 
 # ── Entry point (local dev only — gunicorn uses module-level init above) ──
