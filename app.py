@@ -317,22 +317,10 @@ start_scheduler()
 # ══════════════════════════════════════════════════
 # ── Authentication Decorators (Add this now!) ──────────
 @app.route("/", methods=["GET", "POST"])
-def login():
-    # Only redirect if everything is perfect. 
-    # If there's any doubt, just show the login page.
-    if "user_id" in session:
-        try:
-            target = "admin_dashboard" if session.get("is_admin") else "dashboard"
-            return redirect(url_for(target))
-        except:
-            session.clear() # If session is corrupted, clear it and show login
-            return render_template("login.html")
-            
-    if request.method == "POST":
-        # ... your existing POST logic ...
-        pass
-        
-    return render_template("login.html")
+def index():  # <--- RENAME THIS (was likely 'login' before)
+    if "user_id" not in session:
+        return redirect(url_for("login"))
+    return redirect(url_for("dashboard"))
 @app.route("/", methods=["GET", "POST"])
 def login():
     if "user_id" in session:
