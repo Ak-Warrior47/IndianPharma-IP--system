@@ -6,12 +6,6 @@ from flask import Flask, render_template, request, redirect, url_for, flash, ses
 from flask_sqlalchemy import SQLAlchemy
 from flask_socketio import SocketIO
 from werkzeug.security import generate_password_hash, check_password_hash
-from werkzeug.middleware.proxy_fix import ProxyFix
-# Update this line to include x_prefix=1
-app.wsgi_app = ProxyFix(
-    app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_port=1, x_prefix=1
-)
-
 from datetime import datetime, date, timedelta
 from apscheduler.schedulers.background import BackgroundScheduler
 from functools import wraps
@@ -21,7 +15,11 @@ logger = logging.getLogger(__name__)
 
 # 1. CREATE APP FIRST
 app = Flask(__name__)
-
+from werkzeug.middleware.proxy_fix import ProxyFix
+# Update this line to include x_prefix=1
+app.wsgi_app = ProxyFix(
+    app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_port=1, x_prefix=1
+)
 #
 # 3. CONFIGS THIRD
 app.secret_key = os.environ.get("SECRET_KEY", "ip_pharma_final_secure_change_in_prod")
