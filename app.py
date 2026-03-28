@@ -14,12 +14,14 @@ from werkzeug.security import generate_password_hash, check_password_hash
 from datetime import datetime, date, timedelta
 from apscheduler.schedulers.background import BackgroundScheduler
 from functools import wraps
+from werkzeug.middleware.proxy_fix import ProxyFix # <--- ADD THIS
 
 # Setup logging AFTER the monkey patch
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 app = Flask(__name__)
+app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_port=1)
 app.secret_key = os.environ.get("SECRET_KEY", "ip_pharma_v6_secure")
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
