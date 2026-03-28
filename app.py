@@ -7,6 +7,11 @@ from flask_sqlalchemy import SQLAlchemy
 from flask_socketio import SocketIO
 from werkzeug.security import generate_password_hash, check_password_hash
 from werkzeug.middleware.proxy_fix import ProxyFix
+# Update this line to include x_prefix=1
+app.wsgi_app = ProxyFix(
+    app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_port=1, x_prefix=1
+)
+
 from datetime import datetime, date, timedelta
 from apscheduler.schedulers.background import BackgroundScheduler
 from functools import wraps
@@ -17,9 +22,7 @@ logger = logging.getLogger(__name__)
 # 1. CREATE APP FIRST
 app = Flask(__name__)
 
-# 2. PROXYFIX SECOND (You had this floating at the top before!)
-app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_port=1)
-
+#
 # 3. CONFIGS THIRD
 app.secret_key = os.environ.get("SECRET_KEY", "ip_pharma_final_secure_change_in_prod")
 
@@ -31,6 +34,11 @@ app.config["SQLALCHEMY_DATABASE_URI"] = db_url
 app.config['PREFERRED_URL_SCHEME'] = 'https'
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 app.config["SQLALCHEMY_ENGINE_OPTIONS"] = {"pool_pre_ping": True, "pool_recycle": 300}
+# Add these three lines to your app.config section
+app.config['SESSION_COOKIE_SECURE'] = True
+app.config['SESSION_COOKIE_HTTPONLY'] = True
+app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
+
 
 # 4. EXTENSIONS FOURTH
 db       = SQLAlchemy(app)
@@ -362,6 +370,7 @@ def logout():
 @app.route("/dashboard", methods=["GET", "POST"])
 @login_required
 def dashboard():
+    return render_template("dashboard.html")
     try:
         emp_id      = session["user_id"]
         staff_type  = session.get("staff_type", "picker")
