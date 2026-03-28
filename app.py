@@ -239,27 +239,36 @@ def build_leaderboard(staff_type=None):
 
 
 # ── SCHEDULER ───────────────────────────────────────
+# ── SCHEDULER FIX ───────────────────────────────────────
 def start_scheduler():
-    def job():
+    def scheduled_task():
+        # This ensures the background worker can talk to the Database
         with app.app_context():
             try:
-                target  = date.today() - timedelta(days=2)
-                pending = KPIEntry.query.filter_by(entry_date=target, report_sent=False).all()
-                for e in pending:
-                    emp = db.session.get(Employee, e.emp_id)
-                    if emp: logger.info(f"[48HR] {emp.name} — {target}")
-                    e.report_sent = True
+                # Look back 2 days to close out reports
+                target_date = date.today() - timedelta(days=2)
+                pending_reports = KPIEntry.query.filter_by(entry_date=target_date, report_sent=False).all()
+                
+                for entry in pending_reports:
+                    entry.report_sent = True
+                    logger.info(f"Auto-archived report for entry ID: {entry.id}")
+                
                 db.session.commit()
-            except Exception as err:
-                logger.error(f"Scheduler error: {err}")
-    try:
-        s = BackgroundScheduler(daemon=True)
-        s.add_job(job, "interval", hours=24, id="auto_report", replace_existing=True)
-        s.start()
-        atexit.register(lambda: s.shutdown(wait=False))
-    except Exception as e:
-        logger.warning(f"Scheduler failed to start: {e}")
+            except Exception as e:
+                db.session.rollback()
+                logger.error(f"Scheduler Task Failed: {e}")
 
+    try:
+        # We use a simple background scheduler
+        scheduler = BackgroundScheduler(daemon=True)
+        # Change interval to something Render likes (every 12 hours)
+        scheduler.add_job(func=scheduled_task, trigger="interval", hours=12, id="daily_cleanup")
+        scheduler.start()
+        # Ensure scheduler shuts down when the app stops
+        atexit.register(lambda: scheduler.shutdown(wait=False))
+        logger.info("✅ Scheduler initialized and started.")
+    except Exception as e:
+        logger.error(f"❌ Scheduler failed to start: {e}")
 
 # ── DB INIT ─────────────────────────────────────────
 def init_db():
