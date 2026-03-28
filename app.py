@@ -242,7 +242,7 @@ def build_leaderboard(staff_type=None):
 # ── SCHEDULER FIX ───────────────────────────────────────
 def start_scheduler():
     def scheduled_task():
-        # This 'with' block is the bridge Render is asking for
+        # THIS LINE IS THE KEY: It gives the background job access to the DB
         with app.app_context():
             try:
                 target = date.today() - timedelta(days=2)
@@ -256,7 +256,6 @@ def start_scheduler():
                 logger.error(f"Scheduler job error: {e}")
 
     try:
-        # Check if scheduler is already running to avoid double-starting
         s = BackgroundScheduler(daemon=True)
         s.add_job(scheduled_task, "interval", hours=12, id="daily_cleanup")
         s.start()
@@ -454,8 +453,7 @@ def admin_dashboard():
     except Exception as e:
         logger.error(f"Admin dashboard: {e}")
         flash("Error loading admin dashboard.", "danger")
-        return redirect(url_for("login"))
-
+    
 
 @app.route("/admin/staff/<int:emp_id>")
 @login_required
@@ -576,8 +574,10 @@ def server_error(e):
 # REMOVE the old init_db() and start_scheduler() calls that are floating here
 # DELETE Line 414 (the lonely redirect line)
 
+# DELETE that lonely redirect(url_for("login")) line!
+
 if __name__ == "__main__":
-    # This ensures DB and Scheduler start only when the app is actually running
+    # This ensures everything starts ONLY when the app is ready
     init_db()
     start_scheduler()
     socketio.run(app, debug=False, port=int(os.environ.get("PORT", 5000)))
