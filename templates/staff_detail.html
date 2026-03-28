@@ -7,6 +7,91 @@
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
 <script src="https://unpkg.com/@phosphor-icons/web"></script>
 <style>
+
+  /* Holographic white/grey theme */
+  body{
+    background:#f0f4ff !important;
+    background-image:
+      radial-gradient(ellipse at 0% 0%,rgba(29,78,216,.08) 0%,transparent 45%),
+      radial-gradient(ellipse at 100% 100%,rgba(96,165,250,.07) 0%,transparent 45%),
+      linear-gradient(rgba(29,78,216,.02) 1px,transparent 1px),
+      linear-gradient(90deg,rgba(29,78,216,.02) 1px,transparent 1px) !important;
+    background-size:100% 100%,100% 100%,36px 36px,36px 36px !important;
+  }
+  .topbar{
+    background:rgba(255,255,255,.88) !important;
+    backdrop-filter:blur(20px) !important;
+    -webkit-backdrop-filter:blur(20px) !important;
+    border-bottom:1px solid rgba(255,255,255,.9) !important;
+    box-shadow:0 1px 12px rgba(15,23,42,.07),0 0 0 1px rgba(29,78,216,.04) !important;
+  }
+  .submit-card,.section-card,.lb-section,.scard,.stat-card{
+    background:rgba(255,255,255,.85) !important;
+    backdrop-filter:blur(16px) !important;
+    -webkit-backdrop-filter:blur(16px) !important;
+    border:1px solid rgba(255,255,255,.9) !important;
+    box-shadow:0 4px 24px rgba(15,23,42,.07),0 1px 4px rgba(15,23,42,.04),
+               inset 0 1px 0 rgba(255,255,255,.8) !important;
+    position:relative;overflow:hidden;
+  }
+  .submit-card::before,.section-card::before,.lb-section::before{
+    content:"";position:absolute;top:0;left:0;right:0;height:1px;
+    background:linear-gradient(90deg,transparent,rgba(29,78,216,.2),rgba(96,165,250,.3),rgba(29,78,216,.2),transparent);
+    pointer-events:none;
+  }
+  .hero{
+    background:linear-gradient(135deg,var(--blue),var(--blue-l)) !important;
+    box-shadow:0 8px 40px rgba(29,78,216,.3),0 0 0 1px rgba(29,78,216,.1) !important;
+  }
+  .btn-submit,.btn-login,.btn-dl,.btn-action{
+    background:linear-gradient(135deg,var(--blue),var(--blue-l)) !important;
+    box-shadow:0 4px 20px rgba(29,78,216,.3),inset 0 1px 0 rgba(255,255,255,.15) !important;
+  }
+  .btn-submit:hover,.btn-login:hover,.btn-dl:hover,.btn-action:hover{
+    background:linear-gradient(135deg,#0f172a,#1e293b) !important;
+    box-shadow:0 8px 28px rgba(15,23,42,.25) !important;
+    transform:translateY(-1px) !important;
+  }
+  .stat-card.highlight,.scard.blue{
+    background:linear-gradient(135deg,var(--blue),var(--blue-l)) !important;
+    box-shadow:0 4px 20px rgba(29,78,216,.3) !important;
+    border:none !important;
+  }
+  .rank-badge{
+    background:linear-gradient(135deg,var(--blue),var(--blue-l)) !important;
+    box-shadow:0 2px 8px rgba(29,78,216,.25) !important;
+  }
+  .kra-bar{
+    background:linear-gradient(135deg,var(--blue),var(--blue-l)) !important;
+    box-shadow:0 4px 16px rgba(29,78,216,.25) !important;
+    border:none !important;
+  }
+  .potential-box,.pot-box{
+    background:linear-gradient(135deg,rgba(239,246,255,.8),rgba(219,234,254,.5)) !important;
+    border:1px solid rgba(191,219,254,.6) !important;
+    box-shadow:0 2px 8px rgba(29,78,216,.06) !important;
+  }
+  .tab-btn.active,.ptab.active{
+    background:rgba(255,255,255,.95) !important;
+    color:var(--blue) !important;
+    box-shadow:0 2px 8px rgba(15,23,42,.1),0 0 0 1px rgba(29,78,216,.1) !important;
+  }
+  .fi{
+    background:rgba(248,250,252,.8) !important;
+    border:1.5px solid rgba(226,232,240,.8) !important;
+    box-shadow:0 1px 3px rgba(15,23,42,.04),inset 0 1px 0 rgba(255,255,255,.6) !important;
+  }
+  .fi:focus{
+    border-color:var(--blue2,#3b82f6) !important;
+    background:rgba(255,255,255,.95) !important;
+    box-shadow:0 0 0 3px rgba(59,130,246,.1),0 1px 3px rgba(15,23,42,.06) !important;
+  }
+  .lb-row.me{
+    background:linear-gradient(135deg,rgba(239,246,255,.8),rgba(219,234,254,.4)) !important;
+    border-left:3px solid var(--blue) !important;
+    box-shadow:inset 0 0 0 1px rgba(191,219,254,.4) !important;
+  }
+  #sov{background:rgba(240,244,255,.97) !important;backdrop-filter:blur(24px) !important}
 *{box-sizing:border-box}
 :root{--blue:#1d4ed8;--blue-l:#3b82f6;--blue-xl:#eff6ff;--blue-border:#bfdbfe;
   --dark:#0f172a;--gray:#64748b;--lgray:#e2e8f0;--white:#ffffff}
