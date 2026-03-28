@@ -20,14 +20,18 @@ from werkzeug.middleware.proxy_fix import ProxyFix
 app.wsgi_app = ProxyFix(
     app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_port=1, x_prefix=1
 )
-#
+app.config['PREFERRED_URL_SCHEME'] = 'https'
+app.config.update(
+    SESSION_COOKIE_SECURE=True,
+    SESSION_COOKIE_HTTPONLY=True,
+    SESSION_COOKIE_SAMESITE='Lax',
+)
 # 3. CONFIGS THIRD
 app.secret_key = os.environ.get("SECRET_KEY", "ip_pharma_final_secure_change_in_prod")
 
 db_url = os.environ.get("DATABASE_URL", "sqlite:///pharma_final.db")
 if db_url.startswith("postgres://"):
     db_url = db_url.replace("postgres://", "postgresql://", 1)
-
 app.config["SQLALCHEMY_DATABASE_URI"] = db_url
 app.config['PREFERRED_URL_SCHEME'] = 'https'
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
