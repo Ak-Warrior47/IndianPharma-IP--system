@@ -28,6 +28,7 @@ if db_url.startswith("postgres://"):
     db_url = db_url.replace("postgres://", "postgresql://", 1)
 
 app.config["SQLALCHEMY_DATABASE_URI"] = db_url
+app.config['PREFERRED_URL_SCHEME'] = 'https'
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 app.config["SQLALCHEMY_ENGINE_OPTIONS"] = {"pool_pre_ping": True, "pool_recycle": 300}
 
@@ -314,6 +315,24 @@ start_scheduler()
 # ══════════════════════════════════════════════════
 #  ROUTES
 # ══════════════════════════════════════════════════
+# ── Authentication Decorators (Add this now!) ──────────
+@app.route("/", methods=["GET", "POST"])
+def login():
+    # Only redirect if everything is perfect. 
+    # If there's any doubt, just show the login page.
+    if "user_id" in session:
+        try:
+            target = "admin_dashboard" if session.get("is_admin") else "dashboard"
+            return redirect(url_for(target))
+        except:
+            session.clear() # If session is corrupted, clear it and show login
+            return render_template("login.html")
+            
+    if request.method == "POST":
+        # ... your existing POST logic ...
+        pass
+        
+    return render_template("login.html")
 @app.route("/", methods=["GET", "POST"])
 def login():
     if "user_id" in session:
