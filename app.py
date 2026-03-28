@@ -1,3 +1,11 @@
+#importd an requirements
+import eventlet
+eventlet.monkey_patch()  # MUST BE ABSOLUTE FIRST LINE
+
+import os, logging, zipfile, io, atexit, json
+from flask import Flask, render_template, request, redirect, url_for, flash, session, send_file, jsonify
+from flask_sqlalchemy import SQLAlchemy
+from flask_socketio import SocketIO
 app = Flask(__name__)
 
 from werkzeug.middleware.proxy_fix import ProxyFix
@@ -9,13 +17,6 @@ app.config.update(
     SESSION_COOKIE_HTTPONLY=True,
     SESSION_COOKIE_SAMESITE='Lax',
 )
-import eventlet
-eventlet.monkey_patch()  # MUST BE ABSOLUTE FIRST LINE
-
-import os, logging, zipfile, io, atexit, json
-from flask import Flask, render_template, request, redirect, url_for, flash, session, send_file, jsonify
-from flask_sqlalchemy import SQLAlchemy
-from flask_socketio import SocketIO
 from werkzeug.security import generate_password_hash, check_password_hash
 from datetime import datetime, date, timedelta
 from apscheduler.schedulers.background import BackgroundScheduler
