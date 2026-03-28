@@ -242,34 +242,28 @@ def build_leaderboard(staff_type=None):
 # ── SCHEDULER FIX ───────────────────────────────────────
 def start_scheduler():
     def scheduled_task():
-        # This ensures the background worker can talk to the Database
+        # This 'with' block is the bridge Render is asking for
         with app.app_context():
             try:
-                # Look back 2 days to close out reports
-                target_date = date.today() - timedelta(days=2)
-                pending_reports = KPIEntry.query.filter_by(entry_date=target_date, report_sent=False).all()
-                
-                for entry in pending_reports:
-                    entry.report_sent = True
-                    logger.info(f"Auto-archived report for entry ID: {entry.id}")
-                
+                target = date.today() - timedelta(days=2)
+                pending = KPIEntry.query.filter_by(entry_date=target, report_sent=False).all()
+                for e in pending:
+                    e.report_sent = True
                 db.session.commit()
+                logger.info("Scheduler: Auto-archived old reports.")
             except Exception as e:
                 db.session.rollback()
-                logger.error(f"Scheduler Task Failed: {e}")
+                logger.error(f"Scheduler job error: {e}")
 
     try:
-        # We use a simple background scheduler
-        scheduler = BackgroundScheduler(daemon=True)
-        # Change interval to something Render likes (every 12 hours)
-        scheduler.add_job(func=scheduled_task, trigger="interval", hours=12, id="daily_cleanup")
-        scheduler.start()
-        # Ensure scheduler shuts down when the app stops
-        atexit.register(lambda: scheduler.shutdown(wait=False))
-        logger.info("✅ Scheduler initialized and started.")
+        # Check if scheduler is already running to avoid double-starting
+        s = BackgroundScheduler(daemon=True)
+        s.add_job(scheduled_task, "interval", hours=12, id="daily_cleanup")
+        s.start()
+        atexit.register(lambda: s.shutdown(wait=False))
+        logger.info("✅ Scheduler initialized.")
     except Exception as e:
-        logger.error(f"❌ Scheduler failed to start: {e}")
-
+        logger.error(f"Scheduler failed: {e}")
 # ── DB INIT ─────────────────────────────────────────
 def init_db():
     with app.app_context():
@@ -579,5 +573,11 @@ def server_error(e):
     logger.error(f"Server Error: {e}")
     return redirect(url_for("login"))
 
+# REMOVE the old init_db() and start_scheduler() calls that are floating here
+# DELETE Line 414 (the lonely redirect line)
+
 if __name__ == "__main__":
-    socketio.run(app, debug=False, port=int(os.environ.get("PORT",5000)))
+    # This ensures DB and Scheduler start only when the app is actually running
+    init_db()
+    start_scheduler()
+    socketio.run(app, debug=False, port=int(os.environ.get("PORT", 5000)))
