@@ -1,3 +1,14 @@
+app = Flask(__name__)
+
+from werkzeug.middleware.proxy_fix import ProxyFix
+# This line MUST be present to recognize Render's HTTPS headers
+app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_port=1, x_prefix=1)
+app.config['PREFERRED_URL_SCHEME'] = 'https'
+app.config.update(
+    SESSION_COOKIE_SECURE=True,
+    SESSION_COOKIE_HTTPONLY=True,
+    SESSION_COOKIE_SAMESITE='Lax',
+)
 import eventlet
 eventlet.monkey_patch()  # MUST BE ABSOLUTE FIRST LINE
 
@@ -14,18 +25,6 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 # 1. CREATE APP FIRST
-app = Flask(__name__)
-from werkzeug.middleware.proxy_fix import ProxyFix
-# Update this line to include x_prefix=1
-app.wsgi_app = ProxyFix(
-    app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_port=1, x_prefix=1
-)
-app.config['PREFERRED_URL_SCHEME'] = 'https'
-app.config.update(
-    SESSION_COOKIE_SECURE=True,
-    SESSION_COOKIE_HTTPONLY=True,
-    SESSION_COOKIE_SAMESITE='Lax',
-)
 # 3. CONFIGS THIRD
 app.secret_key = os.environ.get("SECRET_KEY", "ip_pharma_final_secure_change_in_prod")
 
