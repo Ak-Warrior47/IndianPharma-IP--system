@@ -1,4 +1,12 @@
-import os, logging, zipfile, io, atexit, json
+import eventlet
+eventlet.monkey_patch()  # THIS MUST BE THE ABSOLUTE FIRST LINE
+
+import os
+import logging
+import zipfile
+import io
+import atexit
+import json
 from flask import Flask, render_template, request, redirect, url_for, flash, session, send_file, jsonify
 from flask_sqlalchemy import SQLAlchemy
 from flask_socketio import SocketIO
@@ -7,12 +15,14 @@ from datetime import datetime, date, timedelta
 from apscheduler.schedulers.background import BackgroundScheduler
 from functools import wraps
 
+# Setup logging AFTER the monkey patch
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 app = Flask(__name__)
 app.secret_key = os.environ.get("SECRET_KEY", "ip_pharma_v6_secure")
-
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 db_url = os.environ.get("DATABASE_URL", "sqlite:///pharma_v6.db")
 if db_url.startswith("postgres://"):
     db_url = db_url.replace("postgres://", "postgresql://", 1)
