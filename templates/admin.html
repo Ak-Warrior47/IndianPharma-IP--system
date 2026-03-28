@@ -9,40 +9,50 @@
 <script src="https://unpkg.com/@phosphor-icons/web"></script>
 <style>
 *{box-sizing:border-box}
-body{font-family:'Inter',sans-serif;background:linear-gradient(135deg,#0f0c29,#1a1a2e,#16213e);color:#fff;min-height:100vh}
-.topbar{background:rgba(255,255,255,0.06) !important;backdrop-filter:blur(20px);border-bottom:1px solid rgba(255,255,255,0.1) !important}
-.brand-name{color:#fff !important}.brand-sub{color:rgba(255,255,255,.5) !important}
-.btn-nav{background:rgba(255,255,255,0.08) !important;color:#fff !important;border:1px solid rgba(255,255,255,0.15) !important}
-.btn-nav:hover{background:rgba(255,255,255,0.14) !important;color:#fff !important}
-.btn-nav-dark{background:rgba(255,255,255,0.18) !important}
-.page-title{color:#fff !important}.page-sub{color:rgba(255,255,255,.5) !important}
-.stat-card{background:rgba(255,255,255,0.07) !important;border:1px solid rgba(255,255,255,0.1) !important}
-.stat-label{color:rgba(255,255,255,.5) !important}.stat-val{color:#fff !important}
-.stat-icon{background:rgba(255,255,255,0.1) !important;color:rgba(255,255,255,.6) !important}
-.section-card{background:rgba(255,255,255,0.06) !important;backdrop-filter:blur(16px);border:1px solid rgba(255,255,255,0.1) !important}
-.section-head{border-bottom:1px solid rgba(255,255,255,.08) !important}
-.section-title{color:#fff !important}
-.lb-section{background:rgba(255,255,255,0.06) !important;border:1px solid rgba(255,255,255,0.1) !important}
-.lb-head{border-bottom:1px solid rgba(255,255,255,.08) !important;background:rgba(255,255,255,0.04)}
-.lb-head-title{color:#fff !important}
-.lb-row{border-bottom:.5px solid rgba(255,255,255,.05) !important}
-.lb-row.rank1{background:rgba(255,255,255,0.05) !important}
-.lb-num{color:rgba(255,255,255,.4) !important}.lb-num.t{color:#fff !important}
-.lb-name{color:rgba(255,255,255,.85) !important}.lb-score{color:#fff !important}
-.lb-grade{background:rgba(255,255,255,0.1) !important;color:rgba(255,255,255,.6) !important}
-.ip-table thead tr{background:rgba(255,255,255,0.04) !important;border-bottom:1px solid rgba(255,255,255,.08) !important}
-.ip-table th{color:rgba(255,255,255,.5) !important}
-.ip-table td{border-bottom:.5px solid rgba(255,255,255,.05) !important;color:rgba(255,255,255,.8)}
-.ip-table tbody tr:hover{background:rgba(255,255,255,0.04) !important}
-.emp-name{color:#fff !important}.emp-role{color:rgba(255,255,255,.4) !important}
-.eff-bar{background:rgba(255,255,255,0.1) !important}
-.eff-fill{background:#fff !important}
-.ptab{background:rgba(255,255,255,0.06) !important;border:1px solid rgba(255,255,255,.12) !important;color:rgba(255,255,255,.5) !important}
-.ptab.active{background:rgba(255,255,255,0.18) !important;color:#fff !important;border-color:rgba(255,255,255,.3) !important}
-.btn-action{background:rgba(255,255,255,0.12) !important;color:#fff !important;border:1px solid rgba(255,255,255,.2) !important}
-.btn-action:hover{background:rgba(255,255,255,0.22) !important}
-.no-data{color:rgba(255,255,255,.4) !important}
-.live-toast{background:rgba(15,23,42,.95) !important}
+body{font-family:'Inter',sans-serif;background:#f1f5f9;color:#0f172a;min-height:100vh;
+  background-image:radial-gradient(circle at 10% 10%,rgba(29,78,216,.04) 0%,transparent 50%)}
+:root{--blue:#1d4ed8;--blue-l:#3b82f6;--blue-xl:#eff6ff;--blue-border:#bfdbfe;
+  --dark:#0f172a;--gray:#64748b;--lgray:#e2e8f0;--white:#ffffff;--bg:#f8fafc}
+.topbar{background:var(--white) !important;border-bottom:1px solid var(--lgray) !important;box-shadow:0 1px 3px rgba(15,23,42,.06)}
+.brand-name{color:var(--dark) !important;font-weight:800}.brand-sub{color:var(--gray) !important}
+.btn-nav{background:#f1f5f9 !important;color:var(--dark) !important;border:1px solid var(--lgray) !important;transition:all .2s}
+.btn-nav:hover{background:var(--dark) !important;color:#fff !important}
+.btn-nav-dark{background:linear-gradient(135deg,var(--blue),var(--blue-l)) !important;color:#fff !important;border:none !important;box-shadow:0 2px 8px rgba(29,78,216,.25) !important}
+.btn-nav-dark:hover{background:var(--dark) !important}
+.page-title{color:var(--dark) !important}.page-sub{color:var(--gray) !important}
+.stat-card{background:var(--white) !important;border:1px solid var(--lgray) !important;transition:transform .15s,box-shadow .15s}
+.stat-card:hover{transform:translateY(-2px);box-shadow:0 4px 16px rgba(15,23,42,.08) !important}
+.stat-label{color:var(--gray) !important}.stat-val{color:var(--dark) !important}
+.stat-icon{background:#f1f5f9 !important;color:var(--gray) !important}
+.section-card{background:var(--white) !important;border:1px solid var(--lgray) !important;box-shadow:0 2px 12px rgba(15,23,42,.05)}
+.section-head{border-bottom:1px solid #f1f5f9 !important;background:var(--bg)}
+.section-title{color:var(--dark) !important}
+.lb-section{background:var(--white) !important;border:1px solid var(--lgray) !important;box-shadow:0 2px 12px rgba(15,23,42,.05)}
+.lb-head{border-bottom:1px solid #f1f5f9 !important;background:var(--bg)}
+.lb-head-title{color:var(--dark) !important}
+.lb-type-picker{border-top:3px solid #15803d !important}
+.lb-type-checker{border-top:3px solid var(--blue) !important}
+.badge-picker{background:#f0fdf4;color:#15803d}.badge-checker{background:var(--blue-xl);color:var(--blue)}
+.lb-row{border-bottom:.5px solid #f8fafc !important;transition:background .15s;cursor:pointer}
+.lb-row:hover{background:#f8fafc !important}
+.lb-row.rank1{background:var(--bg) !important}
+.lb-num{color:#94a3b8 !important}.lb-num.t{color:var(--blue) !important;font-weight:800}
+.lb-name{color:var(--dark) !important}.lb-score{color:var(--blue) !important;font-weight:800}
+.lb-grade{background:#f1f5f9 !important;color:var(--gray) !important}
+.ip-table thead tr{background:var(--bg) !important;border-bottom:1px solid var(--lgray) !important}
+.ip-table th{color:var(--gray) !important}
+.ip-table td{border-bottom:.5px solid #f8fafc !important}
+.ip-table tbody tr:hover{background:#fafafa !important}
+.emp-name{color:var(--dark) !important}.emp-role{color:#94a3b8 !important}
+.eff-bar{background:var(--lgray) !important}.eff-fill{background:var(--blue) !important}
+.ptab{background:transparent !important;border:none !important;color:var(--gray) !important;border-radius:8px !important;transition:all .2s}
+.ptab.active{background:var(--white) !important;color:var(--blue) !important;font-weight:700 !important;box-shadow:0 1px 4px rgba(15,23,42,.1) !important}
+.btn-action{background:linear-gradient(135deg,var(--blue),var(--blue-l)) !important;color:#fff !important;
+  border:none !important;box-shadow:0 2px 8px rgba(29,78,216,.2) !important}
+.btn-action:hover{background:var(--dark) !important;color:#fff !important;transform:translateY(-1px) !important}
+.no-data{color:#94a3b8 !important}
+.acc-elite{background:#f0fdf4;color:#15803d}.acc-prof{background:var(--blue-xl);color:var(--blue)}
+.acc-sat{background:#fffbeb;color:#b45309}.acc-poor{background:#fff1f2;color:#be123c}
 .topbar{background:#fff;border-bottom:1px solid #e2e8f0;padding:0 1.5rem;height:58px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:100}
 .mark{width:36px;height:36px;background:#0f172a;color:#fff;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:1rem}
 .brand-name{font-size:.85rem;font-weight:800;color:#0f172a}
@@ -155,7 +165,7 @@ body{font-family:'Inter',sans-serif;background:linear-gradient(135deg,#0f0c29,#1
       </div>
       {% if pickers %}
         {% for r in pickers %}
-        <div class="lb-row {% if loop.index==1 %}rank1{% endif %}">
+        <div class="lb-row {% if loop.index==1 %}rank1{% endif %}" onclick="window.location='/admin/staff/{{r.emp.id}}'" style="cursor:pointer">
           <div class="lb-num {% if loop.index<=3 %}t{% endif %}">#{{loop.index}}</div>
           <div class="lb-name">{{r.emp.name}}</div>
           <div>
@@ -175,7 +185,7 @@ body{font-family:'Inter',sans-serif;background:linear-gradient(135deg,#0f0c29,#1
       </div>
       {% if checkers %}
         {% for r in checkers %}
-        <div class="lb-row {% if loop.index==1 %}rank1{% endif %}">
+        <div class="lb-row {% if loop.index==1 %}rank1{% endif %}" onclick="window.location='/admin/staff/{{r.emp.id}}'" style="cursor:pointer">
           <div class="lb-num {% if loop.index<=3 %}t{% endif %}">#{{loop.index}}</div>
           <div class="lb-name">{{r.emp.name}}</div>
           <div>
@@ -213,7 +223,7 @@ body{font-family:'Inter',sans-serif;background:linear-gradient(135deg,#0f0c29,#1
       <tbody>
       {% for r in rows %}
       <tr>
-        <td><div class="emp-name">{{r.emp.name}}</div><div class="emp-role">{{r.emp.email}}</div></td>
+        <td><a href="/admin/staff/{{r.emp.id}}" style="color:#0f172a;text-decoration:none;font-weight:700;font-size:.85rem;transition:color .2s" onmouseover="this.style.color='#1d4ed8'" onmouseout="this.style.color='#0f172a'">{{r.emp.name}}</a><div class="emp-role">{{r.emp.email}}</div></td>
         <td><span class="type-badge {% if r.emp.staff_type=='picker' %}badge-picker{% else %}badge-checker{% endif %}">{{r.emp.staff_type|title}}</span></td>
         <!-- all-time cells -->
         {% set s = r.stats %}
@@ -252,6 +262,38 @@ body{font-family:'Inter',sans-serif;background:linear-gradient(135deg,#0f0c29,#1
     </table>
     {% else %}<div class="no-data"><i class="ph ph-users" style="font-size:2rem;display:block;margin-bottom:8px"></i>No employee data yet.</div>{% endif %}
   </div>
+</div>
+
+<!-- All-Staff Leaderboard -->
+<div class="section-card" style="margin-top:0">
+  <div class="section-head">
+    <h2 class="section-title"><i class="ph-bold ph-ranking" style="color:#1d4ed8"></i> All-Staff Combined Leaderboard</h2>
+    <span style="font-size:.7rem;color:#64748b;font-weight:600">All registered employees · ranked by efficiency score</span>
+  </div>
+  {% if all_lb %}
+  <table class="ip-table">
+    <thead><tr>
+      <th>Rank</th><th>Name</th><th>Type</th><th>Eff. Score</th><th>Accuracy</th>
+      <th>Speed/hr</th><th>Consistency</th><th>Trend</th><th>Grade</th><th>Days</th>
+    </tr></thead>
+    <tbody>
+    {% for r in all_lb %}
+    <tr onclick="window.location='/admin/staff/{{r.id}}'" style="cursor:pointer">
+      <td><strong style="color:{% if loop.index==1 %}#1d4ed8{% elif loop.index==2 %}#64748b{% elif loop.index==3 %}#b45309{% else %}#94a3b8{% endif %}">#{{loop.index}}</strong></td>
+      <td><a href="/admin/staff/{{r.id}}" style="color:#0f172a;font-weight:700;text-decoration:none" onmouseover="this.style.color='#1d4ed8'" onmouseout="this.style.color='#0f172a'">{{r.name}}</a><div style="font-size:.68rem;color:#94a3b8">{{r.email}}</div></td>
+      <td><span class="type-badge {% if r.staff_type=='picker' %}badge-picker{% else %}badge-checker{% endif %}" style="display:inline-block;padding:2px 7px;border-radius:5px;font-size:.68rem;font-weight:700">{{r.staff_type|title}}</span></td>
+      <td><strong style="color:#1d4ed8">{{r.score}}</strong><div style="height:4px;background:#e2e8f0;border-radius:99px;overflow:hidden;width:60px;margin-top:2px"><div style="height:100%;background:#1d4ed8;border-radius:99px;width:{{r.score}}%"></div></div></td>
+      <td><span class="acc-badge {% if r.pick_acc>=97 %}acc-elite{% elif r.pick_acc>=94 %}acc-prof{% elif r.pick_acc>=87 %}acc-sat{% else %}acc-poor{% endif %}">{{r.pick_acc}}%</span></td>
+      <td>{{r.pick_speed}}/hr</td>
+      <td>{{r.consistency}}%</td>
+      <td><span style="font-size:.7rem;font-weight:700;padding:2px 7px;border-radius:5px;background:{% if r.trend=='improving' %}#f0fdf4{% elif r.trend=='declining' %}#fff1f2{% else %}#f1f5f9{% endif %};color:{% if r.trend=='improving' %}#15803d{% elif r.trend=='declining' %}#be123c{% else %}#64748b{% endif %}">{{r.trend|upper}}</span></td>
+      <td><span style="font-size:.68rem;font-weight:700;padding:2px 6px;border-radius:4px;background:#f1f5f9;color:#475569">{{r.grade}}</span></td>
+      <td>{{r.days}}d</td>
+    </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  {% else %}<div class="no-data" style="padding:2rem;text-align:center">No staff data yet.</div>{% endif %}
 </div>
 
 <script>

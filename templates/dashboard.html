@@ -9,41 +9,67 @@
 <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.5.1/dist/confetti.browser.min.js"></script>
 <style>
 *{box-sizing:border-box}
-body{font-family:'Inter',sans-serif;background:#0f0c29;background:linear-gradient(135deg,#0f0c29,#1a1a2e,#16213e);color:#fff;min-height:100vh}
-.topbar{background:rgba(255,255,255,0.06) !important;backdrop-filter:blur(20px);border-bottom:1px solid rgba(255,255,255,0.1) !important}
-.brand-name{color:#fff !important}.brand-sub{color:rgba(255,255,255,.5) !important}
-.logout-link{color:rgba(255,255,255,.5) !important}.logout-link:hover{color:#fff !important}
-.pill-picker{background:rgba(21,128,61,.25) !important;color:#86efac !important;border:1px solid rgba(21,128,61,.3)}
-.pill-checker{background:rgba(29,78,216,.25) !important;color:#93c5fd !important;border:1px solid rgba(29,78,216,.3)}
-.submit-card{background:rgba(255,255,255,0.06) !important;backdrop-filter:blur(16px);border:1px solid rgba(255,255,255,0.12) !important;color:#fff}
-.stat-card{background:rgba(255,255,255,0.06) !important;border:1px solid rgba(255,255,255,0.1) !important}
-.stat-label{color:rgba(255,255,255,.5) !important}.stat-val{color:#fff !important}.stat-sub{color:rgba(255,255,255,.4) !important}
-.stat-card.highlight{background:rgba(255,255,255,0.15) !important}
-.card-title{color:#fff !important}.kra-bar{background:rgba(255,255,255,0.12) !important;border:1px solid rgba(255,255,255,0.2)}
-.fl{color:rgba(255,255,255,.5) !important}
-.fi{background:rgba(255,255,255,0.06) !important;border:1px solid rgba(255,255,255,0.14) !important;color:#fff !important}
-.fi:focus{border-color:rgba(255,255,255,0.4) !important;background:rgba(255,255,255,0.1) !important;box-shadow:0 0 0 3px rgba(255,255,255,0.06) !important}
-.fi::placeholder{color:rgba(255,255,255,.25) !important}
-.helper{color:rgba(255,255,255,.4) !important}
-.btn-submit{background:#fff !important;color:#0f172a !important}
-.btn-submit:hover{background:rgba(255,255,255,.9) !important}
-.potential-box{background:rgba(255,255,255,0.04) !important;border:1px dashed rgba(255,255,255,0.15) !important}
-.pot-title{color:rgba(255,255,255,.5) !important}.pot-key{color:rgba(255,255,255,.6) !important}.pot-val{color:#fff !important}
-.progress-bar-bg{background:rgba(255,255,255,0.1) !important}
-.progress-bar-fill{background:#fff !important}.progress-bar-fill.pot{background:rgba(255,255,255,0.3) !important}
-.tab-btn{background:rgba(255,255,255,0.06) !important;border:1px solid rgba(255,255,255,.12) !important;color:rgba(255,255,255,.6) !important}
-.tab-btn.active{background:rgba(255,255,255,0.18) !important;color:#fff !important;border-color:rgba(255,255,255,.3) !important}
-.lb-header{border-bottom:1px solid rgba(255,255,255,.08) !important}
-.lb-title{color:#fff !important}.rank-badge{background:rgba(255,255,255,0.15) !important}
-.lb-row{border-bottom:.5px solid rgba(255,255,255,.06) !important}.lb-row.me{background:rgba(255,255,255,0.06) !important}
-.lb-rank{color:rgba(255,255,255,.4) !important}.lb-rank.top{color:#fff !important}
-.lb-name{color:rgba(255,255,255,.85) !important}.lb-score{color:#fff !important}
-.grade-sm{background:rgba(255,255,255,0.1) !important;color:rgba(255,255,255,.6) !important}
-.log-table th{color:rgba(255,255,255,.5) !important;background:rgba(255,255,255,0.04) !important;border-bottom:1px solid rgba(255,255,255,.08) !important}
-.log-table td{border-bottom:.5px solid rgba(255,255,255,.05) !important;color:rgba(255,255,255,.8)}
-.submitted-banner{background:rgba(255,255,255,0.1) !important;border:1px solid rgba(255,255,255,0.2) !important}
-.section-sep{background:rgba(255,255,255,0.08) !important}
-#sov{background:linear-gradient(135deg,#0f0c29,#1a1a2e) !important}
+body{font-family:'Inter',sans-serif;background:#f1f5f9;color:#0f172a;min-height:100vh;
+  background-image:radial-gradient(circle at 10% 10%,rgba(29,78,216,.04) 0%,transparent 50%)}
+:root{--blue:#1d4ed8;--blue-l:#3b82f6;--blue-xl:#eff6ff;--blue-border:#bfdbfe;
+  --dark:#0f172a;--gray:#64748b;--lgray:#e2e8f0;--bg:#f8fafc;--white:#ffffff}
+.topbar{background:var(--white) !important;border-bottom:1px solid var(--lgray) !important;
+  box-shadow:0 1px 3px rgba(15,23,42,.06)}
+.brand-name{color:var(--dark) !important;font-weight:800}
+.brand-sub{color:var(--gray) !important}
+.brand-ip-label{color:var(--blue);font-weight:900;font-size:1.1rem}
+.logout-link{color:var(--gray) !important;transition:color .2s}.logout-link:hover{color:var(--dark) !important}
+.pill-picker{background:#f0fdf4 !important;color:#15803d !important;border:1px solid #bbf7d0}
+.pill-checker{background:var(--blue-xl) !important;color:var(--blue) !important;border:1px solid var(--blue-border)}
+.submit-card{background:var(--white) !important;border:1px solid var(--lgray) !important;
+  box-shadow:0 2px 12px rgba(15,23,42,.06);transition:box-shadow .2s}
+.submit-card:hover{box-shadow:0 4px 20px rgba(15,23,42,.09)}
+.stat-card{background:var(--white) !important;border:1px solid var(--lgray) !important;
+  transition:transform .15s,box-shadow .15s}
+.stat-card:hover{transform:translateY(-2px);box-shadow:0 4px 16px rgba(15,23,42,.08) !important}
+.stat-label{color:var(--gray) !important}.stat-val{color:var(--dark) !important}.stat-sub{color:#94a3b8 !important}
+.stat-card.highlight{background:linear-gradient(135deg,var(--blue),var(--blue-l)) !important;border-color:transparent !important}
+.stat-card.highlight .stat-label{color:rgba(255,255,255,.75) !important}
+.stat-card.highlight .stat-val{color:#fff !important}.stat-card.highlight .stat-sub{color:rgba(255,255,255,.6) !important}
+.card-title{color:var(--dark) !important}
+.kra-bar{background:linear-gradient(135deg,var(--blue),var(--blue-l)) !important;border:none !important;
+  box-shadow:0 4px 16px rgba(29,78,216,.25)}
+.fl{color:var(--gray) !important}
+.fi{background:var(--bg) !important;border:1.5px solid var(--lgray) !important;color:var(--dark) !important;transition:all .2s}
+.fi:focus{border-color:var(--blue) !important;background:#fff !important;box-shadow:0 0 0 3px rgba(29,78,216,.08) !important}
+.fi::placeholder{color:#cbd5e1 !important}
+.helper{color:var(--gray) !important}
+.btn-submit{background:linear-gradient(135deg,var(--blue),var(--blue-l)) !important;color:#fff !important;
+  box-shadow:0 4px 16px rgba(29,78,216,.25) !important}
+.btn-submit:hover{background:var(--dark) !important;transform:translateY(-1px) !important}
+.potential-box{background:var(--blue-xl) !important;border:1px solid var(--blue-border) !important}
+.pot-title{color:var(--blue) !important;font-weight:700}.pot-key{color:var(--gray) !important}.pot-val{color:var(--dark) !important}
+.progress-bar-bg{background:var(--lgray) !important}
+.progress-bar-fill{background:var(--blue) !important}.progress-bar-fill.pot{background:#bfdbfe !important}
+.stats-tabs{background:#f1f5f9;border-radius:10px;padding:3px}
+.tab-btn{background:transparent !important;border:none !important;color:var(--gray) !important;border-radius:8px !important}
+.tab-btn.active{background:var(--white) !important;color:var(--blue) !important;
+  font-weight:700 !important;box-shadow:0 1px 4px rgba(15,23,42,.1) !important}
+.lb-header{border-bottom:1px solid #f1f5f9 !important;background:var(--bg)}
+.lb-title{color:var(--dark) !important}
+.rank-badge{background:linear-gradient(135deg,var(--blue),var(--blue-l)) !important;
+  box-shadow:0 2px 8px rgba(29,78,216,.25)}
+.lb-row{border-bottom:.5px solid #f8fafc !important;transition:background .15s}
+.lb-row:hover{background:#f8fafc !important}
+.lb-row.me{background:var(--blue-xl) !important;border-left:3px solid var(--blue) !important}
+.lb-rank{color:#94a3b8 !important}.lb-rank.top{color:var(--blue) !important;font-weight:800}
+.lb-name{color:var(--dark) !important}.lb-score{color:var(--blue) !important;font-weight:800}
+.grade-sm{background:#f1f5f9 !important;color:var(--gray) !important}
+.lb-row a.lb-detail{font-size:.68rem;color:var(--blue);text-decoration:none;font-weight:600;
+  padding:3px 8px;border-radius:6px;border:1px solid var(--blue-border);transition:all .15s}
+.lb-row a.lb-detail:hover{background:var(--blue);color:#fff}
+.log-table th{color:var(--gray) !important;background:#f8fafc !important;border-bottom:1px solid var(--lgray) !important}
+.log-table td{border-bottom:.5px solid #f8fafc !important}
+.section-sep{background:var(--lgray) !important}
+.submitted-banner{background:linear-gradient(135deg,var(--blue),var(--blue-l)) !important;
+  border:none !important;box-shadow:0 4px 20px rgba(29,78,216,.25) !important}
+#sov{background:#f1f5f9 !important}
+.alert-msg{border-radius:10px !important}
 .topbar{background:#fff;border-bottom:1px solid #e2e8f0;padding:0 1.5rem;height:58px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:100}
 .mark{width:36px;height:36px;background:#0f172a;color:#fff;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:1rem;flex-shrink:0}
 .brand-name{font-size:.85rem;font-weight:800;color:#0f172a}
@@ -124,8 +150,11 @@ body{font-family:'Inter',sans-serif;background:#0f0c29;background:linear-gradien
 </div>
 <nav class="topbar">
   <div class="d-flex align-items-center gap-2">
-    <div class="mark"><i class="ph-fill ph-dna"></i></div>
-    <div><div class="brand-name">Indian Pharma IP</div><div class="brand-sub">Staff Dashboard</div></div>
+    <div class="mark" style="background:linear-gradient(135deg,#1d4ed8,#3b82f6)"><i class="ph-fill ph-dna"></i></div>
+    <div>
+      <div class="brand-name"><span class="brand-ip-label">IP</span> <span style="font-size:.82rem;font-weight:600;color:#64748b">Indian Pharmaceuticals</span></div>
+      <div class="brand-sub">Staff Dashboard</div>
+    </div>
   </div>
   <div class="d-flex align-items-center gap-3">
     <span class="pill pill-{{staff_type}}"><i class="ph-bold ph-{% if staff_type=='picker' %}package{% else %}magnifying-glass{% endif %}"></i> {{staff_type|title}}</span>

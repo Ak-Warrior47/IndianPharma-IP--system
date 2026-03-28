@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>{{emp.name}} | Indian Pharmaceuticals IP</title>
+<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+<script src="https://unpkg.com/@phosphor-icons/web"></script>
+<style>
+*{box-sizing:border-box}
+:root{--blue:#1d4ed8;--blue-l:#3b82f6;--blue-xl:#eff6ff;--blue-border:#bfdbfe;
+  --dark:#0f172a;--gray:#64748b;--lgray:#e2e8f0;--white:#ffffff}
+body{font-family:'Inter',sans-serif;background:#f1f5f9;color:var(--dark);min-height:100vh;
+  background-image:radial-gradient(circle at 20% 10%,rgba(29,78,216,.05) 0%,transparent 50%)}
+.topbar{background:var(--white);border-bottom:1px solid var(--lgray);padding:0 1.5rem;
+  height:56px;display:flex;align-items:center;justify-content:space-between;
+  position:sticky;top:0;z-index:100;box-shadow:0 1px 3px rgba(15,23,42,.06)}
+.mark{width:34px;height:34px;background:linear-gradient(135deg,var(--blue),var(--blue-l));
+  color:#fff;border-radius:9px;display:flex;align-items:center;justify-content:center;font-size:.9rem}
+.brand-ip{color:var(--blue);font-weight:900;font-size:1rem}
+.brand-full{font-size:.75rem;color:var(--gray);font-weight:600}
+.btn-back{background:#f1f5f9;color:var(--dark);border:1px solid var(--lgray);border-radius:9px;
+  padding:6px 14px;font-size:.75rem;font-weight:700;text-decoration:none;
+  display:flex;align-items:center;gap:5px;transition:all .2s}
+.btn-back:hover{background:var(--dark);color:#fff}
+.btn-dl{background:linear-gradient(135deg,var(--blue),var(--blue-l));color:#fff;border:none;
+  border-radius:9px;padding:6px 14px;font-size:.75rem;font-weight:700;text-decoration:none;
+  display:flex;align-items:center;gap:5px;transition:all .2s;box-shadow:0 2px 8px rgba(29,78,216,.25)}
+.btn-dl:hover{background:var(--dark);color:#fff}
+.page{max-width:1100px;margin:0 auto;padding:1.5rem}
+
+/* Hero card */
+.hero{background:linear-gradient(135deg,var(--blue),var(--blue-l));color:#fff;
+  border-radius:20px;padding:2rem 2rem 1.5rem;margin-bottom:1.25rem;
+  box-shadow:0 8px 32px rgba(29,78,216,.25);position:relative;overflow:hidden}
+.hero::before{content:"";position:absolute;top:-40px;right:-40px;width:180px;height:180px;
+  background:rgba(255,255,255,.06);border-radius:50%}
+.hero::after{content:"";position:absolute;bottom:-60px;right:60px;width:120px;height:120px;
+  background:rgba(255,255,255,.04);border-radius:50%}
+.hero-av{width:64px;height:64px;border-radius:50%;background:rgba(255,255,255,.2);
+  display:flex;align-items:center;justify-content:center;font-size:1.5rem;font-weight:800;
+  border:2px solid rgba(255,255,255,.3);flex-shrink:0;color:#fff}
+.hero-name{font-size:1.4rem;font-weight:800;letter-spacing:-.5px;margin:0}
+.hero-role{font-size:.8rem;color:rgba(255,255,255,.75);margin-top:2px}
+.hero-grade{font-size:.7rem;font-weight:700;padding:4px 10px;border-radius:99px;
+  background:rgba(255,255,255,.2);border:1px solid rgba(255,255,255,.25);letter-spacing:.5px}
+.hero-score{font-size:2.5rem;font-weight:800;letter-spacing:-2px;line-height:1;color:#fff}
+.hero-score-label{font-size:.6rem;color:rgba(255,255,255,.6);font-weight:700;letter-spacing:2px;text-transform:uppercase}
+.type-badge{display:inline-flex;align-items:center;gap:5px;font-size:.7rem;font-weight:700;
+  padding:4px 10px;border-radius:99px;margin-top:.5rem}
+.tp-picker{background:#f0fdf4;color:#15803d}
+.tp-checker{background:var(--blue-xl);color:var(--blue)}
+
+/* Stats grid */
+.scard{background:var(--white);border:1px solid var(--lgray);border-radius:14px;padding:1rem;
+  transition:transform .15s,box-shadow .15s}
+.scard:hover{transform:translateY(-2px);box-shadow:0 4px 16px rgba(15,23,42,.08)}
+.scard-label{font-size:.6rem;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:1px;margin-bottom:4px}
+.scard-val{font-size:1.4rem;font-weight:800;color:var(--dark);letter-spacing:-1px;line-height:1}
+.scard-sub{font-size:.7rem;color:var(--gray);margin-top:2px}
+.scard.blue{background:linear-gradient(135deg,var(--blue),var(--blue-l));border:none}
+.scard.blue .scard-label{color:rgba(255,255,255,.65)}.scard.blue .scard-val{color:#fff}.scard.blue .scard-sub{color:rgba(255,255,255,.55)}
+
+/* Period tabs */
+.period-tabs{display:flex;gap:4px;background:#f1f5f9;border-radius:10px;padding:3px;margin-bottom:1rem}
+.ptab{padding:6px 14px;border-radius:8px;border:none;background:transparent;
+  font-size:.75rem;font-weight:700;color:var(--gray);cursor:pointer;transition:all .2s}
+.ptab.active{background:var(--white);color:var(--blue);box-shadow:0 1px 4px rgba(15,23,42,.1)}
+.ptab-panel{display:none}.ptab-panel.active{display:block}
+
+/* Potential bar */
+.pot-box{background:var(--blue-xl);border:1px solid var(--blue-border);border-radius:12px;padding:1rem;margin-top:.75rem}
+.pot-title{font-size:.65rem;font-weight:700;color:var(--blue);text-transform:uppercase;letter-spacing:1px;margin-bottom:.5rem}
+.pot-row{display:flex;justify-content:space-between;font-size:.78rem;margin-bottom:.3rem}
+.pot-key{color:var(--gray)}.pot-val{font-weight:700;color:var(--dark)}
+.pbg{height:6px;background:#e2e8f0;border-radius:99px;overflow:hidden;margin-top:.4rem}
+.pfill{height:100%;border-radius:99px;background:var(--blue)}
+.pfill2{height:100%;border-radius:99px;background:#bfdbfe}
+
+/* Table */
+.ip-table{width:100%;border-collapse:collapse;font-size:.8rem}
+.ip-table th{font-size:.62rem;font-weight:700;color:var(--gray);text-transform:uppercase;
+  letter-spacing:.8px;padding:8px 10px;border-bottom:1px solid var(--lgray);background:#f8fafc}
+.ip-table td{padding:8px 10px;border-bottom:.5px solid #f8fafc}
+.ip-table tbody tr:hover{background:#fafafa}
+.acc-hi{background:#f0fdf4;color:#15803d;padding:2px 7px;border-radius:5px;font-size:.72rem;font-weight:700;display:inline-block}
+.acc-ok{background:#fffbeb;color:#b45309;padding:2px 7px;border-radius:5px;font-size:.72rem;font-weight:700;display:inline-block}
+.acc-lo{background:#fff1f2;color:#be123c;padding:2px 7px;border-radius:5px;font-size:.72rem;font-weight:700;display:inline-block}
+
+.section-card{background:var(--white);border:1px solid var(--lgray);border-radius:16px;
+  overflow:hidden;margin-bottom:1.25rem}
+.sc-head{padding:.9rem 1.25rem;border-bottom:1px solid #f1f5f9;display:flex;align-items:center;justify-content:space-between}
+.sc-title{font-size:.85rem;font-weight:800;margin:0;color:var(--dark)}
+</style>
+</head>
+<body>
+<nav class="topbar">
+  <div class="d-flex align-items-center gap-2">
+    <div class="mark"><i class="ph-fill ph-dna"></i></div>
+    <div>
+      <div style="font-size:.85rem;font-weight:800"><span class="brand-ip">IP</span> <span class="brand-full">Indian Pharmaceuticals</span></div>
+      <div style="font-size:.6rem;color:#94a3b8;font-weight:600;letter-spacing:1px;text-transform:uppercase">Staff Detail</div>
+    </div>
+  </div>
+  <div class="d-flex align-items-center gap-2">
+    {% if is_admin_view is defined and is_admin_view %}
+    <a href="/admin" class="btn-back"><i class="ph ph-arrow-left"></i> Admin</a>
+    <a href="/download/{{emp.id}}" class="btn-dl"><i class="ph-bold ph-file-pdf"></i> Download KRA PDF</a>
+    {% else %}
+    <a href="/dashboard" class="btn-back"><i class="ph ph-arrow-left"></i> Dashboard</a>
+    {% endif %}
+  </div>
+</nav>
+
+<div class="page">
+  <!-- Hero -->
+  <div class="hero mb-3">
+    <div class="d-flex align-items-start gap-3">
+      <div class="hero-av">{{emp.name[:2].upper()}}</div>
+      <div style="flex:1">
+        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+          <h1 class="hero-name">{{emp.name}}</h1>
+          <span class="hero-grade">{% if a_stats %}{{a_stats.grade}}{% else %}NO DATA{% endif %}</span>
+        </div>
+        <div class="hero-role">{{emp.email}}</div>
+        <span class="type-badge {% if emp.staff_type=='picker' %}tp-picker{% else %}tp-checker{% endif %}">
+          {% if emp.staff_type=='picker' %}📦 Picker{% else %}🔍 Checker{% endif %}
+        </span>
+      </div>
+      <div style="text-align:right">
+        <div class="hero-score-label">Efficiency</div>
+        <div class="hero-score">{% if a_stats %}{{a_stats.eff_score}}{% else %}—{% endif %}</div>
+        <div style="font-size:.65rem;color:rgba(255,255,255,.6);margin-top:2px">
+          {% if a_stats %}Trend: {{a_stats.trend|upper}} · {{a_stats.consistency}}% consistent{% endif %}
+        </div>
+      </div>
+    </div>
+  </div>
+
+  {% if a_stats %}
+  <!-- Period tabs -->
+  <div class="section-card">
+    <div class="sc-head">
+      <h2 class="sc-title">Performance by Period</h2>
+      <div class="period-tabs">
+        <button class="ptab active" onclick="showTab('all',this)">All-Time</button>
+        <button class="ptab" onclick="showTab('month',this)">Month</button>
+        <button class="ptab" onclick="showTab('week',this)">Week</button>
+        <button class="ptab" onclick="showTab('day',this)">Today</button>
+      </div>
+    </div>
+    <div style="padding:1.25rem">
+    {% for pid,stats in [('all',a_stats),('month',m_stats),('week',w_stats),('day',d_stats)] %}
+    <div class="ptab-panel {% if pid=='all' %}active{% endif %}" id="tab-{{pid}}">
+      {% if stats %}
+      <div class="row g-2 mb-3">
+        <div class="col-6 col-md-3"><div class="scard blue"><div class="scard-label">Efficiency Score</div><div class="scard-val">{{stats.eff_score}}</div><div class="scard-sub">out of 100</div></div></div>
+        <div class="col-6 col-md-3"><div class="scard"><div class="scard-label">Pick Accuracy</div><div class="scard-val">{{stats.pick_acc}}%</div><div class="scard-sub">{{stats.tp}} picked, {{stats.tm}} missed</div></div></div>
+        <div class="col-6 col-md-3"><div class="scard"><div class="scard-label">{% if emp.staff_type=='picker' %}Pick Speed{% else %}Check Speed{% endif %}</div><div class="scard-val">{% if emp.staff_type=='picker' %}{{stats.pick_speed}}{% else %}{{stats.ck_speed}}{% endif %}</div><div class="scard-sub">items per hour</div></div></div>
+        {% if emp.staff_type=='checker' %}
+        <div class="col-6 col-md-3"><div class="scard"><div class="scard-label">Error Detection</div><div class="scard-val">{{stats.check_acc}}%</div><div class="scard-sub">{{stats.ter}} found / {{stats.tck}} checked</div></div></div>
+        {% else %}
+        <div class="col-6 col-md-3"><div class="scard"><div class="scard-label">Consistency</div><div class="scard-val">{{stats.consistency}}%</div><div class="scard-sub">{{stats.trend}} trend</div></div></div>
+        {% endif %}
+        <div class="col-6 col-md-3"><div class="scard"><div class="scard-label">Bills Processed</div><div class="scard-val">{{stats.tb}}</div></div></div>
+        <div class="col-6 col-md-3"><div class="scard"><div class="scard-label">CS in Purchase</div><div class="scard-val">{{stats.tbx}}</div></div></div>
+        <div class="col-6 col-md-3"><div class="scard"><div class="scard-label">Sweep Hours</div><div class="scard-val">{{stats.ts}}</div></div></div>
+        <div class="col-6 col-md-3"><div class="scard"><div class="scard-label">Days Logged</div><div class="scard-val">{{stats.days}}</div></div></div>
+      </div>
+      <div class="pot-box">
+        <div class="pot-title"><i class="ph-bold ph-lightning"></i> Potential Analysis</div>
+        <div class="pot-row"><span class="pot-key">Actual items handled</span><span class="pot-val">{{stats.ti}}</span></div>
+        <div class="pot-row"><span class="pot-key">Benchmark potential items</span><span class="pot-val">{{stats.potential_items}}</span></div>
+        <div class="pot-row"><span class="pot-key">Gap to benchmark</span><span class="pot-val">{{stats.gap_items}} items</span></div>
+        <div class="pot-row"><span class="pot-key">Current efficiency</span><span class="pot-val">{{stats.eff_score}}/100</span></div>
+        <div class="pot-row"><span class="pot-key">Max achievable efficiency</span><span class="pot-val">{{stats.potential_eff}}/100</span></div>
+        <div style="font-size:.65rem;color:var(--blue);margin-top:.4rem;margin-bottom:.25rem">Current vs Potential</div>
+        <div class="pbg"><div class="pfill" style="width:{{stats.eff_score}}%"></div></div>
+        <div class="pbg mt-1"><div class="pfill2" style="width:{{stats.potential_eff}}%"></div></div>
+      </div>
+      {% else %}<p style="color:#94a3b8;font-size:.85rem;text-align:center;padding:1.5rem 0">No data for this period.</p>{% endif %}
+    </div>
+    {% endfor %}
+    </div>
+  </div>
+
+  <!-- Entry log -->
+  {% if entries %}
+  <div class="section-card">
+    <div class="sc-head"><h2 class="sc-title">Entry Log (Last {{entries|length}})</h2></div>
+    <div style="overflow-x:auto">
+      <table class="ip-table">
+        <thead><tr>
+          <th>Date</th><th>Bills</th><th>Picked</th><th>Missed</th><th>Accuracy</th>
+          <th>Speed/hr</th><th>CS</th><th>Sweep hrs</th>
+          {% if emp.staff_type=='checker' %}<th>Checked</th><th>Errors</th>{% endif %}
+        </tr></thead>
+        <tbody>
+        {% for e in entries %}
+        <tr>
+          <td>{{e.entry_date}}</td><td>{{e.bills}}</td><td>{{e.picked}}</td><td>{{e.missed}}</td>
+          <td><span class="{% if e.accuracy>=95 %}acc-hi{% elif e.accuracy>=85 %}acc-ok{% else %}acc-lo{% endif %}">{{e.accuracy}}%</span></td>
+          <td>{{e.pick_speed}}</td><td>{{e.boxes}}</td><td>{{e.sweep}}h</td>
+          {% if emp.staff_type=='checker' %}<td>{{e.checked}}</td><td>{{e.errors_found}}</td>{% endif %}
+        </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+  {% endif %}
+  {% else %}
+  <div style="text-align:center;padding:3rem;color:#94a3b8"><i class="ph ph-chart-bar" style="font-size:2.5rem;display:block;margin-bottom:8px"></i>No KPI data submitted yet.</div>
+  {% endif %}
+</div>
+
+<script>
+function showTab(id,btn){
+  document.querySelectorAll('.ptab-panel').forEach(p=>p.classList.remove('active'));
+  document.querySelectorAll('.ptab').forEach(b=>b.classList.remove('active'));
+  document.getElementById('tab-'+id).classList.add('active');
+  btn.classList.add('active');
+}
+</script>
+</body></html>
