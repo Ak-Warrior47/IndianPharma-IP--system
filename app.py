@@ -355,11 +355,7 @@ def login():
                 user.staff_type = role_choice
                 db.session.commit()
             session.permanent = True
-            @app.route("/dashboard")
-@login_required
-def dashboard():
-    return render_template("dashboard.html")
-
+        
 @app.route("/admin_dashboard")
 @login_required
 @admin_required
@@ -375,7 +371,7 @@ def logout():
 @app.route("/dashboard", methods=["GET", "POST"])
 @login_required
 def dashboard():
-    return render_template("dashboard.html")
+    def dashboard():
     try:
         emp_id      = session["user_id"]
         staff_type  = session.get("staff_type", "picker")
