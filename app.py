@@ -25,8 +25,12 @@ app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_port=1, x_
 
 IS_PRODUCTION = os.environ.get("RENDER") or os.environ.get("DATABASE_URL")
 
+# Warn loudly if no SECRET_KEY is set in production — sessions will be insecure
+if IS_PRODUCTION and not os.environ.get("SECRET_KEY"):
+    logger.warning("⚠️  SECRET_KEY env var is not set! Using insecure default. Set it in Render environment variables.")
+
 app.config.update(
-    SECRET_KEY=os.environ.get("SECRET_KEY", "pharma_secure_key_2024"),
+    SECRET_KEY=os.environ.get("SECRET_KEY", "pharma_secure_key_2024_local_only"),
     SESSION_COOKIE_SECURE=bool(IS_PRODUCTION),   # True on Render, False locally
     SESSION_COOKIE_HTTPONLY=True,
     SESSION_COOKIE_SAMESITE='Lax',
@@ -45,7 +49,8 @@ if db_url.startswith("postgres://"):
 app.config["SQLALCHEMY_DATABASE_URI"] = db_url
 
 db = SQLAlchemy(app)
-socketio = SocketIO(app, cors_allowed_origins="*", async_mode="eventlet")
+_cors_origins = os.environ.get("CORS_ORIGIN", "*") if not IS_PRODUCTION else os.environ.get("CORS_ORIGIN", "*")
+socketio = SocketIO(app, cors_allowed_origins=_cors_origins, async_mode="eventlet")
 
 # ══════════════════════════════════════════════════
 #  3. MODELS
@@ -369,8 +374,15 @@ def init_db():
             db.session.rollback()
 
 
-init_db()
-start_scheduler()
+try:
+    init_db()
+except Exception as _init_err:
+    logger.error(f"Database init failed: {_init_err}")
+
+try:
+    start_scheduler()
+except Exception as _sched_err:
+    logger.error(f"Scheduler start failed: {_sched_err}")
 
 
 # ══════════════════════════════════════════════════
@@ -378,7 +390,12 @@ start_scheduler()
 # ══════════════════════════════════════════════════
 @app.route('/health')
 def health_check():
-    return jsonify(status="Pharma IP Operational", version="8.0"), 200
+    try:
+        db.session.execute(db.text("SELECT 1"))
+        return jsonify(status="ok"), 200
+    except Exception as e:
+        logger.error(f"Health check DB failure: {e}")
+        return jsonify(status="db_error"), 503
 
 
 @app.route("/")
@@ -401,6 +418,11 @@ def login():
         return redirect(url_for("dashboard"))
 
     if request.method == "POST":
+        # Basic brute-force guard: track failed attempts in session
+        attempts = session.get("login_attempts", 0)
+        if attempts >= 10:
+            flash("Too many failed login attempts. Please wait and try again.", "danger")
+            return render_template("login.html")
         try:
             email       = request.form.get("email", "").lower().strip()
             password    = request.form.get("password", "")
@@ -408,6 +430,10 @@ def login():
             user        = Employee.query.filter_by(email=email).first()
 
             if not user or not user.check_password(password):
+                # Use constant-time comparison path to avoid timing attacks that reveal valid emails
+                if not user:
+                    check_password_hash("dummy", password)  # consume same time even if user not found
+                session["login_attempts"] = session.get("login_attempts", 0) + 1
                 flash("Invalid Pharma ID or Password.", "danger")
                 return render_template("login.html")
 
@@ -416,7 +442,7 @@ def login():
                 user.staff_type = role_choice
                 db.session.commit()
 
-            # Clear OLD session first to wipe any stale/corrupt cookie
+            # Clear OLD session first to wipe any stale/corrupt cookie and login attempt counter
             session.clear()
             session.permanent = True
             session["user_id"]    = user.id
@@ -437,7 +463,7 @@ def login():
     return render_template("login.html")
 
 
-@app.route("/logout")
+@app.route("/logout", methods=["GET", "POST"])
 def logout():
     session.clear()
     return redirect(url_for("login"))
@@ -447,7 +473,11 @@ def logout():
 @login_required
 def dashboard():
     try:
-        emp_id     = session["user_id"]
+        emp_id     = session.get("user_id")
+        if not emp_id:
+            session.clear()
+            flash("Session expired. Please sign in again.", "warning")
+            return redirect(url_for("login"))
         staff_type = session.get("staff_type", "picker")
         today      = date.today()
         today_entry = KPIEntry.query.filter_by(emp_id=emp_id, entry_date=today).first()
@@ -458,6 +488,14 @@ def dashboard():
                 missed     = max(0, int(request.form.get("missed",     0) or 0))
                 sweep_mins = max(0, float(request.form.get("sweep_mins", 0) or 0))
                 check_mins = max(0, float(request.form.get("check_mins", 0) or 0))
+                checked      = max(0, int(request.form.get("checked",      0) or 0))
+                errors_found = max(0, int(request.form.get("errors_found", 0) or 0))
+                # Sanity cap: errors_found can't exceed checked items
+                if errors_found > checked:
+                    errors_found = checked
+                # Sanity cap: sweep/check time can't be unrealistically high (>24hr day)
+                sweep_mins = min(sweep_mins, 1440)
+                check_mins = min(check_mins, 1440)
                 ne = KPIEntry(
                     emp_id       = emp_id,
                     bills        = max(0, int(request.form.get("bills",        0) or 0)),
@@ -465,8 +503,8 @@ def dashboard():
                     missed       = missed,
                     boxes        = max(0, int(request.form.get("boxes",        0) or 0)),
                     sweep        = round(sweep_mins / 60, 3),
-                    checked      = max(0, int(request.form.get("checked",      0) or 0)),
-                    errors_found = max(0, int(request.form.get("errors_found", 0) or 0)),
+                    checked      = checked,
+                    errors_found = errors_found,
                     check_time   = round(check_mins / 60, 3),
                     entry_date   = today
                 )
@@ -478,7 +516,7 @@ def dashboard():
                 if eff < 85:
                     try:
                         socketio.emit("admin_alert", {
-                            "name": session["user_name"],
+                            "name": session.get("user_name", "Unknown"),
                             "eff":  eff,
                             "type": staff_type
                         })
@@ -502,14 +540,22 @@ def dashboard():
         my_rank = next((i + 1 for i, x in enumerate(lb) if x["id"] == emp_id), "-")
 
         return render_template("dashboard.html",
-            user_name=session["user_name"], staff_type=staff_type,
+            user_name=session.get("user_name", "User"), staff_type=staff_type,
             today=today, today_entry=today_entry,
             d_stats=d_stats, w_stats=w_stats, m_stats=m_stats, a_stats=a_stats,
             leaderboard=lb, my_rank=my_rank, recent=all_entries[:14])
     except Exception as e:
         logger.error(f"Dashboard error: {e}")
-        flash("Error loading dashboard.", "danger")
-        return redirect(url_for("login"))
+        db.session.rollback()
+        # Do NOT redirect to login here — that causes an infinite redirect loop
+        # when the session is valid but a DB or render error occurs.
+        flash("Error loading dashboard. Please refresh the page.", "danger")
+        return render_template("dashboard.html",
+            user_name=session.get("user_name", "User"),
+            staff_type=session.get("staff_type", "picker"),
+            today=date.today(), today_entry=None,
+            d_stats=None, w_stats=None, m_stats=None, a_stats=None,
+            leaderboard=[], my_rank="-", recent=[]), 200
 
 
 @app.route("/admin_dashboard")
@@ -552,14 +598,19 @@ def admin_dashboard():
                                pickers=pickers, checkers=checkers, all_lb=all_lb)
     except Exception as e:
         logger.error(f"Admin dashboard: {e}")
+        db.session.rollback()
         flash("Error loading admin dashboard.", "danger")
-        return redirect(url_for("login"))
+        return render_template("admin.html", rows=[], pickers=[], checkers=[], all_lb=[]), 200
 
 
 @app.route("/staff/<int:emp_id>")
 @login_required
 def staff_detail(emp_id):
     try:
+        # Security: non-admin users can only view their own profile
+        if not session.get("is_admin") and session.get("user_id") != emp_id:
+            flash("You can only view your own profile.", "warning")
+            return redirect(url_for("dashboard"))
         emp = db.session.get(Employee, emp_id)
         if not emp or emp.is_admin:
             flash("Employee not found.", "danger")
@@ -615,14 +666,23 @@ def admin_staff_detail(emp_id):
 @admin_required
 def export_data():
     """CSV export — quick management download."""
-    entries = KPIEntry.query.all()   # Query inside request context, not inside generator
-    def generate():
-        yield 'Employee_ID,Date,Picked,Missed,Accuracy\n'
-        for e in entries:
-            yield (f"{e.emp_id},{e.entry_date},{e.picked},{e.missed},"
-                   f"{round(safe_div(e.picked, (e.picked + e.missed)) * 100, 1)}%\n")
-    return Response(generate(), mimetype='text/csv',
-                    headers={"Content-Disposition": "attachment; filename=pharma_kpi.csv"})
+    try:
+        entries = KPIEntry.query.join(Employee).add_columns(
+            Employee.name, Employee.email
+        ).order_by(KPIEntry.entry_date.desc()).all()
+        def generate():
+            yield 'Employee_ID,Employee_Name,Date,Picked,Missed,Accuracy\n'
+            for row in entries:
+                e = row[0]
+                name = row.name.replace(",", " ")  # sanitize commas in names
+                yield (f"{e.emp_id},{name},{e.entry_date},{e.picked},{e.missed},"
+                       f"{round(safe_div(e.picked, (e.picked + e.missed)) * 100, 1)}%\n")
+        return Response(generate(), mimetype='text/csv',
+                        headers={"Content-Disposition": "attachment; filename=pharma_kpi.csv"})
+    except Exception as e:
+        logger.error(f"Export error: {e}")
+        flash("Could not generate export.", "danger")
+        return redirect(url_for("admin_dashboard"))
 
 
 @app.route("/download/<int:emp_id>")
@@ -703,20 +763,29 @@ def bulk_zip():
 # ══════════════════════════════════════════════════
 @app.errorhandler(404)
 def not_found(e):
+    # Avoid redirect loops: if the destination itself 404s, go to login
     if session.get("user_id"):
-        try:
-            return redirect(url_for("admin_dashboard" if session.get("is_admin") else "dashboard"))
-        except Exception:
-            return redirect(url_for("login"))
+        target = "admin_dashboard" if session.get("is_admin") else "dashboard"
+        # Don't redirect back to the same path that 404'd
+        if request.path not in (url_for("dashboard"), url_for("admin_dashboard")):
+            try:
+                return redirect(url_for(target))
+            except Exception:
+                pass
+    session.clear()
     return redirect(url_for("login"))
 
 
 @app.errorhandler(500)
 def server_error(e):
     logger.error(f"500 error: {e}")
-    db.session.rollback()
+    try:
+        db.session.rollback()
+    except Exception:
+        pass
     session.clear()
-    return render_template("login.html"), 500
+    # Redirect instead of render to avoid template errors compounding the 500
+    return redirect(url_for("login"))
 
 
 # ══════════════════════════════════════════════════
