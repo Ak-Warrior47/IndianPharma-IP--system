@@ -36,7 +36,7 @@ app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
 # 4. EXTENSIONS FOURTH
 db       = SQLAlchemy(app)
 socketio = SocketIO(app, cors_allowed_origins="*", async_mode="eventlet")
-_#-------------------------------------HEALTH CODE 
+#-------------------------------------HEALTH CODE 
 @app.route('/health')
 def health_check():
     return "OK", 200
