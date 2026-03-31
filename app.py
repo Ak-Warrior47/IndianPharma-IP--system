@@ -1,8 +1,8 @@
-#importd an requirements
 import eventlet
 eventlet.monkey_patch()  # MUST BE ABSOLUTE FIRST LINE
-import os, logging, zipfile, io, atexit, json
-from flask import Flask, render_template, request, redirect, url_for, flash, session, send_file, jsonify
+
+import os, logging, json, csv, zipfile, io, atexit
+from flask import Flask, render_template, request, redirect, url_for, flash, session, send_file, Response, jsonify
 from flask_sqlalchemy import SQLAlchemy
 from flask_socketio import SocketIO
 from werkzeug.security import generate_password_hash, check_password_hash
@@ -10,44 +10,41 @@ from datetime import datetime, date, timedelta
 from apscheduler.schedulers.background import BackgroundScheduler
 from functools import wraps
 from werkzeug.middleware.proxy_fix import ProxyFix
+
+# ══════════════════════════════════════════════════
+#  1. APP & LOGGING SETUP
+# ══════════════════════════════════════════════════
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
-
-# 1. CREATE APP FIRST
 app = Flask(__name__)
 
-# 3. APPLY PROXYFIX (Crucial for Render redirects)
-from werkzeug.middleware.proxy_fix import ProxyFix
+# ══════════════════════════════════════════════════
+#  2. RENDER INFRASTRUCTURE
+# ══════════════════════════════════════════════════
 app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_port=1, x_prefix=1)
-from datetime import timedelta
-
 app.config.update(
+    SECRET_KEY=os.environ.get("SECRET_KEY", "pharma_secure_key_2024"),
     SESSION_COOKIE_SECURE=True,
     SESSION_COOKIE_HTTPONLY=True,
     SESSION_COOKIE_SAMESITE='Lax',
-    PERMANENT_SESSION_LIFETIME=timedelta(days=7), # Add this line
-    SESSION_REFRESH_EACH_REQUEST=True             # Add this line
+    PERMANENT_SESSION_LIFETIME=timedelta(days=7),
+    SESSION_REFRESH_EACH_REQUEST=True,
+    PREFERRED_URL_SCHEME='https',
+    SQLALCHEMY_TRACK_MODIFICATIONS=False,
+    SQLALCHEMY_ENGINE_OPTIONS={"pool_pre_ping": True, "pool_recycle": 300}
 )
-#APPKEYS 
-app.secret_key = os.environ.get("SECRET_KEY", "ip_pharma_final_secure_change_in_prod")
+
+# Database: Postgres on Render, SQLite locally
 db_url = os.environ.get("DATABASE_URL", "sqlite:///pharma_final.db")
 if db_url.startswith("postgres://"):
     db_url = db_url.replace("postgres://", "postgresql://", 1)
 app.config["SQLALCHEMY_DATABASE_URI"] = db_url
-app.config['PREFERRED_URL_SCHEME'] = 'https'
-app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
-app.config["SQLALCHEMY_ENGINE_OPTIONS"] = {"pool_pre_ping": True, "pool_recycle": 300}
-# Add these three lines to your app.config section
 
-# 4. EXTENSIONS FOURTH
-db       = SQLAlchemy(app)
+db = SQLAlchemy(app)
 socketio = SocketIO(app, cors_allowed_origins="*", async_mode="eventlet")
-#-------------------------------------HEALTH CODE 
-@app.route('/health')
-def health_check():
-    return "OK", 200
+
 # ══════════════════════════════════════════════════
-#  MODELS
+#  3. MODELS
 # ══════════════════════════════════════════════════
 class Employee(db.Model):
     __tablename__ = "employees"
@@ -55,7 +52,7 @@ class Employee(db.Model):
     name          = db.Column(db.String(100), nullable=False)
     email         = db.Column(db.String(100), unique=True, nullable=False, index=True)
     password_hash = db.Column(db.String(255), nullable=False)
-    staff_type    = db.Column(db.String(20), default="picker")
+    staff_type    = db.Column(db.String(20), default="picker")   # picker | checker
     role          = db.Column(db.String(100), default="Operations Specialist")
     is_admin      = db.Column(db.Boolean, default=False)
     entries       = db.relationship("KPIEntry", backref="owner", lazy="select",
@@ -73,14 +70,15 @@ class KPIEntry(db.Model):
     picked         = db.Column(db.Integer, default=0)
     missed         = db.Column(db.Integer, default=0)
     boxes          = db.Column(db.Integer, default=0)
-    sweep          = db.Column(db.Float,   default=0.0)
+    sweep          = db.Column(db.Float,   default=0.0)   # hours
     checked        = db.Column(db.Integer, default=0)
     errors_found   = db.Column(db.Integer, default=0)
-    check_time     = db.Column(db.Float,   default=0.0)
+    check_time     = db.Column(db.Float,   default=0.0)   # hours
     entry_date     = db.Column(db.Date,    nullable=False, index=True)
     report_sent    = db.Column(db.Boolean, default=False)
     __table_args__ = (db.UniqueConstraint("emp_id", "entry_date", name="_emp_date_uc"),)
 
+    # ── Computed properties (from File 2) ──────────
     @property
     def accuracy(self):
         t = self.picked + self.missed
@@ -97,7 +95,7 @@ class KPIEntry(db.Model):
 
 
 # ══════════════════════════════════════════════════
-#  DECORATORS
+#  4. DECORATORS
 # ══════════════════════════════════════════════════
 def login_required(f):
     @wraps(f)
@@ -118,7 +116,7 @@ def admin_required(f):
     return decorated
 
 # ══════════════════════════════════════════════════
-#  ANALYTICS
+#  5. ANALYTICS ENGINE (Full File 2 version)
 # ══════════════════════════════════════════════════
 def safe_div(a, b, default=0.0):
     try:
@@ -126,18 +124,19 @@ def safe_div(a, b, default=0.0):
     except Exception:
         return default
 
+
 def build_analytics(entries, staff_type="picker"):
     try:
         if not entries:
             return None
-        tp  = sum(int(e.picked or 0)        for e in entries)
-        tm  = sum(int(e.missed or 0)        for e in entries)
+        tp  = sum(int(e.picked or 0)             for e in entries)
+        tm  = sum(int(e.missed or 0)             for e in entries)
         ti  = tp + tm
-        tb  = sum(int(e.bills or 0)         for e in entries)
-        tbx = sum(int(e.boxes or 0)         for e in entries)
-        ts  = round(sum(float(e.sweep or 0) for e in entries), 3)
-        tck = sum(int(e.checked or 0)       for e in entries)
-        ter = sum(int(e.errors_found or 0)  for e in entries)
+        tb  = sum(int(e.bills or 0)              for e in entries)
+        tbx = sum(int(e.boxes or 0)              for e in entries)
+        ts  = round(sum(float(e.sweep or 0)      for e in entries), 3)
+        tck = sum(int(e.checked or 0)            for e in entries)
+        ter = sum(int(e.errors_found or 0)       for e in entries)
         tct = round(sum(float(e.check_time or 0) for e in entries), 3)
 
         pick_acc   = round(safe_div(tp, ti) * 100, 1)
@@ -156,6 +155,7 @@ def build_analytics(entries, staff_type="picker"):
             potential_eff   = round(min(100, eff_score + max(0, (98 - pick_acc) * 0.5 + (200 - pick_speed) * 0.1)), 1)
             gap_items       = max(0, potential_items - ti)
 
+        # 4-tier grading
         if staff_type == "picker":
             if pick_acc >= 98 and tbx >= 15: grade, fb = "ELITE",        "Exceptional pick accuracy & CS handling. Gold Standard."
             elif pick_acc >= 95:             grade, fb = "PROFICIENT",   "Meets standard pharma pick accuracy requirements."
@@ -167,14 +167,16 @@ def build_analytics(entries, staff_type="picker"):
             elif check_acc >= 87:             grade, fb = "SATISFACTORY", "Acceptable check rate. Increase error detection."
             else:                             grade, fb = "RE-TRAINING",  "Verification accuracy below threshold. Re-training needed."
 
+        # Consistency score (variance-based)
         daily_accs = [e.accuracy for e in entries if (e.picked + e.missed) > 0]
         if len(daily_accs) > 1:
-            mean_a    = sum(daily_accs) / len(daily_accs)
-            variance  = sum((x - mean_a) ** 2 for x in daily_accs) / len(daily_accs)
+            mean_a      = sum(daily_accs) / len(daily_accs)
+            variance    = sum((x - mean_a) ** 2 for x in daily_accs) / len(daily_accs)
             consistency = round(max(0, 100 - (variance ** 0.5) * 2), 1)
         else:
             consistency = 100.0 if daily_accs else 0.0
 
+        # Trend detection
         trend = "stable"
         if len(entries) >= 4:
             recent_avg = sum(e.accuracy for e in entries[:2]) / 2
@@ -199,11 +201,15 @@ def build_analytics(entries, staff_type="picker"):
 
 def get_period_entries(emp_id, period):
     today  = date.today()
-    starts = {"day": today, "week": today - timedelta(days=6), "month": today - timedelta(days=29)}
-    start  = starts.get(period, today)
+    starts = {
+        "day":   today,
+        "week":  today - timedelta(days=6),
+        "month": today - timedelta(days=29)
+    }
+    start = starts.get(period, today)
     try:
         return KPIEntry.query.filter(
-            KPIEntry.emp_id == emp_id,
+            KPIEntry.emp_id     == emp_id,
             KPIEntry.entry_date >= start,
             KPIEntry.entry_date <= today
         ).order_by(KPIEntry.entry_date.desc()).all()
@@ -225,14 +231,24 @@ def build_leaderboard(staff_type=None):
             if not stats:
                 continue
             lb.append({
-                "id": emp.id, "name": emp.name, "email": emp.email,
-                "staff_type": emp.staff_type, "role": emp.role,
-                "score": stats["eff_score"], "grade": stats["grade"],
-                "pick_acc": stats["pick_acc"], "pick_speed": stats["pick_speed"],
-                "check_acc": stats["check_acc"], "ck_speed": stats["ck_speed"],
-                "consistency": stats["consistency"], "trend": stats["trend"],
-                "days": stats["days"], "tp": stats["tp"], "tm": stats["tm"],
-                "potential_eff": stats["potential_eff"], "gap_items": stats["gap_items"],
+                "id":           emp.id,
+                "name":         emp.name,
+                "email":        emp.email,
+                "staff_type":   emp.staff_type,
+                "role":         emp.role,
+                "score":        stats["eff_score"],
+                "grade":        stats["grade"],
+                "pick_acc":     stats["pick_acc"],
+                "pick_speed":   stats["pick_speed"],
+                "check_acc":    stats["check_acc"],
+                "ck_speed":     stats["ck_speed"],
+                "consistency":  stats["consistency"],
+                "trend":        stats["trend"],
+                "days":         stats["days"],
+                "tp":           stats["tp"],
+                "tm":           stats["tm"],
+                "potential_eff": stats["potential_eff"],
+                "gap_items":    stats["gap_items"],
             })
         lb.sort(key=lambda x: x["score"], reverse=True)
         return lb
@@ -242,11 +258,11 @@ def build_leaderboard(staff_type=None):
 
 
 # ══════════════════════════════════════════════════
-#  SCHEDULER  — runs INSIDE app context, started ONCE
+#  6. SCHEDULER (from File 2)
 # ══════════════════════════════════════════════════
 def start_scheduler():
     def scheduled_task():
-        with app.app_context():   # <-- critical: gives DB access to background thread
+        with app.app_context():
             try:
                 target  = date.today() - timedelta(days=2)
                 pending = KPIEntry.query.filter_by(entry_date=target, report_sent=False).all()
@@ -268,10 +284,8 @@ def start_scheduler():
 
 
 # ══════════════════════════════════════════════════
-#  DB INIT  — called once at module load (works for gunicorn)
-with app.app_context():
-    db.create_all()
-    logger.info("Database tables verified/created.")
+#  7. DATABASE INIT + SEED DATA (from File 2)
+# ══════════════════════════════════════════════════
 def init_db():
     with app.app_context():
         try:
@@ -281,14 +295,16 @@ def init_db():
                 ex = Employee.query.filter_by(email=email).first()
                 if ex:
                     return ex
-                emp = Employee(name=name, email=email, staff_type=stype, is_admin=admin,
-                               role="Admin" if admin else f"Operations {stype.title()}")
+                emp = Employee(
+                    name=name, email=email, staff_type=stype, is_admin=admin,
+                    role="Admin" if admin else f"Operations {stype.title()}"
+                )
                 emp.set_password(pw)
                 db.session.add(emp)
                 db.session.flush()
                 return emp
 
-            make("System Admin",  "admin@pharmaip.com",  "admin123", admin=True)
+            make("System Admin", "admin@pharmaip.com", "admin123", admin=True)
 
             p1 = make("Rahul Sharma", "rahul@pharmaip.com", "test1234", stype="picker")
             if p1 and not KPIEntry.query.filter_by(emp_id=p1.id).first():
@@ -318,66 +334,63 @@ def init_db():
             db.session.rollback()
 
 
-# ── Call ONCE at module level (gunicorn imports this module, not __main__) ──
+with app.app_context():
+    db.create_all()
+    logger.info("Database tables verified.")
+
 init_db()
 start_scheduler()
 
 
 # ══════════════════════════════════════════════════
-#  ROUTES
+#  8. ROUTES
 # ══════════════════════════════════════════════════
-# ── Authentication Decorators (Add this now!) ──────────
+@app.route('/health')
+def health_check():
+    return jsonify(status="Pharma IP Operational", version="8.0"), 200
+
+
 @app.route("/", methods=["GET", "POST"])
 def index():
     if "user_id" not in session:
         return redirect(url_for("login"))
-    # Check if admin or regular user to send to right dashboard
     return redirect(url_for("admin_dashboard" if session.get("is_admin") else "dashboard"))
 
-@app.route("/login", methods=["GET", "POST"]) # <--- CHANGE THIS FROM "/" TO "/login"
+
+@app.route("/login", methods=["GET", "POST"])
 def login():
     if "user_id" in session:
         return redirect(url_for("admin_dashboard" if session.get("is_admin") else "dashboard"))
-    # ... rest of your login logic ...
     if request.method == "POST":
         try:
             email       = request.form.get("email", "").lower().strip()
             password    = request.form.get("password", "")
             role_choice = request.form.get("staff_type", "").strip()
             user        = Employee.query.filter_by(email=email).first()
-             if not user:
-                flash("No account found with that email.", "danger")
+
+            if not user or not user.check_password(password):
+                flash("Invalid Pharma ID or Password.", "danger")
                 return render_template("login.html")
-            if not user.check_password(password):
-                flash("Incorrect password.", "danger")
-                return render_template("login.html")
+
+            # Allow staff to set their role at login if not admin
             if not user.is_admin and role_choice in ("picker", "checker"):
                 user.staff_type = role_choice
                 db.session.commit()
-            
+
+            session.clear()
             session.permanent = True
-            session.update({"user_id": user.id, "user_name": user.name,
-                            "staff_type": user.staff_type, "is_admin": user.is_admin})
-    
+            session.update({
+                "user_id":    user.id,
+                "user_name":  user.name,
+                "staff_type": user.staff_type,
+                "is_admin":   user.is_admin
+            })
             return redirect(url_for("admin_dashboard" if user.is_admin else "dashboard"))
-            
         except Exception as e:
             logger.error(f"Login error: {e}")
             flash("System error. Please try again.", "danger")
-            
     return render_template("login.html")
-@app.route("/admin_dashboard")
-@login_required
-@admin_required
-def admin_dashboard():
-    return render_template("admin.html")
-        
-        
-@app.route("/admin_dashboard")
-@login_required
-@admin_required
-def admin_dashboard():
-    return render_template("admin.html")
+
 
 @app.route("/logout")
 def logout():
@@ -388,11 +401,10 @@ def logout():
 @app.route("/dashboard", methods=["GET", "POST"])
 @login_required
 def dashboard():
-    def dashboard():
     try:
-        emp_id      = session["user_id"]
-        staff_type  = session.get("staff_type", "picker")
-        today       = date.today()
+        emp_id     = session["user_id"]
+        staff_type = session.get("staff_type", "picker")
+        today      = date.today()
         today_entry = KPIEntry.query.filter_by(emp_id=emp_id, entry_date=today).first()
 
         if request.method == "POST" and not today_entry:
@@ -420,8 +432,11 @@ def dashboard():
                 eff   = round(picked / total * 100, 1) if total > 0 else 0.0
                 if eff < 85:
                     try:
-                        socketio.emit("admin_alert", {"name": session["user_name"],
-                                                      "eff": eff, "type": staff_type})
+                        socketio.emit("admin_alert", {
+                            "name": session["user_name"],
+                            "eff":  eff,
+                            "type": staff_type
+                        })
                     except Exception:
                         pass
                 flash("Today's metrics recorded successfully.", "success")
@@ -450,33 +465,7 @@ def dashboard():
         return redirect(url_for("login"))
 
 
-@app.route("/staff/<int:emp_id>")
-@login_required
-def staff_detail(emp_id):
-    try:
-        emp = db.session.get(Employee, emp_id)
-        if not emp or emp.is_admin:
-            flash("Employee not found.", "danger")
-            return redirect(url_for("dashboard"))
-        entries = KPIEntry.query.filter_by(emp_id=emp_id).order_by(KPIEntry.entry_date.desc()).all()
-        today   = date.today()
-        d_ent   = [e for e in entries if e.entry_date == today]
-        w_ent   = [e for e in entries if e.entry_date >= today - timedelta(days=6)]
-        m_ent   = [e for e in entries if e.entry_date >= today - timedelta(days=29)]
-        return render_template("staff_detail.html",
-            emp=emp,
-            a_stats=build_analytics(entries, emp.staff_type),
-            d_stats=build_analytics(d_ent,   emp.staff_type),
-            w_stats=build_analytics(w_ent,   emp.staff_type),
-            m_stats=build_analytics(m_ent,   emp.staff_type),
-            entries=entries[:20])
-    except Exception as e:
-        logger.error(f"Staff detail: {e}")
-        flash("Could not load staff detail.", "danger")
-        return redirect(url_for("dashboard"))
-
-
-@app.route("/admin")
+@app.route("/admin_dashboard")
 @login_required
 @admin_required
 def admin_dashboard():
@@ -508,7 +497,33 @@ def admin_dashboard():
     except Exception as e:
         logger.error(f"Admin dashboard: {e}")
         flash("Error loading admin dashboard.", "danger")
-        return redirect(url_for("login"))   # ← ALWAYS returns, no None path
+        return redirect(url_for("login"))
+
+
+@app.route("/staff/<int:emp_id>")
+@login_required
+def staff_detail(emp_id):
+    try:
+        emp = db.session.get(Employee, emp_id)
+        if not emp or emp.is_admin:
+            flash("Employee not found.", "danger")
+            return redirect(url_for("dashboard"))
+        entries = KPIEntry.query.filter_by(emp_id=emp_id).order_by(KPIEntry.entry_date.desc()).all()
+        today   = date.today()
+        d_ent   = [e for e in entries if e.entry_date == today]
+        w_ent   = [e for e in entries if e.entry_date >= today - timedelta(days=6)]
+        m_ent   = [e for e in entries if e.entry_date >= today - timedelta(days=29)]
+        return render_template("staff_detail.html",
+            emp=emp,
+            a_stats=build_analytics(entries, emp.staff_type),
+            d_stats=build_analytics(d_ent,   emp.staff_type),
+            w_stats=build_analytics(w_ent,   emp.staff_type),
+            m_stats=build_analytics(m_ent,   emp.staff_type),
+            entries=entries[:20])
+    except Exception as e:
+        logger.error(f"Staff detail: {e}")
+        flash("Could not load staff detail.", "danger")
+        return redirect(url_for("dashboard"))
 
 
 @app.route("/admin/staff/<int:emp_id>")
@@ -537,6 +552,20 @@ def admin_staff_detail(emp_id):
         logger.error(f"Admin staff detail: {e}")
         flash("Could not load staff detail.", "danger")
         return redirect(url_for("admin_dashboard"))
+
+
+@app.route("/export_data")
+@login_required
+@admin_required
+def export_data():
+    """CSV export (from File 1) — quick management download."""
+    def generate():
+        yield 'Employee_ID,Date,Picked,Missed,Accuracy\n'
+        for e in KPIEntry.query.all():
+            yield (f"{e.emp_id},{e.entry_date},{e.picked},{e.missed},"
+                   f"{round(safe_div(e.picked, (e.picked + e.missed)) * 100, 1)}%\n")
+    return Response(generate(), mimetype='text/csv',
+                    headers={"Content-Disposition": "attachment; filename=pharma_kpi.csv"})
 
 
 @app.route("/download/<int:emp_id>")
@@ -592,11 +621,13 @@ def bulk_zip():
                     d_ent = [e for e in ents if e.entry_date == today]
                     w_ent = [e for e in ents if e.entry_date >= today - timedelta(days=6)]
                     m_ent = [e for e in ents if e.entry_date >= today - timedelta(days=29)]
-                    payload = dict(all_entries=ents, staff_type=emp.staff_type,
-                                   all_stats =build_analytics(ents,  emp.staff_type),
-                                   day_stats =build_analytics(d_ent, emp.staff_type),
-                                   week_stats=build_analytics(w_ent, emp.staff_type),
-                                   month_stats=build_analytics(m_ent, emp.staff_type))
+                    payload = dict(
+                        all_entries = ents, staff_type  = emp.staff_type,
+                        all_stats   = build_analytics(ents,  emp.staff_type),
+                        day_stats   = build_analytics(d_ent, emp.staff_type),
+                        week_stats  = build_analytics(w_ent, emp.staff_type),
+                        month_stats = build_analytics(m_ent, emp.staff_type)
+                    )
                     pdf = generate_visual_pdf(emp.name, payload)
                     zf.writestr(f"KRA_{emp.name.replace(' ', '_')}.pdf", pdf.read())
                 except Exception as ex:
@@ -608,31 +639,31 @@ def bulk_zip():
         logger.error(f"Bulk zip error: {e}")
         flash("Could not generate bulk export.", "danger")
         return redirect(url_for("admin_dashboard"))
-    
-@app.route("/health")
-def health():
-    return jsonify(status="Pharma IP Final Operational", version="7.0"), 200
 
-# ── Error handlers ──────────────────────────────────
+
+# ══════════════════════════════════════════════════
+#  9. ERROR HANDLERS (from File 2)
+# ══════════════════════════════════════════════════
 @app.errorhandler(404)
 def not_found(e):
-    # If they are logged in, send them to their specific home
     if "user_id" in session:
         try:
-            target = "admin_dashboard" if session.get("is_admin") else "dashboard"
-            return redirect(url_for(target))
-        except:
+            return redirect(url_for("admin_dashboard" if session.get("is_admin") else "dashboard"))
+        except Exception:
             return redirect(url_for("login"))
     return redirect(url_for("login"))
+
 
 @app.errorhandler(500)
 def server_error(e):
     logger.error(f"500 error: {e}")
     db.session.rollback()
-    # If a 500 happens, CLEAR session and go to login to reset the state
-    session.clear() 
+    session.clear()
     return render_template("login.html"), 500
 
-# ── Entry point (local dev only — gunicorn uses module-level init above) ──
+
+# ══════════════════════════════════════════════════
+#  10. ENTRY POINT
+# ══════════════════════════════════════════════════
 if __name__ == "__main__":
-    socketio.run(app, debug=False, port=int(os.environ.get("PORT", 5000)))
+    socketio.run(app, host="0.0.0.0", port=int(os.environ.get("PORT", 10000)))
