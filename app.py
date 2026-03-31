@@ -19,6 +19,15 @@ app = Flask(__name__)
 # 3. APPLY PROXYFIX (Crucial for Render redirects)
 from werkzeug.middleware.proxy_fix import ProxyFix
 app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_port=1, x_prefix=1)
+from datetime import timedelta
+
+app.config.update(
+    SESSION_COOKIE_SECURE=True,
+    SESSION_COOKIE_HTTPONLY=True,
+    SESSION_COOKIE_SAMESITE='Lax',
+    PERMANENT_SESSION_LIFETIME=timedelta(days=7), # Add this line
+    SESSION_REFRESH_EACH_REQUEST=True             # Add this line
+)
 #APPKEYS 
 app.secret_key = os.environ.get("SECRET_KEY", "ip_pharma_final_secure_change_in_prod")
 db_url = os.environ.get("DATABASE_URL", "sqlite:///pharma_final.db")
@@ -29,9 +38,6 @@ app.config['PREFERRED_URL_SCHEME'] = 'https'
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 app.config["SQLALCHEMY_ENGINE_OPTIONS"] = {"pool_pre_ping": True, "pool_recycle": 300}
 # Add these three lines to your app.config section
-app.config['SESSION_COOKIE_SECURE'] = True
-app.config['SESSION_COOKIE_HTTPONLY'] = True
-app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
 
 # 4. EXTENSIONS FOURTH
 db       = SQLAlchemy(app)
@@ -110,7 +116,6 @@ def admin_required(f):
             return redirect(url_for("dashboard"))
         return f(*a, **kw)
     return decorated
-
 
 # ══════════════════════════════════════════════════
 #  ANALYTICS
@@ -350,14 +355,16 @@ def login():
                 user.staff_type = role_choice
                 db.session.commit()
             session.permanent = True
-            session.update({"user_id": user.id, "user_name": user.name,
-                            "staff_type": user.staff_type, "is_admin": user.is_admin})
-            return redirect(url_for("admin_dashboard" if user.is_admin else "dashboard"))
-        except Exception as e:
-            logger.error(f"Login error: {e}")
-            flash("System error. Please try again.", "danger")
-    return render_template("login.html")
+            @app.route("/dashboard")
+@login_required
+def dashboard():
+    return render_template("dashboard.html")
 
+@app.route("/admin_dashboard")
+@login_required
+@admin_required
+def admin_dashboard():
+    return render_template("admin.html")
 
 @app.route("/logout")
 def logout():
