@@ -345,7 +345,7 @@ def login():
             password    = request.form.get("password", "")
             role_choice = request.form.get("staff_type", "").strip()
             user        = Employee.query.filter_by(email=email).first()
-            if not user:
+             if not user:
                 flash("No account found with that email.", "danger")
                 return render_template("login.html")
             if not user.check_password(password):
@@ -354,18 +354,24 @@ def login():
             if not user.is_admin and role_choice in ("picker", "checker"):
                 user.staff_type = role_choice
                 db.session.commit()
-            session.permanent = True
-             session.update({"user_id": user.id, "user_name": user.name,
-                            "staff_type": user.staff_type, "is_admin": user.is_admin})
             
+            session.permanent = True
+            session.update({"user_id": user.id, "user_name": user.name,
+                            "staff_type": user.staff_type, "is_admin": user.is_admin})
+    
             return redirect(url_for("admin_dashboard" if user.is_admin else "dashboard"))
             
-        # THIS IS THE PART THAT WAS MISSING AND CAUSED THE CRASH:
         except Exception as e:
             logger.error(f"Login error: {e}")
             flash("System error. Please try again.", "danger")
             
     return render_template("login.html")
+@app.route("/admin_dashboard")
+@login_required
+@admin_required
+def admin_dashboard():
+    return render_template("admin.html")
+        
         
 @app.route("/admin_dashboard")
 @login_required
