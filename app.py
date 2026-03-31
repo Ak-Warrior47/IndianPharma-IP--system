@@ -1,11 +1,12 @@
 import eventlet
 eventlet.monkey_patch()  # MUST BE ABSOLUTE FIRST LINE
-import os, logging, json, csv, zipfile, io, atexit
+
+import os, logging, zipfile, io, atexit
 from flask import Flask, render_template, request, redirect, url_for, flash, session, send_file, Response, jsonify
 from flask_sqlalchemy import SQLAlchemy
 from flask_socketio import SocketIO
 from werkzeug.security import generate_password_hash, check_password_hash
-from datetime import datetime, date, timedelta
+from datetime import date, timedelta
 from apscheduler.schedulers.background import BackgroundScheduler
 from functools import wraps
 from werkzeug.middleware.proxy_fix import ProxyFix
@@ -21,14 +22,18 @@ app = Flask(__name__)
 #  2. RENDER INFRASTRUCTURE
 # ══════════════════════════════════════════════════
 app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_port=1, x_prefix=1)
+
+IS_PRODUCTION = os.environ.get("RENDER") or os.environ.get("DATABASE_URL")
+
 app.config.update(
     SECRET_KEY=os.environ.get("SECRET_KEY", "pharma_secure_key_2024"),
-    SESSION_COOKIE_SECURE=True,
+    SESSION_COOKIE_SECURE=bool(IS_PRODUCTION),   # True on Render, False locally
     SESSION_COOKIE_HTTPONLY=True,
     SESSION_COOKIE_SAMESITE='Lax',
+    SESSION_COOKIE_NAME='pharma_session',        # Explicit name avoids stale cookie conflicts
     PERMANENT_SESSION_LIFETIME=timedelta(days=7),
     SESSION_REFRESH_EACH_REQUEST=True,
-    PREFERRED_URL_SCHEME='https',
+    PREFERRED_URL_SCHEME='https' if IS_PRODUCTION else 'http',
     SQLALCHEMY_TRACK_MODIFICATIONS=False,
     SQLALCHEMY_ENGINE_OPTIONS={"pool_pre_ping": True, "pool_recycle": 300}
 )
@@ -99,7 +104,8 @@ class KPIEntry(db.Model):
 def login_required(f):
     @wraps(f)
     def decorated(*a, **kw):
-        if "user_id" not in session:
+        if not session.get("user_id"):   # .get() safely handles missing OR None
+            session.clear()              # Wipe any corrupt partial session
             flash("Please sign in.", "warning")
             return redirect(url_for("login"))
         return f(*a, **kw)
@@ -138,10 +144,14 @@ def build_analytics(entries, staff_type="picker"):
         ter = sum(int(e.errors_found or 0)       for e in entries)
         tct = round(sum(float(e.check_time or 0) for e in entries), 3)
 
-        pick_acc   = round(safe_div(tp, ti) * 100, 1)
-        pick_speed = round(safe_div(ti, ts), 1)
-        check_acc  = round(safe_div(ter, tck) * 100, 1)
-        ck_speed   = round(safe_div(tck, tct), 1)
+        pick_acc   = round(safe_div(tp, ti) * 100, 1)          # picked / total_items %
+        pick_speed = round(safe_div(ti, ts), 1)                 # items per hour
+        # check_acc = correct checks / total checked (NOT error rate)
+        # errors_found = items with errors caught; checker accuracy = how many were clean
+        correct_checks = max(0, tck - ter)
+        check_acc  = round(safe_div(correct_checks, tck) * 100, 1)   # clean check rate %
+        error_rate = round(safe_div(ter, tck) * 100, 1)              # error detection rate %
+        ck_speed   = round(safe_div(tck, tct), 1)                    # checks per hour
 
         if staff_type == "checker":
             eff_score       = round(min(100, (check_acc / 100 * 70) + (min(safe_div(ck_speed, 150), 1) * 30)), 1)
@@ -161,13 +171,19 @@ def build_analytics(entries, staff_type="picker"):
             elif pick_acc >= 88:             grade, fb = "SATISFACTORY", "Acceptable. Focus on reducing missed picks."
             else:                            grade, fb = "RE-TRAINING",  "Pick accuracy below safety threshold. Intervention required."
         else:
+            # Grade on check_acc (clean rate) — higher is better
             if check_acc >= 97 and tbx >= 10: grade, fb = "ELITE",        "Exceptional verification accuracy. Zero-error standard met."
             elif check_acc >= 94:             grade, fb = "PROFICIENT",   "Good check accuracy. Minor improvements remain."
             elif check_acc >= 87:             grade, fb = "SATISFACTORY", "Acceptable check rate. Increase error detection."
             else:                             grade, fb = "RE-TRAINING",  "Verification accuracy below threshold. Re-training needed."
 
-        # Consistency score (variance-based)
-        daily_accs = [e.accuracy for e in entries if (e.picked + e.missed) > 0]
+        # Consistency score (variance-based) — use correct metric per staff type
+        if staff_type == "checker":
+            daily_accs = [round(safe_div(max(0, (e.checked or 0) - (e.errors_found or 0)), (e.checked or 0)) * 100, 1)
+                          for e in entries if (e.checked or 0) > 0]
+        else:
+            daily_accs = [e.accuracy for e in entries if (e.picked + e.missed) > 0]
+
         if len(daily_accs) > 1:
             mean_a      = sum(daily_accs) / len(daily_accs)
             variance    = sum((x - mean_a) ** 2 for x in daily_accs) / len(daily_accs)
@@ -175,11 +191,15 @@ def build_analytics(entries, staff_type="picker"):
         else:
             consistency = 100.0 if daily_accs else 0.0
 
-        # Trend detection
+        # Trend detection — use correct metric per staff type
         trend = "stable"
         if len(entries) >= 4:
-            recent_avg = sum(e.accuracy for e in entries[:2]) / 2
-            older_avg  = sum(e.accuracy for e in entries[-2:]) / 2
+            if staff_type == "checker":
+                def _acc(e): return round(safe_div(max(0, (e.checked or 0) - (e.errors_found or 0)), (e.checked or 0)) * 100, 1)
+            else:
+                def _acc(e): return e.accuracy
+            recent_avg = sum(_acc(e) for e in entries[:2]) / 2
+            older_avg  = sum(_acc(e) for e in entries[-2:]) / 2
             if recent_avg > older_avg + 2:   trend = "improving"
             elif recent_avg < older_avg - 2: trend = "declining"
 
@@ -187,7 +207,7 @@ def build_analytics(entries, staff_type="picker"):
             tp=tp, tm=tm, ti=ti, tb=tb, tbx=tbx, ts=ts,
             tck=tck, ter=ter, tct=tct,
             pick_acc=pick_acc, pick_speed=pick_speed,
-            check_acc=check_acc, ck_speed=ck_speed,
+            check_acc=check_acc, error_rate=error_rate, ck_speed=ck_speed,
             eff_score=eff_score, grade=grade, feedback=fb,
             potential_items=potential_items, potential_eff=potential_eff,
             gap_items=gap_items, consistency=consistency, trend=trend,
@@ -223,31 +243,42 @@ def build_leaderboard(staff_type=None):
         if staff_type:
             query = query.filter_by(staff_type=staff_type)
         employees = query.all()
+        if not employees:
+            return []
+
+        # Load ALL entries in one query instead of N queries (N+1 fix)
+        emp_ids = [emp.id for emp in employees]
+        all_entries = KPIEntry.query.filter(KPIEntry.emp_id.in_(emp_ids)).all()
+        entries_by_emp = {}
+        for e in all_entries:
+            entries_by_emp.setdefault(e.emp_id, []).append(e)
+
         lb = []
         for emp in employees:
-            entries = KPIEntry.query.filter_by(emp_id=emp.id).all()
+            entries = entries_by_emp.get(emp.id, [])
             stats   = build_analytics(entries, emp.staff_type)
             if not stats:
                 continue
             lb.append({
-                "id":           emp.id,
-                "name":         emp.name,
-                "email":        emp.email,
-                "staff_type":   emp.staff_type,
-                "role":         emp.role,
-                "score":        stats["eff_score"],
-                "grade":        stats["grade"],
-                "pick_acc":     stats["pick_acc"],
-                "pick_speed":   stats["pick_speed"],
-                "check_acc":    stats["check_acc"],
-                "ck_speed":     stats["ck_speed"],
-                "consistency":  stats["consistency"],
-                "trend":        stats["trend"],
-                "days":         stats["days"],
-                "tp":           stats["tp"],
-                "tm":           stats["tm"],
+                "id":            emp.id,
+                "name":          emp.name,
+                "email":         emp.email,
+                "staff_type":    emp.staff_type,
+                "role":          emp.role,
+                "score":         stats["eff_score"],
+                "grade":         stats["grade"],
+                "pick_acc":      stats["pick_acc"],
+                "pick_speed":    stats["pick_speed"],
+                "check_acc":     stats["check_acc"],
+                "error_rate":    stats["error_rate"],
+                "ck_speed":      stats["ck_speed"],
+                "consistency":   stats["consistency"],
+                "trend":         stats["trend"],
+                "days":          stats["days"],
+                "tp":            stats["tp"],
+                "tm":            stats["tm"],
                 "potential_eff": stats["potential_eff"],
-                "gap_items":    stats["gap_items"],
+                "gap_items":     stats["gap_items"],
             })
         lb.sort(key=lambda x: x["score"], reverse=True)
         return lb
@@ -260,6 +291,11 @@ def build_leaderboard(staff_type=None):
 #  6. SCHEDULER (from File 2)
 # ══════════════════════════════════════════════════
 def start_scheduler():
+    # Guard: only start once — gunicorn spawns multiple workers, avoid duplicate schedulers
+    if os.environ.get("SCHEDULER_STARTED"):
+        return
+    os.environ["SCHEDULER_STARTED"] = "1"
+
     def scheduled_task():
         with app.app_context():
             try:
@@ -333,10 +369,6 @@ def init_db():
             db.session.rollback()
 
 
-with app.app_context():
-    db.create_all()
-    logger.info("Database tables verified.")
-
 init_db()
 start_scheduler()
 
@@ -349,17 +381,25 @@ def health_check():
     return jsonify(status="Pharma IP Operational", version="8.0"), 200
 
 
-@app.route("/", methods=["GET", "POST"])
+@app.route("/")
 def index():
-    if "user_id" not in session:
+    # Hard stop — never redirect to self
+    uid = session.get("user_id")
+    if not uid:
         return redirect(url_for("login"))
-    return redirect(url_for("admin_dashboard" if session.get("is_admin") else "dashboard"))
+    if session.get("is_admin"):
+        return redirect(url_for("admin_dashboard"))
+    return redirect(url_for("dashboard"))
 
 
 @app.route("/login", methods=["GET", "POST"])
 def login():
-    if "user_id" in session:
-        return redirect(url_for("admin_dashboard" if session.get("is_admin") else "dashboard"))
+    # If already logged in go straight to destination — never loop back to /login
+    if session.get("user_id"):
+        if session.get("is_admin"):
+            return redirect(url_for("admin_dashboard"))
+        return redirect(url_for("dashboard"))
+
     if request.method == "POST":
         try:
             email       = request.form.get("email", "").lower().strip()
@@ -371,23 +411,29 @@ def login():
                 flash("Invalid Pharma ID or Password.", "danger")
                 return render_template("login.html")
 
-            # Allow staff to set their role at login if not admin
+            # Allow staff to pick their role at login
             if not user.is_admin and role_choice in ("picker", "checker"):
                 user.staff_type = role_choice
                 db.session.commit()
 
+            # Clear OLD session first to wipe any stale/corrupt cookie
             session.clear()
             session.permanent = True
-            session.update({
-                "user_id":    user.id,
-                "user_name":  user.name,
-                "staff_type": user.staff_type,
-                "is_admin":   user.is_admin
-            })
-            return redirect(url_for("admin_dashboard" if user.is_admin else "dashboard"))
+            session["user_id"]    = user.id
+            session["user_name"]  = user.name
+            session["staff_type"] = user.staff_type
+            session["is_admin"]   = bool(user.is_admin)
+
+            logger.info(f"Login OK: {user.email} admin={user.is_admin}")
+
+            if user.is_admin:
+                return redirect(url_for("admin_dashboard"))
+            return redirect(url_for("dashboard"))
+
         except Exception as e:
             logger.error(f"Login error: {e}")
             flash("System error. Please try again.", "danger")
+
     return render_template("login.html")
 
 
@@ -443,6 +489,8 @@ def dashboard():
                 db.session.rollback()
                 logger.error(f"Dashboard POST: {e}")
                 flash("Could not save entry. Please try again.", "danger")
+        elif request.method == "POST" and today_entry:
+            flash("You have already submitted today's metrics.", "info")
 
         all_entries = KPIEntry.query.filter_by(emp_id=emp_id).order_by(KPIEntry.entry_date.desc()).all()
         d_stats = build_analytics(get_period_entries(emp_id, "day"),   staff_type)
@@ -472,9 +520,17 @@ def admin_dashboard():
         employees = Employee.query.filter_by(is_admin=False).all()
         today     = date.today()
         rows      = []
+
+        # Load all entries for all employees in ONE query (N+1 fix)
+        emp_ids    = [emp.id for emp in employees]
+        all_ents   = KPIEntry.query.filter(KPIEntry.emp_id.in_(emp_ids)).order_by(KPIEntry.entry_date.desc()).all()
+        ents_by_id = {}
+        for e in all_ents:
+            ents_by_id.setdefault(e.emp_id, []).append(e)
+
         for emp in employees:
             try:
-                ents  = KPIEntry.query.filter_by(emp_id=emp.id).order_by(KPIEntry.entry_date.desc()).all()
+                ents  = ents_by_id.get(emp.id, [])
                 d_ent = [e for e in ents if e.entry_date == today]
                 w_ent = [e for e in ents if e.entry_date >= today - timedelta(days=6)]
                 m_ent = [e for e in ents if e.entry_date >= today - timedelta(days=29)]
@@ -488,6 +544,7 @@ def admin_dashboard():
                 ))
             except Exception as ex:
                 logger.error(f"Admin row {emp.name}: {ex}")
+
         all_lb   = build_leaderboard()
         pickers  = [r for r in all_lb if r["staff_type"] == "picker"]
         checkers = [r for r in all_lb if r["staff_type"] == "checker"]
@@ -557,10 +614,11 @@ def admin_staff_detail(emp_id):
 @login_required
 @admin_required
 def export_data():
-    """CSV export (from File 1) — quick management download."""
+    """CSV export — quick management download."""
+    entries = KPIEntry.query.all()   # Query inside request context, not inside generator
     def generate():
         yield 'Employee_ID,Date,Picked,Missed,Accuracy\n'
-        for e in KPIEntry.query.all():
+        for e in entries:
             yield (f"{e.emp_id},{e.entry_date},{e.picked},{e.missed},"
                    f"{round(safe_div(e.picked, (e.picked + e.missed)) * 100, 1)}%\n")
     return Response(generate(), mimetype='text/csv',
@@ -645,7 +703,7 @@ def bulk_zip():
 # ══════════════════════════════════════════════════
 @app.errorhandler(404)
 def not_found(e):
-    if "user_id" in session:
+    if session.get("user_id"):
         try:
             return redirect(url_for("admin_dashboard" if session.get("is_admin") else "dashboard"))
         except Exception:
