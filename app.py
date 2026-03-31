@@ -1,21 +1,20 @@
 #importd an requirements
 import eventlet
 eventlet.monkey_patch()  # MUST BE ABSOLUTE FIRST LINE
-
 import os, logging, zipfile, io, atexit, json
 from flask import Flask, render_template, request, redirect, url_for, flash, session, send_file, jsonify
 from flask_sqlalchemy import SQLAlchemy
 from flask_socketio import SocketIO
-app = Flask(__name__)
-
 from werkzeug.middleware.proxy_fix import ProxyFix
-# This line MUST be present to recognize Render's HTTPS headers
+
+# This tells Flask it is behind a proxy (Render)
 app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_port=1, x_prefix=1)
-app.config['PREFERRED_URL_SCHEME'] = 'https'
+
 app.config.update(
     SESSION_COOKIE_SECURE=True,
     SESSION_COOKIE_HTTPONLY=True,
     SESSION_COOKIE_SAMESITE='Lax',
+    PREFERRED_URL_SCHEME='https'
 )
 from werkzeug.security import generate_password_hash, check_password_hash
 from datetime import datetime, date, timedelta
@@ -41,10 +40,13 @@ app.config['SESSION_COOKIE_SECURE'] = True
 app.config['SESSION_COOKIE_HTTPONLY'] = True
 app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
 
-
 # 4. EXTENSIONS FOURTH
 db       = SQLAlchemy(app)
 socketio = SocketIO(app, cors_allowed_origins="*", async_mode="eventlet")
+#_____________________________________--------------------------------------HEALTH CODE 
+@app.route('/health')
+def health_check():
+    return "OK", 200
 
 # ══════════════════════════════════════════════════
 #  MODELS
@@ -270,7 +272,9 @@ def start_scheduler():
 
 # ══════════════════════════════════════════════════
 #  DB INIT  — called once at module load (works for gunicorn)
-# ══════════════════════════════════════════════════
+with app.app_context():
+    db.create_all()
+    logger.info("Database tables verified/created.")
 def init_db():
     with app.app_context():
         try:
@@ -592,15 +596,12 @@ def bulk_zip():
         logger.error(f"Bulk zip error: {e}")
         flash("Could not generate bulk export.", "danger")
         return redirect(url_for("admin_dashboard"))
-
-
+    
 @app.route("/health")
 def health():
     return jsonify(status="Pharma IP Final Operational", version="7.0"), 200
 
-
 # ── Error handlers ──────────────────────────────────
-# ── Error handlers (Fixed to prevent loops) ────────────────
 @app.errorhandler(404)
 def not_found(e):
     # If they are logged in, send them to their specific home
@@ -619,7 +620,6 @@ def server_error(e):
     # If a 500 happens, CLEAR session and go to login to reset the state
     session.clear() 
     return render_template("login.html"), 500
-
 
 # ── Entry point (local dev only — gunicorn uses module-level init above) ──
 if __name__ == "__main__":
