@@ -5,29 +5,22 @@ import os, logging, zipfile, io, atexit, json
 from flask import Flask, render_template, request, redirect, url_for, flash, session, send_file, jsonify
 from flask_sqlalchemy import SQLAlchemy
 from flask_socketio import SocketIO
-from werkzeug.middleware.proxy_fix import ProxyFix
-
-# This tells Flask it is behind a proxy (Render)
-app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_port=1, x_prefix=1)
-
-app.config.update(
-    SESSION_COOKIE_SECURE=True,
-    SESSION_COOKIE_HTTPONLY=True,
-    SESSION_COOKIE_SAMESITE='Lax',
-    PREFERRED_URL_SCHEME='https'
-)
 from werkzeug.security import generate_password_hash, check_password_hash
 from datetime import datetime, date, timedelta
 from apscheduler.schedulers.background import BackgroundScheduler
 from functools import wraps
-
+from werkzeug.middleware.proxy_fix import ProxyFix
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 # 1. CREATE APP FIRST
-# 3. CONFIGS THIRD
-app.secret_key = os.environ.get("SECRET_KEY", "ip_pharma_final_secure_change_in_prod")
+app = Flask(__name__)
 
+# 3. APPLY PROXYFIX (Crucial for Render redirects)
+from werkzeug.middleware.proxy_fix import ProxyFix
+app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_port=1, x_prefix=1)
+#APPKEYS 
+app.secret_key = os.environ.get("SECRET_KEY", "ip_pharma_final_secure_change_in_prod")
 db_url = os.environ.get("DATABASE_URL", "sqlite:///pharma_final.db")
 if db_url.startswith("postgres://"):
     db_url = db_url.replace("postgres://", "postgresql://", 1)
@@ -43,11 +36,10 @@ app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
 # 4. EXTENSIONS FOURTH
 db       = SQLAlchemy(app)
 socketio = SocketIO(app, cors_allowed_origins="*", async_mode="eventlet")
-#_____________________________________--------------------------------------HEALTH CODE 
+_#-------------------------------------HEALTH CODE 
 @app.route('/health')
 def health_check():
     return "OK", 200
-
 # ══════════════════════════════════════════════════
 #  MODELS
 # ══════════════════════════════════════════════════
