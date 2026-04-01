@@ -591,7 +591,21 @@ def admin_dashboard():
             except Exception as ex:
                 logger.error(f"Admin row {emp.name}: {ex}")
 
-        all_lb   = build_leaderboard()
+        # Build leaderboard from already-loaded rows — avoids redundant DB queries
+        def _to_lb(r):
+            s = r["stats"]
+            if not s:
+                return None
+            e = r["emp"]
+            return {"id":e.id,"name":e.name,"email":e.email,"staff_type":e.staff_type,
+                    "role":e.role,"score":s["eff_score"],"grade":s["grade"],
+                    "pick_acc":s["pick_acc"],"pick_speed":s["pick_speed"],
+                    "check_acc":s["check_acc"],"error_rate":s["error_rate"],
+                    "ck_speed":s["ck_speed"],"consistency":s["consistency"],
+                    "trend":s["trend"],"days":s["days"],"tp":s["tp"],"tm":s["tm"],
+                    "potential_eff":s["potential_eff"],"gap_items":s["gap_items"]}
+        all_lb   = sorted([x for x in (_to_lb(r) for r in rows) if x],
+                          key=lambda x: x["score"], reverse=True)
         pickers  = [r for r in all_lb if r["staff_type"] == "picker"]
         checkers = [r for r in all_lb if r["staff_type"] == "checker"]
         return render_template("admin.html", rows=rows,

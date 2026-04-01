@@ -126,7 +126,7 @@ def generate_visual_pdf(emp_name, payload):
             HRFlowable(width="100%", thickness=2, color=colors.HexColor(BLUE)),
             Spacer(1, 0.3*cm),
             Paragraph(f"KRA Grade: {grade}", grade_st),
-            Paragraph(f"Efficiency Score: {all_s.get("eff_score",0)}/100  |  Consistency: {all_s.get("consistency",0)}%  |  Trend: {all_s.get("trend","stable").upper()}",
+            Paragraph(f"Efficiency Score: {all_s.get('eff_score',0)}/100  |  Consistency: {all_s.get('consistency',0)}%  |  Trend: {all_s.get('trend','stable').upper()}",
                       _p("EF", fontSize=11, fontName="Helvetica-Bold", alignment=TA_CENTER,
                          textColor=colors.HexColor(DARK))),
             Paragraph(all_s.get("feedback",""), _p("FB", fontSize=9, alignment=TA_CENTER,

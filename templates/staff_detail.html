@@ -189,7 +189,7 @@ body{font-family:'Inter',sans-serif;background:#f1f5f9;color:var(--dark);min-hei
   </div>
   <div class="d-flex align-items-center gap-2">
     {% if is_admin_view is defined and is_admin_view %}
-    <a href="/admin" class="btn-back"><i class="ph ph-arrow-left"></i> Admin</a>
+    <a href="/admin_dashboard" class="btn-back"><i class="ph ph-arrow-left"></i> Admin</a>
     <a href="/download/{{emp.id}}" class="btn-dl"><i class="ph-bold ph-file-pdf"></i> Download KRA PDF</a>
     {% else %}
     <a href="/dashboard" class="btn-back"><i class="ph ph-arrow-left"></i> Dashboard</a>

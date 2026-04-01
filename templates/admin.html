@@ -250,12 +250,12 @@ body{font-family:'Inter',sans-serif;background:#f1f5f9;color:#0f172a;min-height:
       </div>
       {% if pickers %}
         {% for r in pickers %}
-        <div class="lb-row {% if loop.index==1 %}rank1{% endif %}" onclick="window.location='/admin/staff/{{r.emp.id}}'" style="cursor:pointer">
+        <div class="lb-row {% if loop.index==1 %}rank1{% endif %}" onclick="window.location='/admin/staff/{{r.id}}'" style="cursor:pointer">
           <div class="lb-num {% if loop.index<=3 %}t{% endif %}">#{{loop.index}}</div>
-          <div class="lb-name">{{r.emp.name}}</div>
+          <div class="lb-name">{{r.name}}</div>
           <div>
-            <span class="lb-score">{{r.stats.eff_score}}</span>
-            <span class="lb-grade">{{r.stats.grade}}</span>
+            <span class="lb-score">{{r.score}}</span>
+            <span class="lb-grade">{{r.grade}}</span>
           </div>
         </div>
         {% endfor %}
@@ -270,12 +270,12 @@ body{font-family:'Inter',sans-serif;background:#f1f5f9;color:#0f172a;min-height:
       </div>
       {% if checkers %}
         {% for r in checkers %}
-        <div class="lb-row {% if loop.index==1 %}rank1{% endif %}" onclick="window.location='/admin/staff/{{r.emp.id}}'" style="cursor:pointer">
+        <div class="lb-row {% if loop.index==1 %}rank1{% endif %}" onclick="window.location='/admin/staff/{{r.id}}'" style="cursor:pointer">
           <div class="lb-num {% if loop.index<=3 %}t{% endif %}">#{{loop.index}}</div>
-          <div class="lb-name">{{r.emp.name}}</div>
+          <div class="lb-name">{{r.name}}</div>
           <div>
-            <span class="lb-score">{{r.stats.eff_score}}</span>
-            <span class="lb-grade">{{r.stats.grade}}</span>
+            <span class="lb-score">{{r.score}}</span>
+            <span class="lb-grade">{{r.grade}}</span>
           </div>
         </div>
         {% endfor %}
@@ -312,30 +312,30 @@ body{font-family:'Inter',sans-serif;background:#f1f5f9;color:#0f172a;min-height:
         <td><span class="type-badge {% if r.emp.staff_type=='picker' %}badge-picker{% else %}badge-checker{% endif %}">{{r.emp.staff_type|title}}</span></td>
         <!-- all-time cells -->
         {% set s = r.stats %}
-        <td class="pd-all">{% if s %}<span class="acc-badge {% if s.pick_acc>=97 %}acc-elite{% elif s.pick_acc>=94 %}acc-prof{% elif s.pick_acc>=87 %}acc-sat{% else %}acc-poor{% endif %}">{{s.pick_acc}}%</span>{% else %}—{% endif %}</td>
+        <td class="pd-all">{% if s %}{% set acc = s.check_acc if r.emp.staff_type=='checker' else s.pick_acc %}<span class="acc-badge {% if acc>=97 %}acc-elite{% elif acc>=94 %}acc-prof{% elif acc>=87 %}acc-sat{% else %}acc-poor{% endif %}">{{acc}}%</span>{% else %}—{% endif %}</td>
         <td class="pd-all">{% if s %}{{s.eff_score}}<div class="eff-bar"><div class="eff-fill" style="width:{{s.eff_score}}%"></div></div>{% else %}—{% endif %}</td>
-        <td class="pd-all">{% if s %}{{s.ti}}{% else %}—{% endif %}</td>
+        <td class="pd-all">{% if s %}{{s.ti if r.emp.staff_type=='picker' else s.tck}}{% else %}—{% endif %}</td>
         <td class="pd-all">{% if s %}{% if r.emp.staff_type=='picker' %}{{s.pick_speed}}{% else %}{{s.ck_speed}}{% endif %}{% else %}—{% endif %}</td>
         <td class="pd-all">{% if s %}<strong>{{s.potential_eff}}</strong>/100{% else %}—{% endif %}</td>
         <!-- month cells -->
         {% set ms = r.m_stats %}
-        <td class="pd-month" style="display:none">{% if ms %}<span class="acc-badge {% if ms.pick_acc>=97 %}acc-elite{% elif ms.pick_acc>=94 %}acc-prof{% elif ms.pick_acc>=87 %}acc-sat{% else %}acc-poor{% endif %}">{{ms.pick_acc}}%</span>{% else %}—{% endif %}</td>
+        <td class="pd-month" style="display:none">{% if ms %}{% set acc = ms.check_acc if r.emp.staff_type=='checker' else ms.pick_acc %}<span class="acc-badge {% if acc>=97 %}acc-elite{% elif acc>=94 %}acc-prof{% elif acc>=87 %}acc-sat{% else %}acc-poor{% endif %}">{{acc}}%</span>{% else %}—{% endif %}</td>
         <td class="pd-month" style="display:none">{% if ms %}{{ms.eff_score}}{% else %}—{% endif %}</td>
-        <td class="pd-month" style="display:none">{% if ms %}{{ms.ti}}{% else %}—{% endif %}</td>
+        <td class="pd-month" style="display:none">{% if ms %}{{ms.ti if r.emp.staff_type=='picker' else ms.tck}}{% else %}—{% endif %}</td>
         <td class="pd-month" style="display:none">{% if ms %}{% if r.emp.staff_type=='picker' %}{{ms.pick_speed}}{% else %}{{ms.ck_speed}}{% endif %}{% else %}—{% endif %}</td>
         <td class="pd-month" style="display:none">{% if ms %}<strong>{{ms.potential_eff}}</strong>/100{% else %}—{% endif %}</td>
         <!-- week cells -->
         {% set ws = r.w_stats %}
-        <td class="pd-week" style="display:none">{% if ws %}<span class="acc-badge {% if ws.pick_acc>=97 %}acc-elite{% elif ws.pick_acc>=94 %}acc-prof{% elif ws.pick_acc>=87 %}acc-sat{% else %}acc-poor{% endif %}">{{ws.pick_acc}}%</span>{% else %}—{% endif %}</td>
+        <td class="pd-week" style="display:none">{% if ws %}{% set acc = ws.check_acc if r.emp.staff_type=='checker' else ws.pick_acc %}<span class="acc-badge {% if acc>=97 %}acc-elite{% elif acc>=94 %}acc-prof{% elif acc>=87 %}acc-sat{% else %}acc-poor{% endif %}">{{acc}}%</span>{% else %}—{% endif %}</td>
         <td class="pd-week" style="display:none">{% if ws %}{{ws.eff_score}}{% else %}—{% endif %}</td>
-        <td class="pd-week" style="display:none">{% if ws %}{{ws.ti}}{% else %}—{% endif %}</td>
+        <td class="pd-week" style="display:none">{% if ws %}{{ws.ti if r.emp.staff_type=='picker' else ws.tck}}{% else %}—{% endif %}</td>
         <td class="pd-week" style="display:none">{% if ws %}{% if r.emp.staff_type=='picker' %}{{ws.pick_speed}}{% else %}{{ws.ck_speed}}{% endif %}{% else %}—{% endif %}</td>
         <td class="pd-week" style="display:none">{% if ws %}<strong>{{ws.potential_eff}}</strong>/100{% else %}—{% endif %}</td>
         <!-- day cells -->
         {% set ds = r.d_stats %}
-        <td class="pd-day" style="display:none">{% if ds %}<span class="acc-badge {% if ds.pick_acc>=97 %}acc-elite{% elif ds.pick_acc>=94 %}acc-prof{% elif ds.pick_acc>=87 %}acc-sat{% else %}acc-poor{% endif %}">{{ds.pick_acc}}%</span>{% else %}—{% endif %}</td>
+        <td class="pd-day" style="display:none">{% if ds %}{% set acc = ds.check_acc if r.emp.staff_type=='checker' else ds.pick_acc %}<span class="acc-badge {% if acc>=97 %}acc-elite{% elif acc>=94 %}acc-prof{% elif acc>=87 %}acc-sat{% else %}acc-poor{% endif %}">{{acc}}%</span>{% else %}—{% endif %}</td>
         <td class="pd-day" style="display:none">{% if ds %}{{ds.eff_score}}{% else %}—{% endif %}</td>
-        <td class="pd-day" style="display:none">{% if ds %}{{ds.ti}}{% else %}—{% endif %}</td>
+        <td class="pd-day" style="display:none">{% if ds %}{{ds.ti if r.emp.staff_type=='picker' else ds.tck}}{% else %}—{% endif %}</td>
         <td class="pd-day" style="display:none">{% if ds %}{% if r.emp.staff_type=='picker' %}{{ds.pick_speed}}{% else %}{{ds.ck_speed}}{% endif %}{% else %}—{% endif %}</td>
         <td class="pd-day" style="display:none">{% if ds %}<strong>{{ds.potential_eff}}</strong>/100{% else %}—{% endif %}</td>
 
@@ -368,8 +368,8 @@ body{font-family:'Inter',sans-serif;background:#f1f5f9;color:#0f172a;min-height:
       <td><a href="/admin/staff/{{r.id}}" style="color:#0f172a;font-weight:700;text-decoration:none" onmouseover="this.style.color='#1d4ed8'" onmouseout="this.style.color='#0f172a'">{{r.name}}</a><div style="font-size:.68rem;color:#94a3b8">{{r.email}}</div></td>
       <td><span class="type-badge {% if r.staff_type=='picker' %}badge-picker{% else %}badge-checker{% endif %}" style="display:inline-block;padding:2px 7px;border-radius:5px;font-size:.68rem;font-weight:700">{{r.staff_type|title}}</span></td>
       <td><strong style="color:#1d4ed8">{{r.score}}</strong><div style="height:4px;background:#e2e8f0;border-radius:99px;overflow:hidden;width:60px;margin-top:2px"><div style="height:100%;background:#1d4ed8;border-radius:99px;width:{{r.score}}%"></div></div></td>
-      <td><span class="acc-badge {% if r.pick_acc>=97 %}acc-elite{% elif r.pick_acc>=94 %}acc-prof{% elif r.pick_acc>=87 %}acc-sat{% else %}acc-poor{% endif %}">{{r.pick_acc}}%</span></td>
-      <td>{{r.pick_speed}}/hr</td>
+      <td><span class="acc-badge {% if (r.check_acc if r.staff_type=='checker' else r.pick_acc)>=97 %}acc-elite{% elif (r.check_acc if r.staff_type=='checker' else r.pick_acc)>=94 %}acc-prof{% elif (r.check_acc if r.staff_type=='checker' else r.pick_acc)>=87 %}acc-sat{% else %}acc-poor{% endif %}">{{r.check_acc if r.staff_type=='checker' else r.pick_acc}}%</span></td>
+      <td>{{r.ck_speed if r.staff_type=='checker' else r.pick_speed}}/hr</td>
       <td>{{r.consistency}}%</td>
       <td><span style="font-size:.7rem;font-weight:700;padding:2px 7px;border-radius:5px;background:{% if r.trend=='improving' %}#f0fdf4{% elif r.trend=='declining' %}#fff1f2{% else %}#f1f5f9{% endif %};color:{% if r.trend=='improving' %}#15803d{% elif r.trend=='declining' %}#be123c{% else %}#64748b{% endif %}">{{r.trend|upper}}</span></td>
       <td><span style="font-size:.68rem;font-weight:700;padding:2px 6px;border-radius:4px;background:#f1f5f9;color:#475569">{{r.grade}}</span></td>
