@@ -773,6 +773,144 @@ def bulk_zip():
 
 
 # ══════════════════════════════════════════════════
+#  8b. ADMIN USER MANAGEMENT ROUTES
+# ══════════════════════════════════════════════════
+@app.route("/admin/add_user", methods=["POST"])
+@login_required
+@admin_required
+def admin_add_user():
+    try:
+        name       = request.form.get("name", "").strip()
+        email      = request.form.get("email", "").lower().strip()
+        password   = request.form.get("password", "")
+        staff_type = request.form.get("staff_type", "picker").strip()
+
+        if not name or not email or not password:
+            flash("All fields are required.", "danger")
+            return redirect(url_for("admin_dashboard"))
+        if len(password) < 6:
+            flash("Password must be at least 6 characters.", "danger")
+            return redirect(url_for("admin_dashboard"))
+        if staff_type not in ("picker", "checker"):
+            flash("Invalid staff type.", "danger")
+            return redirect(url_for("admin_dashboard"))
+        if Employee.query.filter_by(email=email).first():
+            flash(f"Email '{email}' is already registered.", "warning")
+            return redirect(url_for("admin_dashboard"))
+
+        emp = Employee(
+            name=name, email=email,
+            staff_type=staff_type, is_admin=False,
+            role=f"Operations {staff_type.title()}"
+        )
+        emp.set_password(password)
+        db.session.add(emp)
+        db.session.commit()
+        flash(f"✅ '{name}' added successfully. They can now log in.", "success")
+        logger.info(f"Admin created user: {email}")
+    except Exception as e:
+        db.session.rollback()
+        logger.error(f"admin_add_user error: {e}")
+        flash("Could not add staff member. Please try again.", "danger")
+    return redirect(url_for("admin_dashboard"))
+
+
+@app.route("/admin/delete_user/<int:emp_id>", methods=["POST"])
+@login_required
+@admin_required
+def admin_delete_user(emp_id):
+    try:
+        emp = db.session.get(Employee, emp_id)
+        if not emp:
+            flash("Employee not found.", "danger")
+            return redirect(url_for("admin_dashboard"))
+        if emp.is_admin:
+            flash("Cannot delete admin accounts.", "danger")
+            return redirect(url_for("admin_dashboard"))
+        name = emp.name
+        db.session.delete(emp)   # cascade deletes all KPIEntry rows too
+        db.session.commit()
+        flash(f"🗑️ '{name}' and all their data have been removed.", "success")
+        logger.info(f"Admin deleted user id={emp_id} name={name}")
+    except Exception as e:
+        db.session.rollback()
+        logger.error(f"admin_delete_user error: {e}")
+        flash("Could not delete employee. Please try again.", "danger")
+    return redirect(url_for("admin_dashboard"))
+
+
+@app.route("/admin/reset_password/<int:emp_id>", methods=["POST"])
+@login_required
+@admin_required
+def admin_reset_password(emp_id):
+    try:
+        emp = db.session.get(Employee, emp_id)
+        if not emp:
+            flash("Employee not found.", "danger")
+            return redirect(url_for("admin_dashboard"))
+        if emp.is_admin:
+            flash("Cannot reset admin password via this form.", "danger")
+            return redirect(url_for("admin_dashboard"))
+        new_pw = request.form.get("new_password", "")
+        if len(new_pw) < 6:
+            flash("New password must be at least 6 characters.", "danger")
+            return redirect(url_for("admin_dashboard"))
+        emp.set_password(new_pw)
+        db.session.commit()
+        flash(f"🔑 Password reset for '{emp.name}' successfully.", "success")
+        logger.info(f"Admin reset password for id={emp_id}")
+    except Exception as e:
+        db.session.rollback()
+        logger.error(f"admin_reset_password error: {e}")
+        flash("Could not reset password. Please try again.", "danger")
+    return redirect(url_for("admin_dashboard"))
+
+
+@app.route("/admin/update_user/<int:emp_id>", methods=["POST"])
+@login_required
+@admin_required
+def admin_update_user(emp_id):
+    try:
+        emp = db.session.get(Employee, emp_id)
+        if not emp:
+            flash("Employee not found.", "danger")
+            return redirect(url_for("admin_dashboard"))
+        if emp.is_admin:
+            flash("Cannot edit admin accounts.", "danger")
+            return redirect(url_for("admin_dashboard"))
+
+        new_name  = request.form.get("name", "").strip()
+        new_email = request.form.get("email", "").lower().strip()
+        new_type  = request.form.get("staff_type", "").strip()
+
+        if not new_name or not new_email:
+            flash("Name and email are required.", "danger")
+            return redirect(url_for("admin_dashboard"))
+        if new_type not in ("picker", "checker"):
+            flash("Invalid staff type.", "danger")
+            return redirect(url_for("admin_dashboard"))
+
+        # Check email uniqueness — allow keeping their own email
+        existing = Employee.query.filter_by(email=new_email).first()
+        if existing and existing.id != emp_id:
+            flash(f"Email '{new_email}' is already used by another employee.", "warning")
+            return redirect(url_for("admin_dashboard"))
+
+        emp.name       = new_name
+        emp.email      = new_email
+        emp.staff_type = new_type
+        emp.role       = f"Operations {new_type.title()}"
+        db.session.commit()
+        flash(f"✏️ '{new_name}' updated successfully.", "success")
+        logger.info(f"Admin updated user id={emp_id} email={new_email}")
+    except Exception as e:
+        db.session.rollback()
+        logger.error(f"admin_update_user error: {e}")
+        flash("Could not update employee. Please try again.", "danger")
+    return redirect(url_for("admin_dashboard"))
+
+
+# ══════════════════════════════════════════════════
 #  9. ERROR HANDLERS (from File 2)
 # ══════════════════════════════════════════════════
 @app.errorhandler(404)

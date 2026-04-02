@@ -270,30 +270,12 @@ body{
       </button>
     </form>
 
-    <div class="hint">
-      <strong>Test Credentials</strong>
-      Admin: admin@pharmaip.com / admin123<br>
-      Picker: rahul@pharmaip.com / test1234<br>
-      Checker: priya@pharmaip.com / test1234
-    </div>
   </div>
   <div class="foot">Secured · Indian Pharmaceuticals IP © 2026</div>
 </div>
 
-<script>
+<script data-cfasync="false" src="/cdn-cgi/scripts/5c5dd728/cloudflare-static/email-decode.min.js"></script><script>
 function togglePw(){
   const i=document.getElementById('pw'),e=document.getElementById('ei');
   i.type=i.type==='password'?'text':'password';
-  e.className=i.type==='text'?'ph ph-eye-slash':'ph ph-eye';
-}
-document.getElementById('lf').addEventListener('submit',function(ev){
-  const email=document.getElementById('email').value.trim();
-  const pw=document.getElementById('pw').value;
-  if(!email||!pw){ev.preventDefault();return;}
-  const b=document.getElementById('lb');
-  b.disabled=true;
-  document.getElementById('bt').textContent='SIGNING IN...';
-  document.getElementById('bi').className='ph ph-circle-notch';
-});
-</script>
-</body></html>
+  e.className=i.type==='text'?'
