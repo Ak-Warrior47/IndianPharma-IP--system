@@ -50,7 +50,6 @@
   .flash.warning{background:rgba(254,243,199,0.7);color:#92400e;border:1px solid rgba(245,158,11,0.2);}
   .flash.info{background:rgba(219,234,254,0.7);color:#1e40af;border:1px solid rgba(59,130,246,0.2);}
 
-  /* Summary stats */
   .summary-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-bottom:24px;}
   .sum-card{background:var(--glass-strong);backdrop-filter:blur(20px) saturate(180%);-webkit-backdrop-filter:blur(20px) saturate(180%);border:1.5px solid var(--glass-border);border-radius:20px;padding:20px 22px;box-shadow:var(--shadow);position:relative;overflow:hidden;transition:transform 0.25s,box-shadow 0.25s;}
   .sum-card:hover{transform:translateY(-3px);box-shadow:var(--shadow-lg);}
@@ -62,7 +61,6 @@
   .sum-val{font-family:'Sora',sans-serif;font-size:28px;font-weight:800;color:var(--navy);}
   .sum-sub{font-size:11px;color:var(--muted);margin-top:4px;}
 
-  /* Section card */
   .section-card{background:var(--glass-strong);backdrop-filter:blur(20px) saturate(180%);-webkit-backdrop-filter:blur(20px) saturate(180%);border:1.5px solid var(--glass-border);border-radius:20px;padding:24px;box-shadow:var(--shadow);margin-bottom:24px;}
   .section-title{font-family:'Sora',sans-serif;font-size:14px;font-weight:700;color:var(--navy);margin-bottom:18px;display:flex;align-items:center;justify-content:space-between;}
   .section-title .dot{width:8px;height:8px;border-radius:50%;background:linear-gradient(135deg,var(--blue),#818cf8);display:inline-block;margin-right:8px;}
@@ -75,15 +73,20 @@
   .add-form-field input:focus,.add-form-field select:focus{border-color:var(--blue);box-shadow:0 0 0 3px rgba(37,99,235,0.1);}
   .btn-add{padding:9px 20px;background:linear-gradient(135deg,var(--blue),var(--blue-dark));color:white;border:none;border-radius:10px;font-family:'Sora',sans-serif;font-size:12px;font-weight:600;cursor:pointer;transition:all 0.2s;box-shadow:0 4px 12px rgba(37,99,235,0.3);white-space:nowrap;letter-spacing:0.03em;}
   .btn-add:hover{transform:translateY(-1px);box-shadow:0 6px 18px rgba(37,99,235,0.4);}
+  /* email suggest in form */
+  .email-field-wrap{position:relative;}
+  .form-suggest{position:absolute;top:100%;left:0;right:0;background:#fff;border:1.5px solid rgba(37,99,235,0.2);border-radius:8px;z-index:99;box-shadow:0 4px 16px rgba(15,23,42,.1);display:none;overflow:hidden;margin-top:2px;}
+  .form-suggest.show{display:block;}
+  .form-suggest-opt{padding:8px 12px;font-size:12px;color:var(--navy);cursor:pointer;transition:background .15s;display:flex;align-items:center;gap:6px;}
+  .form-suggest-opt:hover{background:rgba(37,99,235,0.06);}
+  .form-suggest-opt span{color:var(--blue);font-weight:700;}
 
-  /* Tabs */
   .tabs{display:flex;gap:6px;margin-bottom:20px;background:rgba(241,245,249,0.8);border-radius:12px;padding:4px;width:fit-content;}
   .tab{padding:7px 18px;border-radius:9px;font-size:12px;font-weight:600;color:var(--muted);cursor:pointer;transition:all 0.2s;border:none;background:none;font-family:'Sora',sans-serif;}
   .tab.active{background:white;color:var(--blue);box-shadow:0 2px 8px rgba(0,0,0,0.08);}
   .tab-panel{display:none;}
   .tab-panel.active{display:block;}
 
-  /* Staff table */
   .staff-table{width:100%;border-collapse:collapse;}
   .staff-table th{font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:0.08em;padding:10px 12px;text-align:left;border-bottom:1px solid rgba(203,213,225,0.5);}
   .staff-table td{font-size:13px;color:var(--slate);padding:12px 12px;border-bottom:1px solid rgba(203,213,225,0.2);vertical-align:middle;}
@@ -116,7 +119,13 @@
   .btn-icon.danger:hover{border-color:var(--red);background:rgba(220,38,38,0.08);}
   .btn-icon.btn-submit-action{border:none;background:none;font-family:inherit;}
 
-  /* Reset modal */
+  /* Heat map */
+  .heatmap-grid{display:flex;gap:3px;flex-wrap:wrap;margin-top:8px;}
+  .hm-cell{width:14px;height:14px;border-radius:3px;cursor:pointer;transition:transform .15s;}
+  .hm-cell:hover{transform:scale(1.4);}
+  .hm-legend{display:flex;align-items:center;gap:6px;font-size:10px;color:var(--muted);margin-top:8px;}
+  .hm-legend-swatch{width:10px;height:10px;border-radius:2px;display:inline-block;}
+
   .modal-overlay{display:none;position:fixed;inset:0;background:rgba(15,23,42,0.4);backdrop-filter:blur(4px);z-index:1000;align-items:center;justify-content:center;}
   .modal-overlay.open{display:flex;}
   .modal{background:var(--glass-strong);backdrop-filter:blur(24px) saturate(180%);-webkit-backdrop-filter:blur(24px) saturate(180%);border:1.5px solid var(--glass-border);border-radius:24px;padding:32px;width:100%;max-width:400px;box-shadow:var(--shadow-lg);animation:modalIn 0.3s cubic-bezier(.22,1,.36,1);}
@@ -129,7 +138,6 @@
   .btn-modal-confirm{flex:1;padding:11px;background:linear-gradient(135deg,var(--blue),var(--blue-dark));color:white;border:none;border-radius:12px;font-family:'Sora',sans-serif;font-size:13px;font-weight:600;cursor:pointer;transition:all 0.2s;box-shadow:0 4px 12px rgba(37,99,235,0.3);}
   .btn-modal-cancel{flex:1;padding:11px;background:rgba(241,245,249,0.9);color:var(--slate);border:1.5px solid rgba(203,213,225,0.7);border-radius:12px;font-family:'Sora',sans-serif;font-size:13px;font-weight:600;cursor:pointer;transition:all 0.2s;}
 
-  /* Leaderboard */
   .lb-item{display:flex;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid rgba(203,213,225,0.4);}
   .lb-item:last-child{border-bottom:none;}
   .lb-rank{font-family:'Sora',sans-serif;font-size:13px;font-weight:800;color:var(--muted);width:22px;text-align:center;flex-shrink:0;}
@@ -182,7 +190,7 @@
   <div class="topbar">
     <div>
       <div class="page-title">Admin <span>Dashboard</span></div>
-      <div style="font-size:13px;color:var(--muted);margin-top:4px;">Full staff overview & management</div>
+      <div style="font-size:13px;color:var(--muted);margin-top:4px;">Full staff overview &amp; management</div>
     </div>
     <div class="export-btns">
       <a href="/export_data" class="btn-export outline">📥 Export CSV</a>
@@ -214,7 +222,7 @@
         {% set scores = rows | selectattr('stats') | map(attribute='stats') | map(attribute='eff_score') | list %}
         {% if scores %}{{ (scores | sum / scores | length) | round(1) }}{% else %}—{% endif %}
       </div>
-      <div class="sum-sub">Team average</div>
+      <div class="sum-sub">Team average score</div>
     </div>
     <div class="sum-card red">
       <div class="sum-label">Need Attention</div>
@@ -226,22 +234,24 @@
     </div>
   </div>
 
-  <!-- HOW-TO GUIDE -->
+  <!-- HOW-TO GUIDE — hidden by default, toggle persists via localStorage -->
   <div class="section-card" style="margin-bottom:16px;">
     <div class="section-title">
       <span><span class="dot"></span>📘 Admin Guide — How to Manage Staff</span>
-      <button onclick="toggleGuide()" id="guideToggle" style="background:rgba(37,99,235,0.08);border:1.5px solid rgba(37,99,235,0.2);color:var(--blue);border-radius:8px;padding:5px 14px;font-size:11px;font-weight:700;cursor:pointer;font-family:'Sora',sans-serif;">Hide Guide</button>
+      <button onclick="toggleGuide()" id="guideToggle"
+        style="background:rgba(37,99,235,0.08);border:1.5px solid rgba(37,99,235,0.2);color:var(--blue);border-radius:8px;padding:5px 14px;font-size:11px;font-weight:700;cursor:pointer;font-family:'Sora',sans-serif;">
+        Show Guide
+      </button>
     </div>
-    <div id="guideBody" style="display:block;">
+    <div id="guideBody" style="display:none;">
       <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:16px;">
-        <!-- Step 1 -->
         <div style="background:rgba(37,99,235,0.05);border:1px solid rgba(37,99,235,0.15);border-radius:14px;padding:18px;">
           <div style="font-size:22px;margin-bottom:8px;">➕</div>
           <div style="font-family:'Sora',sans-serif;font-size:12px;font-weight:700;color:var(--navy);margin-bottom:6px;">Adding a New Staff Member</div>
           <ol style="font-size:12px;color:var(--slate);line-height:1.8;padding-left:16px;margin:0;">
             <li>Scroll down to <b>"Add New Staff Member"</b> below</li>
-            <li>Type the employee's <b>Full Name</b></li>
-            <li>Enter their <b>Email</b> (this is their login ID)</li>
+            <li>Type the employee's <b>Full Name</b> (auto-capitalised)</li>
+            <li>Enter their <b>Email</b> — type name, select @pharmaip.com</li>
             <li>Choose a <b>Password</b> (minimum 6 characters)</li>
             <li>Select their role: <b>Picker</b> or <b>Checker</b></li>
             <li>Click <b>"+ Add Member"</b> — done!</li>
@@ -250,7 +260,6 @@
             ✅ Staff can log in immediately after being added
           </div>
         </div>
-        <!-- Step 2 -->
         <div style="background:rgba(245,158,11,0.05);border:1px solid rgba(245,158,11,0.2);border-radius:14px;padding:18px;">
           <div style="font-size:22px;margin-bottom:8px;">🔑</div>
           <div style="font-family:'Sora',sans-serif;font-size:12px;font-weight:700;color:var(--navy);margin-bottom:6px;">Resetting a Password</div>
@@ -266,7 +275,6 @@
             ⚠️ Always share the new password securely with the staff member
           </div>
         </div>
-        <!-- Step 3 -->
         <div style="background:rgba(220,38,38,0.04);border:1px solid rgba(220,38,38,0.15);border-radius:14px;padding:18px;">
           <div style="font-size:22px;margin-bottom:8px;">🗑️</div>
           <div style="font-family:'Sora',sans-serif;font-size:12px;font-weight:700;color:var(--navy);margin-bottom:6px;">Removing a Staff Member</div>
@@ -279,22 +287,38 @@
           <div style="margin-top:10px;padding:8px 10px;background:rgba(220,38,38,0.07);border-radius:8px;font-size:11px;color:var(--red);font-weight:600;">
             ❗ Deletion is permanent. All past data will be lost.
           </div>
-          <div style="margin-top:6px;padding:8px 10px;background:rgba(37,99,235,0.06);border-radius:8px;font-size:11px;color:var(--blue);font-weight:600;">
-            💡 To change a name or email — delete and re-add with new details
-          </div>
         </div>
       </div>
-      <!-- Action buttons guide -->
       <div style="margin-top:14px;padding:14px 18px;background:rgba(241,245,249,0.7);border-radius:12px;border:1px solid rgba(203,213,225,0.5);">
         <div style="font-family:'Sora',sans-serif;font-size:11px;font-weight:700;color:var(--navy);margin-bottom:10px;">Action Button Reference</div>
         <div style="display:flex;gap:20px;flex-wrap:wrap;">
           <span style="font-size:12px;color:var(--slate);">👤 <b>View Profile</b> — Full performance detail &amp; history</span>
           <span style="font-size:12px;color:var(--slate);">📄 <b>Download PDF</b> — Export individual KRA report</span>
-          <span style="font-size:12px;color:var(--slate);">✏️ <b>Edit Details</b> — Change name, email or role (no coding)</span>
+          <span style="font-size:12px;color:var(--slate);">✏️ <b>Edit Details</b> — Change name, email or role</span>
           <span style="font-size:12px;color:var(--slate);">🔑 <b>Reset Password</b> — Change login password</span>
           <span style="font-size:12px;color:var(--slate);">🗑️ <b>Delete</b> — Remove employee &amp; all data</span>
-          <span style="font-size:12px;color:var(--slate);">📥 <b>Export CSV</b> — All staff data spreadsheet</span>
-          <span style="font-size:12px;color:var(--slate);">📦 <b>Bulk PDF</b> — Download all reports as ZIP</span>
+        </div>
+      </div>
+      <!-- Formula Reference -->
+      <div style="margin-top:14px;padding:14px 18px;background:rgba(37,99,235,0.04);border-radius:12px;border:1px solid rgba(37,99,235,0.12);">
+        <div style="font-family:'Sora',sans-serif;font-size:11px;font-weight:700;color:var(--navy);margin-bottom:10px;">📐 KPI Formula Reference</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+          <div style="font-size:11px;color:var(--slate);line-height:1.7;">
+            <b>PICKER</b><br>
+            Pick Accuracy = Picked ÷ (Picked+Missed) × 100<br>
+            Pick Speed = (Picked+Missed) ÷ Total Time (hrs)<br>
+            Packing Eff. = Packing Done ÷ Sales Bill × 100<br>
+            CS Fulfilment = min(Packing Done ÷ CS Open × 100, 100)<br>
+            Efficiency Score = (Acc/100)×50 + min(Spd/200,1)×30 + (PkgEff/100)×12 + (CS/100)×8
+          </div>
+          <div style="font-size:11px;color:var(--slate);line-height:1.7;">
+            <b>CHECKER</b><br>
+            Clean Check Rate = (Checked−Errors) ÷ Checked × 100<br>
+            Error Rate = Errors ÷ Checked × 100<br>
+            Check Speed = Checked ÷ Check Time (hrs)<br>
+            Efficiency Score = (CleanRate/100)×70 + min(CkSpd/150,1)×30<br>
+            <b>GRADES:</b> ELITE ≥98% | PROFICIENT ≥95% | SATISFACTORY ≥88% | RE-TRAINING &lt;88%
+          </div>
         </div>
       </div>
     </div>
@@ -305,19 +329,25 @@
     <div class="section-title">
       <span><span class="dot"></span>Add New Staff Member</span>
     </div>
-    <form method="POST" action="/admin/add_user">
+    <form method="POST" action="/admin/add_user" autocomplete="off">
       <div class="add-form-grid">
         <div class="add-form-field">
           <label>Full Name</label>
-          <input type="text" name="name" placeholder="e.g. Rahul Sharma" required>
+          <!-- oninput: auto Title Case -->
+          <input type="text" name="name" id="addName" placeholder="e.g. Rahul Sharma" required
+                 oninput="autoTitleCase(this)">
         </div>
         <div class="add-form-field">
           <label>Email Address</label>
-          <input type="email" name="email" placeholder="rahul@pharmaip.com" required>
+          <div class="email-field-wrap">
+            <input type="email" name="email" id="addEmail" placeholder="rahul@pharmaip.com" required
+                   autocomplete="off" oninput="onAddEmailInput(this)" onblur="hideAddSuggest()" onkeydown="addEmailKey(event)">
+            <div class="form-suggest" id="addEmailSuggest"></div>
+          </div>
         </div>
         <div class="add-form-field">
           <label>Password</label>
-          <input type="password" name="password" placeholder="Min 6 characters" required>
+          <input type="password" name="password" placeholder="Min 6 characters" required minlength="6">
         </div>
         <div class="add-form-field">
           <label>Role</label>
@@ -349,14 +379,9 @@
       <table class="staff-table">
         <thead>
           <tr>
-            <th>Employee</th>
-            <th>Type</th>
-            <th>Grade</th>
-            <th>Today</th>
-            <th>Accuracy</th>
-            <th>Score</th>
-            <th>Trend</th>
-            <th>Actions</th>
+            <th>Employee</th><th>Type</th><th>Grade</th><th>Today</th>
+            <th>Pick Acc</th><th>Packing Eff</th><th>CS Fulfil</th>
+            <th>Score</th><th>Trend</th><th>Actions</th>
           </tr>
         </thead>
         <tbody>
@@ -375,16 +400,14 @@
               </div>
             </td>
             <td><span style="font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;">{{ emp.staff_type }}</span></td>
-            <td>
-              {% if s %}<span class="grade-badge grade-{{ s.grade }}">{{ s.grade }}</span>{% else %}—{% endif %}
-            </td>
+            <td>{% if s %}<span class="grade-badge grade-{{ s.grade }}">{{ s.grade }}</span>{% else %}—{% endif %}</td>
             <td>
               <span class="status-dot {% if ds %}submitted{% else %}pending{% endif %}"></span>
               <span style="font-size:11px;color:var(--muted);margin-left:4px;">{% if ds %}Done{% else %}Pending{% endif %}</span>
             </td>
-            <td>
-              {% if s %}<span style="font-weight:600;color:var(--navy);">{{ s.pick_acc }}%</span>{% else %}—{% endif %}
-            </td>
+            <td>{% if s %}<span style="font-weight:600;color:var(--navy);">{{ s.pick_acc }}%</span>{% else %}—{% endif %}</td>
+            <td>{% if s %}<span style="font-weight:600;color:var(--navy);">{{ s.packing_eff }}%</span>{% else %}—{% endif %}</td>
+            <td>{% if s %}<span style="font-weight:600;color:var(--navy);">{{ s.cs_fulfilment }}%</span>{% else %}—{% endif %}</td>
             <td>
               {% if s %}
               <div class="score-bar-wrap">
@@ -413,7 +436,7 @@
             </td>
           </tr>
           {% else %}
-          <tr><td colspan="8" style="text-align:center;padding:32px;color:var(--muted);font-size:13px;">No staff members yet. Add one above.</td></tr>
+          <tr><td colspan="10" style="text-align:center;padding:32px;color:var(--muted);font-size:13px;">No staff members yet. Add one above.</td></tr>
           {% endfor %}
         </tbody>
       </table>
@@ -422,7 +445,7 @@
     <!-- PICKERS LB -->
     <div class="tab-panel" id="tab-pickers">
       <table class="staff-table">
-        <thead><tr><th>Rank</th><th>Employee</th><th>Grade</th><th>Accuracy</th><th>Speed/hr</th><th>Score</th><th>Actions</th></tr></thead>
+        <thead><tr><th>Rank</th><th>Employee</th><th>Grade</th><th>Pick Acc</th><th>Packing Eff</th><th>CS Fulfil</th><th>Speed/hr</th><th>Score</th><th>Actions</th></tr></thead>
         <tbody>
           {% for p in pickers %}
           <tr>
@@ -430,11 +453,13 @@
             <td><div class="emp-cell"><div class="emp-avatar">{{ p.name[0]|upper }}</div><div><div class="emp-name">{{ p.name }}</div><div class="emp-email">{{ p.days }} days active</div></div></div></td>
             <td><span class="grade-badge grade-{{ p.grade }}">{{ p.grade }}</span></td>
             <td><span style="font-weight:600">{{ p.pick_acc }}%</span></td>
+            <td><span style="font-weight:600">{{ p.packing_eff }}%</span></td>
+            <td><span style="font-weight:600">{{ p.cs_fulfilment }}%</span></td>
             <td><span style="font-weight:600">{{ p.pick_speed }}</span></td>
             <td><div class="score-bar-wrap"><div class="score-bar-track"><div class="score-bar-fill" style="width:{{ p.score }}%"></div></div><div class="score-num">{{ p.score }}</div></div></td>
             <td><div class="action-btns"><a href="/admin/staff/{{ p.id }}" class="btn-icon">👤</a><a href="/download/{{ p.id }}" class="btn-icon">📄</a></div></td>
           </tr>
-          {% else %}<tr><td colspan="7" style="text-align:center;padding:32px;color:var(--muted);font-size:13px;">No pickers yet</td></tr>{% endfor %}
+          {% else %}<tr><td colspan="9" style="text-align:center;padding:32px;color:var(--muted);font-size:13px;">No pickers yet</td></tr>{% endfor %}
         </tbody>
       </table>
     </div>
@@ -442,7 +467,7 @@
     <!-- CHECKERS LB -->
     <div class="tab-panel" id="tab-checkers">
       <table class="staff-table">
-        <thead><tr><th>Rank</th><th>Employee</th><th>Grade</th><th>Check Acc</th><th>Error Rate</th><th>Score</th><th>Actions</th></tr></thead>
+        <thead><tr><th>Rank</th><th>Employee</th><th>Grade</th><th>Clean Check Rate</th><th>Error Rate</th><th>Check Spd/hr</th><th>Score</th><th>Actions</th></tr></thead>
         <tbody>
           {% for c in checkers %}
           <tr>
@@ -451,24 +476,25 @@
             <td><span class="grade-badge grade-{{ c.grade }}">{{ c.grade }}</span></td>
             <td><span style="font-weight:600">{{ c.check_acc }}%</span></td>
             <td><span style="font-weight:600">{{ c.error_rate }}%</span></td>
+            <td><span style="font-weight:600">{{ c.ck_speed }}/hr</span></td>
             <td><div class="score-bar-wrap"><div class="score-bar-track"><div class="score-bar-fill" style="width:{{ c.score }}%"></div></div><div class="score-num">{{ c.score }}</div></div></td>
             <td><div class="action-btns"><a href="/admin/staff/{{ c.id }}" class="btn-icon">👤</a><a href="/download/{{ c.id }}" class="btn-icon">📄</a></div></td>
           </tr>
-          {% else %}<tr><td colspan="7" style="text-align:center;padding:32px;color:var(--muted);font-size:13px;">No checkers yet</td></tr>{% endfor %}
+          {% else %}<tr><td colspan="8" style="text-align:center;padding:32px;color:var(--muted);font-size:13px;">No checkers yet</td></tr>{% endfor %}
         </tbody>
       </table>
     </div>
   </div>
 
   <!-- LEADERBOARDS SIDE BY SIDE -->
-  <div class="two-col">
+  <div class="two-col" style="margin-bottom:24px;">
     <div class="section-card">
       <div class="section-title"><span><span class="dot"></span>Picker Leaderboard</span></div>
       {% for p in pickers[:6] %}
       <div class="lb-item">
         <div class="lb-rank {% if loop.index<=3 %}top{% endif %}">{% if loop.index==1%}🥇{% elif loop.index==2%}🥈{% elif loop.index==3%}🥉{% else %}{{ loop.index }}{% endif %}</div>
         <div class="lb-avatar">{{ p.name[0]|upper }}</div>
-        <div style="flex:1"><div class="lb-name">{{ p.name }}</div><div class="lb-name-sub">{{ p.grade }} · {{ p.pick_acc }}% acc</div></div>
+        <div style="flex:1"><div class="lb-name">{{ p.name }}</div><div class="lb-name-sub">{{ p.grade }} · Acc {{ p.pick_acc }}% · Pkg {{ p.packing_eff }}%</div></div>
         <div class="lb-score-wrap"><div class="lb-bar-track"><div class="lb-bar-fill" style="width:{{ p.score }}%"></div></div><div class="lb-score">{{ p.score }}</div></div>
       </div>
       {% else %}<p style="font-size:13px;color:var(--muted);text-align:center;padding:16px 0">No pickers yet</p>{% endfor %}
@@ -479,11 +505,46 @@
       <div class="lb-item">
         <div class="lb-rank {% if loop.index<=3 %}top{% endif %}">{% if loop.index==1%}🥇{% elif loop.index==2%}🥈{% elif loop.index==3%}🥉{% else %}{{ loop.index }}{% endif %}</div>
         <div class="lb-avatar" style="background:linear-gradient(135deg,#059669,#34d399)">{{ c.name[0]|upper }}</div>
-        <div style="flex:1"><div class="lb-name">{{ c.name }}</div><div class="lb-name-sub">{{ c.grade }} · {{ c.check_acc }}% check acc</div></div>
+        <div style="flex:1"><div class="lb-name">{{ c.name }}</div><div class="lb-name-sub">{{ c.grade }} · Clean {{ c.check_acc }}% · Err {{ c.error_rate }}%</div></div>
         <div class="lb-score-wrap"><div class="lb-bar-track"><div class="lb-bar-fill" style="width:{{ c.score }}%"></div></div><div class="lb-score">{{ c.score }}</div></div>
       </div>
       {% else %}<p style="font-size:13px;color:var(--muted);text-align:center;padding:16px 0">No checkers yet</p>{% endfor %}
     </div>
+  </div>
+
+  <!-- GLOBAL HEAT MAP -->
+  <div class="section-card">
+    <div class="section-title"><span><span class="dot"></span>Team Efficiency Heat Map — Last 30 Days</span></div>
+    <div id="globalHeatmap" class="heatmap-grid"></div>
+    <div class="hm-legend">
+      <span>Low</span>
+      <span class="hm-legend-swatch" style="background:#dbeafe"></span>
+      <span class="hm-legend-swatch" style="background:#93c5fd"></span>
+      <span class="hm-legend-swatch" style="background:#3b82f6"></span>
+      <span class="hm-legend-swatch" style="background:#1d4ed8"></span>
+      <span class="hm-legend-swatch" style="background:#1e3a8a"></span>
+      <span>High</span>
+      <span style="margin-left:8px;color:#94a3b8;">Hover a cell for date &amp; score</span>
+    </div>
+    <script>
+    (function(){
+      const data = {{ global_heatmap | tojson }};
+      const today = new Date();
+      const grid  = document.getElementById('globalHeatmap');
+      for (let i=29; i>=0; i--) {
+        const d   = new Date(today); d.setDate(today.getDate()-i);
+        const key = d.toISOString().slice(0,10);
+        const eff = data[key];
+        const cell = document.createElement('div');
+        cell.className = 'hm-cell';
+        cell.title = key + (eff !== undefined ? ' · Score: ' + eff : ' · No data');
+        cell.style.background = eff === undefined ? '#f1f5f9' :
+          eff >= 85 ? '#1e3a8a' : eff >= 70 ? '#1d4ed8' : eff >= 55 ? '#3b82f6' :
+          eff >= 40 ? '#93c5fd' : '#dbeafe';
+        grid.appendChild(cell);
+      }
+    })();
+    </script>
   </div>
 </main>
 
@@ -507,9 +568,9 @@
   <div class="modal" style="max-width:460px;">
     <div class="modal-title">Edit Employee ✏️</div>
     <div class="modal-sub" id="editModalSub">Update name, email or role.</div>
-    <form method="POST" id="editForm">
+    <form method="POST" id="editForm" autocomplete="off">
       <label style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:0.06em;display:block;margin-bottom:5px;">Full Name</label>
-      <input type="text" name="name" id="editName" class="modal-input" placeholder="Full Name" required>
+      <input type="text" name="name" id="editName" class="modal-input" placeholder="Full Name" required oninput="autoTitleCase(this)">
       <label style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:0.06em;display:block;margin-bottom:5px;">Email (Login ID)</label>
       <input type="email" name="email" id="editEmail" class="modal-input" placeholder="email@pharmaip.com" required>
       <label style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:0.06em;display:block;margin-bottom:5px;">Role</label>
@@ -518,7 +579,7 @@
         <option value="checker">✅ Checker</option>
       </select>
       <div style="background:rgba(245,158,11,0.08);border:1px solid rgba(245,158,11,0.25);border-radius:10px;padding:10px 12px;font-size:11px;color:var(--amber);font-weight:600;margin-bottom:16px;">
-        ⚠️ Changing the email also changes the login ID. Tell the staff member their new email.
+        ⚠️ Changing the email also changes the login ID. Email must end with @pharmaip.com.
       </div>
       <div class="modal-actions">
         <button type="button" class="btn-modal-cancel" onclick="closeEdit()">Cancel</button>
@@ -529,34 +590,80 @@
 </div>
 
 <script>
+const DOMAIN = '@pharmaip.com';
+
+/* ── Guide toggle — hidden by default, state saved in localStorage ── */
 function toggleGuide() {
-  var body = document.getElementById('guideBody');
-  var btn  = document.getElementById('guideToggle');
-  if (body.style.display === 'none') {
-    body.style.display = 'block';
-    btn.textContent = 'Hide Guide';
-  } else {
-    body.style.display = 'none';
-    btn.textContent = 'Show Guide';
-  }
+  const body = document.getElementById('guideBody');
+  const btn  = document.getElementById('guideToggle');
+  const show = body.style.display === 'none';
+  body.style.display = show ? 'block' : 'none';
+  btn.textContent    = show ? 'Hide Guide' : 'Show Guide';
+  try { localStorage.setItem('adminGuideOpen', show ? '1' : '0'); } catch(e){}
 }
+// On load: guide is hidden by default unless user previously opened it
+(function(){
+  try {
+    const stored = localStorage.getItem('adminGuideOpen');
+    if (stored === '1') {
+      document.getElementById('guideBody').style.display = 'block';
+      document.getElementById('guideToggle').textContent = 'Hide Guide';
+    }
+  } catch(e){}
+})();
+
+/* ── Auto Title Case for name fields ────────────────────────────── */
+function autoTitleCase(el) {
+  const pos = el.selectionStart;
+  el.value  = el.value.replace(/\b\w/g, c => c.toUpperCase());
+  try { el.setSelectionRange(pos, pos); } catch(e){}
+}
+
+/* ── Email suggest in Add Staff form ────────────────────────────── */
+function onAddEmailInput(el) {
+  const v   = el.value.trim();
+  const box = document.getElementById('addEmailSuggest');
+  if (!v || v.includes('@')) { box.classList.remove('show'); return; }
+  const full = v + DOMAIN;
+  box.innerHTML = `<div class="form-suggest-opt" onmousedown="pickAddEmail(event,'${full.replace(/'/g,"\\'")}')">
+    ${v}<span>${DOMAIN}</span></div>`;
+  box.classList.add('show');
+}
+function pickAddEmail(e, val) {
+  e.preventDefault();
+  document.getElementById('addEmail').value = val;
+  document.getElementById('addEmailSuggest').classList.remove('show');
+}
+function hideAddSuggest() {
+  setTimeout(() => document.getElementById('addEmailSuggest').classList.remove('show'), 200);
+}
+function addEmailKey(e) {
+  const box = document.getElementById('addEmailSuggest');
+  if (!box.classList.contains('show')) return;
+  if (e.key === 'Tab' || e.key === 'Enter') {
+    const opt = box.querySelector('.form-suggest-opt');
+    if (opt) { e.preventDefault(); opt.dispatchEvent(new MouseEvent('mousedown')); }
+  }
+  if (e.key === 'Escape') box.classList.remove('show');
+}
+
+/* ── Tabs ─────────────────────────────────────────────────────── */
 function switchTab(t, btn) {
   document.querySelectorAll('.tab').forEach(x => x.classList.remove('active'));
   document.querySelectorAll('.tab-panel').forEach(x => x.classList.remove('active'));
   btn.classList.add('active');
   document.getElementById('tab-' + t).classList.add('active');
 }
+
+/* ── Modals ──────────────────────────────────────────────────── */
 function openReset(id, name) {
   document.getElementById('resetForm').action = '/admin/reset_password/' + id;
   document.getElementById('resetModalSub').textContent = 'Set a new password for ' + name + '.';
   document.getElementById('resetModal').classList.add('open');
 }
-function closeReset() {
-  document.getElementById('resetModal').classList.remove('open');
-}
-document.getElementById('resetModal').addEventListener('click', function(e) {
-  if (e.target === this) closeReset();
-});
+function closeReset() { document.getElementById('resetModal').classList.remove('open'); }
+document.getElementById('resetModal').addEventListener('click', function(e){ if(e.target===this) closeReset(); });
+
 function openEdit(id, name, email, staffType) {
   document.getElementById('editForm').action = '/admin/update_user/' + id;
   document.getElementById('editModalSub').textContent = 'Editing: ' + name;
@@ -565,12 +672,8 @@ function openEdit(id, name, email, staffType) {
   document.getElementById('editType').value  = staffType;
   document.getElementById('editModal').classList.add('open');
 }
-function closeEdit() {
-  document.getElementById('editModal').classList.remove('open');
-}
-document.getElementById('editModal').addEventListener('click', function(e) {
-  if (e.target === this) closeEdit();
-});
+function closeEdit() { document.getElementById('editModal').classList.remove('open'); }
+document.getElementById('editModal').addEventListener('click', function(e){ if(e.target===this) closeEdit(); });
 </script>
 </body>
 </html>

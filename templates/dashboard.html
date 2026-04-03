@@ -16,349 +16,139 @@
     --green: #059669; --amber: #d97706; --red: #dc2626;
   }
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-  body {
-    font-family: 'DM Sans', sans-serif;
-    background: #eef2ff;
-    min-height: 100vh;
-    display: flex;
-    overflow-x: hidden;
-  }
-  body::before {
-    content:'';
-    position:fixed; inset:0;
-    background:
-      radial-gradient(ellipse 70% 50% at 10% 0%, rgba(147,197,253,0.4) 0%, transparent 60%),
-      radial-gradient(ellipse 50% 70% at 90% 100%, rgba(196,181,253,0.25) 0%, transparent 60%);
-    z-index:0; pointer-events:none;
-  }
+  body { font-family: 'DM Sans', sans-serif; background: #eef2ff; min-height: 100vh; display: flex; overflow-x: hidden; }
+  body::before { content:''; position:fixed; inset:0; background: radial-gradient(ellipse 70% 50% at 10% 0%, rgba(147,197,253,0.4) 0%, transparent 60%), radial-gradient(ellipse 50% 70% at 90% 100%, rgba(196,181,253,0.25) 0%, transparent 60%); z-index:0; pointer-events:none; }
 
-  /* ── SIDEBAR ── */
-  .sidebar {
-    width: 240px; min-width: 240px;
-    background: var(--glass);
-    backdrop-filter: blur(24px) saturate(180%);
-    -webkit-backdrop-filter: blur(24px) saturate(180%);
-    border-right: 1.5px solid var(--glass-border);
-    display: flex; flex-direction: column;
-    position: fixed; top: 0; left: 0; bottom: 0;
-    z-index: 100;
-    box-shadow: 4px 0 32px rgba(37,99,235,0.07);
-    animation: sideIn 0.5s cubic-bezier(.22,1,.36,1) both;
-  }
+  .sidebar { width:240px; min-width:240px; background:var(--glass); backdrop-filter:blur(24px) saturate(180%); -webkit-backdrop-filter:blur(24px) saturate(180%); border-right:1.5px solid var(--glass-border); display:flex; flex-direction:column; position:fixed; top:0; left:0; bottom:0; z-index:100; box-shadow:4px 0 32px rgba(37,99,235,0.07); animation:sideIn 0.5s cubic-bezier(.22,1,.36,1) both; }
   @keyframes sideIn { from{transform:translateX(-100%);opacity:0} to{transform:translateX(0);opacity:1} }
+  .sidebar-logo { padding:28px 24px 20px; border-bottom:1px solid rgba(203,213,225,0.5); }
+  .sidebar-logo-icon { width:40px; height:40px; background:linear-gradient(135deg,var(--blue),#818cf8); border-radius:12px; display:flex; align-items:center; justify-content:center; font-size:18px; margin-bottom:10px; box-shadow:0 4px 12px rgba(37,99,235,0.3); }
+  .sidebar-logo-name { font-family:'Sora',sans-serif; font-size:11px; font-weight:700; letter-spacing:0.15em; color:var(--blue); text-transform:uppercase; }
+  .sidebar-logo-sub { font-size:10px; color:var(--muted); margin-top:2px; }
+  .sidebar-user { padding:18px 24px; border-bottom:1px solid rgba(203,213,225,0.5); }
+  .user-avatar { width:38px; height:38px; background:linear-gradient(135deg,var(--blue-light),#818cf8); border-radius:50%; display:flex; align-items:center; justify-content:center; font-family:'Sora',sans-serif; font-size:14px; font-weight:700; color:white; margin-bottom:8px; }
+  .user-name { font-size:13px; font-weight:600; color:var(--navy); }
+  .user-role { font-size:11px; color:var(--muted); display:flex; align-items:center; gap:5px; margin-top:3px; }
+  .role-dot { width:6px; height:6px; border-radius:50%; background:var(--green); display:inline-block; box-shadow:0 0 6px var(--green); }
+  .sidebar-nav { flex:1; padding:16px 12px; }
+  .nav-label { font-size:9px; font-weight:700; letter-spacing:0.12em; color:#94a3b8; text-transform:uppercase; padding:0 12px; margin:12px 0 6px; }
+  .nav-link { display:flex; align-items:center; gap:10px; padding:10px 12px; border-radius:10px; font-size:13px; font-weight:500; color:var(--slate); text-decoration:none; transition:all 0.2s; margin-bottom:2px; }
+  .nav-link:hover { background:rgba(37,99,235,0.08); color:var(--blue); }
+  .nav-link.active { background:rgba(37,99,235,0.12); color:var(--blue); font-weight:600; }
+  .nav-link .icon { font-size:16px; width:20px; text-align:center; }
+  .sidebar-footer { padding:16px 12px; border-top:1px solid rgba(203,213,225,0.5); }
+  .logout-btn { display:flex; align-items:center; gap:10px; padding:10px 12px; border-radius:10px; font-size:13px; font-weight:500; color:#ef4444; text-decoration:none; transition:all 0.2s; width:100%; background:none; border:none; cursor:pointer; font-family:inherit; }
+  .logout-btn:hover { background:rgba(239,68,68,0.08); }
 
-  .sidebar-logo {
-    padding: 28px 24px 20px;
-    border-bottom: 1px solid rgba(203,213,225,0.5);
-  }
-  .sidebar-logo-icon {
-    width: 40px; height: 40px;
-    background: linear-gradient(135deg, var(--blue), #818cf8);
-    border-radius: 12px;
-    display: flex; align-items: center; justify-content: center;
-    font-size: 18px; margin-bottom: 10px;
-    box-shadow: 0 4px 12px rgba(37,99,235,0.3);
-  }
-  .sidebar-logo-name {
-    font-family: 'Sora', sans-serif;
-    font-size: 11px; font-weight: 700;
-    letter-spacing: 0.15em; color: var(--blue);
-    text-transform: uppercase;
-  }
-  .sidebar-logo-sub { font-size: 10px; color: var(--muted); margin-top: 2px; }
-
-  .sidebar-user {
-    padding: 18px 24px;
-    border-bottom: 1px solid rgba(203,213,225,0.5);
-  }
-  .user-avatar {
-    width: 38px; height: 38px;
-    background: linear-gradient(135deg, var(--blue-light), #818cf8);
-    border-radius: 50%; display: flex; align-items: center; justify-content: center;
-    font-family: 'Sora', sans-serif; font-size: 14px; font-weight: 700; color: white;
-    margin-bottom: 8px;
-  }
-  .user-name { font-size: 13px; font-weight: 600; color: var(--navy); }
-  .user-role {
-    font-size: 11px; color: var(--muted);
-    display: flex; align-items: center; gap: 5px; margin-top: 3px;
-  }
-  .role-dot {
-    width: 6px; height: 6px; border-radius: 50%;
-    background: var(--green); display: inline-block;
-    box-shadow: 0 0 6px var(--green);
-  }
-
-  .sidebar-nav { flex: 1; padding: 16px 12px; }
-  .nav-label { font-size: 9px; font-weight: 700; letter-spacing: 0.12em; color: #94a3b8; text-transform: uppercase; padding: 0 12px; margin: 12px 0 6px; }
-  .nav-link {
-    display: flex; align-items: center; gap: 10px;
-    padding: 10px 12px; border-radius: 10px;
-    font-size: 13px; font-weight: 500; color: var(--slate);
-    text-decoration: none; transition: all 0.2s; margin-bottom: 2px;
-  }
-  .nav-link:hover { background: rgba(37,99,235,0.08); color: var(--blue); }
-  .nav-link.active { background: rgba(37,99,235,0.12); color: var(--blue); font-weight: 600; }
-  .nav-link .icon { font-size: 16px; width: 20px; text-align: center; }
-
-  .sidebar-footer {
-    padding: 16px 12px;
-    border-top: 1px solid rgba(203,213,225,0.5);
-  }
-  .logout-btn {
-    display: flex; align-items: center; gap: 10px;
-    padding: 10px 12px; border-radius: 10px;
-    font-size: 13px; font-weight: 500; color: #ef4444;
-    text-decoration: none; transition: all 0.2s; width: 100%;
-    background: none; border: none; cursor: pointer; font-family: inherit;
-  }
-  .logout-btn:hover { background: rgba(239,68,68,0.08); }
-
-  /* ── MAIN ── */
-  .main {
-    margin-left: 240px;
-    flex: 1;
-    padding: 32px;
-    position: relative; z-index: 1;
-    animation: fadeIn 0.6s 0.2s cubic-bezier(.22,1,.36,1) both;
-  }
+  .main { margin-left:240px; flex:1; padding:32px; position:relative; z-index:1; animation:fadeIn 0.6s 0.2s cubic-bezier(.22,1,.36,1) both; }
   @keyframes fadeIn { from{opacity:0;transform:translateY(16px)} to{opacity:1;transform:translateY(0)} }
+  .topbar { display:flex; align-items:center; justify-content:space-between; margin-bottom:28px; }
+  .page-title { font-family:'Sora',sans-serif; font-size:24px; font-weight:800; color:var(--navy); }
+  .page-title span { color:var(--blue); }
+  .topbar-right { display:flex; align-items:center; gap:12px; }
+  .date-chip { background:var(--glass); backdrop-filter:blur(12px); border:1px solid var(--glass-border); border-radius:20px; padding:6px 14px; font-size:12px; color:var(--slate); font-weight:500; }
+  .grade-badge { padding:6px 16px; border-radius:20px; font-family:'Sora',sans-serif; font-size:11px; font-weight:700; letter-spacing:0.08em; text-transform:uppercase; }
+  .grade-ELITE        { background:rgba(37,99,235,0.12); color:var(--blue);  border:1px solid rgba(37,99,235,0.25); }
+  .grade-PROFICIENT   { background:rgba(5,150,105,0.12); color:var(--green); border:1px solid rgba(5,150,105,0.25); }
+  .grade-SATISFACTORY { background:rgba(217,119,6,0.12); color:var(--amber); border:1px solid rgba(217,119,6,0.25); }
+  .grade-RE-TRAINING  { background:rgba(220,38,38,0.12); color:var(--red);   border:1px solid rgba(220,38,38,0.25); }
+  .flash { border-radius:12px; padding:12px 16px; font-size:13px; margin-bottom:20px; font-weight:500; backdrop-filter:blur(8px); }
+  .flash.danger  { background:rgba(254,202,202,0.7); color:#991b1b; border:1px solid rgba(239,68,68,0.2); }
+  .flash.success { background:rgba(187,247,208,0.7); color:#166534; border:1px solid rgba(34,197,94,0.2); }
+  .flash.warning { background:rgba(254,243,199,0.7); color:#92400e; border:1px solid rgba(245,158,11,0.2); }
+  .flash.info    { background:rgba(219,234,254,0.7); color:#1e40af; border:1px solid rgba(59,130,246,0.2); }
 
-  .topbar {
-    display: flex; align-items: center; justify-content: space-between;
-    margin-bottom: 28px;
-  }
-  .page-title { font-family: 'Sora', sans-serif; font-size: 24px; font-weight: 800; color: var(--navy); }
-  .page-title span { color: var(--blue); }
-  .topbar-right { display: flex; align-items: center; gap: 12px; }
-  .date-chip {
-    background: var(--glass);
-    backdrop-filter: blur(12px);
-    border: 1px solid var(--glass-border);
-    border-radius: 20px; padding: 6px 14px;
-    font-size: 12px; color: var(--slate); font-weight: 500;
-  }
-  .grade-badge {
-    padding: 6px 16px; border-radius: 20px;
-    font-family: 'Sora', sans-serif; font-size: 11px; font-weight: 700;
-    letter-spacing: 0.08em; text-transform: uppercase;
-  }
-  .grade-ELITE        { background: rgba(37,99,235,0.12); color: var(--blue); border: 1px solid rgba(37,99,235,0.25); }
-  .grade-PROFICIENT   { background: rgba(5,150,105,0.12); color: var(--green); border: 1px solid rgba(5,150,105,0.25); }
-  .grade-SATISFACTORY { background: rgba(217,119,6,0.12); color: var(--amber); border: 1px solid rgba(217,119,6,0.25); }
-  .grade-RE-TRAINING  { background: rgba(220,38,38,0.12); color: var(--red);   border: 1px solid rgba(220,38,38,0.25); }
+  .stats-grid { display:grid; grid-template-columns:repeat(4,1fr); gap:16px; margin-bottom:24px; }
+  .stat-card { background:var(--glass-strong); backdrop-filter:blur(20px) saturate(180%); -webkit-backdrop-filter:blur(20px) saturate(180%); border:1.5px solid var(--glass-border); border-radius:20px; padding:22px; box-shadow:var(--shadow); position:relative; overflow:hidden; transition:transform 0.25s,box-shadow 0.25s; }
+  .stat-card:hover { transform:translateY(-3px); box-shadow:var(--shadow-lg); }
+  .stat-card::before { content:''; position:absolute; top:0; left:0; right:0; height:3px; background:linear-gradient(90deg,var(--blue),#818cf8); border-radius:20px 20px 0 0; }
+  .stat-card.green::before { background:linear-gradient(90deg,var(--green),#34d399); }
+  .stat-card.amber::before { background:linear-gradient(90deg,var(--amber),#fbbf24); }
+  .stat-card.purple::before { background:linear-gradient(90deg,#7c3aed,#a78bfa); }
+  .stat-card.red::before { background:linear-gradient(90deg,var(--red),#f87171); }
+  .stat-icon { font-size:22px; margin-bottom:12px; }
+  .stat-label { font-size:11px; font-weight:600; color:var(--muted); text-transform:uppercase; letter-spacing:0.08em; margin-bottom:6px; }
+  .stat-value { font-family:'Sora',sans-serif; font-size:30px; font-weight:800; color:var(--navy); line-height:1; }
+  .stat-suffix { font-size:14px; font-weight:500; color:var(--muted); }
+  .stat-trend { display:inline-flex; align-items:center; gap:4px; font-size:11px; font-weight:600; padding:3px 8px; border-radius:20px; margin-top:8px; }
+  .trend-up   { background:rgba(5,150,105,0.1); color:var(--green); }
+  .trend-down { background:rgba(220,38,38,0.1); color:var(--red); }
+  .trend-flat { background:rgba(100,116,139,0.1); color:var(--muted); }
 
-  /* Flash */
-  .flash { border-radius: 12px; padding: 12px 16px; font-size: 13px; margin-bottom: 20px; font-weight: 500; backdrop-filter: blur(8px); }
-  .flash.danger  { background: rgba(254,202,202,0.7); color: #991b1b; border: 1px solid rgba(239,68,68,0.2); }
-  .flash.success { background: rgba(187,247,208,0.7); color: #166534; border: 1px solid rgba(34,197,94,0.2); }
-  .flash.warning { background: rgba(254,243,199,0.7); color: #92400e; border: 1px solid rgba(245,158,11,0.2); }
-  .flash.info    { background: rgba(219,234,254,0.7); color: #1e40af; border: 1px solid rgba(59,130,246,0.2); }
+  .two-col   { display:grid; grid-template-columns:1fr 1fr; gap:20px; margin-bottom:24px; }
+  .three-col { display:grid; grid-template-columns:1.2fr 1fr; gap:20px; margin-bottom:24px; }
 
-  /* ── STAT CARDS ── */
-  .stats-grid {
-    display: grid;
-    grid-template-columns: repeat(4, 1fr);
-    gap: 16px;
-    margin-bottom: 24px;
-  }
-  .stat-card {
-    background: var(--glass-strong);
-    backdrop-filter: blur(20px) saturate(180%);
-    -webkit-backdrop-filter: blur(20px) saturate(180%);
-    border: 1.5px solid var(--glass-border);
-    border-radius: 20px;
-    padding: 22px;
-    box-shadow: var(--shadow);
-    position: relative; overflow: hidden;
-    transition: transform 0.25s, box-shadow 0.25s;
-  }
-  .stat-card:hover { transform: translateY(-3px); box-shadow: var(--shadow-lg); }
-  .stat-card::before {
-    content:''; position:absolute; top:0; left:0; right:0; height:3px;
-    background: linear-gradient(90deg, var(--blue), #818cf8);
-    border-radius: 20px 20px 0 0;
-  }
-  .stat-card.green::before { background: linear-gradient(90deg, var(--green), #34d399); }
-  .stat-card.amber::before { background: linear-gradient(90deg, var(--amber), #fbbf24); }
-  .stat-card.purple::before { background: linear-gradient(90deg, #7c3aed, #a78bfa); }
+  .section-card { background:var(--glass-strong); backdrop-filter:blur(20px) saturate(180%); -webkit-backdrop-filter:blur(20px) saturate(180%); border:1.5px solid var(--glass-border); border-radius:20px; padding:24px; box-shadow:var(--shadow); }
+  .section-title { font-family:'Sora',sans-serif; font-size:14px; font-weight:700; color:var(--navy); margin-bottom:18px; display:flex; align-items:center; gap:8px; }
+  .section-title .dot { width:8px; height:8px; border-radius:50%; background:linear-gradient(135deg,var(--blue),#818cf8); }
 
-  .stat-icon { font-size: 22px; margin-bottom: 12px; }
-  .stat-label { font-size: 11px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 6px; }
-  .stat-value { font-family: 'Sora', sans-serif; font-size: 30px; font-weight: 800; color: var(--navy); line-height: 1; }
-  .stat-suffix { font-size: 14px; font-weight: 500; color: var(--muted); }
-  .stat-trend {
-    display: inline-flex; align-items: center; gap: 4px;
-    font-size: 11px; font-weight: 600; padding: 3px 8px;
-    border-radius: 20px; margin-top: 8px;
-  }
-  .trend-up   { background: rgba(5,150,105,0.1); color: var(--green); }
-  .trend-down { background: rgba(220,38,38,0.1); color: var(--red); }
-  .trend-flat { background: rgba(100,116,139,0.1); color: var(--muted); }
-
-  /* ── TWO COLUMN LAYOUT ── */
-  .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 24px; }
-  .three-col { display: grid; grid-template-columns: 1.2fr 1fr; gap: 20px; margin-bottom: 24px; }
-
-  /* ── GLASS SECTION CARD ── */
-  .section-card {
-    background: var(--glass-strong);
-    backdrop-filter: blur(20px) saturate(180%);
-    -webkit-backdrop-filter: blur(20px) saturate(180%);
-    border: 1.5px solid var(--glass-border);
-    border-radius: 20px;
-    padding: 24px;
-    box-shadow: var(--shadow);
-  }
-  .section-title {
-    font-family: 'Sora', sans-serif;
-    font-size: 14px; font-weight: 700; color: var(--navy);
-    margin-bottom: 18px;
-    display: flex; align-items: center; gap: 8px;
-  }
-  .section-title .dot {
-    width: 8px; height: 8px; border-radius: 50%;
-    background: linear-gradient(135deg, var(--blue), #818cf8);
-  }
-
-  /* ── SUBMIT FORM ── */
-  .submitted-banner {
-    background: rgba(5,150,105,0.1);
-    border: 1.5px solid rgba(5,150,105,0.25);
-    border-radius: 14px; padding: 18px 20px;
-    display: flex; align-items: center; gap: 14px;
-  }
-  .submitted-icon { font-size: 28px; }
+  .submitted-banner { background:rgba(5,150,105,0.1); border:1.5px solid rgba(5,150,105,0.25); border-radius:14px; padding:18px 20px; display:flex; align-items:center; gap:14px; }
+  .submitted-icon { font-size:28px; }
   .submitted-text h4 { font-family:'Sora',sans-serif; font-size:14px; font-weight:700; color:var(--green); }
   .submitted-text p  { font-size:12px; color:var(--muted); margin-top:3px; }
 
-  .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
-  .form-group { display: flex; flex-direction: column; gap: 6px; }
-  .form-group label {
-    font-size: 11px; font-weight: 700; color: var(--muted);
-    text-transform: uppercase; letter-spacing: 0.08em;
-  }
-  .form-group input {
-    padding: 10px 14px;
-    background: rgba(255,255,255,0.8);
-    border: 1.5px solid rgba(203,213,225,0.7);
-    border-radius: 10px;
-    font-family: 'DM Sans', sans-serif; font-size: 14px; color: var(--navy);
-    outline: none; transition: all 0.2s;
-  }
-  .form-group input:focus {
-    border-color: var(--blue);
-    background: rgba(255,255,255,0.95);
-    box-shadow: 0 0 0 3px rgba(37,99,235,0.1);
-  }
-  .form-hint { font-size: 10px; color: #94a3b8; }
+  /* Submit form grid */
+  .form-grid { display:grid; grid-template-columns:1fr 1fr; gap:14px; }
+  .form-group { display:flex; flex-direction:column; gap:6px; }
+  .form-group label { font-size:11px; font-weight:700; color:var(--muted); text-transform:uppercase; letter-spacing:0.08em; }
+  .form-group input { padding:10px 14px; background:rgba(255,255,255,0.8); border:1.5px solid rgba(203,213,225,0.7); border-radius:10px; font-family:'DM Sans',sans-serif; font-size:14px; color:var(--navy); outline:none; transition:all 0.2s; }
+  .form-group input:focus { border-color:var(--blue); background:rgba(255,255,255,0.95); box-shadow:0 0 0 3px rgba(37,99,235,0.1); }
+  .form-hint { font-size:10px; color:#94a3b8; }
+  .form-divider { grid-column:1/-1; border:none; border-top:1px dashed rgba(203,213,225,0.7); margin:4px 0; }
+  .form-section-label { grid-column:1/-1; font-size:10px; font-weight:700; color:var(--blue); text-transform:uppercase; letter-spacing:0.1em; padding-top:4px; }
+  .submit-row { margin-top:18px; display:flex; align-items:center; gap:12px; }
+  .btn-primary { padding:11px 28px; background:linear-gradient(135deg,var(--blue),var(--blue-dark)); color:white; border:none; border-radius:12px; font-family:'Sora',sans-serif; font-size:13px; font-weight:600; cursor:pointer; transition:all 0.25s; box-shadow:0 4px 14px rgba(37,99,235,0.35); letter-spacing:0.03em; }
+  .btn-primary:hover { transform:translateY(-1px); box-shadow:0 8px 20px rgba(37,99,235,0.45); }
+  .submit-note { font-size:11px; color:var(--muted); }
 
-  .submit-row { margin-top: 18px; display: flex; align-items: center; gap: 12px; }
-  .btn-primary {
-    padding: 11px 28px;
-    background: linear-gradient(135deg, var(--blue), var(--blue-dark));
-    color: white; border: none; border-radius: 12px;
-    font-family: 'Sora', sans-serif; font-size: 13px; font-weight: 600;
-    cursor: pointer; transition: all 0.25s;
-    box-shadow: 0 4px 14px rgba(37,99,235,0.35);
-    letter-spacing: 0.03em;
-  }
-  .btn-primary:hover { transform: translateY(-1px); box-shadow: 0 8px 20px rgba(37,99,235,0.45); }
-  .submit-note { font-size: 11px; color: var(--muted); }
+  .period-tabs { display:flex; gap:6px; margin-bottom:18px; background:rgba(241,245,249,0.8); border-radius:12px; padding:4px; backdrop-filter:blur(8px); }
+  .period-tab { flex:1; padding:7px; border-radius:9px; font-size:11px; font-weight:600; color:var(--muted); text-align:center; cursor:pointer; transition:all 0.2s; border:none; background:none; font-family:'Sora',sans-serif; }
+  .period-tab.active { background:white; color:var(--blue); box-shadow:0 2px 8px rgba(0,0,0,0.08); }
+  .period-panel { display:none; }
+  .period-panel.active { display:block; }
 
-  /* ── PERIOD TABS ── */
-  .period-tabs {
-    display: flex; gap: 6px; margin-bottom: 18px;
-    background: rgba(241,245,249,0.8); border-radius: 12px; padding: 4px;
-    backdrop-filter: blur(8px);
-  }
-  .period-tab {
-    flex: 1; padding: 7px; border-radius: 9px;
-    font-size: 11px; font-weight: 600; color: var(--muted);
-    text-align: center; cursor: pointer; transition: all 0.2s;
-    border: none; background: none; font-family: 'Sora', sans-serif;
-  }
-  .period-tab.active {
-    background: white; color: var(--blue);
-    box-shadow: 0 2px 8px rgba(0,0,0,0.08);
-  }
-  .period-panel { display: none; }
-  .period-panel.active { display: block; }
+  .mini-stats { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+  .mini-stat { background:rgba(248,250,252,0.8); border:1px solid rgba(203,213,225,0.5); border-radius:12px; padding:14px; }
+  .mini-stat-label { font-size:10px; font-weight:600; color:var(--muted); text-transform:uppercase; letter-spacing:0.06em; }
+  .mini-stat-val   { font-family:'Sora',sans-serif; font-size:20px; font-weight:800; color:var(--navy); margin-top:4px; }
+  .mini-stat-val .suf { font-size:11px; font-weight:500; color:var(--muted); }
 
-  /* ── MINI STATS ── */
-  .mini-stats { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-  .mini-stat {
-    background: rgba(248,250,252,0.8);
-    border: 1px solid rgba(203,213,225,0.5);
-    border-radius: 12px; padding: 14px;
-  }
-  .mini-stat-label { font-size: 10px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: 0.06em; }
-  .mini-stat-val   { font-family: 'Sora', sans-serif; font-size: 20px; font-weight: 800; color: var(--navy); margin-top: 4px; }
-  .mini-stat-val .suf { font-size: 11px; font-weight: 500; color: var(--muted); }
+  .lb-item { display:flex; align-items:center; gap:12px; padding:10px 0; border-bottom:1px solid rgba(203,213,225,0.4); transition:background 0.15s; }
+  .lb-item:last-child { border-bottom:none; }
+  .lb-rank { font-family:'Sora',sans-serif; font-size:13px; font-weight:800; color:var(--muted); width:22px; text-align:center; flex-shrink:0; }
+  .lb-rank.top { color:var(--blue); }
+  .lb-avatar { width:32px; height:32px; border-radius:50%; background:linear-gradient(135deg,var(--blue-light),#818cf8); display:flex; align-items:center; justify-content:center; font-size:12px; font-weight:700; color:white; flex-shrink:0; }
+  .lb-name { font-size:13px; font-weight:600; color:var(--navy); flex:1; }
+  .lb-name-sub { font-size:10px; color:var(--muted); }
+  .lb-score-wrap { display:flex; align-items:center; gap:8px; }
+  .lb-score { font-family:'Sora',sans-serif; font-size:14px; font-weight:800; color:var(--navy); }
+  .lb-bar-track { width:60px; height:4px; background:rgba(203,213,225,0.5); border-radius:2px; overflow:hidden; }
+  .lb-bar-fill  { height:100%; background:linear-gradient(90deg,var(--blue),#818cf8); border-radius:2px; }
+  .my-row .lb-name { color:var(--blue); }
+  .my-row .lb-avatar { box-shadow:0 0 0 2px var(--blue); }
 
-  /* ── LEADERBOARD ── */
-  .lb-item {
-    display: flex; align-items: center; gap: 12px;
-    padding: 10px 0;
-    border-bottom: 1px solid rgba(203,213,225,0.4);
-    transition: background 0.15s;
-  }
-  .lb-item:last-child { border-bottom: none; }
-  .lb-rank {
-    font-family: 'Sora', sans-serif; font-size: 13px; font-weight: 800;
-    color: var(--muted); width: 22px; text-align: center; flex-shrink: 0;
-  }
-  .lb-rank.top { color: var(--blue); }
-  .lb-avatar {
-    width: 32px; height: 32px; border-radius: 50%;
-    background: linear-gradient(135deg, var(--blue-light), #818cf8);
-    display: flex; align-items: center; justify-content: center;
-    font-size: 12px; font-weight: 700; color: white; flex-shrink: 0;
-  }
-  .lb-name { font-size: 13px; font-weight: 600; color: var(--navy); flex: 1; }
-  .lb-name-sub { font-size: 10px; color: var(--muted); }
-  .lb-score-wrap { display: flex; align-items: center; gap: 8px; }
-  .lb-score { font-family: 'Sora', sans-serif; font-size: 14px; font-weight: 800; color: var(--navy); }
-  .lb-bar-track { width: 60px; height: 4px; background: rgba(203,213,225,0.5); border-radius: 2px; overflow: hidden; }
-  .lb-bar-fill  { height: 100%; background: linear-gradient(90deg, var(--blue), #818cf8); border-radius: 2px; }
-  .my-row .lb-name { color: var(--blue); }
-  .my-row .lb-avatar { box-shadow: 0 0 0 2px var(--blue); }
+  .recent-table { width:100%; border-collapse:collapse; }
+  .recent-table th { font-size:10px; font-weight:700; color:var(--muted); text-transform:uppercase; letter-spacing:0.08em; padding:8px 12px; text-align:left; border-bottom:1px solid rgba(203,213,225,0.5); }
+  .recent-table td { font-size:13px; color:var(--slate); padding:10px 12px; border-bottom:1px solid rgba(203,213,225,0.25); }
+  .recent-table tr:last-child td { border-bottom:none; }
+  .recent-table tr:hover td { background:rgba(37,99,235,0.03); }
+  .acc-pill { padding:2px 8px; border-radius:20px; font-size:11px; font-weight:600; display:inline-block; }
+  .acc-good { background:rgba(5,150,105,0.1); color:var(--green); }
+  .acc-mid  { background:rgba(217,119,6,0.1); color:var(--amber); }
+  .acc-bad  { background:rgba(220,38,38,0.1); color:var(--red); }
 
-  /* ── RECENT TABLE ── */
-  .recent-table { width: 100%; border-collapse: collapse; }
-  .recent-table th {
-    font-size: 10px; font-weight: 700; color: var(--muted);
-    text-transform: uppercase; letter-spacing: 0.08em;
-    padding: 8px 12px; text-align: left;
-    border-bottom: 1px solid rgba(203,213,225,0.5);
-  }
-  .recent-table td {
-    font-size: 13px; color: var(--slate);
-    padding: 10px 12px;
-    border-bottom: 1px solid rgba(203,213,225,0.25);
-  }
-  .recent-table tr:last-child td { border-bottom: none; }
-  .recent-table tr:hover td { background: rgba(37,99,235,0.03); }
-  .acc-pill {
-    padding: 2px 8px; border-radius: 20px; font-size: 11px; font-weight: 600;
-    display: inline-block;
-  }
-  .acc-good { background: rgba(5,150,105,0.1); color: var(--green); }
-  .acc-mid  { background: rgba(217,119,6,0.1); color: var(--amber); }
-  .acc-bad  { background: rgba(220,38,38,0.1); color: var(--red); }
+  .my-rank-badge { display:inline-flex; align-items:center; gap:6px; background:rgba(37,99,235,0.1); border:1px solid rgba(37,99,235,0.2); border-radius:20px; padding:5px 14px; font-family:'Sora',sans-serif; font-size:12px; font-weight:700; color:var(--blue); }
 
-  /* rank badge */
-  .my-rank-badge {
-    display: inline-flex; align-items: center; gap: 6px;
-    background: rgba(37,99,235,0.1); border: 1px solid rgba(37,99,235,0.2);
-    border-radius: 20px; padding: 5px 14px;
-    font-family: 'Sora', sans-serif; font-size: 12px; font-weight: 700; color: var(--blue);
-  }
+  /* Heat map */
+  .heatmap-grid { display:flex; gap:3px; flex-wrap:wrap; margin-top:6px; }
+  .hm-cell { width:14px; height:14px; border-radius:3px; cursor:pointer; transition:transform .15s; position:relative; }
+  .hm-cell:hover { transform:scale(1.5); z-index:2; }
+  .hm-legend { display:flex; align-items:center; gap:6px; font-size:10px; color:var(--muted); margin-top:8px; }
+  .hm-swatch { width:10px; height:10px; border-radius:2px; display:inline-block; }
 </style>
 </head>
 <body>
 
-<!-- SIDEBAR -->
 <aside class="sidebar">
   <div class="sidebar-logo">
     <div class="sidebar-logo-icon">💊</div>
@@ -368,10 +158,7 @@
   <div class="sidebar-user">
     <div class="user-avatar">{{ user_name[0] | upper }}</div>
     <div class="user-name">{{ user_name }}</div>
-    <div class="user-role">
-      <span class="role-dot"></span>
-      {{ staff_type | title }} · Active
-    </div>
+    <div class="user-role"><span class="role-dot"></span>{{ staff_type | title }} · Active</div>
   </div>
   <nav class="sidebar-nav">
     <div class="nav-label">My Space</div>
@@ -382,14 +169,11 @@
   </nav>
   <div class="sidebar-footer">
     <form method="POST" action="/logout" style="margin:0">
-      <button type="submit" class="logout-btn">
-        <span>🚪</span> Sign Out
-      </button>
+      <button type="submit" class="logout-btn"><span>🚪</span> Sign Out</button>
     </form>
   </div>
 </aside>
 
-<!-- MAIN -->
 <main class="main">
   <div class="topbar">
     <div>
@@ -423,21 +207,21 @@
       </div>
     </div>
     <div class="stat-card green">
-      <div class="stat-icon">⚡</div>
-      <div class="stat-label">Efficiency Score</div>
-      <div class="stat-value">{{ a_stats.eff_score }}<span class="stat-suffix">/100</span></div>
-      <div class="stat-trend trend-flat">All-time avg</div>
+      <div class="stat-icon">📦</div>
+      <div class="stat-label">Packing Efficiency</div>
+      <div class="stat-value">{{ a_stats.packing_eff }}<span class="stat-suffix">%</span></div>
+      <div class="stat-trend trend-flat">Sales Bill vs Packed</div>
     </div>
     <div class="stat-card amber">
       <div class="stat-icon">🏃</div>
-      <div class="stat-label">Pick Speed</div>
-      <div class="stat-value">{{ a_stats.pick_speed }}<span class="stat-suffix">/hr</span></div>
-      <div class="stat-trend trend-flat">Items per hour</div>
+      <div class="stat-label">CS Fulfilment</div>
+      <div class="stat-value">{{ a_stats.cs_fulfilment }}<span class="stat-suffix">%</span></div>
+      <div class="stat-trend trend-flat">CS Sales Open filled</div>
     </div>
     <div class="stat-card purple">
-      <div class="stat-icon">📈</div>
-      <div class="stat-label">Consistency</div>
-      <div class="stat-value">{{ a_stats.consistency }}<span class="stat-suffix">%</span></div>
+      <div class="stat-icon">⚡</div>
+      <div class="stat-label">Efficiency Score</div>
+      <div class="stat-value">{{ a_stats.eff_score }}<span class="stat-suffix">/100</span></div>
       <div class="stat-trend trend-flat">{{ a_stats.days }} days logged</div>
     </div>
   </div>
@@ -453,47 +237,55 @@
           <div class="submitted-icon">✅</div>
           <div class="submitted-text">
             <h4>Submitted for Today</h4>
-            <p>Picked: {{ today_entry.picked }} · Missed: {{ today_entry.missed }} · Accuracy: {{ today_entry.accuracy }}%</p>
+            <p>
+              Sales Bill: {{ today_entry.sales_bill }} · Picked: {{ today_entry.picked }} · Missed: {{ today_entry.missed }} · Acc: {{ today_entry.accuracy }}%<br>
+              Packing Done: {{ today_entry.packing_done }} · CS Open: {{ today_entry.cs_sales_open }} · Rack: {{ today_entry.rack_organized }} · Table: {{ today_entry.table_clean }}
+            </p>
           </div>
         </div>
       {% else %}
         <form method="POST" action="/dashboard">
           <div class="form-grid">
-            {% if staff_type == 'picker' %}
+            {# ── EXACT ORDER: Sales Bill Packed, Item Picked, Item Missed, CS Sales Open, Packing Done, Rack Organized, Table Clean ── #}
             <div class="form-group">
-              <label>Bills</label>
-              <input type="number" name="bills" min="0" value="0">
+              <label>Sales Bill Packed <span style="color:#ef4444;font-size:9px;">URGENT</span></label>
+              <input type="number" name="sales_bill" min="0" value="0" required>
+              <span class="form-hint">Sales Bill Packed (Urgent Bill)</span>
             </div>
             <div class="form-group">
-              <label>Items Picked</label>
-              <input type="number" name="picked" min="0" value="0">
+              <label>Item Picked</label>
+              <input type="number" name="picked" min="0" value="0" required>
+              <span class="form-hint">Total items picked today</span>
             </div>
             <div class="form-group">
-              <label>Items Missed</label>
-              <input type="number" name="missed" min="0" value="0">
+              <label>Item Missed</label>
+              <input type="number" name="missed" min="0" value="0" required>
+              <span class="form-hint">Items not picked / missed</span>
             </div>
             <div class="form-group">
-              <label>CS in Purchase</label>
-              <input type="number" name="boxes" min="0" value="0">
+              <label>CS Sales Open</label>
+              <input type="number" name="cs_sales_open" min="0" value="0" required>
+              <span class="form-hint">CS Sales Open orders</span>
+            </div>
+            <div class="form-group">
+              <label>Packing Done</label>
+              <input type="number" name="packing_done" min="0" value="0" required>
+              <span class="form-hint">Bills fully packed today</span>
+            </div>
+            <div class="form-group">
+              <label>Rack Organized</label>
+              <input type="number" name="rack_organized" min="0" value="0" required>
+              <span class="form-hint">Racks organized today</span>
             </div>
             <div class="form-group" style="grid-column:1/-1">
-              <label>Sweep Time (minutes)</label>
-              <input type="number" name="sweep_mins" min="0" step="1" value="0">
-              <span class="form-hint">Total time spent on picking floor</span>
+              <label>Table Clean</label>
+              <input type="number" name="table_clean" min="0" value="0" required>
+              <span class="form-hint">Tables cleaned / cleared today</span>
             </div>
-            {% else %}
-            <div class="form-group">
-              <label>Bills</label>
-              <input type="number" name="bills" min="0" value="0">
-            </div>
-            <div class="form-group">
-              <label>Items Picked</label>
-              <input type="number" name="picked" min="0" value="0">
-            </div>
-            <div class="form-group">
-              <label>Items Missed</label>
-              <input type="number" name="missed" min="0" value="0">
-            </div>
+
+            {% if staff_type == 'checker' %}
+            <hr class="form-divider">
+            <div class="form-section-label">Checker Metrics</div>
             <div class="form-group">
               <label>Items Checked</label>
               <input type="number" name="checked" min="0" value="0">
@@ -503,18 +295,18 @@
               <input type="number" name="errors_found" min="0" value="0">
             </div>
             <div class="form-group">
-              <label>CS in Purchase</label>
-              <input type="number" name="boxes" min="0" value="0">
-            </div>
-            <div class="form-group">
-              <label>Sweep Time (mins)</label>
-              <input type="number" name="sweep_mins" min="0" value="0">
-            </div>
-            <div class="form-group">
               <label>Check Time (mins)</label>
               <input type="number" name="check_mins" min="0" value="0">
+              <span class="form-hint">Total check session minutes</span>
             </div>
             {% endif %}
+
+            <hr class="form-divider">
+            <div class="form-group" style="grid-column:1/-1">
+              <label>Total Time (mins)</label>
+              <input type="number" name="total_time_mins" min="0" step="1" value="0" required>
+              <span class="form-hint">Total time on floor (minutes) — used for all speed calculations</span>
+            </div>
           </div>
           <div class="submit-row">
             <button type="submit" class="btn-primary">Submit Today's Metrics →</button>
@@ -534,68 +326,72 @@
         <button class="period-tab" onclick="switchPeriod('all',this)">All Time</button>
       </div>
 
-      <div class="period-panel active" id="panel-day">
-        {% if d_stats %}
+      {% for pid, pstats in [('day', d_stats), ('week', w_stats), ('month', m_stats), ('all', a_stats)] %}
+      <div class="period-panel {% if pid == 'day' %}active{% endif %}" id="panel-{{ pid }}">
+        {% if pstats %}
         <div class="mini-stats">
-          <div class="mini-stat"><div class="mini-stat-label">Accuracy</div><div class="mini-stat-val">{{ d_stats.pick_acc }}<span class="suf">%</span></div></div>
-          <div class="mini-stat"><div class="mini-stat-label">Efficiency</div><div class="mini-stat-val">{{ d_stats.eff_score }}<span class="suf">/100</span></div></div>
-          <div class="mini-stat"><div class="mini-stat-label">Picked</div><div class="mini-stat-val">{{ d_stats.tp }}</div></div>
-          <div class="mini-stat"><div class="mini-stat-label">Missed</div><div class="mini-stat-val">{{ d_stats.tm }}</div></div>
+          <div class="mini-stat"><div class="mini-stat-label">Pick Accuracy</div><div class="mini-stat-val">{{ pstats.pick_acc }}<span class="suf">%</span></div></div>
+          <div class="mini-stat"><div class="mini-stat-label">Efficiency Score</div><div class="mini-stat-val">{{ pstats.eff_score }}<span class="suf">/100</span></div></div>
+          <div class="mini-stat"><div class="mini-stat-label">Item Picked</div><div class="mini-stat-val">{{ pstats.tp }}</div></div>
+          <div class="mini-stat"><div class="mini-stat-label">Item Missed</div><div class="mini-stat-val">{{ pstats.tm }}</div></div>
+          <div class="mini-stat"><div class="mini-stat-label">Sales Bill Packed</div><div class="mini-stat-val">{{ pstats.tsb }}</div></div>
+          <div class="mini-stat"><div class="mini-stat-label">Packing Done</div><div class="mini-stat-val">{{ pstats.tpd }}</div></div>
+          <div class="mini-stat"><div class="mini-stat-label">Packing Eff.</div><div class="mini-stat-val">{{ pstats.packing_eff }}<span class="suf">%</span></div></div>
+          <div class="mini-stat"><div class="mini-stat-label">CS Sales Open</div><div class="mini-stat-val">{{ pstats.tcs }}</div></div>
+          <div class="mini-stat"><div class="mini-stat-label">CS Fulfilment</div><div class="mini-stat-val">{{ pstats.cs_fulfilment }}<span class="suf">%</span></div></div>
+          <div class="mini-stat"><div class="mini-stat-label">Rack Organized</div><div class="mini-stat-val">{{ pstats.tro }}</div></div>
+          <div class="mini-stat"><div class="mini-stat-label">Table Clean</div><div class="mini-stat-val">{{ pstats.ttc }}</div></div>
+          <div class="mini-stat"><div class="mini-stat-label">Pick Speed/hr</div><div class="mini-stat-val">{{ pstats.pick_speed }}</div></div>
           {% if staff_type == 'checker' %}
-          <div class="mini-stat"><div class="mini-stat-label">Checked</div><div class="mini-stat-val">{{ d_stats.tck }}</div></div>
-          <div class="mini-stat"><div class="mini-stat-label">Errors Found</div><div class="mini-stat-val">{{ d_stats.ter }}</div></div>
+          <div class="mini-stat"><div class="mini-stat-label">Items Checked</div><div class="mini-stat-val">{{ pstats.tck }}</div></div>
+          <div class="mini-stat"><div class="mini-stat-label">Errors Found</div><div class="mini-stat-val">{{ pstats.ter }}</div></div>
+          <div class="mini-stat"><div class="mini-stat-label">Clean Rate</div><div class="mini-stat-val">{{ pstats.check_acc }}<span class="suf">%</span></div></div>
+          <div class="mini-stat"><div class="mini-stat-label">Error Rate</div><div class="mini-stat-val">{{ pstats.error_rate }}<span class="suf">%</span></div></div>
           {% endif %}
-          <div class="mini-stat"><div class="mini-stat-label">Speed/hr</div><div class="mini-stat-val">{{ d_stats.pick_speed }}</div></div>
-          <div class="mini-stat"><div class="mini-stat-label">Grade</div><div class="mini-stat-val" style="font-size:13px">{{ d_stats.grade }}</div></div>
+          <div class="mini-stat"><div class="mini-stat-label">Consistency</div><div class="mini-stat-val">{{ pstats.consistency }}<span class="suf">%</span></div></div>
+          <div class="mini-stat"><div class="mini-stat-label">Grade</div><div class="mini-stat-val" style="font-size:13px">{{ pstats.grade }}</div></div>
+          <div class="mini-stat"><div class="mini-stat-label">Potential Items</div><div class="mini-stat-val">{{ pstats.potential_items }}</div></div>
+          <div class="mini-stat"><div class="mini-stat-label">Gap Items</div><div class="mini-stat-val">{{ pstats.gap_items }}</div></div>
         </div>
-        {% else %}<p style="font-size:13px;color:var(--muted);text-align:center;padding:20px 0">No entry for today yet</p>{% endif %}
+        {% else %}<p style="font-size:13px;color:var(--muted);text-align:center;padding:20px 0">No entry for this period</p>{% endif %}
       </div>
-
-      <div class="period-panel" id="panel-week">
-        {% if w_stats %}
-        <div class="mini-stats">
-          <div class="mini-stat"><div class="mini-stat-label">Accuracy</div><div class="mini-stat-val">{{ w_stats.pick_acc }}<span class="suf">%</span></div></div>
-          <div class="mini-stat"><div class="mini-stat-label">Efficiency</div><div class="mini-stat-val">{{ w_stats.eff_score }}<span class="suf">/100</span></div></div>
-          <div class="mini-stat"><div class="mini-stat-label">Total Picked</div><div class="mini-stat-val">{{ w_stats.tp }}</div></div>
-          <div class="mini-stat"><div class="mini-stat-label">Total Missed</div><div class="mini-stat-val">{{ w_stats.tm }}</div></div>
-          <div class="mini-stat"><div class="mini-stat-label">Speed/hr</div><div class="mini-stat-val">{{ w_stats.pick_speed }}</div></div>
-          <div class="mini-stat"><div class="mini-stat-label">Consistency</div><div class="mini-stat-val">{{ w_stats.consistency }}<span class="suf">%</span></div></div>
-          <div class="mini-stat"><div class="mini-stat-label">Days Active</div><div class="mini-stat-val">{{ w_stats.days }}</div></div>
-          <div class="mini-stat"><div class="mini-stat-label">Grade</div><div class="mini-stat-val" style="font-size:13px">{{ w_stats.grade }}</div></div>
-        </div>
-        {% else %}<p style="font-size:13px;color:var(--muted);text-align:center;padding:20px 0">No data this week</p>{% endif %}
-      </div>
-
-      <div class="period-panel" id="panel-month">
-        {% if m_stats %}
-        <div class="mini-stats">
-          <div class="mini-stat"><div class="mini-stat-label">Accuracy</div><div class="mini-stat-val">{{ m_stats.pick_acc }}<span class="suf">%</span></div></div>
-          <div class="mini-stat"><div class="mini-stat-label">Efficiency</div><div class="mini-stat-val">{{ m_stats.eff_score }}<span class="suf">/100</span></div></div>
-          <div class="mini-stat"><div class="mini-stat-label">Total Picked</div><div class="mini-stat-val">{{ m_stats.tp }}</div></div>
-          <div class="mini-stat"><div class="mini-stat-label">Total Missed</div><div class="mini-stat-val">{{ m_stats.tm }}</div></div>
-          <div class="mini-stat"><div class="mini-stat-label">Speed/hr</div><div class="mini-stat-val">{{ m_stats.pick_speed }}</div></div>
-          <div class="mini-stat"><div class="mini-stat-label">Consistency</div><div class="mini-stat-val">{{ m_stats.consistency }}<span class="suf">%</span></div></div>
-          <div class="mini-stat"><div class="mini-stat-label">Days Active</div><div class="mini-stat-val">{{ m_stats.days }}</div></div>
-          <div class="mini-stat"><div class="mini-stat-label">Grade</div><div class="mini-stat-val" style="font-size:13px">{{ m_stats.grade }}</div></div>
-        </div>
-        {% else %}<p style="font-size:13px;color:var(--muted);text-align:center;padding:20px 0">No data this month</p>{% endif %}
-      </div>
-
-      <div class="period-panel" id="panel-all">
-        {% if a_stats %}
-        <div class="mini-stats">
-          <div class="mini-stat"><div class="mini-stat-label">Accuracy</div><div class="mini-stat-val">{{ a_stats.pick_acc }}<span class="suf">%</span></div></div>
-          <div class="mini-stat"><div class="mini-stat-label">Efficiency</div><div class="mini-stat-val">{{ a_stats.eff_score }}<span class="suf">/100</span></div></div>
-          <div class="mini-stat"><div class="mini-stat-label">Total Picked</div><div class="mini-stat-val">{{ a_stats.tp }}</div></div>
-          <div class="mini-stat"><div class="mini-stat-label">Total Missed</div><div class="mini-stat-val">{{ a_stats.tm }}</div></div>
-          <div class="mini-stat"><div class="mini-stat-label">Speed/hr</div><div class="mini-stat-val">{{ a_stats.pick_speed }}</div></div>
-          <div class="mini-stat"><div class="mini-stat-label">Consistency</div><div class="mini-stat-val">{{ a_stats.consistency }}<span class="suf">%</span></div></div>
-          <div class="mini-stat"><div class="mini-stat-label">Days Active</div><div class="mini-stat-val">{{ a_stats.days }}</div></div>
-          <div class="mini-stat"><div class="mini-stat-label">Grade</div><div class="mini-stat-val" style="font-size:13px">{{ a_stats.grade }}</div></div>
-        </div>
-        {% else %}<p style="font-size:13px;color:var(--muted);text-align:center;padding:20px 0">No data yet</p>{% endif %}
-      </div>
+      {% endfor %}
     </div>
+  </div>
+
+  <!-- HEAT MAP -->
+  <div class="section-card" style="margin-bottom:24px;">
+    <div class="section-title"><span class="dot"></span>My Efficiency Heat Map — Last 30 Days</div>
+    <div id="myHeatmap" class="heatmap-grid"></div>
+    <div class="hm-legend">
+      <span>Low</span>
+      <span class="hm-swatch" style="background:#dbeafe"></span>
+      <span class="hm-swatch" style="background:#93c5fd"></span>
+      <span class="hm-swatch" style="background:#3b82f6"></span>
+      <span class="hm-swatch" style="background:#1d4ed8"></span>
+      <span class="hm-swatch" style="background:#1e3a8a"></span>
+      <span>High</span>
+      <span style="margin-left:8px;color:#94a3b8;font-size:10px;">Hover for date &amp; score</span>
+    </div>
+    <script>
+    (function(){
+      const data  = {{ heatmap | tojson }};
+      const today = new Date();
+      const grid  = document.getElementById('myHeatmap');
+      for (let i = 29; i >= 0; i--) {
+        const d   = new Date(today); d.setDate(today.getDate() - i);
+        const key = d.toISOString().slice(0, 10);
+        const eff = data[key];
+        const cell = document.createElement('div');
+        cell.className = 'hm-cell';
+        cell.title = key + (eff !== undefined ? ' · Score: ' + eff : ' · No data');
+        cell.style.background = eff === undefined ? '#f1f5f9' :
+          eff >= 85 ? '#1e3a8a' : eff >= 70 ? '#1d4ed8' : eff >= 55 ? '#3b82f6' :
+          eff >= 40 ? '#93c5fd' : '#dbeafe';
+        grid.appendChild(cell);
+      }
+    })();
+    </script>
   </div>
 
   <!-- LEADERBOARD + RECENT -->
@@ -611,7 +407,7 @@
           <div class="lb-avatar">{{ p.name[0] | upper }}</div>
           <div style="flex:1">
             <div class="lb-name">{{ p.name }}{% if p.id == session.user_id %} (You){% endif %}</div>
-            <div class="lb-name-sub">{{ p.grade }} · {{ p.days }} days</div>
+            <div class="lb-name-sub">{{ p.grade }} · Acc {{ p.pick_acc }}% · Pkg {{ p.packing_eff }}%</div>
           </div>
           <div class="lb-score-wrap">
             <div class="lb-bar-track"><div class="lb-bar-fill" style="width:{{ p.score }}%"></div></div>
@@ -630,18 +426,17 @@
       <table class="recent-table">
         <thead>
           <tr>
-            <th>Date</th>
-            <th>Picked</th>
-            <th>Missed</th>
-            <th>Accuracy</th>
+            <th>Date</th><th>SB</th><th>Picked</th><th>Missed</th><th>Packing</th><th>Accuracy</th>
           </tr>
         </thead>
         <tbody>
           {% for e in recent[:8] %}
           <tr>
             <td>{{ e.entry_date.strftime('%d %b') }}</td>
+            <td>{{ e._sales_bill_effective }}</td>
             <td>{{ e.picked }}</td>
             <td>{{ e.missed }}</td>
+            <td>{{ e.packing_done }}</td>
             <td>
               <span class="acc-pill {% if e.accuracy >= 95 %}acc-good{% elif e.accuracy >= 88 %}acc-mid{% else %}acc-bad{% endif %}">
                 {{ e.accuracy }}%
@@ -656,7 +451,6 @@
       {% endif %}
     </div>
   </div>
-
 </main>
 
 <script>

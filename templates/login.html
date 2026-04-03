@@ -24,172 +24,67 @@ body{
     linear-gradient(90deg,rgba(29,78,216,.025) 1px,transparent 1px);
   background-size:100% 100%,100% 100%,100% 100%,36px 36px,36px 36px;
 }
-
-/* Holographic shimmer orbs */
 .orb{position:fixed;border-radius:50%;pointer-events:none;opacity:.5;animation:orb-float 10s ease-in-out infinite}
-.orb1{width:320px;height:320px;top:-80px;left:-80px;
-  background:radial-gradient(circle,rgba(96,165,250,.25),rgba(29,78,216,.08) 60%,transparent);
-  filter:blur(40px);animation-delay:0s}
-.orb2{width:280px;height:280px;bottom:-60px;right:-60px;
-  background:radial-gradient(circle,rgba(147,197,253,.2),rgba(59,130,246,.06) 60%,transparent);
-  filter:blur(35px);animation-delay:4s}
-.orb3{width:200px;height:200px;top:40%;right:10%;
-  background:radial-gradient(circle,rgba(191,219,254,.18),transparent 70%);
-  filter:blur(30px);animation-delay:7s}
+.orb1{width:320px;height:320px;top:-80px;left:-80px;background:radial-gradient(circle,rgba(96,165,250,.25),rgba(29,78,216,.08) 60%,transparent);filter:blur(40px);animation-delay:0s}
+.orb2{width:280px;height:280px;bottom:-60px;right:-60px;background:radial-gradient(circle,rgba(147,197,253,.2),rgba(59,130,246,.06) 60%,transparent);filter:blur(35px);animation-delay:4s}
+.orb3{width:200px;height:200px;top:40%;right:10%;background:radial-gradient(circle,rgba(191,219,254,.18),transparent 70%);filter:blur(30px);animation-delay:7s}
 @keyframes orb-float{0%,100%{transform:translateY(0) scale(1)}50%{transform:translateY(-20px) scale(1.04)}}
-
 .wrap{width:100%;max-width:450px;position:relative;z-index:10;animation:fadein .5s cubic-bezier(.16,1,.3,1)}
 @keyframes fadein{from{opacity:0;transform:translateY(18px)}to{opacity:1;transform:translateY(0)}}
-
-/* Brand */
 .brand{text-align:center;margin-bottom:1.75rem}
-.logo-ring{
-  display:inline-flex;align-items:center;justify-content:center;
-  width:66px;height:66px;border-radius:20px;margin-bottom:1rem;
-  background:linear-gradient(135deg,var(--blue),var(--blue2));
-  box-shadow:0 8px 32px rgba(29,78,216,.35),0 0 0 1px rgba(29,78,216,.15),
-             inset 0 1px 0 rgba(255,255,255,.2);
-  font-size:1.8rem;color:#fff;position:relative;overflow:hidden;
-}
-.logo-ring::before{
-  content:"";position:absolute;inset:0;
-  background:linear-gradient(135deg,rgba(255,255,255,.18) 0%,transparent 60%);
-  border-radius:20px;
-}
+.logo-ring{display:inline-flex;align-items:center;justify-content:center;width:66px;height:66px;border-radius:20px;margin-bottom:1rem;background:linear-gradient(135deg,var(--blue),var(--blue2));box-shadow:0 8px 32px rgba(29,78,216,.35),0 0 0 1px rgba(29,78,216,.15),inset 0 1px 0 rgba(255,255,255,.2);font-size:1.8rem;color:#fff;position:relative;overflow:hidden;}
+.logo-ring::before{content:"";position:absolute;inset:0;background:linear-gradient(135deg,rgba(255,255,255,.18) 0%,transparent 60%);border-radius:20px;}
 .brand-ip{font-size:1.85rem;font-weight:900;color:var(--blue);letter-spacing:-1.5px;line-height:1}
 .brand-name{font-size:.82rem;font-weight:600;color:var(--gray);margin-top:2px;letter-spacing:.2px}
 .brand-sub{font-size:.62rem;color:#94a3b8;font-weight:600;letter-spacing:2.5px;text-transform:uppercase;margin-top:4px}
-
-/* Glass card */
-.card{
-  background:rgba(255,255,255,.85);
-  backdrop-filter:blur(24px);-webkit-backdrop-filter:blur(24px);
-  border:1px solid rgba(255,255,255,.9);
-  border-radius:24px;padding:2.25rem 2rem;
-  box-shadow:0 8px 40px rgba(15,23,42,.1),0 2px 8px rgba(15,23,42,.06),
-             0 0 0 1px rgba(29,78,216,.06),
-             inset 0 1px 0 rgba(255,255,255,.8);
-  position:relative;overflow:hidden;
-}
-.card::before{
-  content:"";position:absolute;top:0;left:0;right:0;height:1px;
-  background:linear-gradient(90deg,transparent,rgba(29,78,216,.3),rgba(96,165,250,.4),rgba(29,78,216,.3),transparent);
-}
-.card::after{
-  content:"";position:absolute;top:0;left:-100%;width:200%;height:100%;
-  background:linear-gradient(90deg,transparent 30%,rgba(255,255,255,.06) 50%,transparent 70%);
-  animation:shimmer 6s ease-in-out infinite;pointer-events:none;
-}
+.card{background:rgba(255,255,255,.85);backdrop-filter:blur(24px);-webkit-backdrop-filter:blur(24px);border:1px solid rgba(255,255,255,.9);border-radius:24px;padding:2.25rem 2rem;box-shadow:0 8px 40px rgba(15,23,42,.1),0 2px 8px rgba(15,23,42,.06),0 0 0 1px rgba(29,78,216,.06),inset 0 1px 0 rgba(255,255,255,.8);position:relative;overflow:hidden;}
+.card::before{content:"";position:absolute;top:0;left:0;right:0;height:1px;background:linear-gradient(90deg,transparent,rgba(29,78,216,.3),rgba(96,165,250,.4),rgba(29,78,216,.3),transparent);}
+.card::after{content:"";position:absolute;top:0;left:-100%;width:200%;height:100%;background:linear-gradient(90deg,transparent 30%,rgba(255,255,255,.06) 50%,transparent 70%);animation:shimmer 6s ease-in-out infinite;pointer-events:none;}
 @keyframes shimmer{0%{transform:translateX(-50%)}100%{transform:translateX(50%)}}
-
-/* Flash */
-.flash{background:rgba(254,242,242,.9);border:1px solid rgba(254,202,202,.8);color:#9f1239;
-  border-radius:10px;padding:10px 14px;font-size:.82rem;font-weight:500;
-  margin-bottom:1.25rem;display:flex;align-items:center;gap:8px;
-  box-shadow:0 1px 4px rgba(239,68,68,.1)}
-
-/* Labels & inputs */
-.fl{display:block;font-size:.64rem;font-weight:700;color:var(--gray);
-  text-transform:uppercase;letter-spacing:1px;margin-bottom:5px}
+.flash{background:rgba(254,242,242,.9);border:1px solid rgba(254,202,202,.8);color:#9f1239;border-radius:10px;padding:10px 14px;font-size:.82rem;font-weight:500;margin-bottom:1.25rem;display:flex;align-items:center;gap:8px;box-shadow:0 1px 4px rgba(239,68,68,.1)}
+.fl{display:block;font-size:.64rem;font-weight:700;color:var(--gray);text-transform:uppercase;letter-spacing:1px;margin-bottom:5px}
 .ig{position:relative;margin-bottom:.9rem}
-.ii{position:absolute;left:13px;top:50%;transform:translateY(-50%);
-  color:#94a3b8;font-size:1rem;pointer-events:none;z-index:2;transition:color .2s}
-.fi{
-  width:100%;padding:11px 15px 11px 40px;
-  background:rgba(248,250,252,.8);
-  border:1.5px solid rgba(226,232,240,.8);
-  border-radius:12px;color:var(--dark);font-size:.9rem;font-weight:500;
-  outline:none;transition:all .2s;font-family:'Inter',sans-serif;
-  box-shadow:0 1px 3px rgba(15,23,42,.04),inset 0 1px 0 rgba(255,255,255,.6);
-}
-.fi:focus{
-  border-color:var(--blue2);
-  background:rgba(255,255,255,.95);
-  box-shadow:0 0 0 3px rgba(59,130,246,.12),0 1px 3px rgba(15,23,42,.06);
-}
-.fi:focus~.ii{color:var(--blue)}
+.ii{position:absolute;left:13px;top:50%;transform:translateY(-50%);color:#94a3b8;font-size:1rem;pointer-events:none;z-index:2;transition:color .2s}
+.fi{width:100%;padding:11px 15px 11px 40px;background:rgba(248,250,252,.8);border:1.5px solid rgba(226,232,240,.8);border-radius:12px;color:var(--dark);font-size:.9rem;font-weight:500;outline:none;transition:all .2s;font-family:'Inter',sans-serif;box-shadow:0 1px 3px rgba(15,23,42,.04),inset 0 1px 0 rgba(255,255,255,.6);}
+.fi:focus{border-color:var(--blue2);background:rgba(255,255,255,.95);box-shadow:0 0 0 3px rgba(59,130,246,.12),0 1px 3px rgba(15,23,42,.06);}
 .fi::placeholder{color:#cbd5e1}
-.tpw{position:absolute;right:11px;top:50%;transform:translateY(-50%);
-  background:none;border:none;color:#94a3b8;cursor:pointer;padding:4px;z-index:2;
-  border-radius:6px;transition:all .15s}
+.tpw{position:absolute;right:11px;top:50%;transform:translateY(-50%);background:none;border:none;color:#94a3b8;cursor:pointer;padding:4px;z-index:2;border-radius:6px;transition:all .15s}
 .tpw:hover{color:var(--dark);background:rgba(15,23,42,.06)}
-
-/* Section divider */
-.sec-div{display:flex;align-items:center;gap:8px;margin:.9rem 0 .6rem;
-  font-size:.62rem;font-weight:700;color:#94a3b8;letter-spacing:1.5px;text-transform:uppercase}
-.sec-div::before,.sec-div::after{content:"";flex:1;height:1px;
-  background:linear-gradient(90deg,transparent,rgba(29,78,216,.15),transparent)}
-
-/* Role MCQ */
+/* email suggestion */
+.email-wrap{position:relative}
+.suggest-box{position:absolute;top:calc(100% + 4px);left:0;right:0;background:rgba(255,255,255,.98);border:1.5px solid rgba(29,78,216,.2);border-radius:10px;z-index:50;box-shadow:0 4px 20px rgba(15,23,42,.12);display:none;overflow:hidden}
+.suggest-box.show{display:block}
+.suggest-opt{padding:9px 14px;font-size:.85rem;color:var(--dark);cursor:pointer;transition:background .15s;display:flex;align-items:center;gap:8px}
+.suggest-opt:hover,.suggest-opt.active{background:rgba(29,78,216,.06)}
+.suggest-opt span{color:var(--blue);font-weight:700}
+.sec-div{display:flex;align-items:center;gap:8px;margin:.9rem 0 .6rem;font-size:.62rem;font-weight:700;color:#94a3b8;letter-spacing:1.5px;text-transform:uppercase}
+.sec-div::before,.sec-div::after{content:"";flex:1;height:1px;background:linear-gradient(90deg,transparent,rgba(29,78,216,.15),transparent)}
 .role-grid{display:grid;grid-template-columns:1fr 1fr;gap:.6rem}
 .ro{position:relative;cursor:pointer}
 .ro input[type=radio]{position:absolute;opacity:0;width:0;height:0}
-.rc{
-  border:1.5px solid rgba(226,232,240,.8);border-radius:14px;
-  padding:.85rem .9rem;display:flex;flex-direction:column;align-items:center;gap:.35rem;
-  transition:all .2s;text-align:center;
-  background:rgba(248,250,252,.6);cursor:pointer;position:relative;
-  box-shadow:0 1px 3px rgba(15,23,42,.04);
-}
-.rc:hover{border-color:rgba(59,130,246,.5);background:rgba(239,246,255,.8);
-  box-shadow:0 2px 8px rgba(29,78,216,.08)}
+.rc{border:1.5px solid rgba(226,232,240,.8);border-radius:14px;padding:.85rem .9rem;display:flex;flex-direction:column;align-items:center;gap:.35rem;transition:all .2s;text-align:center;background:rgba(248,250,252,.6);cursor:pointer;position:relative;box-shadow:0 1px 3px rgba(15,23,42,.04);}
+.rc:hover{border-color:rgba(59,130,246,.5);background:rgba(239,246,255,.8);box-shadow:0 2px 8px rgba(29,78,216,.08)}
 .ro-icon{font-size:1.45rem;line-height:1}
 .ro-name{font-size:.8rem;font-weight:700;color:var(--dark)}
 .ro-desc{font-size:.62rem;color:var(--gray);line-height:1.3}
-.ro-chk{
-  position:absolute;top:7px;right:7px;width:17px;height:17px;
-  background:rgba(226,232,240,.6);border:1.5px solid rgba(203,213,225,.8);
-  border-radius:50%;display:flex;align-items:center;justify-content:center;
-  font-size:.5rem;color:transparent;transition:all .2s;
-}
-.ro input:checked~.rc{
-  border-color:var(--blue2);
-  background:rgba(239,246,255,.9);
-  box-shadow:0 0 0 3px rgba(59,130,246,.1),0 2px 8px rgba(29,78,216,.1);
-}
+.ro-chk{position:absolute;top:7px;right:7px;width:17px;height:17px;background:rgba(226,232,240,.6);border:1.5px solid rgba(203,213,225,.8);border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:.5rem;color:transparent;transition:all .2s;}
+.ro input:checked~.rc{border-color:var(--blue2);background:rgba(239,246,255,.9);box-shadow:0 0 0 3px rgba(59,130,246,.1),0 2px 8px rgba(29,78,216,.1);}
 .ro input:checked~.rc .ro-name{color:var(--blue)}
 .ro input:checked~.rc .ro-chk{background:var(--blue);border-color:var(--blue);color:#fff}
 .role-hint{font-size:.62rem;color:#94a3b8;text-align:center;margin-top:.35rem}
-
-/* Remember */
 .rm-row{display:flex;justify-content:space-between;align-items:center;margin:.75rem 0}
 .rm-lbl{display:flex;align-items:center;gap:7px;font-size:.78rem;color:var(--gray);cursor:pointer;font-weight:500}
-.rm-cb{width:15px;height:15px;border-radius:4px;border:1.5px solid rgba(203,213,225,.8);
-  background:rgba(248,250,252,.8);appearance:none;cursor:pointer;transition:all .2s;flex-shrink:0}
+.rm-cb{width:15px;height:15px;border-radius:4px;border:1.5px solid rgba(203,213,225,.8);background:rgba(248,250,252,.8);appearance:none;cursor:pointer;transition:all .2s;flex-shrink:0}
 .rm-cb:checked{background:var(--blue);border-color:var(--blue);box-shadow:0 0 0 2px rgba(29,78,216,.15)}
-
-/* CTA button */
-.btn-login{
-  width:100%;padding:13px;border:none;border-radius:13px;cursor:pointer;
-  font-size:.9rem;font-weight:700;letter-spacing:.2px;
-  display:flex;align-items:center;justify-content:center;gap:10px;
-  transition:all .25s;margin-top:.5rem;position:relative;overflow:hidden;
-  background:linear-gradient(135deg,var(--blue) 0%,var(--blue2) 100%);color:#fff;
-  box-shadow:0 4px 20px rgba(29,78,216,.35),0 1px 0 rgba(255,255,255,.12) inset;
-}
-.btn-login::before{
-  content:"";position:absolute;top:0;left:-100%;width:200%;height:100%;
-  background:linear-gradient(90deg,transparent 30%,rgba(255,255,255,.12) 50%,transparent 70%);
-  transition:left .5s;
-}
+.btn-login{width:100%;padding:13px;border:none;border-radius:13px;cursor:pointer;font-size:.9rem;font-weight:700;letter-spacing:.2px;display:flex;align-items:center;justify-content:center;gap:10px;transition:all .25s;margin-top:.5rem;position:relative;overflow:hidden;background:linear-gradient(135deg,var(--blue) 0%,var(--blue2) 100%);color:#fff;box-shadow:0 4px 20px rgba(29,78,216,.35),0 1px 0 rgba(255,255,255,.12) inset;}
+.btn-login::before{content:"";position:absolute;top:0;left:-100%;width:200%;height:100%;background:linear-gradient(90deg,transparent 30%,rgba(255,255,255,.12) 50%,transparent 70%);transition:left .5s;}
 .btn-login:hover::before{left:100%}
-.btn-login:hover{background:linear-gradient(135deg,var(--dark),#1e293b);
-  box-shadow:0 8px 28px rgba(15,23,42,.25);transform:translateY(-1px)}
+.btn-login:hover{background:linear-gradient(135deg,var(--dark),#1e293b);box-shadow:0 8px 28px rgba(15,23,42,.25);transform:translateY(-1px)}
 .btn-login:active{transform:translateY(0);box-shadow:0 2px 8px rgba(15,23,42,.15)}
 .btn-login:disabled{opacity:.55;cursor:not-allowed;transform:none}
 .arr{transition:transform .2s}
 .btn-login:hover .arr{transform:translateX(4px)}
-
-/* Hint */
-.hint{
-  background:linear-gradient(135deg,rgba(239,246,255,.9),rgba(219,234,254,.7));
-  border:1px solid rgba(191,219,254,.8);border-radius:12px;
-  padding:.75rem 1rem;margin-top:1.25rem;font-size:.72rem;color:var(--gray);
-  line-height:1.65;box-shadow:0 1px 4px rgba(29,78,216,.06);
-}
-.hint strong{display:block;color:var(--blue);font-size:.72rem;font-weight:700;margin-bottom:3px}
-.foot{text-align:center;margin-top:1.1rem;font-size:.62rem;color:#94a3b8;
-  font-weight:600;letter-spacing:1.5px;text-transform:uppercase}
+.foot{text-align:center;margin-top:1.1rem;font-size:.62rem;color:#94a3b8;font-weight:600;letter-spacing:1.5px;text-transform:uppercase}
 @media(max-width:400px){.card{padding:1.75rem 1.25rem}}
 </style>
 </head>
@@ -212,16 +107,19 @@ body{
     <div class="flash" role="alert"><i class="ph-fill ph-warning-circle"></i> {{msg}}</div>
     {% endfor %}{% endif %}{% endwith %}
 
-    <form method="POST" id="lf" novalidate>
+    <form method="POST" id="lf" novalidate autocomplete="off">
       <div>
         <label class="fl" for="email">Corporate Email</label>
-        <div class="ig">
+        <div class="ig email-wrap">
           <input type="email" name="email" id="email" class="fi"
                  placeholder="employee@pharmaip.com"
-                 autocomplete="email" required autofocus aria-label="Email">
+                 autocomplete="off" required autofocus aria-label="Corporate email"
+                 oninput="onEmailInput(this)" onblur="hideSuggest()" onkeydown="emailKey(event)">
           <i class="ph ph-envelope ii" aria-hidden="true"></i>
+          <div class="suggest-box" id="suggestBox" role="listbox" aria-label="Email suggestions"></div>
         </div>
       </div>
+
       <div>
         <label class="fl" for="pw">Password</label>
         <div class="ig" style="margin-bottom:0">
@@ -237,7 +135,7 @@ body{
       <div class="sec-div">Select Your Role</div>
 
       <div class="role-grid" role="radiogroup" aria-label="Select role">
-        <label class="ro" aria-label="Picker - speed and accuracy">
+        <label class="ro" aria-label="Picker">
           <input type="radio" name="staff_type" value="picker" checked>
           <div class="rc">
             <div class="ro-chk"><i class="ph-bold ph-check"></i></div>
@@ -246,7 +144,7 @@ body{
             <div class="ro-desc">Speed &amp;<br>accuracy</div>
           </div>
         </label>
-        <label class="ro" aria-label="Checker - verification and error detection">
+        <label class="ro" aria-label="Checker">
           <input type="radio" name="staff_type" value="checker">
           <div class="rc">
             <div class="ro-chk"><i class="ph-bold ph-check"></i></div>
@@ -269,13 +167,62 @@ body{
         <i class="ph-bold ph-arrow-right arr" id="bi" aria-hidden="true"></i>
       </button>
     </form>
-
   </div>
   <div class="foot">Secured · Indian Pharmaceuticals IP © 2026</div>
 </div>
 
-<script data-cfasync="false" src="/cdn-cgi/scripts/5c5dd728/cloudflare-static/email-decode.min.js"></script><script>
-function togglePw(){
-  const i=document.getElementById('pw'),e=document.getElementById('ei');
-  i.type=i.type==='password'?'text':'password';
-  e.className=i.type==='text'?'
+<script>
+const DOMAIN = '@pharmaip.com';
+
+/* ── Email domain suggestion ────────────────────────────────── */
+function onEmailInput(el) {
+  const v   = el.value.trim();
+  const box = document.getElementById('suggestBox');
+  // only suggest when user has typed something before @
+  if (!v || v.includes('@')) { box.classList.remove('show'); return; }
+  const full = v + DOMAIN;
+  box.innerHTML = `<div class="suggest-opt" role="option"
+    onmousedown="pickSuggest(event,'${full.replace(/'/g,"\\'")}')">
+    ${v}<span>${DOMAIN}</span>
+  </div>`;
+  box.classList.add('show');
+}
+
+function pickSuggest(e, val) {
+  e.preventDefault();
+  document.getElementById('email').value = val;
+  document.getElementById('suggestBox').classList.remove('show');
+}
+
+function hideSuggest() {
+  setTimeout(() => document.getElementById('suggestBox').classList.remove('show'), 200);
+}
+
+function emailKey(e) {
+  const box = document.getElementById('suggestBox');
+  if (!box.classList.contains('show')) return;
+  if (e.key === 'Tab' || e.key === 'Enter') {
+    const opt = box.querySelector('.suggest-opt');
+    if (opt) { e.preventDefault(); opt.dispatchEvent(new MouseEvent('mousedown')); }
+  }
+  if (e.key === 'Escape') box.classList.remove('show');
+}
+
+/* ── Password toggle ────────────────────────────────────────── */
+function togglePw() {
+  const i = document.getElementById('pw');
+  const e = document.getElementById('ei');
+  i.type = i.type === 'password' ? 'text' : 'password';
+  e.className = i.type === 'text' ? 'ph ph-eye-slash' : 'ph ph-eye';
+}
+
+/* ── Submit loading state ───────────────────────────────────── */
+document.getElementById('lf').addEventListener('submit', function() {
+  const b = document.getElementById('lb');
+  b.disabled = true;
+  document.getElementById('bt').textContent = 'SIGNING IN…';
+  document.getElementById('bi').className = 'ph-bold ph-circle-notch arr';
+});
+</script>
+</body>
+</html>
