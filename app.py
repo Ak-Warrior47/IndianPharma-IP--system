@@ -22,17 +22,19 @@ app = Flask(__name__)
 #  2. RENDER INFRASTRUCTURE
 # ══════════════════════════════════════════════════
 app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_port=1, x_prefix=1)
+
 IS_PRODUCTION = os.environ.get("RENDER") or os.environ.get("DATABASE_URL")
 
+# Warn loudly if no SECRET_KEY is set in production — sessions will be insecure
 if IS_PRODUCTION and not os.environ.get("SECRET_KEY"):
-    logger.warning("SECRET_KEY env var is not set! Using insecure default.")
+    logger.warning("⚠️  SECRET_KEY env var is not set! Using insecure default. Set it in Render environment variables.")
 
 app.config.update(
     SECRET_KEY=os.environ.get("SECRET_KEY", "pharma_secure_key_2024_local_only"),
-    SESSION_COOKIE_SECURE=bool(IS_PRODUCTION),
+    SESSION_COOKIE_SECURE=bool(IS_PRODUCTION),   # True on Render, False locally
     SESSION_COOKIE_HTTPONLY=True,
     SESSION_COOKIE_SAMESITE='Lax',
-    SESSION_COOKIE_NAME='pharma_session',
+    SESSION_COOKIE_NAME='pharma_session',        # Explicit name avoids stale cookie conflicts
     PERMANENT_SESSION_LIFETIME=timedelta(days=7),
     SESSION_REFRESH_EACH_REQUEST=True,
     PREFERRED_URL_SCHEME='https' if IS_PRODUCTION else 'http',
@@ -40,16 +42,15 @@ app.config.update(
     SQLALCHEMY_ENGINE_OPTIONS={"pool_pre_ping": True, "pool_recycle": 300}
 )
 
+# Database: Postgres on Render, SQLite locally
 db_url = os.environ.get("DATABASE_URL", "sqlite:///pharma_final.db")
 if db_url.startswith("postgres://"):
     db_url = db_url.replace("postgres://", "postgresql://", 1)
 app.config["SQLALCHEMY_DATABASE_URI"] = db_url
 
 db = SQLAlchemy(app)
-_cors_origins = os.environ.get("CORS_ORIGIN", "*")
+_cors_origins = os.environ.get("CORS_ORIGIN", "*") if not IS_PRODUCTION else os.environ.get("CORS_ORIGIN", "*")
 socketio = SocketIO(app, cors_allowed_origins=_cors_origins, async_mode="eventlet")
-
-PHARMA_EMAIL_DOMAIN = "@pharmaip.com"
 
 # ══════════════════════════════════════════════════
 #  3. MODELS
@@ -60,7 +61,7 @@ class Employee(db.Model):
     name          = db.Column(db.String(100), nullable=False)
     email         = db.Column(db.String(100), unique=True, nullable=False, index=True)
     password_hash = db.Column(db.String(255), nullable=False)
-    staff_type    = db.Column(db.String(20), default="picker")
+    staff_type    = db.Column(db.String(20), default="picker")   # picker | checker
     role          = db.Column(db.String(100), default="Operations Specialist")
     is_admin      = db.Column(db.Boolean, default=False)
     entries       = db.relationship("KPIEntry", backref="owner", lazy="select",
@@ -71,72 +72,55 @@ class Employee(db.Model):
 
 
 class KPIEntry(db.Model):
-    __tablename__  = "kpi_entries"
-    id             = db.Column(db.Integer, primary_key=True)
-    emp_id         = db.Column(db.Integer, db.ForeignKey("employees.id", ondelete="CASCADE"), nullable=False)
+    __tablename__     = "kpi_entries"
+    id                = db.Column(db.Integer, primary_key=True)
+    emp_id            = db.Column(db.Integer, db.ForeignKey("employees.id", ondelete="CASCADE"), nullable=False)
+    # ── New parameters (in order) ──
+    sales_bills_open  = db.Column(db.Integer, default=0)   # Sales Bill Packed (Urgent Bill)
+    picked            = db.Column(db.Integer, default=0)   # Item Picked
+    missed            = db.Column(db.Integer, default=0)   # Item Missed
+    cs_sales_open     = db.Column(db.Integer, default=0)   # CS Sales Open
+    packing_done      = db.Column(db.Integer, default=0)   # Packing Done
+    rack_organized    = db.Column(db.Integer, default=0)   # Rack Organized (0/1)
+    table_clean       = db.Column(db.Integer, default=0)   # Table Clean (0/1)
+    total_time        = db.Column(db.Float,   default=0.0) # Total Time hours (replaces sweep)
+    # ── Checker fields ──
+    checked           = db.Column(db.Integer, default=0)
+    errors_found      = db.Column(db.Integer, default=0)
+    check_time        = db.Column(db.Float,   default=0.0)
+    # ── Legacy columns kept for backward-compat with old rows ──
+    bills             = db.Column(db.Integer, default=0)
+    boxes             = db.Column(db.Integer, default=0)
+    sweep             = db.Column(db.Float,   default=0.0)
+    entry_date        = db.Column(db.Date,    nullable=False, index=True)
+    report_sent       = db.Column(db.Boolean, default=False)
+    __table_args__    = (db.UniqueConstraint("emp_id", "entry_date", name="_emp_date_uc"),)
 
-    # ── NEW primary picker fields (in submit order) ──────────────────
-    sales_bill     = db.Column(db.Integer, default=0)   # Sales Bill Packed (Urgent Bill)
-    picked         = db.Column(db.Integer, default=0)   # Item Picked
-    missed         = db.Column(db.Integer, default=0)   # Item Missed
-    cs_sales_open  = db.Column(db.Integer, default=0)   # CS Sales Open
-    packing_done   = db.Column(db.Integer, default=0)   # Packing Done
-    rack_organized = db.Column(db.Integer, default=0)   # Rack Organized
-    table_clean    = db.Column(db.Integer, default=0)   # Table Clean
-    total_time     = db.Column(db.Float,   default=0.0) # Total Time (hours) — replaces sweep
-
-    # ── Checker fields ───────────────────────────────────────────────
-    checked        = db.Column(db.Integer, default=0)
-    errors_found   = db.Column(db.Integer, default=0)
-    check_time     = db.Column(db.Float,   default=0.0)
-
-    # ── Legacy columns (backward compat — read-only) ─────────────────
-    bills          = db.Column(db.Integer, default=0)
-    boxes          = db.Column(db.Integer, default=0)
-    sweep          = db.Column(db.Float,   default=0.0)
-
-    entry_date     = db.Column(db.Date,    nullable=False, index=True)
-    report_sent    = db.Column(db.Boolean, default=False)
-    __table_args__ = (db.UniqueConstraint("emp_id", "entry_date", name="_emp_date_uc"),)
-
-    # ── Helpers: fallback to legacy fields if new ones are 0 ─────────
-    @property
-    def _total_time_hrs(self):
-        t = float(self.total_time or 0)
-        return t if t > 0 else float(self.sweep or 0)
-
-    @property
-    def _sales_bill_effective(self):
-        s = int(self.sales_bill or 0)
-        return s if s > 0 else int(self.bills or 0)
-
-    # ── Computed properties ──────────────────────────────────────────
     @property
     def accuracy(self):
-        t = int(self.picked or 0) + int(self.missed or 0)
-        return round(int(self.picked or 0) / t * 100, 1) if t > 0 else 0.0
+        t = self.picked + self.missed
+        return round(self.picked / t * 100, 1) if t > 0 else 0.0
+
+    @property
+    def effective_time(self):
+        return (self.total_time or 0) if (self.total_time or 0) > 0 else (self.sweep or 0)
+
+    @property
+    def effective_cs(self):
+        return (self.cs_sales_open or 0) if (self.cs_sales_open or 0) > 0 else (self.boxes or 0)
+
+    @property
+    def effective_bills(self):
+        return (self.sales_bills_open or 0) if (self.sales_bills_open or 0) > 0 else (self.bills or 0)
 
     @property
     def pick_speed(self):
-        hrs = self._total_time_hrs if self._total_time_hrs > 0 else 1
-        return round((int(self.picked or 0) + int(self.missed or 0)) / hrs, 1)
+        hrs = self.effective_time if self.effective_time > 0 else 1
+        return round((self.picked + self.missed) / hrs, 1)
 
     @property
     def check_rate(self):
-        ck = int(self.checked or 0)
-        return round(int(self.errors_found or 0) / ck * 100, 1) if ck > 0 else 0.0
-
-    @property
-    def packing_efficiency(self):
-        sb = self._sales_bill_effective
-        pd = int(self.packing_done or 0)
-        return round(pd / sb * 100, 1) if sb > 0 else 0.0
-
-    @property
-    def cs_fulfilment_rate(self):
-        cs = int(self.cs_sales_open or 0)
-        pd = int(self.packing_done or 0)
-        return round(min(pd / cs * 100, 100), 1) if cs > 0 else 0.0
+        return round(self.errors_found / self.checked * 100, 1) if self.checked > 0 else 0.0
 
 
 # ══════════════════════════════════════════════════
@@ -145,8 +129,8 @@ class KPIEntry(db.Model):
 def login_required(f):
     @wraps(f)
     def decorated(*a, **kw):
-        if not session.get("user_id"):
-            session.clear()
+        if not session.get("user_id"):   # .get() safely handles missing OR None
+            session.clear()              # Wipe any corrupt partial session
             flash("Please sign in.", "warning")
             return redirect(url_for("login"))
         return f(*a, **kw)
@@ -161,9 +145,8 @@ def admin_required(f):
         return f(*a, **kw)
     return decorated
 
-
 # ══════════════════════════════════════════════════
-#  5. ANALYTICS ENGINE
+#  5. ANALYTICS ENGINE (Full File 2 version)
 # ══════════════════════════════════════════════════
 def safe_div(a, b, default=0.0):
     try:
@@ -173,129 +156,108 @@ def safe_div(a, b, default=0.0):
 
 
 def build_analytics(entries, staff_type="picker"):
-    """
-    FORMULA REFERENCE
-    =================
-    PICKER KPIs
-      Pick Accuracy    = Picked / (Picked + Missed) * 100
-      Pick Speed       = (Picked + Missed) / Total Time (hrs)
-      Packing Eff.     = Packing Done / Sales Bill Packed * 100
-      CS Fulfilment    = min(Packing Done / CS Sales Open * 100, 100)
-      Rack KPI         = avg(Rack Organized per day), normalized to [0,100]
-      Table KPI        = avg(Table Clean per day), normalized to [0,100]
-
-    PICKER EFFICIENCY SCORE (max 100)
-      = (Pick Acc/100)*50
-      + min(Pick Speed/200, 1)*30
-      + (Packing Eff/100)*12
-      + (CS Fulfilment/100)*8
-
-    PICKER GRADE
-      ELITE         : Pick Acc>=98% AND Packing Eff>=95% AND CS Fulfilment>=90%
-      PROFICIENT    : Pick Acc>=95% AND Packing Eff>=85%
-      SATISFACTORY  : Pick Acc>=88%
-      RE-TRAINING   : Pick Acc<88%
-
-    PICKER POTENTIAL
-      Potential Items = 200 * Total Time (hrs)
-      Gap Items       = Potential Items - Actual Items
-
-    CHECKER KPIs
-      Clean Check Rate = (Checked - Errors Found) / Checked * 100
-      Error Rate       = Errors Found / Checked * 100
-      Check Speed      = Checked / Check Time (hrs)
-
-    CHECKER EFFICIENCY SCORE (max 100)
-      = (Clean Rate/100)*70 + min(Check Speed/150, 1)*30
-
-    CHECKER POTENTIAL
-      Potential Items = 150 * Check Time (hrs)
-      Gap Items       = Potential Items - Checked
-
-    SHARED
-      Consistency = max(0, 100 - std_dev(daily_accuracy)*2)
-      Trend       = compare avg of 2 recent days vs 2 oldest days
-    """
     try:
         if not entries:
             return None
 
-        # ── Raw aggregates ─────────────────────────────────────────────
-        tp   = sum(int(e.picked or 0)              for e in entries)
-        tm   = sum(int(e.missed or 0)              for e in entries)
+        tp   = sum(int(e.picked or 0)                      for e in entries)
+        tm   = sum(int(e.missed or 0)                      for e in entries)
         ti   = tp + tm
-        tsb  = sum(e._sales_bill_effective         for e in entries)
-        tpd  = sum(int(e.packing_done or 0)        for e in entries)
-        tcs  = sum(int(e.cs_sales_open or 0)       for e in entries)
-        tro  = sum(int(e.rack_organized or 0)      for e in entries)
-        ttc  = sum(int(e.table_clean or 0)         for e in entries)
-        ttt  = round(sum(e._total_time_hrs         for e in entries), 3)
-        tck  = sum(int(e.checked or 0)             for e in entries)
-        ter  = sum(int(e.errors_found or 0)        for e in entries)
-        tct  = round(sum(float(e.check_time or 0)  for e in entries), 3)
-        n    = len(entries)
+        # Sales Bills Open (new) with legacy bills fallback
+        tsb  = sum(int(e.effective_bills)                  for e in entries)
+        # CS Sales Open (new) with legacy boxes fallback
+        tcs  = sum(int(e.effective_cs)                     for e in entries)
+        # Packing Done
+        tpd  = sum(int(e.packing_done or 0)               for e in entries)
+        # Rack Organized & Table Clean (daily compliance: count of days done)
+        tro  = sum(int(e.rack_organized or 0)              for e in entries)
+        ttc  = sum(int(e.table_clean or 0)                 for e in entries)
+        # Total Time (new) with legacy sweep fallback
+        ts   = round(sum(float(e.effective_time)           for e in entries), 3)
+        # Checker fields
+        tck  = sum(int(e.checked or 0)                     for e in entries)
+        ter  = sum(int(e.errors_found or 0)                for e in entries)
+        tct  = round(sum(float(e.check_time or 0)          for e in entries), 3)
 
-        # ── Core KPIs ─────────────────────────────────────────────────
-        pick_acc      = round(safe_div(tp, ti) * 100, 1)
-        pick_speed    = round(safe_div(ti, ttt), 1)
-        packing_eff   = round(safe_div(tpd, tsb) * 100, 1)
-        cs_fulfilment = round(min(safe_div(tpd, tcs) * 100, 100), 1)
-        # rack/table: treat as per-day averages, cap at 100 for score
-        rack_kpi      = round(min(safe_div(tro, n), 100), 1)
-        table_kpi     = round(min(safe_div(ttc, n), 100), 1)
-        correct_ck    = max(0, tck - ter)
-        check_acc     = round(safe_div(correct_ck, tck) * 100, 1)
-        error_rate    = round(safe_div(ter, tck) * 100, 1)
-        ck_speed      = round(safe_div(tck, tct), 1)
+        days = len(entries)
+        # Workspace compliance rate (rack + table cleanliness)
+        workspace_score = round(safe_div(tro + ttc, days * 2) * 100, 1) if days > 0 else 0.0
 
-        # ── Efficiency scores ──────────────────────────────────────────
+        pick_acc   = round(safe_div(tp, ti) * 100, 1)
+        pick_speed = round(safe_div(ti, ts), 1)
+
+        correct_checks = max(0, tck - ter)
+        check_acc  = round(safe_div(correct_checks, tck) * 100, 1)
+        error_rate = round(safe_div(ter, tck) * 100, 1)
+        ck_speed   = round(safe_div(tck, tct), 1)
+
+        # Packing efficiency: packing_done / (picked + missed) — how much was packed vs picked
+        pack_eff   = round(safe_div(tpd, ti) * 100, 1) if ti > 0 else 0.0
+
+        # ── EFFICIENCY SCORE FORMULA ──────────────────────────────────────────
+        # PICKER:
+        #   Base = (pick_acc/100)*55 + min(pick_speed/200,1)*30
+        #   Bonus = workspace_score/100*10 + min(pack_eff/100,1)*5
+        #   Total = min(100, Base + Bonus)
+        #   Benchmark: 98% acc + 200/hr speed + 100% workspace + 100% pack = 100
+        #
+        # CHECKER:
+        #   Base = (check_acc/100)*65 + min(ck_speed/150,1)*25
+        #   Bonus = workspace_score/100*10
+        #   Total = min(100, Base + Bonus)
+        #   Benchmark: 97% clean rate + 150/hr speed + 100% workspace = 100
+        # ─────────────────────────────────────────────────────────────────────
         if staff_type == "checker":
-            eff_score       = round(min(100,
-                (check_acc / 100 * 70) + (min(safe_div(ck_speed, 150), 1) * 30)), 1)
+            base_eff        = (check_acc / 100 * 65) + (min(safe_div(ck_speed, 150), 1) * 25)
+            bonus_eff       = (workspace_score / 100 * 10)
+            eff_score       = round(min(100, base_eff + bonus_eff), 1)
             potential_items = int(150.0 * tct) if tct > 0 else tck
             potential_eff   = round(min(100, eff_score + max(0, (100 - check_acc) * 0.5)), 1)
             gap_items       = max(0, potential_items - tck)
         else:
-            eff_score       = round(min(100,
-                (pick_acc / 100 * 50) +
-                (min(safe_div(pick_speed, 200), 1) * 30) +
-                (packing_eff / 100 * 12) +
-                (cs_fulfilment / 100 * 8)), 1)
-            potential_items = int(200.0 * ttt)
-            potential_eff   = round(min(100,
-                eff_score +
-                max(0, (98 - pick_acc) * 0.3) +
-                max(0, (100 - packing_eff) * 0.1)), 1)
+            base_eff        = (pick_acc / 100 * 55) + (min(safe_div(pick_speed, 200), 1) * 30)
+            bonus_eff       = (workspace_score / 100 * 10) + (min(safe_div(pack_eff, 100), 1) * 5)
+            eff_score       = round(min(100, base_eff + bonus_eff), 1)
+            potential_items = int(200.0 * ts)
+            potential_eff   = round(min(100, eff_score + max(0, (98 - pick_acc) * 0.5 + (200 - pick_speed) * 0.1)), 1)
             gap_items       = max(0, potential_items - ti)
 
-        # ── Grade ──────────────────────────────────────────────────────
+        # ── 4-TIER GRADING ────────────────────────────────────────────────────
+        # PICKER: ELITE = 98%+ acc AND workspace_score>=80
+        #         PROFICIENT = 95%+ acc
+        #         SATISFACTORY = 88%+ acc
+        #         RE-TRAINING = <88% acc
+        # CHECKER: ELITE = 97%+ clean rate AND workspace_score>=80
+        #          PROFICIENT = 94%+ clean rate
+        #          SATISFACTORY = 87%+ clean rate
+        #          RE-TRAINING = <87% clean rate
+        # ─────────────────────────────────────────────────────────────────────
         if staff_type == "picker":
-            if pick_acc >= 98 and packing_eff >= 95 and cs_fulfilment >= 90:
-                grade, fb = "ELITE",        "Exceptional pick accuracy, packing & CS fulfilment. Gold Standard."
-            elif pick_acc >= 95 and packing_eff >= 85:
-                grade, fb = "PROFICIENT",   "Meets standard pharma pick & packing accuracy requirements."
+            if pick_acc >= 98 and workspace_score >= 80:
+                grade, fb = "ELITE",        "Exceptional pick accuracy & workspace standards. Gold Standard."
+            elif pick_acc >= 95:
+                grade, fb = "PROFICIENT",   "Meets standard pharma pick accuracy requirements."
             elif pick_acc >= 88:
-                grade, fb = "SATISFACTORY", "Acceptable. Focus on reducing missed picks & improving packing."
+                grade, fb = "SATISFACTORY", "Acceptable. Focus on reducing missed picks & workspace compliance."
             else:
-                grade, fb = "RE-TRAINING",  "Pick accuracy below safety threshold. Immediate intervention required."
+                grade, fb = "RE-TRAINING",  "Pick accuracy below safety threshold. Intervention required."
         else:
-            if check_acc >= 97 and tck >= 10:
-                grade, fb = "ELITE",        "Exceptional verification accuracy. Zero-error standard met."
+            if check_acc >= 97 and workspace_score >= 80:
+                grade, fb = "ELITE",        "Exceptional verification accuracy & workspace standards. Zero-error standard met."
             elif check_acc >= 94:
                 grade, fb = "PROFICIENT",   "Good check accuracy. Minor improvements remain."
             elif check_acc >= 87:
-                grade, fb = "SATISFACTORY", "Acceptable check rate. Increase error detection focus."
+                grade, fb = "SATISFACTORY", "Acceptable check rate. Increase error detection."
             else:
-                grade, fb = "RE-TRAINING",  "Verification accuracy below threshold. Re-training required."
+                grade, fb = "RE-TRAINING",  "Verification accuracy below threshold. Re-training needed."
 
-        # ── Consistency ────────────────────────────────────────────────
+        # ── CONSISTENCY (variance-based) ──
         if staff_type == "checker":
-            daily_accs = [round(safe_div(max(0, int(e.checked or 0) - int(e.errors_found or 0)),
-                                         int(e.checked or 0)) * 100, 1)
-                          for e in entries if int(e.checked or 0) > 0]
+            daily_accs = [round(safe_div(max(0, (e.checked or 0) - (e.errors_found or 0)),
+                                         (e.checked or 0)) * 100, 1)
+                          for e in entries if (e.checked or 0) > 0]
         else:
-            daily_accs = [e.accuracy for e in entries
-                          if (int(e.picked or 0) + int(e.missed or 0)) > 0]
+            daily_accs = [e.accuracy for e in entries if (e.picked + e.missed) > 0]
 
         if len(daily_accs) > 1:
             mean_a      = sum(daily_accs) / len(daily_accs)
@@ -304,13 +266,12 @@ def build_analytics(entries, staff_type="picker"):
         else:
             consistency = 100.0 if daily_accs else 0.0
 
-        # ── Trend ──────────────────────────────────────────────────────
+        # ── TREND ──
         trend = "stable"
         if len(entries) >= 4:
             if staff_type == "checker":
-                def _acc(e):
-                    return round(safe_div(max(0, int(e.checked or 0) - int(e.errors_found or 0)),
-                                          int(e.checked or 0)) * 100, 1)
+                def _acc(e): return round(safe_div(max(0, (e.checked or 0) - (e.errors_found or 0)),
+                                                   (e.checked or 0)) * 100, 1)
             else:
                 def _acc(e): return e.accuracy
             recent_avg = sum(_acc(e) for e in entries[:2]) / 2
@@ -319,17 +280,15 @@ def build_analytics(entries, staff_type="picker"):
             elif recent_avg < older_avg - 2: trend = "declining"
 
         return dict(
-            tp=tp, tm=tm, ti=ti,
-            tsb=tsb, tpd=tpd, tcs=tcs, tro=tro, ttc=ttc, ttt=ttt,
-            tck=tck, ter=ter, tct=tct,
+            tp=tp, tm=tm, ti=ti, tsb=tsb, tcs=tcs, tpd=tpd,
+            tro=tro, ttc=ttc, ts=ts, tck=tck, ter=ter, tct=tct,
             pick_acc=pick_acc, pick_speed=pick_speed,
-            packing_eff=packing_eff, cs_fulfilment=cs_fulfilment,
-            rack_kpi=rack_kpi, table_kpi=table_kpi,
             check_acc=check_acc, error_rate=error_rate, ck_speed=ck_speed,
+            pack_eff=pack_eff, workspace_score=workspace_score,
             eff_score=eff_score, grade=grade, feedback=fb,
             potential_items=potential_items, potential_eff=potential_eff,
             gap_items=gap_items, consistency=consistency, trend=trend,
-            days=n
+            days=days
         )
     except Exception as e:
         logger.error(f"build_analytics error: {e}")
@@ -338,8 +297,12 @@ def build_analytics(entries, staff_type="picker"):
 
 def get_period_entries(emp_id, period):
     today  = date.today()
-    starts = {"day": today, "week": today - timedelta(days=6), "month": today - timedelta(days=29)}
-    start  = starts.get(period, today)
+    starts = {
+        "day":   today,
+        "week":  today - timedelta(days=6),
+        "month": today - timedelta(days=29)
+    }
+    start = starts.get(period, today)
     try:
         return KPIEntry.query.filter(
             KPIEntry.emp_id     == emp_id,
@@ -351,38 +314,6 @@ def get_period_entries(emp_id, period):
         return []
 
 
-def _entry_to_lb_row(emp, stats):
-    """Convert employee + stats → leaderboard dict (shared by all callers)."""
-    if not stats:
-        return None
-    return {
-        "id":            emp.id,
-        "name":          emp.name,
-        "email":         emp.email,
-        "staff_type":    emp.staff_type,
-        "role":          emp.role,
-        "score":         stats["eff_score"],
-        "grade":         stats["grade"],
-        "pick_acc":      stats["pick_acc"],
-        "pick_speed":    stats["pick_speed"],
-        "packing_eff":   stats["packing_eff"],
-        "cs_fulfilment": stats["cs_fulfilment"],
-        "check_acc":     stats["check_acc"],
-        "error_rate":    stats["error_rate"],
-        "ck_speed":      stats["ck_speed"],
-        "consistency":   stats["consistency"],
-        "trend":         stats["trend"],
-        "days":          stats["days"],
-        "tp":            stats["tp"],
-        "tm":            stats["tm"],
-        "tsb":           stats["tsb"],
-        "tpd":           stats["tpd"],
-        "tcs":           stats["tcs"],
-        "potential_eff": stats["potential_eff"],
-        "gap_items":     stats["gap_items"],
-    }
-
-
 def build_leaderboard(staff_type=None):
     try:
         query = Employee.query.filter_by(is_admin=False)
@@ -392,6 +323,7 @@ def build_leaderboard(staff_type=None):
         if not employees:
             return []
 
+        # Load ALL entries in one query instead of N queries (N+1 fix)
         emp_ids = [emp.id for emp in employees]
         all_entries = KPIEntry.query.filter(KPIEntry.emp_id.in_(emp_ids)).all()
         entries_by_emp = {}
@@ -402,9 +334,31 @@ def build_leaderboard(staff_type=None):
         for emp in employees:
             entries = entries_by_emp.get(emp.id, [])
             stats   = build_analytics(entries, emp.staff_type)
-            row     = _entry_to_lb_row(emp, stats)
-            if row:
-                lb.append(row)
+            if not stats:
+                continue
+            lb.append({
+                "id":              emp.id,
+                "name":            emp.name,
+                "email":           emp.email,
+                "staff_type":      emp.staff_type,
+                "role":            emp.role,
+                "score":           stats["eff_score"],
+                "grade":           stats["grade"],
+                "pick_acc":        stats["pick_acc"],
+                "pick_speed":      stats["pick_speed"],
+                "check_acc":       stats["check_acc"],
+                "error_rate":      stats["error_rate"],
+                "ck_speed":        stats["ck_speed"],
+                "consistency":     stats["consistency"],
+                "trend":           stats["trend"],
+                "days":            stats["days"],
+                "tp":              stats["tp"],
+                "tm":              stats["tm"],
+                "pack_eff":        stats["pack_eff"],
+                "workspace_score": stats["workspace_score"],
+                "potential_eff":   stats["potential_eff"],
+                "gap_items":       stats["gap_items"],
+            })
         lb.sort(key=lambda x: x["score"], reverse=True)
         return lb
     except Exception as e:
@@ -412,31 +366,11 @@ def build_leaderboard(staff_type=None):
         return []
 
 
-def build_heatmap_data(entries):
-    """Build ISO-date → efficiency score dict for heat map rendering."""
-    hmap = {}
-    for e in entries:
-        ti = int(e.picked or 0) + int(e.missed or 0)
-        if ti == 0 and int(e.checked or 0) == 0:
-            continue
-        ttt = e._total_time_hrs
-        acc   = safe_div(int(e.picked or 0), ti) * 100 if ti > 0 else 0
-        speed = safe_div(ti, ttt if ttt > 0 else 1)
-        pe    = e.packing_efficiency
-        cs    = e.cs_fulfilment_rate
-        eff   = round(min(100,
-            (acc / 100 * 50) +
-            (min(safe_div(speed, 200), 1) * 30) +
-            (pe / 100 * 12) +
-            (cs / 100 * 8)), 1)
-        hmap[str(e.entry_date)] = eff
-    return hmap
-
-
 # ══════════════════════════════════════════════════
-#  6. SCHEDULER
+#  6. SCHEDULER (from File 2)
 # ══════════════════════════════════════════════════
 def start_scheduler():
+    # Guard: only start once — gunicorn spawns multiple workers, avoid duplicate schedulers
     if os.environ.get("SCHEDULER_STARTED"):
         return
     os.environ["SCHEDULER_STARTED"] = "1"
@@ -464,7 +398,7 @@ def start_scheduler():
 
 
 # ══════════════════════════════════════════════════
-#  7. DATABASE INIT + SEED DATA
+#  7. DATABASE INIT + SEED DATA (from File 2)
 # ══════════════════════════════════════════════════
 def init_db():
     with app.app_context():
@@ -486,48 +420,34 @@ def init_db():
 
             make("System Admin", "admin@pharmaip.com", "admin123", admin=True)
 
-            # Seed picker: days_ago, sales_bill, picked, missed, packing_done,
-            #              cs_sales_open, rack_org, tbl_clean, total_time_hrs
             p1 = make("Rahul Sharma", "rahul@pharmaip.com", "test1234", stype="picker")
             if p1 and not KPIEntry.query.filter_by(emp_id=p1.id).first():
-                for d, sb, pk, ms, pd_, cs, ro, tc, tt in [
-                    (6, 40, 195, 5, 38, 12, 8, 7, 1.5),
-                    (5, 42, 210, 2, 40, 15, 9, 8, 1.4),
-                    (4, 38, 188, 8, 35, 10, 7, 6, 1.6),
-                    (3, 45, 220, 1, 43, 18, 9, 9, 1.3),
-                    (2, 41, 200, 4, 39, 13, 8, 7, 1.5),
-                    (1, 44, 215, 3, 42, 16, 8, 8, 1.4),
-                    (0, 46, 225, 2, 44, 17, 9, 9, 1.3),
-                ]:
+                # sales_bills_open, picked, missed, cs_sales_open, packing_done, rack, table, total_time_hrs
+                for d, sb, pk, ms, cs, pd, ro, tc, tt in [
+                    (6,40,195,5,10,180,1,1,1.5),(5,42,210,2,12,200,1,1,1.4),
+                    (4,38,188,8,9,170,0,1,1.6), (3,45,220,1,14,210,1,1,1.3),
+                    (2,41,200,4,11,185,1,0,1.5),(1,44,215,3,13,205,1,1,1.4),
+                    (0,46,225,2,15,215,1,1,1.3)]:
                     db.session.add(KPIEntry(
-                        emp_id=p1.id, sales_bill=sb, picked=pk, missed=ms,
-                        packing_done=pd_, cs_sales_open=cs,
-                        rack_organized=ro, table_clean=tc,
-                        total_time=tt,
-                        entry_date=date.today() - timedelta(days=d)
-                    ))
+                        emp_id=p1.id, sales_bills_open=sb, picked=pk, missed=ms,
+                        cs_sales_open=cs, packing_done=pd, rack_organized=ro,
+                        table_clean=tc, total_time=tt,
+                        entry_date=date.today() - timedelta(days=d)))
 
-            # Seed checker: adds checked/errors_found/check_time on top
             c1 = make("Priya Patel", "priya@pharmaip.com", "test1234", stype="checker")
             if c1 and not KPIEntry.query.filter_by(emp_id=c1.id).first():
-                for d, sb, pk, ms, pd_, cs, ro, tc, tt, ck, er, cm in [
-                    (6, 30, 160, 18, 28, 8, 6, 5, 2.0, 178, 14, 90),
-                    (5, 28, 172, 12, 26, 7, 7, 6, 1.8, 184, 10, 85),
-                    (4, 33, 190,  6, 31, 9, 8, 7, 1.6, 196,  6, 80),
-                    (3, 29, 168, 14, 27, 6, 6, 5, 1.9, 182, 12, 88),
-                    (2, 35, 195,  9, 33, 10, 8, 7, 1.5, 204,  8, 82),
-                    (1, 31, 180, 10, 29, 8,  7, 6, 1.7, 190,  9, 86),
-                    (0, 36, 200,  7, 34, 11, 8, 7, 1.4, 207,  7, 78),
-                ]:
+                # sales_bills_open, picked, missed, cs_sales_open, packing_done, ro, tc, total_time, checked, errors, check_mins
+                for d, sb, pk, ms, cs, pd, ro, tc, tt, ck, er, cm in [
+                    (6,30,160,18,8,150,1,1,2.0,178,14,90),(5,28,172,12,7,160,1,1,1.8,184,10,85),
+                    (4,33,190,6,10,175,1,0,1.6,196,6,80), (3,29,168,14,6,155,0,1,1.9,182,12,88),
+                    (2,35,195,9,11,180,1,1,1.5,204,8,82), (1,31,180,10,9,165,1,1,1.7,190,9,86),
+                    (0,36,200,7,12,185,1,1,1.4,207,7,78)]:
                     db.session.add(KPIEntry(
-                        emp_id=c1.id, sales_bill=sb, picked=pk, missed=ms,
-                        packing_done=pd_, cs_sales_open=cs,
-                        rack_organized=ro, table_clean=tc,
-                        total_time=tt,
-                        checked=ck, errors_found=er,
-                        check_time=round(cm / 60, 3),
-                        entry_date=date.today() - timedelta(days=d)
-                    ))
+                        emp_id=c1.id, sales_bills_open=sb, picked=pk, missed=ms,
+                        cs_sales_open=cs, packing_done=pd, rack_organized=ro,
+                        table_clean=tc, total_time=tt, checked=ck,
+                        errors_found=er, check_time=round(cm/60, 3),
+                        entry_date=date.today() - timedelta(days=d)))
 
             db.session.commit()
             logger.info("DB init complete.")
@@ -562,6 +482,7 @@ def health_check():
 
 @app.route("/")
 def index():
+    # Hard stop — never redirect to self
     uid = session.get("user_id")
     if not uid:
         return redirect(url_for("login"))
@@ -572,10 +493,14 @@ def index():
 
 @app.route("/login", methods=["GET", "POST"])
 def login():
+    # If already logged in go straight to destination — never loop back to /login
     if session.get("user_id"):
-        return redirect(url_for("admin_dashboard") if session.get("is_admin") else url_for("dashboard"))
+        if session.get("is_admin"):
+            return redirect(url_for("admin_dashboard"))
+        return redirect(url_for("dashboard"))
 
     if request.method == "POST":
+        # Basic brute-force guard: track failed attempts in session
         attempts = session.get("login_attempts", 0)
         if attempts >= 10:
             flash("Too many failed login attempts. Please wait and try again.", "danger")
@@ -587,25 +512,31 @@ def login():
             user        = Employee.query.filter_by(email=email).first()
 
             if not user or not user.check_password(password):
+                # Use constant-time comparison path to avoid timing attacks that reveal valid emails
                 if not user:
-                    check_password_hash("dummy", password)
+                    check_password_hash("dummy", password)  # consume same time even if user not found
                 session["login_attempts"] = session.get("login_attempts", 0) + 1
                 flash("Invalid Pharma ID or Password.", "danger")
                 return render_template("login.html")
 
+            # Allow staff to pick their role at login
             if not user.is_admin and role_choice in ("picker", "checker"):
                 user.staff_type = role_choice
                 db.session.commit()
 
+            # Clear OLD session first to wipe any stale/corrupt cookie and login attempt counter
             session.clear()
-            session.permanent  = True
+            session.permanent = True
             session["user_id"]    = user.id
             session["user_name"]  = user.name
             session["staff_type"] = user.staff_type
             session["is_admin"]   = bool(user.is_admin)
 
             logger.info(f"Login OK: {user.email} admin={user.is_admin}")
-            return redirect(url_for("admin_dashboard") if user.is_admin else url_for("dashboard"))
+
+            if user.is_admin:
+                return redirect(url_for("admin_dashboard"))
+            return redirect(url_for("dashboard"))
 
         except Exception as e:
             logger.error(f"Login error: {e}")
@@ -629,47 +560,42 @@ def dashboard():
             session.clear()
             flash("Session expired. Please sign in again.", "warning")
             return redirect(url_for("login"))
-        staff_type  = session.get("staff_type", "picker")
-        today       = date.today()
+        staff_type = session.get("staff_type", "picker")
+        today      = date.today()
         today_entry = KPIEntry.query.filter_by(emp_id=emp_id, entry_date=today).first()
 
         if request.method == "POST" and not today_entry:
             try:
-                def _i(k): return max(0, int(request.form.get(k, 0) or 0))
-                def _f(k): return max(0.0, float(request.form.get(k, 0) or 0))
-
-                sales_bill     = _i("sales_bill")
-                picked         = _i("picked")
-                missed         = _i("missed")
-                cs_sales_open  = _i("cs_sales_open")
-                packing_done   = _i("packing_done")
-                rack_organized = _i("rack_organized")
-                table_clean    = _i("table_clean")
-                total_time_mins = min(_f("total_time_mins"), 1440)
-                check_mins      = min(_f("check_mins"), 1440)
-                checked         = _i("checked")
-                errors_found    = _i("errors_found")
-
+                picked           = max(0, int(request.form.get("picked",           0) or 0))
+                missed           = max(0, int(request.form.get("missed",           0) or 0))
+                sales_bills_open = max(0, int(request.form.get("sales_bills_open", 0) or 0))
+                cs_sales_open    = max(0, int(request.form.get("cs_sales_open",    0) or 0))
+                packing_done     = max(0, int(request.form.get("packing_done",     0) or 0))
+                rack_organized   = 1 if request.form.get("rack_organized") == "1" else 0
+                table_clean      = 1 if request.form.get("table_clean") == "1" else 0
+                total_mins       = max(0, float(request.form.get("total_mins",     0) or 0))
+                check_mins       = max(0, float(request.form.get("check_mins",     0) or 0))
+                checked          = max(0, int(request.form.get("checked",          0) or 0))
+                errors_found     = max(0, int(request.form.get("errors_found",     0) or 0))
                 # Sanity caps
-                if errors_found > checked:
-                    errors_found = checked
-                if packing_done > sales_bill > 0:
-                    packing_done = sales_bill
+                if errors_found > checked:    errors_found = checked
+                total_mins = min(total_mins, 1440)
+                check_mins = min(check_mins, 1440)
 
                 ne = KPIEntry(
-                    emp_id         = emp_id,
-                    sales_bill     = sales_bill,
-                    picked         = picked,
-                    missed         = missed,
-                    cs_sales_open  = cs_sales_open,
-                    packing_done   = packing_done,
-                    rack_organized = rack_organized,
-                    table_clean    = table_clean,
-                    total_time     = round(total_time_mins / 60, 3),
-                    checked        = checked,
-                    errors_found   = errors_found,
-                    check_time     = round(check_mins / 60, 3),
-                    entry_date     = today
+                    emp_id           = emp_id,
+                    sales_bills_open = sales_bills_open,
+                    picked           = picked,
+                    missed           = missed,
+                    cs_sales_open    = cs_sales_open,
+                    packing_done     = packing_done,
+                    rack_organized   = rack_organized,
+                    table_clean      = table_clean,
+                    total_time       = round(total_mins / 60, 3),
+                    checked          = checked,
+                    errors_found     = errors_found,
+                    check_time       = round(check_mins / 60, 3),
+                    entry_date       = today
                 )
                 db.session.add(ne)
                 db.session.commit()
@@ -685,7 +611,7 @@ def dashboard():
                         })
                     except Exception:
                         pass
-                flash("Today's metrics recorded successfully. ✅", "success")
+                flash("Today's metrics recorded successfully.", "success")
             except Exception as e:
                 db.session.rollback()
                 logger.error(f"Dashboard POST: {e}")
@@ -698,41 +624,39 @@ def dashboard():
         w_stats = build_analytics(get_period_entries(emp_id, "week"),  staff_type)
         m_stats = build_analytics(get_period_entries(emp_id, "month"), staff_type)
         a_stats = build_analytics(all_entries, staff_type)
+
         lb      = build_leaderboard(staff_type)
         my_rank = next((i + 1 for i, x in enumerate(lb) if x["id"] == emp_id), "-")
-        heatmap = build_heatmap_data(
-            [e for e in all_entries if e.entry_date >= today - timedelta(days=29)]
-        )
 
         return render_template("dashboard.html",
             user_name=session.get("user_name", "User"), staff_type=staff_type,
             today=today, today_entry=today_entry,
             d_stats=d_stats, w_stats=w_stats, m_stats=m_stats, a_stats=a_stats,
-            leaderboard=lb, my_rank=my_rank, recent=all_entries[:14],
-            heatmap=heatmap)
+            leaderboard=lb, my_rank=my_rank, recent=all_entries[:14])
     except Exception as e:
         logger.error(f"Dashboard error: {e}")
         db.session.rollback()
+        # Do NOT redirect to login here — that causes an infinite redirect loop
+        # when the session is valid but a DB or render error occurs.
         flash("Error loading dashboard. Please refresh the page.", "danger")
         return render_template("dashboard.html",
             user_name=session.get("user_name", "User"),
             staff_type=session.get("staff_type", "picker"),
             today=date.today(), today_entry=None,
             d_stats=None, w_stats=None, m_stats=None, a_stats=None,
-            leaderboard=[], my_rank="-", recent=[], heatmap={}), 200
+            leaderboard=[], my_rank="-", recent=[]), 200
 
 
-# ══════════════════════════════════════════════════
-#  8a. ADMIN ROUTES
-# ══════════════════════════════════════════════════
 @app.route("/admin_dashboard")
 @login_required
 @admin_required
 def admin_dashboard():
     try:
-        employees  = Employee.query.filter_by(is_admin=False).all()
-        today      = date.today()
-        rows       = []
+        employees = Employee.query.filter_by(is_admin=False).all()
+        today     = date.today()
+        rows      = []
+
+        # Load all entries for all employees in ONE query (N+1 fix)
         emp_ids    = [emp.id for emp in employees]
         all_ents   = KPIEntry.query.filter(KPIEntry.emp_id.in_(emp_ids)).order_by(KPIEntry.entry_date.desc()).all()
         ents_by_id = {}
@@ -751,42 +675,43 @@ def admin_dashboard():
                     d_stats = build_analytics(d_ent, emp.staff_type),
                     w_stats = build_analytics(w_ent, emp.staff_type),
                     m_stats = build_analytics(m_ent, emp.staff_type),
-                    count   = len(ents),
-                    heatmap = build_heatmap_data(m_ent)
+                    count   = len(ents)
                 ))
             except Exception as ex:
                 logger.error(f"Admin row {emp.name}: {ex}")
 
+        # Build leaderboard from already-loaded rows — avoids redundant DB queries
         def _to_lb(r):
-            return _entry_to_lb_row(r["emp"], r["stats"])
-
+            s = r["stats"]
+            if not s:
+                return None
+            e = r["emp"]
+            return {"id":e.id,"name":e.name,"email":e.email,"staff_type":e.staff_type,
+                    "role":e.role,"score":s["eff_score"],"grade":s["grade"],
+                    "pick_acc":s["pick_acc"],"pick_speed":s["pick_speed"],
+                    "check_acc":s["check_acc"],"error_rate":s["error_rate"],
+                    "ck_speed":s["ck_speed"],"consistency":s["consistency"],
+                    "trend":s["trend"],"days":s["days"],"tp":s["tp"],"tm":s["tm"],
+                    "pack_eff":s["pack_eff"],"workspace_score":s["workspace_score"],
+                    "potential_eff":s["potential_eff"],"gap_items":s["gap_items"]}
         all_lb   = sorted([x for x in (_to_lb(r) for r in rows) if x],
                           key=lambda x: x["score"], reverse=True)
         pickers  = [r for r in all_lb if r["staff_type"] == "picker"]
         checkers = [r for r in all_lb if r["staff_type"] == "checker"]
-
-        # Build global heat map (average across all staff)
-        global_heatmap_raw = {}
-        for r in rows:
-            for ds, eff in r.get("heatmap", {}).items():
-                global_heatmap_raw.setdefault(ds, []).append(eff)
-        global_heatmap = {k: round(sum(v) / len(v), 1) for k, v in global_heatmap_raw.items()}
-
         return render_template("admin.html", rows=rows,
-                               pickers=pickers, checkers=checkers, all_lb=all_lb,
-                               global_heatmap=global_heatmap)
+                               pickers=pickers, checkers=checkers, all_lb=all_lb)
     except Exception as e:
         logger.error(f"Admin dashboard: {e}")
         db.session.rollback()
         flash("Error loading admin dashboard.", "danger")
-        return render_template("admin.html", rows=[], pickers=[], checkers=[],
-                               all_lb=[], global_heatmap={}), 200
+        return render_template("admin.html", rows=[], pickers=[], checkers=[], all_lb=[]), 200
 
 
 @app.route("/staff/<int:emp_id>")
 @login_required
 def staff_detail(emp_id):
     try:
+        # Security: non-admin users can only view their own profile
         if not session.get("is_admin") and session.get("user_id") != emp_id:
             flash("You can only view your own profile.", "warning")
             return redirect(url_for("dashboard"))
@@ -805,8 +730,7 @@ def staff_detail(emp_id):
             d_stats=build_analytics(d_ent,   emp.staff_type),
             w_stats=build_analytics(w_ent,   emp.staff_type),
             m_stats=build_analytics(m_ent,   emp.staff_type),
-            entries=entries[:20],
-            heatmap=build_heatmap_data(m_ent))
+            entries=entries[:20])
     except Exception as e:
         logger.error(f"Staff detail: {e}")
         flash("Could not load staff detail.", "danger")
@@ -834,7 +758,6 @@ def admin_staff_detail(emp_id):
             w_stats=build_analytics(w_ent,   emp.staff_type),
             m_stats=build_analytics(m_ent,   emp.staff_type),
             entries=entries[:20],
-            heatmap=build_heatmap_data(m_ent),
             is_admin_view=True)
     except Exception as e:
         logger.error(f"Admin staff detail: {e}")
@@ -846,30 +769,22 @@ def admin_staff_detail(emp_id):
 @login_required
 @admin_required
 def export_data():
+    """CSV export — quick management download."""
     try:
         entries = KPIEntry.query.join(Employee).add_columns(
-            Employee.name, Employee.email, Employee.staff_type
+            Employee.name, Employee.email
         ).order_by(KPIEntry.entry_date.desc()).all()
         def generate():
-            yield ('Employee_ID,Employee_Name,Staff_Type,Date,'
-                   'Sales_Bill_Packed,Item_Picked,Item_Missed,Pick_Accuracy%,'
-                   'CS_Sales_Open,Packing_Done,Packing_Eff%,'
-                   'Rack_Organized,Table_Clean,Total_Time_hrs,'
-                   'Checked,Errors_Found,Error_Rate%,Check_Time_hrs\n')
+            yield 'Employee_ID,Name,Date,Sales_Bills_Open,Picked,Missed,CS_Sales_Open,Packing_Done,Rack_Organized,Table_Clean,Total_Time_hrs,Accuracy,Pick_Speed\n'
             for row in entries:
                 e    = row[0]
                 name = row.name.replace(",", " ")
-                ti   = int(e.picked or 0) + int(e.missed or 0)
-                acc  = round(safe_div(int(e.picked or 0), ti) * 100, 1) if ti > 0 else 0
-                pe   = e.packing_efficiency
-                er   = e.check_rate
-                yield (f"{e.emp_id},{name},{row.staff_type},{e.entry_date},"
-                       f"{e._sales_bill_effective},{int(e.picked or 0)},{int(e.missed or 0)},{acc}%,"
-                       f"{int(e.cs_sales_open or 0)},{int(e.packing_done or 0)},{pe}%,"
-                       f"{int(e.rack_organized or 0)},{int(e.table_clean or 0)},{round(e._total_time_hrs,2)},"
-                       f"{int(e.checked or 0)},{int(e.errors_found or 0)},{er}%,{round(float(e.check_time or 0),2)}\n")
+                yield (f"{e.emp_id},{name},{e.entry_date},{e.effective_bills},"
+                       f"{e.picked},{e.missed},{e.effective_cs},{e.packing_done or 0},"
+                       f"{e.rack_organized or 0},{e.table_clean or 0},{e.effective_time},"
+                       f"{e.accuracy}%,{e.pick_speed}\n")
         return Response(generate(), mimetype='text/csv',
-                        headers={"Content-Disposition": "attachment; filename=pharma_kpi_full.csv"})
+                        headers={"Content-Disposition": "attachment; filename=pharma_kpi.csv"})
     except Exception as e:
         logger.error(f"Export error: {e}")
         flash("Could not generate export.", "danger")
@@ -950,14 +865,15 @@ def bulk_zip():
 
 
 # ══════════════════════════════════════════════════
-#  8b. ADMIN USER MANAGEMENT
+#  8b. ADMIN USER MANAGEMENT ROUTES
 # ══════════════════════════════════════════════════
 @app.route("/admin/add_user", methods=["POST"])
 @login_required
 @admin_required
 def admin_add_user():
     try:
-        name       = request.form.get("name", "").strip().title()   # auto Title Case
+        # Auto-capitalize: title-case the name
+        name       = " ".join(w.capitalize() for w in request.form.get("name", "").strip().split())
         email      = request.form.get("email", "").lower().strip()
         password   = request.form.get("password", "")
         staff_type = request.form.get("staff_type", "picker").strip()
@@ -971,8 +887,9 @@ def admin_add_user():
         if staff_type not in ("picker", "checker"):
             flash("Invalid staff type.", "danger")
             return redirect(url_for("admin_dashboard"))
-        if not email.endswith(PHARMA_EMAIL_DOMAIN):
-            flash(f"Email must end with {PHARMA_EMAIL_DOMAIN}.", "danger")
+        # Enforce @pharmaip.com domain
+        if not email.endswith("@pharmaip.com"):
+            flash("Email must end with @pharmaip.com.", "danger")
             return redirect(url_for("admin_dashboard"))
         if Employee.query.filter_by(email=email).first():
             flash(f"Email '{email}' is already registered.", "warning")
@@ -986,7 +903,7 @@ def admin_add_user():
         emp.set_password(password)
         db.session.add(emp)
         db.session.commit()
-        flash(f"'{name}' added successfully.", "success")
+        flash(f"✅ '{name}' added successfully. They can now log in.", "success")
         logger.info(f"Admin created user: {email}")
     except Exception as e:
         db.session.rollback()
@@ -1008,9 +925,9 @@ def admin_delete_user(emp_id):
             flash("Cannot delete admin accounts.", "danger")
             return redirect(url_for("admin_dashboard"))
         name = emp.name
-        db.session.delete(emp)
+        db.session.delete(emp)   # cascade deletes all KPIEntry rows too
         db.session.commit()
-        flash(f"'{name}' and all their data have been removed.", "success")
+        flash(f"🗑️ '{name}' and all their data have been removed.", "success")
         logger.info(f"Admin deleted user id={emp_id} name={name}")
     except Exception as e:
         db.session.rollback()
@@ -1037,7 +954,7 @@ def admin_reset_password(emp_id):
             return redirect(url_for("admin_dashboard"))
         emp.set_password(new_pw)
         db.session.commit()
-        flash(f"Password reset for '{emp.name}' successfully.", "success")
+        flash(f"🔑 Password reset for '{emp.name}' successfully.", "success")
         logger.info(f"Admin reset password for id={emp_id}")
     except Exception as e:
         db.session.rollback()
@@ -1059,7 +976,8 @@ def admin_update_user(emp_id):
             flash("Cannot edit admin accounts.", "danger")
             return redirect(url_for("admin_dashboard"))
 
-        new_name  = request.form.get("name", "").strip().title()
+        # Auto-capitalize name
+        new_name  = " ".join(w.capitalize() for w in request.form.get("name", "").strip().split())
         new_email = request.form.get("email", "").lower().strip()
         new_type  = request.form.get("staff_type", "").strip()
 
@@ -1069,9 +987,11 @@ def admin_update_user(emp_id):
         if new_type not in ("picker", "checker"):
             flash("Invalid staff type.", "danger")
             return redirect(url_for("admin_dashboard"))
-        if not new_email.endswith(PHARMA_EMAIL_DOMAIN):
-            flash(f"Email must end with {PHARMA_EMAIL_DOMAIN}.", "danger")
+        if not new_email.endswith("@pharmaip.com"):
+            flash("Email must end with @pharmaip.com.", "danger")
             return redirect(url_for("admin_dashboard"))
+
+        # Check email uniqueness — allow keeping their own email
         existing = Employee.query.filter_by(email=new_email).first()
         if existing and existing.id != emp_id:
             flash(f"Email '{new_email}' is already used by another employee.", "warning")
@@ -1082,7 +1002,7 @@ def admin_update_user(emp_id):
         emp.staff_type = new_type
         emp.role       = f"Operations {new_type.title()}"
         db.session.commit()
-        flash(f"'{new_name}' updated successfully.", "success")
+        flash(f"✏️ '{new_name}' updated successfully.", "success")
         logger.info(f"Admin updated user id={emp_id} email={new_email}")
     except Exception as e:
         db.session.rollback()
@@ -1092,12 +1012,14 @@ def admin_update_user(emp_id):
 
 
 # ══════════════════════════════════════════════════
-#  9. ERROR HANDLERS
+#  9. ERROR HANDLERS (from File 2)
 # ══════════════════════════════════════════════════
 @app.errorhandler(404)
 def not_found(e):
+    # Avoid redirect loops: if the destination itself 404s, go to login
     if session.get("user_id"):
         target = "admin_dashboard" if session.get("is_admin") else "dashboard"
+        # Don't redirect back to the same path that 404'd
         if request.path not in (url_for("dashboard"), url_for("admin_dashboard")):
             try:
                 return redirect(url_for(target))
@@ -1115,6 +1037,7 @@ def server_error(e):
     except Exception:
         pass
     session.clear()
+    # Redirect instead of render to avoid template errors compounding the 500
     return redirect(url_for("login"))
 
 

@@ -1,227 +1,228 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0">
-<title>Indian Pharmaceuticals IP | Secure Access</title>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>Login | Indian Pharma IP</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
 <script src="https://unpkg.com/@phosphor-icons/web"></script>
 <style>
-*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+*{box-sizing:border-box;margin:0;padding:0}
 :root{
-  --blue:#1d4ed8;--blue2:#3b82f6;--blue3:#60a5fa;
-  --dark:#0f172a;--gray:#64748b;--lgray:#e2e8f0;
-  --white:#ffffff;--bg:#f1f5f9;
+  --blue:#1d4ed8;--blue-l:#3b82f6;--blue-xl:#eff6ff;
+  --dark:#0f172a;--gray:#64748b;--lgray:#e2e8f0;--white:#ffffff;
 }
-html,body{height:100%;font-family:'Inter',sans-serif}
 body{
-  min-height:100vh;display:flex;align-items:center;justify-content:center;padding:20px;
+  font-family:'Inter',sans-serif;min-height:100vh;display:flex;
+  align-items:center;justify-content:center;
   background:#f0f4ff;
   background-image:
-    radial-gradient(ellipse at 0% 0%,rgba(29,78,216,.12) 0%,transparent 50%),
-    radial-gradient(ellipse at 100% 100%,rgba(96,165,250,.1) 0%,transparent 50%),
-    radial-gradient(ellipse at 50% 50%,rgba(147,197,253,.06) 0%,transparent 70%),
+    radial-gradient(ellipse at 10% 10%,rgba(29,78,216,.1) 0%,transparent 50%),
+    radial-gradient(ellipse at 90% 90%,rgba(96,165,250,.08) 0%,transparent 50%),
     linear-gradient(rgba(29,78,216,.025) 1px,transparent 1px),
     linear-gradient(90deg,rgba(29,78,216,.025) 1px,transparent 1px);
-  background-size:100% 100%,100% 100%,100% 100%,36px 36px,36px 36px;
+  background-size:100% 100%,100% 100%,36px 36px,36px 36px;
 }
-.orb{position:fixed;border-radius:50%;pointer-events:none;opacity:.5;animation:orb-float 10s ease-in-out infinite}
-.orb1{width:320px;height:320px;top:-80px;left:-80px;background:radial-gradient(circle,rgba(96,165,250,.25),rgba(29,78,216,.08) 60%,transparent);filter:blur(40px);animation-delay:0s}
-.orb2{width:280px;height:280px;bottom:-60px;right:-60px;background:radial-gradient(circle,rgba(147,197,253,.2),rgba(59,130,246,.06) 60%,transparent);filter:blur(35px);animation-delay:4s}
-.orb3{width:200px;height:200px;top:40%;right:10%;background:radial-gradient(circle,rgba(191,219,254,.18),transparent 70%);filter:blur(30px);animation-delay:7s}
-@keyframes orb-float{0%,100%{transform:translateY(0) scale(1)}50%{transform:translateY(-20px) scale(1.04)}}
-.wrap{width:100%;max-width:450px;position:relative;z-index:10;animation:fadein .5s cubic-bezier(.16,1,.3,1)}
-@keyframes fadein{from{opacity:0;transform:translateY(18px)}to{opacity:1;transform:translateY(0)}}
-.brand{text-align:center;margin-bottom:1.75rem}
-.logo-ring{display:inline-flex;align-items:center;justify-content:center;width:66px;height:66px;border-radius:20px;margin-bottom:1rem;background:linear-gradient(135deg,var(--blue),var(--blue2));box-shadow:0 8px 32px rgba(29,78,216,.35),0 0 0 1px rgba(29,78,216,.15),inset 0 1px 0 rgba(255,255,255,.2);font-size:1.8rem;color:#fff;position:relative;overflow:hidden;}
-.logo-ring::before{content:"";position:absolute;inset:0;background:linear-gradient(135deg,rgba(255,255,255,.18) 0%,transparent 60%);border-radius:20px;}
-.brand-ip{font-size:1.85rem;font-weight:900;color:var(--blue);letter-spacing:-1.5px;line-height:1}
-.brand-name{font-size:.82rem;font-weight:600;color:var(--gray);margin-top:2px;letter-spacing:.2px}
-.brand-sub{font-size:.62rem;color:#94a3b8;font-weight:600;letter-spacing:2.5px;text-transform:uppercase;margin-top:4px}
-.card{background:rgba(255,255,255,.85);backdrop-filter:blur(24px);-webkit-backdrop-filter:blur(24px);border:1px solid rgba(255,255,255,.9);border-radius:24px;padding:2.25rem 2rem;box-shadow:0 8px 40px rgba(15,23,42,.1),0 2px 8px rgba(15,23,42,.06),0 0 0 1px rgba(29,78,216,.06),inset 0 1px 0 rgba(255,255,255,.8);position:relative;overflow:hidden;}
-.card::before{content:"";position:absolute;top:0;left:0;right:0;height:1px;background:linear-gradient(90deg,transparent,rgba(29,78,216,.3),rgba(96,165,250,.4),rgba(29,78,216,.3),transparent);}
-.card::after{content:"";position:absolute;top:0;left:-100%;width:200%;height:100%;background:linear-gradient(90deg,transparent 30%,rgba(255,255,255,.06) 50%,transparent 70%);animation:shimmer 6s ease-in-out infinite;pointer-events:none;}
-@keyframes shimmer{0%{transform:translateX(-50%)}100%{transform:translateX(50%)}}
-.flash{background:rgba(254,242,242,.9);border:1px solid rgba(254,202,202,.8);color:#9f1239;border-radius:10px;padding:10px 14px;font-size:.82rem;font-weight:500;margin-bottom:1.25rem;display:flex;align-items:center;gap:8px;box-shadow:0 1px 4px rgba(239,68,68,.1)}
-.fl{display:block;font-size:.64rem;font-weight:700;color:var(--gray);text-transform:uppercase;letter-spacing:1px;margin-bottom:5px}
-.ig{position:relative;margin-bottom:.9rem}
-.ii{position:absolute;left:13px;top:50%;transform:translateY(-50%);color:#94a3b8;font-size:1rem;pointer-events:none;z-index:2;transition:color .2s}
-.fi{width:100%;padding:11px 15px 11px 40px;background:rgba(248,250,252,.8);border:1.5px solid rgba(226,232,240,.8);border-radius:12px;color:var(--dark);font-size:.9rem;font-weight:500;outline:none;transition:all .2s;font-family:'Inter',sans-serif;box-shadow:0 1px 3px rgba(15,23,42,.04),inset 0 1px 0 rgba(255,255,255,.6);}
-.fi:focus{border-color:var(--blue2);background:rgba(255,255,255,.95);box-shadow:0 0 0 3px rgba(59,130,246,.12),0 1px 3px rgba(15,23,42,.06);}
-.fi::placeholder{color:#cbd5e1}
-.tpw{position:absolute;right:11px;top:50%;transform:translateY(-50%);background:none;border:none;color:#94a3b8;cursor:pointer;padding:4px;z-index:2;border-radius:6px;transition:all .15s}
-.tpw:hover{color:var(--dark);background:rgba(15,23,42,.06)}
-/* email suggestion */
+.card{
+  width:100%;max-width:420px;margin:1.5rem;
+  background:rgba(255,255,255,.92);
+  backdrop-filter:blur(20px);
+  border:1px solid rgba(255,255,255,.9);
+  border-radius:24px;
+  box-shadow:0 8px 40px rgba(15,23,42,.12),0 2px 8px rgba(15,23,42,.06),inset 0 1px 0 rgba(255,255,255,.8);
+  overflow:hidden;
+}
+.card-top{
+  background:linear-gradient(135deg,var(--blue),var(--blue-l));
+  padding:2rem 2rem 1.5rem;
+  position:relative;overflow:hidden;
+}
+.card-top::before{content:"";position:absolute;top:-30px;right:-30px;width:140px;height:140px;background:rgba(255,255,255,.07);border-radius:50%}
+.card-top::after{content:"";position:absolute;bottom:-50px;left:20px;width:100px;height:100px;background:rgba(255,255,255,.04);border-radius:50%}
+.brand-mark{width:48px;height:48px;background:rgba(255,255,255,.2);border:1.5px solid rgba(255,255,255,.3);border-radius:14px;display:flex;align-items:center;justify-content:center;font-size:1.3rem;margin-bottom:.9rem}
+.brand-name{font-size:1.25rem;font-weight:800;color:#fff;letter-spacing:-.5px;margin-bottom:3px}
+.brand-sub{font-size:.72rem;color:rgba(255,255,255,.7);font-weight:600;letter-spacing:1px;text-transform:uppercase}
+
+.card-body{padding:1.75rem 2rem 2rem}
+
+/* Flash messages */
+.flash-list{list-style:none;margin-bottom:1rem}
+.flash-item{padding:10px 14px;border-radius:10px;font-size:.8rem;font-weight:600;display:flex;align-items:center;gap:7px;margin-bottom:6px}
+.flash-danger{background:#fff1f2;color:#be123c;border:1px solid #fecdd3}
+.flash-warning{background:#fffbeb;color:#b45309;border:1px solid #fde68a}
+.flash-success{background:#f0fdf4;color:#15803d;border:1px solid #bbf7d0}
+.flash-info{background:#eff6ff;color:#1d4ed8;border:1px solid #bfdbfe}
+
+label{display:block;font-size:.72rem;font-weight:700;color:var(--gray);text-transform:uppercase;letter-spacing:.8px;margin-bottom:5px;margin-top:1rem}
+label:first-of-type{margin-top:0}
+
+/* Email input wrapper */
 .email-wrap{position:relative}
-.suggest-box{position:absolute;top:calc(100% + 4px);left:0;right:0;background:rgba(255,255,255,.98);border:1.5px solid rgba(29,78,216,.2);border-radius:10px;z-index:50;box-shadow:0 4px 20px rgba(15,23,42,.12);display:none;overflow:hidden}
-.suggest-box.show{display:block}
-.suggest-opt{padding:9px 14px;font-size:.85rem;color:var(--dark);cursor:pointer;transition:background .15s;display:flex;align-items:center;gap:8px}
-.suggest-opt:hover,.suggest-opt.active{background:rgba(29,78,216,.06)}
-.suggest-opt span{color:var(--blue);font-weight:700}
-.sec-div{display:flex;align-items:center;gap:8px;margin:.9rem 0 .6rem;font-size:.62rem;font-weight:700;color:#94a3b8;letter-spacing:1.5px;text-transform:uppercase}
-.sec-div::before,.sec-div::after{content:"";flex:1;height:1px;background:linear-gradient(90deg,transparent,rgba(29,78,216,.15),transparent)}
-.role-grid{display:grid;grid-template-columns:1fr 1fr;gap:.6rem}
-.ro{position:relative;cursor:pointer}
-.ro input[type=radio]{position:absolute;opacity:0;width:0;height:0}
-.rc{border:1.5px solid rgba(226,232,240,.8);border-radius:14px;padding:.85rem .9rem;display:flex;flex-direction:column;align-items:center;gap:.35rem;transition:all .2s;text-align:center;background:rgba(248,250,252,.6);cursor:pointer;position:relative;box-shadow:0 1px 3px rgba(15,23,42,.04);}
-.rc:hover{border-color:rgba(59,130,246,.5);background:rgba(239,246,255,.8);box-shadow:0 2px 8px rgba(29,78,216,.08)}
-.ro-icon{font-size:1.45rem;line-height:1}
-.ro-name{font-size:.8rem;font-weight:700;color:var(--dark)}
-.ro-desc{font-size:.62rem;color:var(--gray);line-height:1.3}
-.ro-chk{position:absolute;top:7px;right:7px;width:17px;height:17px;background:rgba(226,232,240,.6);border:1.5px solid rgba(203,213,225,.8);border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:.5rem;color:transparent;transition:all .2s;}
-.ro input:checked~.rc{border-color:var(--blue2);background:rgba(239,246,255,.9);box-shadow:0 0 0 3px rgba(59,130,246,.1),0 2px 8px rgba(29,78,216,.1);}
-.ro input:checked~.rc .ro-name{color:var(--blue)}
-.ro input:checked~.rc .ro-chk{background:var(--blue);border-color:var(--blue);color:#fff}
-.role-hint{font-size:.62rem;color:#94a3b8;text-align:center;margin-top:.35rem}
-.rm-row{display:flex;justify-content:space-between;align-items:center;margin:.75rem 0}
-.rm-lbl{display:flex;align-items:center;gap:7px;font-size:.78rem;color:var(--gray);cursor:pointer;font-weight:500}
-.rm-cb{width:15px;height:15px;border-radius:4px;border:1.5px solid rgba(203,213,225,.8);background:rgba(248,250,252,.8);appearance:none;cursor:pointer;transition:all .2s;flex-shrink:0}
-.rm-cb:checked{background:var(--blue);border-color:var(--blue);box-shadow:0 0 0 2px rgba(29,78,216,.15)}
-.btn-login{width:100%;padding:13px;border:none;border-radius:13px;cursor:pointer;font-size:.9rem;font-weight:700;letter-spacing:.2px;display:flex;align-items:center;justify-content:center;gap:10px;transition:all .25s;margin-top:.5rem;position:relative;overflow:hidden;background:linear-gradient(135deg,var(--blue) 0%,var(--blue2) 100%);color:#fff;box-shadow:0 4px 20px rgba(29,78,216,.35),0 1px 0 rgba(255,255,255,.12) inset;}
-.btn-login::before{content:"";position:absolute;top:0;left:-100%;width:200%;height:100%;background:linear-gradient(90deg,transparent 30%,rgba(255,255,255,.12) 50%,transparent 70%);transition:left .5s;}
-.btn-login:hover::before{left:100%}
-.btn-login:hover{background:linear-gradient(135deg,var(--dark),#1e293b);box-shadow:0 8px 28px rgba(15,23,42,.25);transform:translateY(-1px)}
-.btn-login:active{transform:translateY(0);box-shadow:0 2px 8px rgba(15,23,42,.15)}
-.btn-login:disabled{opacity:.55;cursor:not-allowed;transform:none}
-.arr{transition:transform .2s}
-.btn-login:hover .arr{transform:translateX(4px)}
-.foot{text-align:center;margin-top:1.1rem;font-size:.62rem;color:#94a3b8;font-weight:600;letter-spacing:1.5px;text-transform:uppercase}
-@media(max-width:400px){.card{padding:1.75rem 1.25rem}}
+.fi{
+  width:100%;padding:11px 14px;border-radius:10px;
+  border:1.5px solid var(--lgray);
+  background:#f8fafc;
+  font-size:.9rem;font-family:'Inter',sans-serif;
+  color:var(--dark);outline:none;transition:all .2s;
+}
+.fi:focus{border-color:var(--blue);background:#fff;box-shadow:0 0 0 3px rgba(29,78,216,.1)}
+
+/* Suggestion dropdown */
+.email-suggestion{
+  position:absolute;top:calc(100% + 4px);left:0;right:0;z-index:99;
+  background:#fff;border:1.5px solid var(--blue);border-radius:10px;
+  box-shadow:0 8px 24px rgba(15,23,42,.12);
+  overflow:hidden;display:none;
+}
+.sug-item{
+  padding:10px 14px;font-size:.85rem;cursor:pointer;
+  display:flex;align-items:center;gap:8px;
+  transition:background .15s;
+}
+.sug-item:hover,.sug-item.active{background:var(--blue-xl)}
+.sug-domain{color:var(--blue);font-weight:700}
+.sug-label{font-size:.68rem;color:var(--gray);margin-left:auto}
+
+/* Role select */
+.role-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:.4rem}
+.role-opt{position:relative}
+.role-opt input{position:absolute;opacity:0;width:0;height:0}
+.role-label{
+  display:flex;align-items:center;gap:7px;
+  padding:10px 12px;border-radius:10px;
+  border:1.5px solid var(--lgray);background:#f8fafc;
+  font-size:.8rem;font-weight:700;color:var(--gray);
+  cursor:pointer;transition:all .2s;
+}
+.role-opt input:checked + .role-label{
+  border-color:var(--blue);background:var(--blue-xl);color:var(--blue);
+}
+.role-label i{font-size:.95rem}
+
+.btn-login{
+  width:100%;margin-top:1.5rem;padding:13px;
+  background:linear-gradient(135deg,var(--blue),var(--blue-l));
+  color:#fff;border:none;border-radius:11px;
+  font-size:.9rem;font-weight:700;cursor:pointer;
+  font-family:'Inter',sans-serif;
+  box-shadow:0 4px 16px rgba(29,78,216,.3);
+  transition:all .2s;display:flex;align-items:center;justify-content:center;gap:7px;
+}
+.btn-login:hover{background:linear-gradient(135deg,#1e3a8a,#1d4ed8);transform:translateY(-1px);box-shadow:0 6px 20px rgba(29,78,216,.35)}
+.btn-login:active{transform:translateY(0)}
+
+.hint{font-size:.7rem;color:var(--gray);text-align:center;margin-top:1rem}
+.hint span{color:var(--blue);font-weight:600}
 </style>
 </head>
 <body>
-<div class="orb orb1"></div>
-<div class="orb orb2"></div>
-<div class="orb orb3"></div>
-
-<div class="wrap">
-  <div class="brand">
-    <div class="logo-ring"><i class="ph-fill ph-dna"></i></div>
-    <div class="brand-ip">IP</div>
-    <div class="brand-name">Indian Pharmaceuticals</div>
-    <div class="brand-sub">Operational Gateway v7.0</div>
+<div class="card">
+  <div class="card-top">
+    <div class="brand-mark"><i class="ph-fill ph-dna" style="color:#fff"></i></div>
+    <div class="brand-name">Indian Pharma IP</div>
+    <div class="brand-sub">Operations · KRA System</div>
   </div>
+  <div class="card-body">
+    {% with messages = get_flashed_messages(with_categories=true) %}
+    {% if messages %}
+    <ul class="flash-list">
+      {% for cat, msg in messages %}
+      <li class="flash-item flash-{{cat}}">
+        <i class="ph-bold ph-{% if cat=='danger' %}warning-octagon{% elif cat=='success' %}check-circle{% elif cat=='warning' %}warning{% else %}info{% endif %}"></i>
+        {{msg}}
+      </li>
+      {% endfor %}
+    </ul>
+    {% endif %}
+    {% endwith %}
 
-  <div class="card">
-    {% with messages=get_flashed_messages(with_categories=true) %}
-    {% if messages %}{% for cat,msg in messages %}
-    <div class="flash" role="alert"><i class="ph-fill ph-warning-circle"></i> {{msg}}</div>
-    {% endfor %}{% endif %}{% endwith %}
-
-    <form method="POST" id="lf" novalidate autocomplete="off">
-      <div>
-        <label class="fl" for="email">Corporate Email</label>
-        <div class="ig email-wrap">
-          <input type="email" name="email" id="email" class="fi"
-                 placeholder="employee@pharmaip.com"
-                 autocomplete="off" required autofocus aria-label="Corporate email"
-                 oninput="onEmailInput(this)" onblur="hideSuggest()" onkeydown="emailKey(event)">
-          <i class="ph ph-envelope ii" aria-hidden="true"></i>
-          <div class="suggest-box" id="suggestBox" role="listbox" aria-label="Email suggestions"></div>
+    <form method="POST" action="/login" autocomplete="off">
+      <label for="email">Pharma ID (Email)</label>
+      <div class="email-wrap">
+        <input
+          class="fi" type="text" id="email" name="email"
+          placeholder="yourname@pharmaip.com"
+          autocomplete="off" spellcheck="false"
+          required
+        >
+        <div class="email-suggestion" id="emailSug">
+          <div class="sug-item" id="sugItem">
+            <i class="ph-bold ph-envelope" style="color:#1d4ed8;font-size:.85rem"></i>
+            <span id="sugFull"></span>
+            <span class="sug-label">Press Enter or Tab</span>
+          </div>
         </div>
       </div>
 
-      <div>
-        <label class="fl" for="pw">Password</label>
-        <div class="ig" style="margin-bottom:0">
-          <input type="password" name="password" id="pw" class="fi"
-                 placeholder="••••••••" autocomplete="current-password" required aria-label="Password">
-          <i class="ph ph-lock-key ii" aria-hidden="true"></i>
-          <button type="button" class="tpw" onclick="togglePw()" aria-label="Toggle password visibility">
-            <i class="ph ph-eye" id="ei" aria-hidden="true"></i>
-          </button>
+      <label for="password">Password</label>
+      <input class="fi" type="password" id="password" name="password" placeholder="••••••••" required>
+
+      <label>Your Role</label>
+      <div class="role-grid">
+        <div class="role-opt">
+          <input type="radio" name="staff_type" id="r_picker" value="picker" checked>
+          <label class="role-label" for="r_picker">
+            <i class="ph-bold ph-package"></i> Picker
+          </label>
+        </div>
+        <div class="role-opt">
+          <input type="radio" name="staff_type" id="r_checker" value="checker">
+          <label class="role-label" for="r_checker">
+            <i class="ph-bold ph-magnifying-glass"></i> Checker
+          </label>
         </div>
       </div>
 
-      <div class="sec-div">Select Your Role</div>
-
-      <div class="role-grid" role="radiogroup" aria-label="Select role">
-        <label class="ro" aria-label="Picker">
-          <input type="radio" name="staff_type" value="picker" checked>
-          <div class="rc">
-            <div class="ro-chk"><i class="ph-bold ph-check"></i></div>
-            <div class="ro-icon">📦</div>
-            <div class="ro-name">Picker</div>
-            <div class="ro-desc">Speed &amp;<br>accuracy</div>
-          </div>
-        </label>
-        <label class="ro" aria-label="Checker">
-          <input type="radio" name="staff_type" value="checker">
-          <div class="rc">
-            <div class="ro-chk"><i class="ph-bold ph-check"></i></div>
-            <div class="ro-icon">🔍</div>
-            <div class="ro-name">Checker</div>
-            <div class="ro-desc">Verification &amp;<br>error detection</div>
-          </div>
-        </label>
-      </div>
-      <div class="role-hint">Switch roles anytime from this screen</div>
-
-      <div class="rm-row">
-        <label class="rm-lbl">
-          <input type="checkbox" class="rm-cb" id="rem" name="remember">Stay signed in
-        </label>
-      </div>
-
-      <button type="submit" class="btn-login" id="lb">
-        <span id="bt">SIGN IN</span>
-        <i class="ph-bold ph-arrow-right arr" id="bi" aria-hidden="true"></i>
+      <button type="submit" class="btn-login">
+        <i class="ph-bold ph-sign-in"></i> Sign In
       </button>
     </form>
+    <p class="hint">Authorized personnel only · <span>@pharmaip.com</span> accounts</p>
   </div>
-  <div class="foot">Secured · Indian Pharmaceuticals IP © 2026</div>
 </div>
 
 <script>
-const DOMAIN = '@pharmaip.com';
+const emailInput = document.getElementById('email');
+const sug        = document.getElementById('emailSug');
+const sugFull    = document.getElementById('sugFull');
+const sugItem    = document.getElementById('sugItem');
+const DOMAIN     = '@pharmaip.com';
 
-/* ── Email domain suggestion ────────────────────────────────── */
-function onEmailInput(el) {
-  const v   = el.value.trim();
-  const box = document.getElementById('suggestBox');
-  // only suggest when user has typed something before @
-  if (!v || v.includes('@')) { box.classList.remove('show'); return; }
-  const full = v + DOMAIN;
-  box.innerHTML = `<div class="suggest-opt" role="option"
-    onmousedown="pickSuggest(event,'${full.replace(/'/g,"\\'")}')">
-    ${v}<span>${DOMAIN}</span>
-  </div>`;
-  box.classList.add('show');
+function updateSuggestion() {
+  const val = emailInput.value.trim();
+  if (!val || val.includes('@')) { sug.style.display = 'none'; return; }
+  sugFull.innerHTML = val + '<span class="sug-domain">' + DOMAIN + '</span>';
+  sug.style.display = 'block';
 }
 
-function pickSuggest(e, val) {
-  e.preventDefault();
-  document.getElementById('email').value = val;
-  document.getElementById('suggestBox').classList.remove('show');
+function applySuggestion() {
+  const val = emailInput.value.trim();
+  if (!val || val.includes('@')) return;
+  emailInput.value = val + DOMAIN;
+  sug.style.display = 'none';
 }
 
-function hideSuggest() {
-  setTimeout(() => document.getElementById('suggestBox').classList.remove('show'), 200);
-}
-
-function emailKey(e) {
-  const box = document.getElementById('suggestBox');
-  if (!box.classList.contains('show')) return;
-  if (e.key === 'Tab' || e.key === 'Enter') {
-    const opt = box.querySelector('.suggest-opt');
-    if (opt) { e.preventDefault(); opt.dispatchEvent(new MouseEvent('mousedown')); }
+emailInput.addEventListener('input', updateSuggestion);
+emailInput.addEventListener('keydown', function(e) {
+  if ((e.key === 'Tab' || e.key === 'Enter') && sug.style.display === 'block') {
+    e.preventDefault();
+    applySuggestion();
+    if (e.key === 'Tab') document.getElementById('password').focus();
   }
-  if (e.key === 'Escape') box.classList.remove('show');
-}
-
-/* ── Password toggle ────────────────────────────────────────── */
-function togglePw() {
-  const i = document.getElementById('pw');
-  const e = document.getElementById('ei');
-  i.type = i.type === 'password' ? 'text' : 'password';
-  e.className = i.type === 'text' ? 'ph ph-eye-slash' : 'ph ph-eye';
-}
-
-/* ── Submit loading state ───────────────────────────────────── */
-document.getElementById('lf').addEventListener('submit', function() {
-  const b = document.getElementById('lb');
-  b.disabled = true;
-  document.getElementById('bt').textContent = 'SIGNING IN…';
-  document.getElementById('bi').className = 'ph-bold ph-circle-notch arr';
+  if (e.key === 'Escape') sug.style.display = 'none';
+});
+sugItem.addEventListener('mousedown', function(e) {
+  e.preventDefault();
+  applySuggestion();
+});
+document.addEventListener('click', function(e) {
+  if (!emailInput.contains(e.target) && !sug.contains(e.target)) {
+    sug.style.display = 'none';
+  }
+});
+// If user leaves email field without @, auto-append domain
+emailInput.addEventListener('blur', function() {
+  setTimeout(() => sug.style.display = 'none', 150);
 });
 </script>
 </body>
