@@ -3,31 +3,31 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>{{ emp.name }} — Profile · Indian Pharmaceuticals IP</title>
-<link href="https://fonts.googleapis.com/css2?family=Sora:wght@300;400;500;600;700;800&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+<title>{{ emp.name }} — Indian Pharma IP</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
 <style>
   :root {
-    --blue:#2563eb;--blue-light:#3b82f6;--blue-dark:#1d4ed8;
+    --blue:#1d4ed8;--blue-l:#3b82f6;--blue-dark:#1e3a8a;
     --navy:#0f172a;--slate:#334155;--muted:#64748b;
     --glass:rgba(255,255,255,0.72);--glass-strong:rgba(255,255,255,0.88);
     --glass-border:rgba(255,255,255,0.9);
-    --shadow:0 4px 24px rgba(37,99,235,0.10);--shadow-lg:0 12px 48px rgba(37,99,235,0.15);
+    --shadow:0 4px 24px rgba(29,78,216,0.10);--shadow-lg:0 12px 48px rgba(29,78,216,0.15);
     --green:#059669;--amber:#d97706;--red:#dc2626;
   }
   *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
-  body{font-family:'DM Sans',sans-serif;background:#eef2ff;min-height:100vh;display:flex;overflow-x:hidden;}
+  body{font-family:'Inter',sans-serif;background:#f0f4ff;min-height:100vh;display:flex;overflow-x:hidden;}
   body::before{content:'';position:fixed;inset:0;background:radial-gradient(ellipse 70% 50% at 10% 0%,rgba(147,197,253,0.4) 0%,transparent 60%),radial-gradient(ellipse 50% 70% at 90% 100%,rgba(196,181,253,0.25) 0%,transparent 60%);z-index:0;pointer-events:none;}
 
-  .sidebar{width:240px;min-width:240px;background:var(--glass);backdrop-filter:blur(24px) saturate(180%);-webkit-backdrop-filter:blur(24px) saturate(180%);border-right:1.5px solid var(--glass-border);display:flex;flex-direction:column;position:fixed;top:0;left:0;bottom:0;z-index:100;box-shadow:4px 0 32px rgba(37,99,235,0.07);}
+  .sidebar{width:240px;min-width:240px;background:var(--glass);backdrop-filter:blur(24px) saturate(180%);-webkit-backdrop-filter:blur(24px) saturate(180%);border-right:1.5px solid var(--glass-border);display:flex;flex-direction:column;position:fixed;top:0;left:0;bottom:0;z-index:100;box-shadow:4px 0 32px rgba(29,78,216,0.07);}
   .sidebar-logo{padding:28px 24px 20px;border-bottom:1px solid rgba(203,213,225,0.5);}
-  .sidebar-logo-icon{width:40px;height:40px;background:linear-gradient(135deg,var(--blue),#818cf8);border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:18px;margin-bottom:10px;box-shadow:0 4px 12px rgba(37,99,235,0.3);}
-  .sidebar-logo-name{font-family:'Sora',sans-serif;font-size:11px;font-weight:700;letter-spacing:0.15em;color:var(--blue);text-transform:uppercase;}
+  .sidebar-logo-icon{width:40px;height:40px;background:linear-gradient(135deg,var(--blue),#818cf8);border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:18px;margin-bottom:10px;box-shadow:0 4px 12px rgba(29,78,216,0.3);}
+  .sidebar-logo-name{font-family:'Inter',sans-serif;font-size:11px;font-weight:700;letter-spacing:0.15em;color:var(--blue);text-transform:uppercase;}
   .sidebar-logo-sub{font-size:10px;color:var(--muted);margin-top:2px;}
   .sidebar-nav{flex:1;padding:16px 12px;}
   .nav-label{font-size:9px;font-weight:700;letter-spacing:0.12em;color:#94a3b8;text-transform:uppercase;padding:0 12px;margin:12px 0 6px;}
   .nav-link{display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:10px;font-size:13px;font-weight:500;color:var(--slate);text-decoration:none;transition:all 0.2s;margin-bottom:2px;}
-  .nav-link:hover{background:rgba(37,99,235,0.08);color:var(--blue);}
-  .nav-link.active{background:rgba(37,99,235,0.12);color:var(--blue);font-weight:600;}
+  .nav-link:hover{background:rgba(29,78,216,0.08);color:var(--blue);}
+  .nav-link.active{background:rgba(29,78,216,0.12);color:var(--blue);font-weight:600;}
   .nav-link .icon{font-size:16px;width:20px;text-align:center;}
   .sidebar-footer{padding:16px 12px;border-top:1px solid rgba(203,213,225,0.5);}
   .logout-btn{display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:10px;font-size:13px;font-weight:500;color:#ef4444;text-decoration:none;transition:all 0.2s;width:100%;background:none;border:none;cursor:pointer;font-family:inherit;}
@@ -42,25 +42,25 @@
   .hero-card{background:var(--glass-strong);backdrop-filter:blur(24px) saturate(180%);-webkit-backdrop-filter:blur(24px) saturate(180%);border:1.5px solid var(--glass-border);border-radius:24px;padding:32px;box-shadow:var(--shadow-lg);margin-bottom:24px;position:relative;overflow:hidden;}
   .hero-card::before{content:'';position:absolute;top:0;left:0;right:0;height:4px;background:linear-gradient(90deg,var(--blue),#818cf8,#34d399);border-radius:24px 24px 0 0;}
   .hero-top{display:flex;align-items:flex-start;gap:24px;}
-  .hero-avatar{width:72px;height:72px;border-radius:50%;background:linear-gradient(135deg,var(--blue),#818cf8);display:flex;align-items:center;justify-content:center;font-family:'Sora',sans-serif;font-size:28px;font-weight:800;color:white;flex-shrink:0;box-shadow:0 8px 24px rgba(37,99,235,0.35);}
+  .hero-avatar{width:72px;height:72px;border-radius:50%;background:linear-gradient(135deg,var(--blue),#818cf8);display:flex;align-items:center;justify-content:center;font-family:'Inter',sans-serif;font-size:28px;font-weight:800;color:white;flex-shrink:0;box-shadow:0 8px 24px rgba(29,78,216,0.35);}
   .hero-info{flex:1;}
-  .hero-name{font-family:'Sora',sans-serif;font-size:24px;font-weight:800;color:var(--navy);}
+  .hero-name{font-family:'Inter',sans-serif;font-size:24px;font-weight:800;color:var(--navy);}
   .hero-role{font-size:13px;color:var(--muted);margin-top:4px;}
   .hero-badges{display:flex;align-items:center;gap:8px;margin-top:12px;flex-wrap:wrap;}
-  .badge{padding:5px 14px;border-radius:20px;font-family:'Sora',sans-serif;font-size:11px;font-weight:700;letter-spacing:0.06em;}
-  .badge-type{background:rgba(37,99,235,0.1);color:var(--blue);border:1px solid rgba(37,99,235,0.2);}
+  .badge{padding:5px 14px;border-radius:20px;font-family:'Inter',sans-serif;font-size:11px;font-weight:700;letter-spacing:0.06em;}
+  .badge-type{background:rgba(29,78,216,0.1);color:var(--blue);border:1px solid rgba(29,78,216,0.2);}
   .badge-days{background:rgba(100,116,139,0.1);color:var(--muted);border:1px solid rgba(100,116,139,0.15);}
   .badge-trend-up{background:rgba(5,150,105,0.1);color:var(--green);border:1px solid rgba(5,150,105,0.2);}
   .badge-trend-down{background:rgba(220,38,38,0.1);color:var(--red);border:1px solid rgba(220,38,38,0.2);}
   .badge-trend-flat{background:rgba(100,116,139,0.1);color:var(--muted);border:1px solid rgba(100,116,139,0.15);}
-  .grade-badge{padding:5px 16px;border-radius:20px;font-family:'Sora',sans-serif;font-size:12px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;}
-  .grade-ELITE{background:rgba(37,99,235,0.12);color:var(--blue);border:1px solid rgba(37,99,235,0.25);}
+  .grade-badge{padding:5px 16px;border-radius:20px;font-family:'Inter',sans-serif;font-size:12px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;}
+  .grade-ELITE{background:rgba(29,78,216,0.12);color:var(--blue);border:1px solid rgba(29,78,216,0.25);}
   .grade-PROFICIENT{background:rgba(5,150,105,0.12);color:var(--green);border:1px solid rgba(5,150,105,0.25);}
   .grade-SATISFACTORY{background:rgba(217,119,6,0.12);color:var(--amber);border:1px solid rgba(217,119,6,0.25);}
   .grade-RE-TRAINING{background:rgba(220,38,38,0.12);color:var(--red);border:1px solid rgba(220,38,38,0.25);}
   .hero-right{text-align:right;}
   .hero-score-label{font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:0.08em;}
-  .hero-score{font-family:'Sora',sans-serif;font-size:48px;font-weight:800;color:var(--navy);line-height:1;}
+  .hero-score{font-family:'Inter',sans-serif;font-size:48px;font-weight:800;color:var(--navy);line-height:1;}
   .hero-score span{font-size:18px;color:var(--muted);}
   .hero-feedback{font-size:12px;color:var(--muted);margin-top:6px;max-width:220px;text-align:right;line-height:1.5;}
 
@@ -68,37 +68,37 @@
   .kpi-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:12px;margin-top:24px;}
   .kpi-card{background:rgba(248,250,252,0.8);border:1px solid rgba(203,213,225,0.5);border-radius:14px;padding:14px;text-align:center;}
   .kpi-label{font-size:10px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:6px;}
-  .kpi-val{font-family:'Sora',sans-serif;font-size:20px;font-weight:800;color:var(--navy);}
+  .kpi-val{font-family:'Inter',sans-serif;font-size:20px;font-weight:800;color:var(--navy);}
   .kpi-val .suf{font-size:11px;font-weight:500;color:var(--muted);}
 
   /* Formula box */
-  .formula-box{background:rgba(37,99,235,0.04);border:1px solid rgba(37,99,235,0.12);border-radius:14px;padding:16px 20px;margin-bottom:20px;}
-  .formula-title{font-family:'Sora',sans-serif;font-size:11px;font-weight:700;color:var(--navy);margin-bottom:10px;}
+  .formula-box{background:rgba(29,78,216,0.04);border:1px solid rgba(29,78,216,0.12);border-radius:14px;padding:16px 20px;margin-bottom:20px;}
+  .formula-title{font-family:'Inter',sans-serif;font-size:11px;font-weight:700;color:var(--navy);margin-bottom:10px;}
   .formula-grid{display:grid;grid-template-columns:1fr 1fr;gap:6px 20px;}
   .formula-row{font-size:11px;color:var(--slate);line-height:1.7;}
   .formula-row b{color:var(--blue);}
 
   .period-tabs{display:flex;gap:6px;margin-bottom:20px;background:rgba(241,245,249,0.8);border-radius:12px;padding:4px;width:fit-content;backdrop-filter:blur(8px);}
-  .period-tab{padding:7px 18px;border-radius:9px;font-size:12px;font-weight:600;color:var(--muted);cursor:pointer;transition:all 0.2s;border:none;background:none;font-family:'Sora',sans-serif;}
+  .period-tab{padding:7px 18px;border-radius:9px;font-size:12px;font-weight:600;color:var(--muted);cursor:pointer;transition:all 0.2s;border:none;background:none;font-family:'Inter',sans-serif;}
   .period-tab.active{background:white;color:var(--blue);box-shadow:0 2px 8px rgba(0,0,0,0.08);}
   .period-panel{display:none;}
   .period-panel.active{display:block;}
 
   .section-card{background:var(--glass-strong);backdrop-filter:blur(20px) saturate(180%);-webkit-backdrop-filter:blur(20px) saturate(180%);border:1.5px solid var(--glass-border);border-radius:20px;padding:24px;box-shadow:var(--shadow);margin-bottom:20px;}
-  .section-title{font-family:'Sora',sans-serif;font-size:14px;font-weight:700;color:var(--navy);margin-bottom:18px;display:flex;align-items:center;gap:8px;}
+  .section-title{font-family:'Inter',sans-serif;font-size:14px;font-weight:700;color:var(--navy);margin-bottom:18px;display:flex;align-items:center;gap:8px;}
   .section-title .dot{width:8px;height:8px;border-radius:50%;background:linear-gradient(135deg,var(--blue),#818cf8);}
 
   .mini-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;}
   .mini-stat{background:rgba(248,250,252,0.8);border:1px solid rgba(203,213,225,0.5);border-radius:12px;padding:14px;}
   .mini-stat-label{font-size:10px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:0.06em;}
-  .mini-stat-val{font-family:'Sora',sans-serif;font-size:20px;font-weight:800;color:var(--navy);margin-top:4px;}
+  .mini-stat-val{font-family:'Inter',sans-serif;font-size:20px;font-weight:800;color:var(--navy);margin-top:4px;}
   .mini-stat-val .suf{font-size:11px;font-weight:500;color:var(--muted);}
 
   .log-table{width:100%;border-collapse:collapse;}
   .log-table th{font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:0.08em;padding:8px 10px;text-align:left;border-bottom:1px solid rgba(203,213,225,0.5);}
   .log-table td{font-size:12px;color:var(--slate);padding:9px 10px;border-bottom:1px solid rgba(203,213,225,0.2);}
   .log-table tr:last-child td{border-bottom:none;}
-  .log-table tr:hover td{background:rgba(37,99,235,0.02);}
+  .log-table tr:hover td{background:rgba(29,78,216,0.02);}
   .acc-pill{padding:2px 8px;border-radius:20px;font-size:11px;font-weight:600;display:inline-block;}
   .acc-good{background:rgba(5,150,105,0.1);color:var(--green);}
   .acc-mid{background:rgba(217,119,6,0.1);color:var(--amber);}
@@ -110,8 +110,8 @@
   .hm-legend{display:flex;align-items:center;gap:6px;font-size:10px;color:var(--muted);margin-top:8px;}
   .hm-swatch{width:10px;height:10px;border-radius:2px;display:inline-block;}
 
-  .btn-dl{display:inline-flex;align-items:center;gap:8px;padding:9px 18px;background:linear-gradient(135deg,var(--blue),var(--blue-dark));color:white;border:none;border-radius:12px;font-family:'Sora',sans-serif;font-size:12px;font-weight:600;cursor:pointer;transition:all 0.2s;box-shadow:0 4px 12px rgba(37,99,235,0.3);text-decoration:none;}
-  .btn-dl:hover{transform:translateY(-1px);box-shadow:0 6px 18px rgba(37,99,235,0.4);}
+  .btn-dl{display:inline-flex;align-items:center;gap:8px;padding:9px 18px;background:linear-gradient(135deg,var(--blue),var(--blue-dark));color:white;border:none;border-radius:12px;font-family:'Inter',sans-serif;font-size:12px;font-weight:600;cursor:pointer;transition:all 0.2s;box-shadow:0 4px 12px rgba(29,78,216,0.3);text-decoration:none;}
+  .btn-dl:hover{transform:translateY(-1px);box-shadow:0 6px 18px rgba(29,78,216,0.4);}
 </style>
 </head>
 <body>
@@ -120,7 +120,6 @@
   <div class="sidebar-logo">
     <div class="sidebar-logo-icon">💊</div>
     <div class="sidebar-logo-name">Indian Pharma IP</div>
-    <div class="sidebar-logo-sub">KRA Performance System</div>
   </div>
   <nav class="sidebar-nav">
     <div class="nav-label">Navigation</div>
@@ -225,23 +224,25 @@
       {% if emp.staff_type == 'picker' %}
       <div class="formula-row"><b>Pick Accuracy</b> = Picked ÷ (Picked+Missed) × 100</div>
       <div class="formula-row"><b>Pick Speed</b> = (Picked+Missed) ÷ Total Time (hrs)</div>
-      <div class="formula-row"><b>Packing Eff.</b> = Packing Done ÷ Sales Bill × 100</div>
+      <div class="formula-row"><b>Packing Eff. (display)</b> = Packing Done ÷ Sales Bills Packed × 100</div>
+      <div class="formula-row"><b>Pack Rate (score)</b> = Packing Done ÷ (Picked+Missed) × 100 — used in Efficiency Score</div>
       <div class="formula-row"><b>CS Fulfilment</b> = min(Packing Done ÷ CS Open × 100, 100)</div>
-      <div class="formula-row"><b>Efficiency Score</b> = (Acc/100)×50 + min(Spd/200,1)×30 + (PkgEff/100)×12 + (CS/100)×8</div>
+      <div class="formula-row"><b>Workspace Score</b> = (Rack Days + Table Days) ÷ (2 × Days) × 100</div>
+      <div class="formula-row"><b>Efficiency Score</b> = (Acc/100)×55 + min(Spd/200,1)×30 + (Workspace/100)×10 + (PackRate/100)×5</div>
       <div class="formula-row"><b>Potential Items</b> = 200 × Total Time (hrs)</div>
       <div class="formula-row"><b>Gap Items</b> = Potential − Actual Items</div>
       <div class="formula-row"><b>Consistency</b> = max(0, 100 − std_dev(daily_acc) × 2)</div>
-      <div class="formula-row"><b>ELITE</b>: Acc≥98% + PkgEff≥95% + CS≥90%</div>
-      <div class="formula-row"><b>PROFICIENT</b>: Acc≥95% + PkgEff≥85% | <b>SATISFACTORY</b>: Acc≥88%</div>
+      <div class="formula-row"><b>ELITE</b>: Acc≥98% + Workspace≥80% · <b>PROFICIENT</b>: Acc≥95% · <b>SATISFACTORY</b>: Acc≥88% · <b>RE-TRAINING</b>: &lt;88%</div>
       {% else %}
       <div class="formula-row"><b>Clean Check Rate</b> = (Checked−Errors) ÷ Checked × 100</div>
       <div class="formula-row"><b>Error Rate</b> = Errors Found ÷ Checked × 100</div>
       <div class="formula-row"><b>Check Speed</b> = Checked ÷ Check Time (hrs)</div>
-      <div class="formula-row"><b>Packing Eff.</b> = Packing Done ÷ Sales Bill × 100</div>
-      <div class="formula-row"><b>Efficiency Score</b> = (CleanRate/100)×70 + min(CkSpd/150,1)×30</div>
+      <div class="formula-row"><b>Packing Eff.</b> = Packing Done ÷ Sales Bills Packed × 100</div>
+      <div class="formula-row"><b>CS Fulfilment</b> = min(Packing Done ÷ CS Open × 100, 100)</div>
+      <div class="formula-row"><b>Workspace Score</b> = (Rack Days + Table Days) ÷ (2 × Days) × 100</div>
+      <div class="formula-row"><b>Efficiency Score</b> = (CleanRate/100)×65 + min(CkSpd/150,1)×25 + (Workspace/100)×10</div>
       <div class="formula-row"><b>Potential Items</b> = 150 × Check Time (hrs)</div>
-      <div class="formula-row"><b>ELITE</b>: CleanRate≥97% + ck≥10 | <b>PROFICIENT</b>: ≥94%</div>
-      <div class="formula-row"><b>SATISFACTORY</b>: ≥87% | <b>RE-TRAINING</b>: &lt;87%</div>
+      <div class="formula-row"><b>ELITE</b>: CleanRate≥97% + Workspace≥80% · <b>PROFICIENT</b>: ≥94% · <b>SATISFACTORY</b>: ≥87% · <b>RE-TRAINING</b>: &lt;87%</div>
       {% endif %}
     </div>
   </div>
@@ -261,23 +262,28 @@
       <span>High</span>
       <span style="margin-left:8px;color:#94a3b8;font-size:10px;">Hover for date &amp; score</span>
     </div>
+    <script type="application/json" id="heatmapData">{{ heatmap | tojson | safe }}</script>
     <script>
     (function(){
-      const data  = {{ heatmap | tojson }};
-      const today = new Date();
-      const grid  = document.getElementById('staffHeatmap');
-      for (let i = 29; i >= 0; i--) {
-        const d   = new Date(today); d.setDate(today.getDate() - i);
-        const key = d.toISOString().slice(0, 10);
-        const eff = data[key];
-        const cell = document.createElement('div');
-        cell.className = 'hm-cell';
-        cell.title = key + (eff !== undefined ? ' · Score: ' + eff : ' · No data');
-        cell.style.background = eff === undefined ? '#f1f5f9' :
-          eff >= 85 ? '#1e3a8a' : eff >= 70 ? '#1d4ed8' : eff >= 55 ? '#3b82f6' :
-          eff >= 40 ? '#93c5fd' : '#dbeafe';
-        grid.appendChild(cell);
-      }
+      try{
+        var raw=document.getElementById('heatmapData');
+        var parsed=raw?JSON.parse(raw.textContent):null;
+        var data=(parsed&&typeof parsed==='object'&&!Array.isArray(parsed))?parsed:{};
+        var today=new Date();
+        var grid=document.getElementById('staffHeatmap');
+        if(!grid)return;
+        for(var i=29;i>=0;i--){
+          var d=new Date(today);d.setDate(today.getDate()-i);
+          var key=d.toISOString().slice(0,10);
+          var eff=data[key];
+          var cell=document.createElement('div');
+          cell.className='hm-cell';
+          cell.title=key+(eff!==undefined?' · Score: '+eff:' · No data');
+          cell.style.background=eff===undefined?'#f1f5f9':
+            eff>=85?'#1e3a8a':eff>=70?'#1d4ed8':eff>=55?'#3b82f6':eff>=40?'#93c5fd':'#dbeafe';
+          grid.appendChild(cell);
+        }
+      }catch(e){/* silent */}
     })();
     </script>
   </div>
@@ -319,6 +325,8 @@
         <div class="mini-stat"><div class="mini-stat-label">Potential Items</div><div class="mini-stat-val">{{ pstats.potential_items }}</div></div>
         <div class="mini-stat"><div class="mini-stat-label">Potential Eff.</div><div class="mini-stat-val">{{ pstats.potential_eff }}</div></div>
         <div class="mini-stat"><div class="mini-stat-label">Gap Items</div><div class="mini-stat-val">{{ pstats.gap_items }}</div></div>
+        <div class="mini-stat"><div class="mini-stat-label">Workspace Score</div><div class="mini-stat-val">{{ pstats.workspace_score }}<span class="suf">%</span></div></div>
+        <div class="mini-stat"><div class="mini-stat-label">Grade</div><div class="mini-stat-val" style="font-size:12px">{{ pstats.grade }}</div></div>
         <div class="mini-stat"><div class="mini-stat-label">Total Time (hrs)</div><div class="mini-stat-val">{{ pstats.ttt }}</div></div>
       </div>
       {% else %}
@@ -359,7 +367,7 @@
         {% for e in entries %}
         <tr>
           <td style="font-weight:600;color:var(--navy);white-space:nowrap">{{ e.entry_date.strftime('%d %b %Y') }}</td>
-          <td>{{ e._sales_bill_effective }}</td>
+          <td>{{ e.effective_bills }}</td>
           <td>{{ e.picked }}</td>
           <td>{{ e.missed }}</td>
           <td>
@@ -369,10 +377,10 @@
           </td>
           <td>{{ e.packing_done }}</td>
           <td>{{ e.cs_sales_open }}</td>
-          <td>{{ e.rack_organized }}</td>
-          <td>{{ e.table_clean }}</td>
+          <td>{{ '✓' if e.rack_organized else '—' }}</td>
+          <td>{{ '✓' if e.table_clean else '—' }}</td>
           <td>{{ e.pick_speed }}</td>
-          <td>{{ e._total_time_hrs | round(2) }} hr</td>
+          <td>{{ e.effective_time | round(2) }} hr</td>
           {% if emp.staff_type == 'checker' %}
           <td>{{ e.checked }}</td>
           <td>{{ e.errors_found }}</td>
