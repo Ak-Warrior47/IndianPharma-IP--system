@@ -2,10 +2,8 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0">
-<title>Admin HQ | Indian Pharma IP</title>
-<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-<script src="https://cdn.socket.io/4.0.0/socket.io.min.js"></script>
+<title>Indian Pharma IP</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
 <script src="https://unpkg.com/@phosphor-icons/web"></script>
 <style>
 *{box-sizing:border-box}
@@ -143,9 +141,9 @@ body{font-family:'Inter',sans-serif;background:#f0f4ff;color:#0f172a;min-height:
 <div id="alert-stack"></div>
 
 <nav class="topbar">
-  <div class="d-flex align-items-center gap-2">
-    <div class="mark"><i class="ph-fill ph-dna"></i></div>
-    <div><div class="brand-name">Indian Pharma IP</div><div class="brand-sub">Admin HQ v5</div></div>
+  <div style="display:flex;align-items:center;gap:8px">
+    <div class="mark">💊</div>
+    <div><div class="brand-name">Indian Pharma IP</div></div>
   </div>
   <div class="nav-actions">
     <a href="/export_data" class="btn-nav"><i class="ph-bold ph-table"></i> CSV</a>
@@ -165,8 +163,8 @@ body{font-family:'Inter',sans-serif;background:#f0f4ff;color:#0f172a;min-height:
 
   <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1rem;flex-wrap:wrap;gap:.5rem">
     <div>
-      <h1 class="page-title">Operational Command</h1>
-      <p class="page-sub"><span class="live-dot"></span>Live monitoring · 48-hr KRA automation active</p>
+      <h1 class="page-title">Indian Pharma IP</h1>
+      
     </div>
   </div>
 
@@ -189,10 +187,12 @@ body{font-family:'Inter',sans-serif;background:#f0f4ff;color:#0f172a;min-height:
         <div class="instr-row"><span class="instr-key">Total Time (mins)</span><span class="instr-val">Total shift working time in minutes</span></div>
         <div class="formula-box">
           <p><strong>Pick Accuracy</strong> = Picked ÷ (Picked+Missed) × 100</p>
-          <p><strong>Pick Speed</strong> = (Picked+Missed) ÷ Total Hours</p>
-          <p><strong>Pack Efficiency</strong> = Packing Done ÷ Total Items × 100</p>
+          <p><strong>Pick Speed</strong> = (Picked+Missed) ÷ Total Time (hrs)</p>
+          <p><strong>Packing Eff. (display)</strong> = Packing Done ÷ Sales Bills Packed × 100</p>
+          <p><strong>Pack Rate (in score)</strong> = Packing Done ÷ (Picked+Missed) × 100</p>
+          <p><strong>CS Fulfilment</strong> = min(Packing Done ÷ CS Sales Open × 100, 100)</p>
           <p><strong>Workspace Score</strong> = (Rack+Table Days) ÷ (2×Days) × 100</p>
-          <p><strong>Efficiency Score</strong> = (Acc/100)×55 + min(Speed/200,1)×30 + (Workspace/100)×10 + (Pack/100)×5</p>
+          <p><strong>Efficiency Score</strong> = (Acc/100)×55 + min(Speed/200,1)×30 + (Workspace/100)×10 + (PackRate/100)×5</p>
           <p style="color:var(--blue);margin-top:4px"><strong>ELITE</strong> ≥98%+Workspace≥80% · <strong>PROFICIENT</strong> ≥95% · <strong>SATISFACTORY</strong> ≥88% · <strong>RE-TRAINING</strong> &lt;88%</p>
         </div>
       </div>
@@ -210,7 +210,7 @@ body{font-family:'Inter',sans-serif;background:#f0f4ff;color:#0f172a;min-height:
         <div class="formula-box">
           <p><strong>Check Accuracy</strong> = (Checked−Errors) ÷ Checked × 100</p>
           <p><strong>Error Rate</strong> = Errors ÷ Checked × 100</p>
-          <p><strong>Check Speed</strong> = Checked ÷ Check Hours</p>
+          <p><strong>Check Speed</strong> = Checked ÷ Check Time (hrs)</p>
           <p><strong>Workspace Score</strong> = (Rack+Table Days) ÷ (2×Days) × 100</p>
           <p><strong>Efficiency Score</strong> = (CheckAcc/100)×65 + min(Speed/150,1)×25 + (Workspace/100)×10</p>
           <p style="color:var(--blue);margin-top:4px"><strong>ELITE</strong> ≥97%+Workspace≥80% · <strong>PROFICIENT</strong> ≥94% · <strong>SATISFACTORY</strong> ≥87% · <strong>RE-TRAINING</strong> &lt;87%</p>
@@ -480,15 +480,33 @@ body{font-family:'Inter',sans-serif;background:#f0f4ff;color:#0f172a;min-height:
   </div>
 </div>
 
+<script src="https://cdn.socket.io/4.7.5/socket.io.min.js" crossorigin="anonymous"></script>
 <script>
-// Socket alerts
-const socket=io();
-socket.on('admin_alert',function(msg){
-  const s=document.getElementById('alert-stack');
-  const t=document.createElement('div');t.className='live-toast';
-  t.innerHTML='<div class="toast-title"><i class="ph-fill ph-warning-octagon"></i> Critical Drop — '+msg.type.toUpperCase()+'</div><div class="toast-body"><strong>'+msg.name+'</strong> recorded <strong>'+msg.eff+'%</strong> accuracy.</div>';
-  s.prepend(t);setTimeout(()=>{t.style.transition='opacity .4s';t.style.opacity='0';setTimeout(()=>t.remove(),400);},10000);
-});
+// ── Live alert socket ─────────────────────────────────────────────────────────
+(function(){
+  if(typeof io==='undefined'){
+    // SocketIO CDN failed to load — silently degrade, alerts just won't show
+    return;
+  }
+  try{
+    var socket=io({
+      transports:['websocket','polling'],
+      reconnectionAttempts:5,
+      reconnectionDelay:2000,
+      timeout:10000
+    });
+    socket.on('connect',function(){ /* connected silently */ });
+    socket.on('connect_error',function(){ /* degrade silently */ });
+    socket.on('admin_alert',function(msg){
+      var s=document.getElementById('alert-stack');if(!s)return;
+      var t=document.createElement('div');t.className='live-toast';
+      t.innerHTML='<div class="toast-title"><i class="ph-fill ph-warning-octagon"></i> Critical Drop \u2014 '+msg.type.toUpperCase()+'</div>'
+        +'<div class="toast-body"><strong>'+msg.name+'</strong> recorded <strong>'+msg.eff+'%</strong> accuracy.</div>';
+      s.prepend(t);
+      setTimeout(function(){t.style.transition='opacity .4s';t.style.opacity='0';setTimeout(function(){t.remove();},400);},10000);
+    });
+  }catch(e){ /* init error — degrade silently */ }
+})();
 
 // Period tabs
 function setPeriod(p,btn){
