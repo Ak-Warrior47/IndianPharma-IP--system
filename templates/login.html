@@ -3,357 +3,181 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1.0">
-<title>Indian Pharma IP</title>
+<title>Login | Indian Pharma IP</title>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
 <script src="https://unpkg.com/@phosphor-icons/web"></script>
 <style>
-*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+*{box-sizing:border-box;margin:0;padding:0}
 :root{
-  --blue:#1d4ed8;--blue-l:#3b82f6;--blue-dark:#1e3a8a;
-  --navy:#0f172a;--slate:#334155;--muted:#64748b;--lgray:#e2e8f0;
-  --glass:rgba(255,255,255,0.72);--glass-strong:rgba(255,255,255,0.88);
-  --glass-border:rgba(255,255,255,0.9);
-  --shadow:0 4px 24px rgba(29,78,216,0.10);--shadow-lg:0 12px 48px rgba(29,78,216,0.18);
-  --green:#059669;--amber:#d97706;--red:#dc2626;
+  --blue:#1d4ed8;--blue-l:#3b82f6;--blue-xl:#eff6ff;
+  --dark:#0f172a;--gray:#64748b;--lgray:#e2e8f0;--white:#ffffff;
 }
-
 body{
-  font-family:'Inter',sans-serif;
-  min-height:100vh;
-  display:flex;align-items:center;justify-content:center;
+  font-family:'Inter',sans-serif;min-height:100vh;display:flex;
+  align-items:center;justify-content:center;
   background:#f0f4ff;
-  overflow:hidden;
-}
-
-/* Ambient background — matches staff_detail/dashboard */
-body::before{
-  content:'';position:fixed;inset:0;
-  background:
-    radial-gradient(ellipse 70% 50% at 10% 0%,rgba(147,197,253,0.4) 0%,transparent 60%),
-    radial-gradient(ellipse 50% 70% at 90% 100%,rgba(196,181,253,0.25) 0%,transparent 60%);
-  z-index:0;pointer-events:none;
-}
-
-/* Subtle grid overlay */
-body::after{
-  content:'';position:fixed;inset:0;
   background-image:
-    linear-gradient(rgba(29,78,216,0.03) 1px,transparent 1px),
-    linear-gradient(90deg,rgba(29,78,216,0.03) 1px,transparent 1px);
-  background-size:40px 40px;
-  z-index:0;pointer-events:none;
+    radial-gradient(ellipse at 10% 10%,rgba(29,78,216,.1) 0%,transparent 50%),
+    radial-gradient(ellipse at 90% 90%,rgba(96,165,250,.08) 0%,transparent 50%),
+    linear-gradient(rgba(29,78,216,.025) 1px,transparent 1px),
+    linear-gradient(90deg,rgba(29,78,216,.025) 1px,transparent 1px);
+  background-size:100% 100%,100% 100%,36px 36px,36px 36px;
 }
-
-.wrapper{
-  position:relative;z-index:1;
-  width:100%;max-width:440px;
-  margin:1.5rem;
-  animation:rise 0.65s cubic-bezier(.22,1,.36,1) both;
-}
-@keyframes rise{
-  from{opacity:0;transform:translateY(24px)}
-  to{opacity:1;transform:translateY(0)}
-}
-
-/* Card */
 .card{
-  background:var(--glass-strong);
-  backdrop-filter:blur(24px) saturate(180%);
-  -webkit-backdrop-filter:blur(24px) saturate(180%);
-  border:1.5px solid var(--glass-border);
+  width:100%;max-width:420px;margin:1.5rem;
+  background:rgba(255,255,255,.92);
+  backdrop-filter:blur(20px);
+  border:1px solid rgba(255,255,255,.9);
   border-radius:24px;
-  box-shadow:var(--shadow-lg);
+  box-shadow:0 8px 40px rgba(15,23,42,.12),0 2px 8px rgba(15,23,42,.06),inset 0 1px 0 rgba(255,255,255,.8);
   overflow:hidden;
 }
+.card-top{
+  background:linear-gradient(135deg,var(--blue),var(--blue-l));
+  padding:2rem 2rem 1.5rem;
+  position:relative;overflow:hidden;
+}
+.card-top::before{content:"";position:absolute;top:-30px;right:-30px;width:140px;height:140px;background:rgba(255,255,255,.07);border-radius:50%}
+.card-top::after{content:"";position:absolute;bottom:-50px;left:20px;width:100px;height:100px;background:rgba(255,255,255,.04);border-radius:50%}
+.brand-mark{width:48px;height:48px;background:rgba(255,255,255,.2);border:1.5px solid rgba(255,255,255,.3);border-radius:14px;display:flex;align-items:center;justify-content:center;font-size:1.3rem;margin-bottom:.9rem}
+.brand-name{font-size:1.25rem;font-weight:800;color:#fff;letter-spacing:-.5px;margin-bottom:3px}
+.brand-sub{font-size:.72rem;color:rgba(255,255,255,.7);font-weight:600;letter-spacing:1px;text-transform:uppercase}
 
-/* Top gradient accent bar — same as hero-card::before in staff_detail */
-.card-accent{
-  height:4px;
-  background:linear-gradient(90deg,var(--blue),#818cf8,#34d399);
-}
-
-/* Header */
-.card-header{
-  padding:32px 32px 24px;
-  border-bottom:1px solid rgba(203,213,225,0.4);
-  display:flex;align-items:center;gap:16px;
-}
-.logo-icon{
-  width:48px;height:48px;flex-shrink:0;
-  background:linear-gradient(135deg,var(--blue),#818cf8);
-  border-radius:14px;
-  display:flex;align-items:center;justify-content:center;
-  font-size:20px;
-  box-shadow:0 6px 18px rgba(29,78,216,0.35);
-}
-.logo-text{}
-.logo-name{
-  font-family:'Inter',sans-serif;
-  font-size:15px;font-weight:800;
-  letter-spacing:0.06em;
-  color:var(--navy);
-  text-transform:uppercase;
-}
-.logo-sub{
-  font-size:11px;font-weight:500;
-  color:var(--muted);
-  margin-top:3px;
-  letter-spacing:0.04em;
-}
-
-/* Body */
-.card-body{padding:28px 32px 32px}
+.card-body{padding:1.75rem 2rem 2rem}
 
 /* Flash messages */
-.flash-list{list-style:none;margin-bottom:18px}
-.flash-item{
-  padding:10px 14px;border-radius:11px;
-  font-size:12px;font-weight:600;
-  display:flex;align-items:center;gap:8px;
-  margin-bottom:6px;
-}
-.flash-danger{background:rgba(254,202,202,0.7);color:#991b1b;border:1px solid rgba(239,68,68,0.2)}
-.flash-warning{background:rgba(254,243,199,0.7);color:#92400e;border:1px solid rgba(245,158,11,0.2)}
-.flash-success{background:rgba(187,247,208,0.7);color:#166534;border:1px solid rgba(34,197,94,0.2)}
-.flash-info{background:rgba(219,234,254,0.7);color:#1e40af;border:1px solid rgba(59,130,246,0.2)}
+.flash-list{list-style:none;margin-bottom:1rem}
+.flash-item{padding:10px 14px;border-radius:10px;font-size:.8rem;font-weight:600;display:flex;align-items:center;gap:7px;margin-bottom:6px}
+.flash-danger{background:#fff1f2;color:#be123c;border:1px solid #fecdd3}
+.flash-warning{background:#fffbeb;color:#b45309;border:1px solid #fde68a}
+.flash-success{background:#f0fdf4;color:#15803d;border:1px solid #bbf7d0}
+.flash-info{background:#eff6ff;color:#1d4ed8;border:1px solid #bfdbfe}
 
-/* Field label */
-.field-label{
-  display:block;
-  font-family:'Inter',sans-serif;
-  font-size:10px;font-weight:700;
-  color:var(--muted);
-  text-transform:uppercase;
-  letter-spacing:0.1em;
-  margin-bottom:6px;
-  margin-top:18px;
-}
-.field-label:first-of-type{margin-top:0}
+label{display:block;font-size:.72rem;font-weight:700;color:var(--gray);text-transform:uppercase;letter-spacing:.8px;margin-bottom:5px;margin-top:1rem}
+label:first-of-type{margin-top:0}
 
-/* Inputs */
-.field-wrap{position:relative}
+/* Email input wrapper */
+.email-wrap{position:relative}
 .fi{
-  width:100%;
-  padding:11px 14px 11px 40px;
-  border-radius:12px;
+  width:100%;padding:11px 14px;border-radius:10px;
   border:1.5px solid var(--lgray);
-  background:rgba(248,250,252,0.8);
-  font-size:14px;
-  font-family:'Inter',sans-serif;
-  color:var(--navy);
-  outline:none;
-  transition:all 0.2s;
+  background:#f8fafc;
+  font-size:.9rem;font-family:'Inter',sans-serif;
+  color:var(--dark);outline:none;transition:all .2s;
 }
-.fi:focus{
-  border-color:var(--blue);
-  background:rgba(255,255,255,0.95);
-  box-shadow:0 0 0 3px rgba(29,78,216,0.1);
-}
-.fi-icon{
-  position:absolute;left:13px;top:50%;transform:translateY(-50%);
-  font-size:15px;color:var(--muted);pointer-events:none;
-  transition:color 0.2s;
-}
-.field-wrap:focus-within .fi-icon{color:var(--blue)}
+.fi:focus{border-color:var(--blue);background:#fff;box-shadow:0 0 0 3px rgba(29,78,216,.1)}
 
-/* Password toggle */
-.fi-pw{padding-right:42px}
-.pw-toggle{
-  position:absolute;right:12px;top:50%;transform:translateY(-50%);
-  background:none;border:none;cursor:pointer;padding:4px;
-  color:var(--muted);font-size:15px;transition:color 0.2s;
-}
-.pw-toggle:hover{color:var(--blue)}
-
-/* Email suggestion dropdown */
-.email-sug{
+/* Suggestion dropdown */
+.email-suggestion{
   position:absolute;top:calc(100% + 4px);left:0;right:0;z-index:99;
-  background:rgba(255,255,255,0.97);
-  backdrop-filter:blur(12px);
-  border:1.5px solid var(--blue);
-  border-radius:12px;
-  box-shadow:0 8px 28px rgba(29,78,216,0.15);
+  background:#fff;border:1.5px solid var(--blue);border-radius:10px;
+  box-shadow:0 8px 24px rgba(15,23,42,.12);
   overflow:hidden;display:none;
 }
 .sug-item{
-  padding:11px 14px;font-size:13px;cursor:pointer;
-  display:flex;align-items:center;gap:9px;
-  transition:background 0.15s;
-  color:var(--slate);
+  padding:10px 14px;font-size:.85rem;cursor:pointer;
+  display:flex;align-items:center;gap:8px;
+  transition:background .15s;
 }
-.sug-item:hover,.sug-item.active{background:rgba(29,78,216,0.06)}
+.sug-item:hover,.sug-item.active{background:var(--blue-xl)}
 .sug-domain{color:var(--blue);font-weight:700}
-.sug-hint{font-size:10px;color:var(--muted);margin-left:auto;font-family:'Inter',sans-serif;font-weight:600;letter-spacing:0.05em}
+.sug-label{font-size:.68rem;color:var(--gray);margin-left:auto}
 
-/* Role selector */
-.role-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:6px}
+/* Role select */
+.role-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:.4rem}
 .role-opt{position:relative}
 .role-opt input{position:absolute;opacity:0;width:0;height:0}
 .role-label{
-  display:flex;align-items:center;gap:8px;
-  padding:11px 14px;border-radius:12px;
-  border:1.5px solid var(--lgray);
-  background:rgba(248,250,252,0.8);
-  font-family:'Inter',sans-serif;
-  font-size:12px;font-weight:700;
-  color:var(--muted);cursor:pointer;transition:all 0.2s;
+  display:flex;align-items:center;gap:7px;
+  padding:10px 12px;border-radius:10px;
+  border:1.5px solid var(--lgray);background:#f8fafc;
+  font-size:.8rem;font-weight:700;color:var(--gray);
+  cursor:pointer;transition:all .2s;
 }
 .role-opt input:checked + .role-label{
-  border-color:var(--blue);
-  background:rgba(29,78,216,0.07);
-  color:var(--blue);
+  border-color:var(--blue);background:var(--blue-xl);color:var(--blue);
 }
-.role-label i{font-size:15px}
+.role-label i{font-size:.95rem}
 
-/* Submit button */
 .btn-login{
-  width:100%;margin-top:24px;
-  padding:14px;
-  background:linear-gradient(135deg,var(--blue),var(--blue-light));
-  color:#fff;border:none;border-radius:13px;
+  width:100%;margin-top:1.5rem;padding:13px;
+  background:linear-gradient(135deg,var(--blue),var(--blue-l)) !important;
+  color:#fff !important;border:none;border-radius:11px;
+  font-size:.9rem;font-weight:700;cursor:pointer;
   font-family:'Inter',sans-serif;
-  font-size:13px;font-weight:700;
-  letter-spacing:0.05em;
-  cursor:pointer;
-  box-shadow:0 6px 20px rgba(29,78,216,0.35);
-  transition:all 0.2s;
-  display:flex;align-items:center;justify-content:center;gap:8px;
+  box-shadow:0 4px 16px rgba(29,78,216,.3);
+  transition:all .2s;display:flex !important;align-items:center;justify-content:center;gap:7px;
 }
-.btn-login:hover{
-  background:linear-gradient(135deg,var(--blue-dark),var(--blue));
-  transform:translateY(-1px);
-  box-shadow:0 8px 26px rgba(29,78,216,0.42);
-}
+.btn-login:hover{background:linear-gradient(135deg,#1e3a8a,#1d4ed8) !important;transform:translateY(-1px);box-shadow:0 6px 20px rgba(29,78,216,.35)}
 .btn-login:active{transform:translateY(0)}
 
-/* Footer hint */
-.card-foot{
-  padding:14px 32px 20px;
-  text-align:center;
-  font-size:11px;color:var(--muted);
-  border-top:1px solid rgba(203,213,225,0.35);
-}
-.card-foot span{
-  font-family:'Inter',sans-serif;
-  font-weight:700;color:var(--blue);
-}
-
-/* Floating particles — purely decorative, matches dashboard vibe */
-.particles{position:fixed;inset:0;z-index:0;pointer-events:none;overflow:hidden}
-.p{
-  position:absolute;border-radius:50%;
-  background:radial-gradient(circle,rgba(29,78,216,0.18),transparent 70%);
-  animation:float linear infinite;
-}
-@keyframes float{
-  0%{transform:translateY(100vh) scale(0)}
-  10%{opacity:1}
-  90%{opacity:0.4}
-  100%{transform:translateY(-10vh) scale(1);opacity:0}
-}
+.hint{font-size:.7rem;color:var(--gray);text-align:center;margin-top:1rem}
+.hint span{color:var(--blue);font-weight:600}
 </style>
 </head>
 <body>
+<div class="card">
+  <div class="card-top">
+    <div class="brand-mark"><i class="ph-fill ph-dna" style="color:#fff"></i></div>
+    <div class="brand-name">Indian Pharma IP</div>
+    <div class="brand-sub">Operations · KRA System</div>
+  </div>
+  <div class="card-body">
+    {% with messages = get_flashed_messages(with_categories=true) %}
+    {% if messages %}
+    <ul class="flash-list">
+      {% for cat, msg in messages %}
+      <li class="flash-item flash-{{cat}}">
+        <i class="ph-bold ph-{% if cat=='danger' %}warning-octagon{% elif cat=='success' %}check-circle{% elif cat=='warning' %}warning{% else %}info{% endif %}"></i>
+        {{msg}}
+      </li>
+      {% endfor %}
+    </ul>
+    {% endif %}
+    {% endwith %}
 
-<!-- Decorative particles -->
-<div class="particles" aria-hidden="true">
-  <div class="p" style="width:120px;height:120px;left:15%;animation-duration:18s;animation-delay:0s"></div>
-  <div class="p" style="width:80px;height:80px;left:55%;animation-duration:22s;animation-delay:4s"></div>
-  <div class="p" style="width:60px;height:60px;left:80%;animation-duration:16s;animation-delay:8s"></div>
-  <div class="p" style="width:100px;height:100px;left:35%;animation-duration:25s;animation-delay:2s"></div>
-  <div class="p" style="width:50px;height:50px;left:70%;animation-duration:20s;animation-delay:12s"></div>
-</div>
-
-<div class="wrapper">
-  <div class="card">
-
-    <!-- Top accent bar — matches hero-card in staff_detail.html -->
-    <div class="card-accent"></div>
-
-    <!-- Header -->
-    <div class="card-header">
-      <div class="logo-icon">💊</div>
-      <div class="logo-text">
-        <div class="logo-name">Indian Pharma IP</div>
+    <form method="POST" action="/login" autocomplete="off">
+      <label for="email">Pharma ID (Email)</label>
+      <div class="email-wrap">
+        <input
+          class="fi" type="text" id="email" name="email"
+          placeholder="yourname@pharmaip.com"
+          autocomplete="off" spellcheck="false"
+          required
+        >
+        <div class="email-suggestion" id="emailSug">
+          <div class="sug-item" id="sugItem">
+            <i class="ph-bold ph-envelope" style="color:#1d4ed8;font-size:.85rem"></i>
+            <span id="sugFull"></span>
+            <span class="sug-label">Press Enter or Tab</span>
+          </div>
+        </div>
       </div>
-    </div>
 
-    <!-- Body -->
-    <div class="card-body">
+      <label for="password">Password</label>
+      <input class="fi" type="password" id="password" name="password" placeholder="••••••••" required>
 
-      <!-- Flash messages -->
-      {% with messages = get_flashed_messages(with_categories=true) %}
-      {% if messages %}
-      <ul class="flash-list">
-        {% for cat, msg in messages %}
-        <li class="flash-item flash-{{cat}}">
-          <i class="ph-bold ph-{% if cat=='danger' %}warning-octagon{% elif cat=='success' %}check-circle{% elif cat=='warning' %}warning{% else %}info{% endif %}"></i>
-          {{msg}}
-        </li>
-        {% endfor %}
-      </ul>
-      {% endif %}
-      {% endwith %}
-
-      <form method="POST" action="/login" autocomplete="off">
-
-        <!-- Email -->
-        <label class="field-label" for="email">Pharma ID (Email)</label>
-        <div class="field-wrap">
-          <i class="ph-bold ph-envelope fi-icon"></i>
-          <input
-            class="fi" type="text" id="email" name="email"
-            placeholder="yourname@pharmaip.com"
-            autocomplete="off" spellcheck="false" required
-          >
-          <div class="email-sug" id="emailSug">
-            <div class="sug-item" id="sugItem">
-              <i class="ph-bold ph-envelope" style="color:var(--blue);font-size:13px"></i>
-              <span id="sugFull"></span>
-              <span class="sug-hint">Tab or Enter</span>
-            </div>
-          </div>
+      <label>Your Role</label>
+      <div class="role-grid">
+        <div class="role-opt">
+          <input type="radio" name="staff_type" id="r_picker" value="picker" checked>
+          <label class="role-label" for="r_picker">
+            <i class="ph-bold ph-package"></i> Picker
+          </label>
         </div>
-
-        <!-- Password -->
-        <label class="field-label" for="password">Password</label>
-        <div class="field-wrap">
-          <i class="ph-bold ph-lock fi-icon"></i>
-          <input class="fi fi-pw" type="password" id="password" name="password" placeholder="••••••••" required>
-          <button type="button" class="pw-toggle" id="pwToggle" tabindex="-1" aria-label="Show password">
-            <i class="ph-bold ph-eye" id="pwIcon"></i>
-          </button>
+        <div class="role-opt">
+          <input type="radio" name="staff_type" id="r_checker" value="checker">
+          <label class="role-label" for="r_checker">
+            <i class="ph-bold ph-magnifying-glass"></i> Checker
+          </label>
         </div>
+      </div>
 
-        <!-- Role -->
-        <label class="field-label">Your Role</label>
-        <div class="role-grid">
-          <div class="role-opt">
-            <input type="radio" name="staff_type" id="r_picker" value="picker" checked>
-            <label class="role-label" for="r_picker">
-              <i class="ph-bold ph-package"></i> Picker
-            </label>
-          </div>
-          <div class="role-opt">
-            <input type="radio" name="staff_type" id="r_checker" value="checker">
-            <label class="role-label" for="r_checker">
-              <i class="ph-bold ph-magnifying-glass"></i> Checker
-            </label>
-          </div>
-        </div>
-
-        <button type="submit" class="btn-login">
-          <i class="ph-bold ph-sign-in"></i> Sign In to Dashboard
-        </button>
-
-      </form>
-    </div>
-
-    <!-- Footer -->
-    <div class="card-foot">
-      Authorized personnel only · @pharmaip.com
-    </div>
-
+      <button type="submit" class="btn-login">
+        <i class="ph-bold ph-sign-in"></i> Sign In
+      </button>
+    </form>
+    <p class="hint">Authorized personnel only · <span>@pharmaip.com</span> accounts</p>
   </div>
 </div>
 
@@ -366,38 +190,39 @@ const DOMAIN     = '@pharmaip.com';
 
 function updateSuggestion() {
   const val = emailInput.value.trim();
-  if (!val || val.includes('@')) { sug.style.display='none'; return; }
+  if (!val || val.includes('@')) { sug.style.display = 'none'; return; }
   sugFull.innerHTML = val + '<span class="sug-domain">' + DOMAIN + '</span>';
   sug.style.display = 'block';
 }
+
 function applySuggestion() {
   const val = emailInput.value.trim();
   if (!val || val.includes('@')) return;
   emailInput.value = val + DOMAIN;
   sug.style.display = 'none';
 }
+
 emailInput.addEventListener('input', updateSuggestion);
 emailInput.addEventListener('keydown', function(e) {
-  if ((e.key==='Tab'||e.key==='Enter') && sug.style.display==='block') {
-    e.preventDefault(); applySuggestion();
-    if (e.key==='Tab') document.getElementById('password').focus();
+  if ((e.key === 'Tab' || e.key === 'Enter') && sug.style.display === 'block') {
+    e.preventDefault();
+    applySuggestion();
+    if (e.key === 'Tab') document.getElementById('password').focus();
   }
-  if (e.key==='Escape') sug.style.display='none';
+  if (e.key === 'Escape') sug.style.display = 'none';
 });
-sugItem.addEventListener('mousedown', function(e){ e.preventDefault(); applySuggestion(); });
-document.addEventListener('click', function(e){
-  if (!emailInput.contains(e.target) && !sug.contains(e.target)) sug.style.display='none';
+sugItem.addEventListener('mousedown', function(e) {
+  e.preventDefault();
+  applySuggestion();
 });
-emailInput.addEventListener('blur', function(){ setTimeout(()=>sug.style.display='none',150); });
-
-// Password toggle
-const pwToggle = document.getElementById('pwToggle');
-const pwIcon   = document.getElementById('pwIcon');
-const pwField  = document.getElementById('password');
-pwToggle.addEventListener('click', function(){
-  const show = pwField.type==='password';
-  pwField.type = show ? 'text' : 'password';
-  pwIcon.className = show ? 'ph-bold ph-eye-slash' : 'ph-bold ph-eye';
+document.addEventListener('click', function(e) {
+  if (!emailInput.contains(e.target) && !sug.contains(e.target)) {
+    sug.style.display = 'none';
+  }
+});
+// If user leaves email field without @, auto-append domain
+emailInput.addEventListener('blur', function() {
+  setTimeout(() => sug.style.display = 'none', 150);
 });
 </script>
 </body>
