@@ -51,6 +51,7 @@ class Employee(db.Model):
     staff_type    = db.Column(db.String(20), default="picker")
     role          = db.Column(db.String(100), default="Operations Specialist")
     is_admin      = db.Column(db.Boolean, default=False)
+    sunday_override = db.Column(db.Boolean, default=False)
     entries       = db.relationship("KPIEntry", backref="owner", lazy="select", cascade="all, delete-orphan")
     def set_password(self, pw):   self.password_hash = generate_password_hash(pw)
     def check_password(self, pw): return check_password_hash(self.password_hash, pw)
@@ -375,26 +376,34 @@ def dashboard():
         today_entry=KPIEntry.query.filter_by(emp_id=emp_id,entry_date=today).first()
         if request.method=="POST" and not today_entry:
             try:
-                def gi(k): return max(0,int(request.form.get(k,0) or 0))
-                def gf(k): return max(0,float(request.form.get(k,0) or 0))
-                picked=gi("picked"); missed=gi("missed")
-                sales_bills_open=gi("sales_bills_open"); cs_sales_open=gi("cs_sales_open")
-                packing_done=gi("packing_done")
-                rack_organized=1 if gi("rack_organized")>=1 else 0
-                table_clean=1 if gi("table_clean")>=1 else 0
-                total_mins=min(gf("total_mins"),1440); check_mins=min(gf("check_mins"),1440)
-                checked=gi("checked"); errors_found=min(gi("errors_found"),checked)
-                ne=KPIEntry(emp_id=emp_id,sales_bills_open=sales_bills_open,picked=picked,
-                    missed=missed,cs_sales_open=cs_sales_open,packing_done=packing_done,
-                    rack_organized=rack_organized,table_clean=table_clean,
-                    total_time=round(total_mins/60,3),checked=checked,errors_found=errors_found,
-                    check_time=round(check_mins/60,3),entry_date=today)
-                db.session.add(ne); db.session.commit(); today_entry=ne
-                total=picked+missed; eff=round(picked/total*100,1) if total>0 else 0.0
-                if eff<85:
-                    try: socketio.emit("admin_alert",{"name":session.get("user_name","Unknown"),"eff":eff,"type":staff_type})
-                    except Exception: pass
-                flash("Today's metrics recorded successfully.","success")
+                # Check if today is Sunday
+                is_sunday = today.weekday() == 6
+                emp = db.session.get(Employee, emp_id)
+                sunday_override_allowed = emp and emp.sunday_override
+                
+                if is_sunday and not sunday_override_allowed:
+                    flash("📅 Sunday is a holiday. No data submission allowed today. Admin can enable data entry for Sundays.","warning")
+                else:
+                    def gi(k): return max(0,int(request.form.get(k,0) or 0))
+                    def gf(k): return max(0,float(request.form.get(k,0) or 0))
+                    picked=gi("picked"); missed=gi("missed")
+                    sales_bills_open=gi("sales_bills_open"); cs_sales_open=gi("cs_sales_open")
+                    packing_done=gi("packing_done")
+                    rack_organized=1 if gi("rack_organized")>=1 else 0
+                    table_clean=1 if gi("table_clean")>=1 else 0
+                    total_mins=min(gf("total_mins"),1440); check_mins=min(gf("check_mins"),1440)
+                    checked=gi("checked"); errors_found=min(gi("errors_found"),checked)
+                    ne=KPIEntry(emp_id=emp_id,sales_bills_open=sales_bills_open,picked=picked,
+                        missed=missed,cs_sales_open=cs_sales_open,packing_done=packing_done,
+                        rack_organized=rack_organized,table_clean=table_clean,
+                        total_time=round(total_mins/60,3),checked=checked,errors_found=errors_found,
+                        check_time=round(check_mins/60,3),entry_date=today)
+                    db.session.add(ne); db.session.commit(); today_entry=ne
+                    total=picked+missed; eff=round(picked/total*100,1) if total>0 else 0.0
+                    if eff<85:
+                        try: socketio.emit("admin_alert",{"name":session.get("user_name","Unknown"),"eff":eff,"type":staff_type})
+                        except Exception: pass
+                    flash("Today's metrics recorded successfully.","success")
             except Exception as e:
                 db.session.rollback(); logger.error(f"Dashboard POST: {e}")
                 flash("Could not save entry. Please try again.","danger")
@@ -644,6 +653,21 @@ def admin_update_user(emp_id):
         db.session.rollback(); logger.error(f"update_user: {e}"); flash("Could not update employee.","danger")
     return redirect(url_for("admin_dashboard"))
 
+@app.route("/admin/toggle_sunday/<int:emp_id>",methods=["POST"])
+@login_required
+@admin_required
+def admin_toggle_sunday(emp_id):
+    try:
+        emp=db.session.get(Employee,emp_id)
+        if not emp or emp.is_admin: flash("Cannot modify this account.","danger"); return redirect(url_for("admin_dashboard"))
+        emp.sunday_override = not emp.sunday_override
+        db.session.commit()
+        status = "enabled" if emp.sunday_override else "disabled"
+        flash(f"✏️ Sunday data entry {status} for '{emp.name}'.","success")
+    except Exception as e:
+        db.session.rollback(); logger.error(f"toggle_sunday: {e}"); flash("Could not update Sunday override.","danger")
+    return redirect(url_for("admin_dashboard"))
+
 @app.errorhandler(404)
 def not_found(e):
     if session.get("user_id"):
@@ -679,6 +703,7 @@ def run_migration():
             "ALTER TABLE kpi_entries ADD COLUMN IF NOT EXISTS rack_organized INTEGER DEFAULT 0",
             "ALTER TABLE kpi_entries ADD COLUMN IF NOT EXISTS table_clean INTEGER DEFAULT 0",
             "ALTER TABLE kpi_entries ADD COLUMN IF NOT EXISTS total_time FLOAT DEFAULT 0.0",
+            "ALTER TABLE employees ADD COLUMN IF NOT EXISTS sunday_override BOOLEAN DEFAULT 0",
             "UPDATE kpi_entries SET sales_bills_open = bills WHERE sales_bills_open = 0 AND bills > 0",
             "UPDATE kpi_entries SET cs_sales_open = boxes WHERE cs_sales_open = 0 AND boxes > 0",
             "UPDATE kpi_entries SET total_time = sweep WHERE total_time = 0 AND sweep > 0",
@@ -695,4 +720,4 @@ def run_migration():
         return html
     except Exception as e:
         logger.error(f"Migration error: {e}")
-        return f"<b>Error:</b> {e}", 500
+        return f"<b>Error:</b> {e}", 5000
