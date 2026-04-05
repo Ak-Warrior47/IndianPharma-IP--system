@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Indian Pharma IP</title>
+<title>My Dashboard — Indian Pharma IP</title>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
 <script src="https://unpkg.com/@phosphor-icons/web"></script>
 <style>
@@ -294,27 +294,50 @@ body{font-family:'Inter',sans-serif;background:#f0f4ff;min-height:100vh;display:
             </p>
           </div>
         </div>
-      {% else %}
-        <form method="POST" action="/dashboard" autocomplete="off">
+      {% else %}\n        <form method="POST" action="/dashboard" autocomplete="off">
           <div class="form-grid">
 
-            <!-- Row 1: Sales Bill Packed | Item Picked -->
+            {% if staff_type == 'checker' %}
+            <!-- CHECKER METRICS SECTION (TOP) -->
+            <div class="form-section-lbl"><i class="ph-bold ph-magnifying-glass"></i> Checker Metrics</div>
+            <div class="form-group">
+              <label class="fi-label" for="f_ck">Items Checked <span class="req">*</span></label>
+              <input class="fi" type="number" id="f_ck" name="checked" min="0" value="0" required>
+              <span class="fi-hint">Total items verified today</span>
+            </div>
+            <div class="form-group">
+              <label class="fi-label" for="f_er">Errors Found <span class="req">*</span></label>
+              <input class="fi" type="number" id="f_er" name="errors_found" min="0" value="0" required>
+              <span class="fi-hint">Mistakes caught during check</span>
+            </div>
+            <div class="form-group full">
+              <label class="fi-label" for="f_cm">Check Time (mins) <span class="req">*</span></label>
+              <input class="fi" type="number" id="f_cm" name="check_mins" min="0" max="480" value="0" required>
+              <span class="fi-hint">Total checking time in minutes (max 8 hrs)</span>
+            </div>
+            <hr class="form-divider">
+            {% endif %}
+
+            <!-- COMMON FIELDS FOR ALL (Picker & Checker) -->
+            <div class="form-section-lbl"><i class="ph-bold ph-package"></i> Work Completed</div>
+
+            <!-- Row 1: Sales Bill Packed | Item Picked/Checked -->
             <div class="form-group">
               <label class="fi-label" for="f_sb">Sales Bill Packed <span class="req">★ URGENT</span></label>
               <input class="fi" type="number" id="f_sb" name="sales_bills_open" min="0" value="0" required>
-              <span class="fi-hint">Sales bills packed today (urgent)</span>
+              <span class="fi-hint">Sales bills packed today</span>
             </div>
             <div class="form-group">
-              <label class="fi-label" for="f_pk">Item Picked <span class="req">*</span></label>
+              <label class="fi-label" for="f_pk">{% if staff_type == 'checker' %}Bills Checked{% else %}Item Picked{% endif %} <span class="req">*</span></label>
               <input class="fi" type="number" id="f_pk" name="picked" min="0" value="0" required>
-              <span class="fi-hint">Total items picked from rack</span>
+              <span class="fi-hint">{% if staff_type == 'checker' %}Bills verified today{% else %}Total items picked from rack{% endif %}</span>
             </div>
 
-            <!-- Row 2: Item Missed | CS Sales Open -->
+            <!-- Row 2: Item Missed/Urgent | CS Sales Open -->
             <div class="form-group">
-              <label class="fi-label" for="f_ms">Item Missed <span class="req">*</span></label>
+              <label class="fi-label" for="f_ms">{% if staff_type == 'checker' %}Urgent Bill Checked{% else %}Item Missed{% endif %} <span class="req">*</span></label>
               <input class="fi" type="number" id="f_ms" name="missed" min="0" value="0" required>
-              <span class="fi-hint">Items not found / missed</span>
+              <span class="fi-hint">{% if staff_type == 'checker' %}Urgent bills verified{% else %}Items not found / missed{% endif %}</span>
             </div>
             <div class="form-group">
               <label class="fi-label" for="f_cs">CS Sales Open <span class="req">*</span></label>
@@ -322,27 +345,12 @@ body{font-family:'Inter',sans-serif;background:#f0f4ff;min-height:100vh;display:
               <span class="fi-hint">CS open orders handled</span>
             </div>
 
-            <!-- Row 3: Packing Done | Rack Organized -->
+            <!-- Row 3: Packing Done | Table Clean -->
             <div class="form-group">
               <label class="fi-label" for="f_pd">Packing Done <span class="req">*</span></label>
               <input class="fi" type="number" id="f_pd" name="packing_done" min="0" value="0" required>
               <span class="fi-hint">Bills fully packed &amp; ready</span>
             </div>
-            <div class="form-group">
-              <label class="fi-label">Rack Organized</label>
-              <div class="yn-group">
-                <div class="yn-opt">
-                  <input type="radio" name="rack_organized" id="rack_yes" value="1">
-                  <label class="yn-lbl" for="rack_yes"><i class="ph-bold ph-check" style="color:var(--green)"></i> Yes</label>
-                </div>
-                <div class="yn-opt">
-                  <input type="radio" name="rack_organized" id="rack_no" value="0" checked>
-                  <label class="yn-lbl" for="rack_no"><i class="ph-bold ph-x" style="color:var(--red)"></i> No</label>
-                </div>
-              </div>
-            </div>
-
-            <!-- Row 4: Table Clean | Total Time -->
             <div class="form-group">
               <label class="fi-label">Table Clean</label>
               <div class="yn-group">
@@ -356,29 +364,13 @@ body{font-family:'Inter',sans-serif;background:#f0f4ff;min-height:100vh;display:
                 </div>
               </div>
             </div>
-            <div class="form-group">
-              <label class="fi-label" for="f_tm">Total Time (mins) <span class="req">*</span></label>
-              <input class="fi" type="number" id="f_tm" name="total_mins" min="0" step="1" value="0" required>
-              <span class="fi-hint">Total shift time in minutes</span>
-            </div>
 
-            {% if staff_type == 'checker' %}
-            <hr class="form-divider">
-            <div class="form-section-lbl"><i class="ph-bold ph-magnifying-glass"></i> Checker Metrics</div>
-            <div class="form-group">
-              <label class="fi-label" for="f_ck">Items Checked</label>
-              <input class="fi" type="number" id="f_ck" name="checked" min="0" value="0">
-            </div>
-            <div class="form-group">
-              <label class="fi-label" for="f_er">Errors Found</label>
-              <input class="fi" type="number" id="f_er" name="errors_found" min="0" value="0">
-            </div>
+            <!-- Row 4: Total Time -->
             <div class="form-group full">
-              <label class="fi-label" for="f_cm">Check Time (mins)</label>
-              <input class="fi" type="number" id="f_cm" name="check_mins" min="0" value="0">
-              <span class="fi-hint">Time spent checking in minutes</span>
+              <label class="fi-label" for="f_tm">Total Time (mins) <span class="req">*</span></label>
+              <input class="fi" type="number" id="f_tm" name="total_mins" min="0" max="480" step="1" value="0" required>
+              <span class="fi-hint">Total shift time in minutes (max 8 hrs = 480 mins)</span>
             </div>
-            {% endif %}
 
           </div>
           <div class="submit-row">
@@ -423,13 +415,7 @@ body{font-family:'Inter',sans-serif;background:#f0f4ff;min-height:100vh;display:
           <div class="mini-stat"><div class="mini-stat-label">Consistency</div><div class="mini-stat-val">{{ pstats.consistency }}<span class="suf">%</span></div></div>
           <div class="mini-stat"><div class="mini-stat-label">Grade</div><div class="mini-stat-val" style="font-size:12px">{{ pstats.grade }}</div></div>
           <div class="mini-stat"><div class="mini-stat-label">Potential Items</div><div class="mini-stat-val">{{ pstats.potential_items }}</div></div>
-          <div class="mini-stat"><div class="mini-stat-label">Potential Eff.</div><div class="mini-stat-val">{{ pstats.potential_eff }}</div></div>
           <div class="mini-stat"><div class="mini-stat-label">Gap Items</div><div class="mini-stat-val">{{ pstats.gap_items }}</div></div>
-          <div class="mini-stat"><div class="mini-stat-label">Workspace Score</div><div class="mini-stat-val">{{ pstats.workspace_score }}<span class="suf">%</span></div></div>
-          <div class="mini-stat"><div class="mini-stat-label">Total Time (hrs)</div><div class="mini-stat-val">{{ pstats.ttt }}</div></div>
-          {% if staff_type=='checker' %}
-          <div class="mini-stat"><div class="mini-stat-label">Check Speed/hr</div><div class="mini-stat-val">{{ pstats.ck_speed }}</div></div>
-          {% endif %}
         </div>
         {% else %}
         <p style="font-size:13px;color:var(--muted);text-align:center;padding:18px 0">No entry for this period</p>
