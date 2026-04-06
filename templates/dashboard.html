@@ -3,525 +3,381 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>My Dashboard — Indian Pharma IP</title>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
-<script src="https://unpkg.com/@phosphor-icons/web"></script>
+<title>Dashboard | Indian Pharma IP</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&family=DM+Serif+Display&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 <style>
-:root{
-  --blue:#1d4ed8;--blue-l:#3b82f6;--blue-xl:#eff6ff;--blue-dark:#1e3a8a;
-  --navy:#0f172a;--slate:#334155;--muted:#64748b;--lgray:#e2e8f0;--white:#fff;
-  --green:#059669;--amber:#d97706;--red:#dc2626;
-  --glass:rgba(255,255,255,0.75);--glass-strong:rgba(255,255,255,0.92);
-  --shadow:0 4px 24px rgba(29,78,216,0.10);--shadow-lg:0 12px 48px rgba(29,78,216,0.15);
+*, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+:root {
+  --blue:      #1d4ed8;
+  --blue-dark: #1e3a8a;
+  --blue-lite: #eff6ff;
+  --text:      #0f172a;
+  --muted:     #64748b;
+  --border:    #e2e8f0;
+  --bg:        #f8fafc;
+  --white:     #ffffff;
+  --success:   #16a34a;
+  --danger:    #dc2626;
+  --warn:      #d97706;
+  --green-bg:  #f0fdf4;
+  --red-bg:    #fef2f2;
 }
-*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
-body{font-family:'Inter',sans-serif;background:#f0f4ff;min-height:100vh;display:flex;overflow-x:hidden;
-  background-image:radial-gradient(ellipse 70% 50% at 10% 0%,rgba(147,197,253,0.35) 0%,transparent 60%),
-  radial-gradient(ellipse 50% 70% at 90% 100%,rgba(196,181,253,0.2) 0%,transparent 60%);
-}
+body { font-family: 'DM Sans', sans-serif; background: #fff; min-height: 100vh; color: var(--text); }
 
-/* SIDEBAR */
-.sidebar{width:230px;min-width:230px;background:var(--glass-strong);backdrop-filter:blur(24px) saturate(180%);
-  border-right:1.5px solid rgba(255,255,255,0.9);display:flex;flex-direction:column;
-  position:fixed;top:0;left:0;bottom:0;z-index:100;box-shadow:4px 0 32px rgba(29,78,216,0.07);
-  animation:sideIn .5s cubic-bezier(.22,1,.36,1) both;}
-@keyframes sideIn{from{transform:translateX(-100%);opacity:0}to{transform:translateX(0);opacity:1}}
-.sidebar-logo{padding:24px 20px 18px;border-bottom:1px solid rgba(203,213,225,0.5);}
-.sidebar-logo-icon{width:38px;height:38px;background:linear-gradient(135deg,var(--blue),#818cf8);
-  border-radius:11px;display:flex;align-items:center;justify-content:center;font-size:17px;
-  margin-bottom:9px;box-shadow:0 4px 12px rgba(29,78,216,0.3);}
-.sidebar-logo-name{font-size:11px;font-weight:800;letter-spacing:0.14em;color:var(--blue);text-transform:uppercase;}
-.sidebar-user{padding:16px 20px;border-bottom:1px solid rgba(203,213,225,0.5);}
-.user-avatar{width:36px;height:36px;background:linear-gradient(135deg,var(--blue-l),#818cf8);border-radius:50%;
-  display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:800;color:white;margin-bottom:7px;}
-.user-name{font-size:13px;font-weight:700;color:var(--navy);}
-.user-role{font-size:11px;color:var(--muted);display:flex;align-items:center;gap:5px;margin-top:3px;}
-.role-dot{width:6px;height:6px;border-radius:50%;background:var(--green);box-shadow:0 0 6px var(--green);}
-.sidebar-nav{flex:1;padding:14px 10px;overflow-y:auto;}
-.nav-label{font-size:9px;font-weight:700;letter-spacing:0.12em;color:#94a3b8;text-transform:uppercase;padding:0 10px;margin:10px 0 5px;}
-.nav-link{display:flex;align-items:center;gap:9px;padding:9px 10px;border-radius:9px;font-size:13px;font-weight:500;
-  color:var(--slate);text-decoration:none;transition:all .2s;margin-bottom:2px;}
-.nav-link:hover{background:rgba(29,78,216,0.08);color:var(--blue);}
-.nav-link.active{background:rgba(29,78,216,0.12);color:var(--blue);font-weight:700;}
-.nav-link .icon{font-size:15px;width:18px;text-align:center;}
-.sidebar-footer{padding:14px 10px;border-top:1px solid rgba(203,213,225,0.5);}
-.logout-btn{display:flex;align-items:center;gap:9px;padding:9px 10px;border-radius:9px;font-size:13px;
-  font-weight:600;color:#ef4444;width:100%;background:none;border:none;cursor:pointer;font-family:inherit;transition:all .2s;}
-.logout-btn:hover{background:rgba(239,68,68,0.08);}
+/* NAV */
+.nav {
+  position: sticky; top: 0; z-index: 100;
+  background: rgba(255,255,255,0.95); backdrop-filter: blur(12px);
+  border-bottom: 1px solid var(--border);
+  padding: 0 28px; height: 60px;
+  display: flex; align-items: center; justify-content: space-between;
+}
+.nav-brand { font-family: 'DM Serif Display', serif; font-size: 18px; color: var(--text); display: flex; align-items: center; gap: 10px; }
+.nav-pill { font-family: 'DM Sans', sans-serif; font-size: 11px; font-weight: 600; background: var(--blue-lite); color: var(--blue); padding: 3px 10px; border-radius: 20px; text-transform: uppercase; letter-spacing: 0.5px; }
+.nav-right { display: flex; align-items: center; gap: 14px; }
+.nav-user { font-size: 13px; font-weight: 600; color: var(--muted); }
+.btn-logout { padding: 7px 16px; background: var(--red-bg); color: var(--danger); border: 1px solid #fecaca; border-radius: 8px; font-size: 12px; font-weight: 600; cursor: pointer; font-family: inherit; transition: all 0.2s; }
+.btn-logout:hover { background: #fee2e2; }
 
 /* MAIN */
-.main{margin-left:230px;flex:1;padding:28px 32px;position:relative;z-index:1;
-  animation:fadeIn .6s .2s cubic-bezier(.22,1,.36,1) both;}
-@keyframes fadeIn{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:translateY(0)}}
-.topbar{display:flex;align-items:center;justify-content:space-between;margin-bottom:24px;}
-.page-title{font-size:22px;font-weight:900;color:var(--navy);letter-spacing:-.5px;}
-.page-title span{color:var(--blue);}
-.topbar-right{display:flex;align-items:center;gap:10px;}
-.chip{background:var(--glass-strong);border:1px solid rgba(255,255,255,0.9);border-radius:20px;
-  padding:5px 13px;font-size:12px;color:var(--slate);font-weight:600;}
-.grade-badge{padding:5px 14px;border-radius:20px;font-size:11px;font-weight:800;letter-spacing:0.07em;text-transform:uppercase;}
-.grade-ELITE{background:rgba(29,78,216,0.1);color:var(--blue);border:1px solid rgba(29,78,216,0.2);}
-.grade-PROFICIENT{background:rgba(5,150,105,0.1);color:var(--green);border:1px solid rgba(5,150,105,0.2);}
-.grade-SATISFACTORY{background:rgba(217,119,6,0.1);color:var(--amber);border:1px solid rgba(217,119,6,0.2);}
-.grade-RE-TRAINING{background:rgba(220,38,38,0.1);color:var(--red);border:1px solid rgba(220,38,38,0.2);}
-.rank-badge{display:inline-flex;align-items:center;gap:5px;background:rgba(29,78,216,0.1);
-  border:1px solid rgba(29,78,216,0.2);border-radius:20px;padding:5px 13px;font-size:11px;font-weight:800;color:var(--blue);}
+.main { padding: 28px; max-width: 1200px; margin: 0 auto; width: 100%; }
 
-/* FLASH */
-.flash{border-radius:11px;padding:11px 15px;font-size:13px;margin-bottom:18px;font-weight:600;display:flex;align-items:center;gap:8px;}
-.flash.danger{background:rgba(254,202,202,0.7);color:#991b1b;border:1px solid rgba(239,68,68,0.2);}
-.flash.success{background:rgba(187,247,208,0.7);color:#166534;border:1px solid rgba(34,197,94,0.2);}
-.flash.warning{background:rgba(254,243,199,0.7);color:#92400e;border:1px solid rgba(245,158,11,0.2);}
-.flash.info{background:rgba(219,234,254,0.7);color:#1e40af;border:1px solid rgba(59,130,246,0.2);}
+/* ALERTS */
+.alert { padding: 12px 16px; border-radius: 10px; font-size: 13px; font-weight: 500; margin-bottom: 16px; }
+.alert-success { background: var(--green-bg); color: var(--success); border: 1px solid #bbf7d0; }
+.alert-warning { background: #fffbeb; color: var(--warn); border: 1px solid #fcd34d; }
+.alert-danger  { background: var(--red-bg); color: var(--danger); border: 1px solid #fecaca; }
 
-/* STAT CARDS */
-.stats-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:22px;}
-.stat-card{background:var(--glass-strong);border:1.5px solid rgba(255,255,255,0.9);border-radius:18px;
-  padding:20px;box-shadow:var(--shadow);position:relative;overflow:hidden;transition:transform .25s,box-shadow .25s;}
-.stat-card:hover{transform:translateY(-3px);box-shadow:var(--shadow-lg);}
-.stat-card::before{content:'';position:absolute;top:0;left:0;right:0;height:3px;
-  background:linear-gradient(90deg,var(--blue),#818cf8);border-radius:18px 18px 0 0;}
-.stat-card.green::before{background:linear-gradient(90deg,var(--green),#34d399);}
-.stat-card.amber::before{background:linear-gradient(90deg,var(--amber),#fbbf24);}
-.stat-card.purple::before{background:linear-gradient(90deg,#7c3aed,#a78bfa);}
-.stat-icon{font-size:20px;margin-bottom:10px;}
-.stat-label{font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:5px;}
-.stat-value{font-size:28px;font-weight:900;color:var(--navy);line-height:1;letter-spacing:-.5px;}
-.stat-suffix{font-size:13px;font-weight:500;color:var(--muted);}
-.stat-trend{display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:700;
-  padding:3px 8px;border-radius:20px;margin-top:7px;}
-.trend-up{background:rgba(5,150,105,0.1);color:var(--green);}
-.trend-down{background:rgba(220,38,38,0.1);color:var(--red);}
-.trend-flat{background:rgba(100,116,139,0.1);color:var(--muted);}
+/* CARDS */
+.card { background: var(--white); border: 1px solid var(--border); border-radius: 16px; padding: 24px; margin-bottom: 20px; box-shadow: 0 1px 3px rgba(0,0,0,0.04), 0 4px 12px rgba(0,0,0,0.05); }
 
-/* LAYOUT */
-.two-col{display:grid;grid-template-columns:1fr 1fr;gap:18px;margin-bottom:22px;}
-.three-col{display:grid;grid-template-columns:1.3fr 1fr;gap:18px;margin-bottom:22px;}
-.section-card{background:var(--glass-strong);border:1.5px solid rgba(255,255,255,0.9);
-  border-radius:18px;padding:22px;box-shadow:var(--shadow);}
-.section-title{font-size:13px;font-weight:800;color:var(--navy);margin-bottom:16px;
-  display:flex;align-items:center;gap:8px;}
-.section-title .dot{width:7px;height:7px;border-radius:50%;background:linear-gradient(135deg,var(--blue),#818cf8);}
+/* KPI GRID */
+.kpi-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 14px; margin-bottom: 20px; }
+.kpi-card { background: var(--bg); border: 1px solid var(--border); border-radius: 12px; padding: 16px 18px; }
+.kpi-label { font-size: 11px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: 0.6px; margin-bottom: 8px; }
+.kpi-value { font-size: 26px; font-weight: 700; color: var(--text); line-height: 1; }
+.kpi-sub   { font-size: 12px; color: var(--muted); margin-top: 4px; }
+.kpi-card.c-blue   { border-color: #bfdbfe; background: #eff6ff; } .kpi-card.c-blue .kpi-value   { color: var(--blue); }
+.kpi-card.c-green  { border-color: #bbf7d0; background: #f0fdf4; } .kpi-card.c-green .kpi-value  { color: var(--success); }
+.kpi-card.c-orange { border-color: #fed7aa; background: #fff7ed; } .kpi-card.c-orange .kpi-value { color: #ea580c; }
 
-/* SUBMITTED BANNER */
-.submitted-banner{background:rgba(5,150,105,0.08);border:1.5px solid rgba(5,150,105,0.22);
-  border-radius:13px;padding:16px 18px;display:flex;align-items:flex-start;gap:12px;}
-.submitted-icon{font-size:26px;flex-shrink:0;}
-.submitted-text h4{font-size:13px;font-weight:800;color:var(--green);}
-.submitted-text p{font-size:11px;color:var(--muted);margin-top:3px;line-height:1.6;}
+/* FORM */
+.form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 20px; }
+@media (max-width: 600px) { .form-grid { grid-template-columns: 1fr; } }
+.field { display: flex; flex-direction: column; }
+.field label { font-size: 11px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: 0.6px; margin-bottom: 7px; }
+.field input { padding: 10px 13px; border: 1.5px solid var(--border); border-radius: 9px; background: var(--bg); font-size: 14px; font-family: 'DM Sans', sans-serif; color: var(--text); transition: all 0.2s; }
+.field input:focus { outline: none; border-color: var(--blue); background: var(--white); box-shadow: 0 0 0 3px rgba(29,78,216,0.1); }
+.field small { font-size: 11px; color: var(--muted); margin-top: 4px; }
+.btn-submit { padding: 12px 24px; background: linear-gradient(135deg, var(--blue-dark), var(--blue)); color: #fff; border: none; border-radius: 10px; font-size: 14px; font-weight: 700; font-family: inherit; cursor: pointer; transition: all 0.25s; box-shadow: 0 4px 14px rgba(29,78,216,0.3); }
+.btn-submit:hover { transform: translateY(-2px); box-shadow: 0 6px 20px rgba(29,78,216,0.4); }
 
-/* FORM — matches login.html style */
-.form-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;}
-.form-group{display:flex;flex-direction:column;gap:5px;}
-.form-group.full{grid-column:1/-1;}
-.fi-label{font-size:.65rem;font-weight:700;color:var(--muted);text-transform:uppercase;
-  letter-spacing:.8px;display:block;}
-.fi-label .req{color:#dc2626;font-size:.6rem;margin-left:2px;}
-.fi{width:100%;padding:10px 13px;background:rgba(255,255,255,0.85);
-  border:1.5px solid var(--lgray);border-radius:9px;font-family:'Inter',sans-serif;
-  font-size:.875rem;color:var(--navy);outline:none;transition:all .2s;}
-.fi:focus{border-color:var(--blue);background:#fff;box-shadow:0 0 0 3px rgba(29,78,216,0.1);}
-.fi-hint{font-size:.65rem;color:#94a3b8;margin-top:1px;}
-.form-divider{grid-column:1/-1;border:none;border-top:1px dashed rgba(203,213,225,0.7);margin:3px 0;}
-.form-section-lbl{grid-column:1/-1;font-size:.65rem;font-weight:800;color:var(--blue);
-  text-transform:uppercase;letter-spacing:.1em;padding-top:2px;}
+/* SUBMITTED BOX */
+.submitted-box { display: flex; align-items: center; gap: 12px; padding: 16px 20px; background: var(--green-bg); border: 1px solid #bbf7d0; border-radius: 12px; font-weight: 600; color: var(--success); font-size: 14px; margin-bottom: 16px; }
 
-/* YES/NO toggle for rack/table */
-.yn-group{display:flex;gap:6px;}
-.yn-opt{position:relative;}
-.yn-opt input{position:absolute;opacity:0;width:0;height:0;}
-.yn-lbl{display:flex;align-items:center;gap:5px;padding:9px 14px;border-radius:9px;
-  border:1.5px solid var(--lgray);background:#f8fafc;font-size:.8rem;font-weight:700;
-  color:var(--muted);cursor:pointer;transition:all .2s;white-space:nowrap;}
-.yn-opt input:checked + .yn-lbl{border-color:var(--blue);background:var(--blue-xl);color:var(--blue);}
+/* CHART */
+.two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+@media (max-width: 700px) { .two-col { grid-template-columns: 1fr; } }
+.chart-wrap { position: relative; height: 220px; }
 
-.submit-row{margin-top:16px;display:flex;align-items:center;gap:10px;}
-.btn-primary{padding:11px 26px;background:linear-gradient(135deg,var(--blue),var(--blue-dark));
-  color:white;border:none;border-radius:11px;font-family:'Inter',sans-serif;font-size:13px;
-  font-weight:700;cursor:pointer;transition:all .25s;box-shadow:0 4px 14px rgba(29,78,216,0.3);}
-.btn-primary:hover{transform:translateY(-1px);box-shadow:0 8px 20px rgba(29,78,216,0.4);}
-.submit-note{font-size:11px;color:var(--muted);}
+/* TAGS */
+.tag { display: inline-block; padding: 2px 8px; border-radius: 5px; font-size: 11px; font-weight: 700; }
+.tag-ex   { background: #ede9fe; color: #6d28d9; }
+.tag-good { background: #dcfce7; color: #15803d; }
+.tag-avg  { background: #fef9c3; color: #92400e; }
+.tag-poor { background: #fee2e2; color: #b91c1c; }
 
-/* PERIOD TABS */
-.period-tabs{display:flex;gap:5px;margin-bottom:16px;background:rgba(241,245,249,0.8);
-  border-radius:11px;padding:3px;}
-.period-tab{flex:1;padding:6px;border-radius:8px;font-size:11px;font-weight:700;color:var(--muted);
-  text-align:center;cursor:pointer;transition:all .2s;border:none;background:none;font-family:'Inter',sans-serif;}
-.period-tab.active{background:white;color:var(--blue);box-shadow:0 2px 8px rgba(0,0,0,0.08);}
-.period-panel{display:none;}
-.period-panel.active{display:block;}
-.mini-stats{display:grid;grid-template-columns:1fr 1fr;gap:8px;}
-.mini-stat{background:rgba(248,250,252,0.85);border:1px solid rgba(203,213,225,0.5);border-radius:11px;padding:12px;}
-.mini-stat-label{font-size:9px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:0.06em;}
-.mini-stat-val{font-size:18px;font-weight:900;color:var(--navy);margin-top:3px;letter-spacing:-.3px;}
-.mini-stat-val .suf{font-size:10px;font-weight:500;color:var(--muted);}
+/* PERIOD TABLE */
+.ptable { width: 100%; border-collapse: collapse; }
+.ptable th { text-align: left; padding: 10px 14px; border-bottom: 2px solid var(--border); font-size: 11px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: 0.6px; }
+.ptable td { padding: 12px 14px; font-size: 13px; border-bottom: 1px solid var(--border); }
+.ptable tr:last-child td { border-bottom: none; }
 
-/* LEADERBOARD */
-.lb-item{display:flex;align-items:center;gap:11px;padding:9px 0;border-bottom:1px solid rgba(203,213,225,0.35);}
-.lb-item:last-child{border-bottom:none;}
-.lb-rank{font-size:12px;font-weight:900;color:var(--muted);width:20px;text-align:center;flex-shrink:0;}
-.lb-rank.top{color:var(--blue);}
-.lb-avatar{width:30px;height:30px;border-radius:50%;background:linear-gradient(135deg,var(--blue-l),#818cf8);
-  display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:800;color:white;flex-shrink:0;}
-.lb-name{font-size:12px;font-weight:700;color:var(--navy);flex:1;}
-.lb-name-sub{font-size:10px;color:var(--muted);}
-.lb-score-wrap{display:flex;align-items:center;gap:7px;}
-.lb-score{font-size:13px;font-weight:900;color:var(--navy);}
-.lb-bar-track{width:55px;height:4px;background:rgba(203,213,225,0.5);border-radius:2px;overflow:hidden;}
-.lb-bar-fill{height:100%;background:linear-gradient(90deg,var(--blue),#818cf8);border-radius:2px;}
-.my-row .lb-name{color:var(--blue);}
-.my-row .lb-avatar{box-shadow:0 0 0 2px var(--blue);}
+/* HISTORY TABLE */
+.table-wrap { overflow-x: auto; }
+table.htable { width: 100%; border-collapse: collapse; }
+table.htable thead th { text-align: left; padding: 10px 14px; border-bottom: 2px solid var(--border); font-size: 11px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: 0.6px; background: var(--bg); }
+table.htable tbody td { padding: 11px 14px; border-bottom: 1px solid var(--border); font-size: 13px; }
+table.htable tbody tr:last-child td { border-bottom: none; }
+table.htable tbody tr:hover td { background: var(--bg); }
 
-/* RECENT TABLE */
-.recent-table{width:100%;border-collapse:collapse;}
-.recent-table th{font-size:9px;font-weight:700;color:var(--muted);text-transform:uppercase;
-  letter-spacing:0.08em;padding:7px 10px;text-align:left;border-bottom:1px solid rgba(203,213,225,0.5);}
-.recent-table td{font-size:12px;color:var(--slate);padding:9px 10px;border-bottom:1px solid rgba(203,213,225,0.2);}
-.recent-table tr:last-child td{border-bottom:none;}
-.recent-table tr:hover td{background:rgba(29,78,216,0.03);}
-.acc-pill{padding:2px 7px;border-radius:20px;font-size:11px;font-weight:700;display:inline-block;}
-.acc-good{background:rgba(5,150,105,0.1);color:var(--green);}
-.acc-mid{background:rgba(217,119,6,0.1);color:var(--amber);}
-.acc-bad{background:rgba(220,38,38,0.1);color:var(--red);}
-
-/* HEATMAP */
-.heatmap-grid{display:flex;gap:3px;flex-wrap:wrap;margin-top:6px;}
-.hm-cell{width:14px;height:14px;border-radius:3px;cursor:pointer;transition:transform .15s;position:relative;}
-.hm-cell:hover{transform:scale(1.5);z-index:2;}
-.hm-legend{display:flex;align-items:center;gap:6px;font-size:10px;color:var(--muted);margin-top:8px;}
-.hm-swatch{width:10px;height:10px;border-radius:2px;display:inline-block;}
+.section-label { font-size: 14px; font-weight: 700; color: var(--text); margin-bottom: 16px; }
 </style>
 </head>
 <body>
 
-<aside class="sidebar">
-  <div class="sidebar-logo">
-    <div class="sidebar-logo-icon">💊</div>
-    <div class="sidebar-logo-name">Indian Pharma IP</div>
+<nav class="nav">
+  <div class="nav-brand">
+    🔬 Indian Pharma IP
+    <span class="nav-pill">{{ staff_type|title }}</span>
   </div>
-  <div class="sidebar-user">
-    <div class="user-avatar">{{ user_name[0] | upper }}</div>
-    <div class="user-name">{{ user_name }}</div>
-    <div class="user-role"><span class="role-dot"></span>{{ staff_type | title }} · Active</div>
-  </div>
-  <nav class="sidebar-nav">
-    <div class="nav-label">My Space</div>
-    <a href="/dashboard" class="nav-link active"><span class="icon"><i class="ph-bold ph-chart-bar"></i></span> Dashboard</a>
-    <a href="/staff/{{ session.user_id }}" class="nav-link"><span class="icon"><i class="ph-bold ph-user"></i></span> My Profile</a>
-    <div class="nav-label">Team</div>
-    <a href="/dashboard" class="nav-link"><span class="icon"><i class="ph-bold ph-trophy"></i></span> Leaderboard</a>
-  </nav>
-  <div class="sidebar-footer">
-    <form method="POST" action="/logout" style="margin:0">
-      <button type="submit" class="logout-btn"><i class="ph-bold ph-sign-out"></i> Sign Out</button>
+  <div class="nav-right">
+    <span class="nav-user">{{ user_name }}</span>
+    <form method="POST" action="/logout" style="display:inline;">
+      <button type="submit" class="btn-logout">🚪 Logout</button>
     </form>
   </div>
-</aside>
+</nav>
 
-<main class="main">
-  <div class="topbar">
-    <div>
-      <div class="page-title">Good day, <span>{{ user_name.split()[0] }}</span> 👋</div>
-      <div style="font-size:12px;color:var(--muted);margin-top:3px;">{{ today.strftime('%A, %d %B %Y') }}</div>
-    </div>
-    <div class="topbar-right">
-      <span class="chip">{{ staff_type | title }}</span>
-      {% if a_stats %}
-        <span class="grade-badge grade-{{ a_stats.grade }}">{{ a_stats.grade }}</span>
-        <span class="rank-badge">🏅 Rank #{{ my_rank }}</span>
-      {% endif %}
-    </div>
-  </div>
+<div class="main">
 
   {% with messages = get_flashed_messages(with_categories=true) %}
     {% if messages %}{% for cat, msg in messages %}
-      <div class="flash {{ cat }}"><i class="ph-bold ph-{% if cat=='danger' %}warning-octagon{% elif cat=='success' %}check-circle{% elif cat=='warning' %}warning{% else %}info{% endif %}"></i>{{ msg }}</div>
+    <div class="alert alert-{{ cat }}">{{ msg }}</div>
     {% endfor %}{% endif %}
   {% endwith %}
 
-  <!-- STAT CARDS -->
-  {% if a_stats %}
-  <div class="stats-grid">
-    <div class="stat-card">
-      <div class="stat-icon">🎯</div>
-      <div class="stat-label">Pick Accuracy</div>
-      <div class="stat-value">{{ a_stats.pick_acc }}<span class="stat-suffix">%</span></div>
-      <div class="stat-trend {% if a_stats.trend=='improving' %}trend-up{% elif a_stats.trend=='declining' %}trend-down{% else %}trend-flat{% endif %}">
-        {% if a_stats.trend=='improving' %}↑ Improving{% elif a_stats.trend=='declining' %}↓ Declining{% else %}→ Stable{% endif %}
-      </div>
+  <!-- TOP KPI CARDS -->
+  {% if d_stats or w_stats or m_stats %}
+  <div class="kpi-grid">
+    <div class="kpi-card c-blue">
+      <div class="kpi-label">Today Accuracy</div>
+      <div class="kpi-value">{% if d_stats %}{{ d_stats.pick_acc }}%{% else %}—{% endif %}</div>
+      <div class="kpi-sub">{% if d_stats %}{{ d_stats.tp }} picked, {{ d_stats.tm }} missed{% else %}No entry yet{% endif %}</div>
     </div>
-    <div class="stat-card green">
-      <div class="stat-icon">📦</div>
-      <div class="stat-label">Packing Efficiency</div>
-      <div class="stat-value">{{ a_stats.packing_eff }}<span class="stat-suffix">%</span></div>
-      <div class="stat-trend trend-flat">Sales Bill vs Packed</div>
+    <div class="kpi-card c-green">
+      <div class="kpi-label">Today Speed</div>
+      <div class="kpi-value">{% if d_stats %}{{ d_stats.pick_speed }}/hr{% else %}—{% endif %}</div>
+      <div class="kpi-sub">{% if d_stats %}{{ d_stats.ts }}h worked{% else %}No entry yet{% endif %}</div>
     </div>
-    <div class="stat-card amber">
-      <div class="stat-icon">🏃</div>
-      <div class="stat-label">CS Fulfilment</div>
-      <div class="stat-value">{{ a_stats.cs_fulfilment }}<span class="stat-suffix">%</span></div>
-      <div class="stat-trend trend-flat">CS Open filled</div>
+    <div class="kpi-card c-orange">
+      <div class="kpi-label">Efficiency Score</div>
+      <div class="kpi-value">{% if d_stats %}{{ d_stats.eff_score }}{% else %}—{% endif %}</div>
+      <div class="kpi-sub">{% if d_stats %}{{ d_stats.grade }}{% else %}No entry yet{% endif %}</div>
     </div>
-    <div class="stat-card purple">
-      <div class="stat-icon">⚡</div>
-      <div class="stat-label">Efficiency Score</div>
-      <div class="stat-value">{{ a_stats.eff_score }}<span class="stat-suffix">/100</span></div>
-      <div class="stat-trend trend-flat">{{ a_stats.days }} days logged</div>
+    <div class="kpi-card">
+      <div class="kpi-label">Total Entries</div>
+      <div class="kpi-value">{{ total_entries }}</div>
+      <div class="kpi-sub">All time submissions</div>
     </div>
   </div>
   {% endif %}
 
-  <!-- SUBMIT FORM + PERIOD STATS -->
-  <div class="three-col">
+  <!-- TODAY FORM / SUBMITTED -->
+  <div class="card">
+    <div class="section-label">Today's Metrics — {{ today.strftime('%A, %d %b %Y') }}</div>
 
-    <!-- SUBMIT FORM -->
-    <div class="section-card">
-      <div class="section-title"><span class="dot"></span>Today's Entry · {{ today.strftime('%d %b') }}</div>
-      {% if today_entry %}
-        <div class="submitted-banner">
-          <div class="submitted-icon">✅</div>
-          <div class="submitted-text">
-            <h4>Submitted for Today</h4>
-            <p>
-              Sales Bill Packed: <strong>{{ today_entry.effective_bills }}</strong> ·
-              Item Picked: <strong>{{ today_entry.picked }}</strong> ·
-              Item Missed: <strong>{{ today_entry.missed }}</strong> ·
-              Accuracy: <strong>{{ today_entry.accuracy }}%</strong><br>
-              CS Sales Open: <strong>{{ today_entry.cs_sales_open }}</strong> ·
-              Packing Done: <strong>{{ today_entry.packing_done }}</strong> ·
-              Rack: <strong>{{ 'Yes' if today_entry.rack_organized else 'No' }}</strong> ·
-              Table: <strong>{{ 'Yes' if today_entry.table_clean else 'No' }}</strong>
-            </p>
-          </div>
-        </div>
-      {% else %}\n        <form method="POST" action="/dashboard" autocomplete="off">
-          <div class="form-grid">
-
-            {% if staff_type == 'checker' %}
-            <!-- CHECKER METRICS SECTION (TOP) -->
-            <div class="form-section-lbl"><i class="ph-bold ph-magnifying-glass"></i> Checker Metrics</div>
-            <div class="form-group">
-              <label class="fi-label" for="f_ck">Items Checked <span class="req">*</span></label>
-              <input class="fi" type="number" id="f_ck" name="checked" min="0" value="0" required>
-              <span class="fi-hint">Total items verified today</span>
-            </div>
-            <div class="form-group">
-              <label class="fi-label" for="f_er">Errors Found <span class="req">*</span></label>
-              <input class="fi" type="number" id="f_er" name="errors_found" min="0" value="0" required>
-              <span class="fi-hint">Mistakes caught during check</span>
-            </div>
-            <div class="form-group full">
-              <label class="fi-label" for="f_cm">Check Time (mins) <span class="req">*</span></label>
-              <input class="fi" type="number" id="f_cm" name="check_mins" min="0" max="480" value="0" required>
-              <span class="fi-hint">Total checking time in minutes (max 8 hrs)</span>
-            </div>
-            <hr class="form-divider">
-            {% endif %}
-
-            <!-- COMMON FIELDS FOR ALL (Picker & Checker) -->
-            <div class="form-section-lbl"><i class="ph-bold ph-package"></i> Work Completed</div>
-
-            <!-- Row 1: Sales Bill Packed | Item Picked/Checked -->
-            <div class="form-group">
-              <label class="fi-label" for="f_sb">Sales Bill Packed <span class="req">★ URGENT</span></label>
-              <input class="fi" type="number" id="f_sb" name="sales_bills_open" min="0" value="0" required>
-              <span class="fi-hint">Sales bills packed today</span>
-            </div>
-            <div class="form-group">
-              <label class="fi-label" for="f_pk">{% if staff_type == 'checker' %}Bills Checked{% else %}Item Picked{% endif %} <span class="req">*</span></label>
-              <input class="fi" type="number" id="f_pk" name="picked" min="0" value="0" required>
-              <span class="fi-hint">{% if staff_type == 'checker' %}Bills verified today{% else %}Total items picked from rack{% endif %}</span>
-            </div>
-
-            <!-- Row 2: Item Missed/Urgent | CS Sales Open -->
-            <div class="form-group">
-              <label class="fi-label" for="f_ms">{% if staff_type == 'checker' %}Urgent Bill Checked{% else %}Item Missed{% endif %} <span class="req">*</span></label>
-              <input class="fi" type="number" id="f_ms" name="missed" min="0" value="0" required>
-              <span class="fi-hint">{% if staff_type == 'checker' %}Urgent bills verified{% else %}Items not found / missed{% endif %}</span>
-            </div>
-            <div class="form-group">
-              <label class="fi-label" for="f_cs">CS Sales Open <span class="req">*</span></label>
-              <input class="fi" type="number" id="f_cs" name="cs_sales_open" min="0" value="0" required>
-              <span class="fi-hint">CS open orders handled</span>
-            </div>
-
-            <!-- Row 3: Packing Done | Table Clean -->
-            <div class="form-group">
-              <label class="fi-label" for="f_pd">Packing Done <span class="req">*</span></label>
-              <input class="fi" type="number" id="f_pd" name="packing_done" min="0" value="0" required>
-              <span class="fi-hint">Bills fully packed &amp; ready</span>
-            </div>
-            <div class="form-group">
-              <label class="fi-label">Table Clean</label>
-              <div class="yn-group">
-                <div class="yn-opt">
-                  <input type="radio" name="table_clean" id="table_yes" value="1">
-                  <label class="yn-lbl" for="table_yes"><i class="ph-bold ph-check" style="color:var(--green)"></i> Yes</label>
-                </div>
-                <div class="yn-opt">
-                  <input type="radio" name="table_clean" id="table_no" value="0" checked>
-                  <label class="yn-lbl" for="table_no"><i class="ph-bold ph-x" style="color:var(--red)"></i> No</label>
-                </div>
-              </div>
-            </div>
-
-            <!-- Row 4: Total Time -->
-            <div class="form-group full">
-              <label class="fi-label" for="f_tm">Total Time (mins) <span class="req">*</span></label>
-              <input class="fi" type="number" id="f_tm" name="total_mins" min="0" max="480" step="1" value="0" required>
-              <span class="fi-hint">Total shift time in minutes (max 8 hrs = 480 mins)</span>
-            </div>
-
-          </div>
-          <div class="submit-row">
-            <button type="submit" class="btn-primary">Submit Today's Metrics →</button>
-            <span class="submit-note">Once submitted, cannot be changed.</span>
-          </div>
-        </form>
+    {% if today_entry %}
+    <div class="submitted-box">✅ Already submitted today. See you tomorrow!</div>
+    <div class="kpi-grid">
+      {% if staff_type == 'checker' %}
+      <div class="kpi-card"><div class="kpi-label">Checked</div><div class="kpi-value">{{ today_entry.checked }}</div></div>
+      <div class="kpi-card"><div class="kpi-label">Errors</div><div class="kpi-value">{{ today_entry.errors_found }}</div></div>
+      {% else %}
+      <div class="kpi-card"><div class="kpi-label">Picked</div><div class="kpi-value">{{ today_entry.picked }}</div></div>
+      <div class="kpi-card"><div class="kpi-label">Missed</div><div class="kpi-value">{{ today_entry.missed }}</div></div>
       {% endif %}
+      <div class="kpi-card"><div class="kpi-label">Sales Bills</div><div class="kpi-value">{{ today_entry.sales_bills_open }}</div></div>
+      <div class="kpi-card"><div class="kpi-label">Packing Done</div><div class="kpi-value">{{ today_entry.packing_done }}</div></div>
     </div>
 
-    <!-- PERIOD STATS -->
-    <div class="section-card">
-      <div class="section-title"><span class="dot"></span>Performance by Period</div>
-      <div class="period-tabs">
-        <button class="period-tab active" onclick="switchPeriod('day',this)">Today</button>
-        <button class="period-tab" onclick="switchPeriod('week',this)">Week</button>
-        <button class="period-tab" onclick="switchPeriod('month',this)">Month</button>
-        <button class="period-tab" onclick="switchPeriod('all',this)">All Time</button>
-      </div>
-      {% for pid, pstats in [('day',d_stats),('week',w_stats),('month',m_stats),('all',a_stats)] %}
-      <div class="period-panel {% if pid=='day' %}active{% endif %}" id="panel-{{ pid }}">
-        {% if pstats %}
-        <div class="mini-stats">
-          <div class="mini-stat"><div class="mini-stat-label">Pick Accuracy</div><div class="mini-stat-val">{{ pstats.pick_acc }}<span class="suf">%</span></div></div>
-          <div class="mini-stat"><div class="mini-stat-label">Efficiency Score</div><div class="mini-stat-val">{{ pstats.eff_score }}<span class="suf">/100</span></div></div>
-          <div class="mini-stat"><div class="mini-stat-label">Item Picked</div><div class="mini-stat-val">{{ pstats.tp }}</div></div>
-          <div class="mini-stat"><div class="mini-stat-label">Item Missed</div><div class="mini-stat-val">{{ pstats.tm }}</div></div>
-          <div class="mini-stat"><div class="mini-stat-label">Sales Bill Packed</div><div class="mini-stat-val">{{ pstats.tsb }}</div></div>
-          <div class="mini-stat"><div class="mini-stat-label">Packing Done</div><div class="mini-stat-val">{{ pstats.tpd }}</div></div>
-          <div class="mini-stat"><div class="mini-stat-label">Packing Eff.</div><div class="mini-stat-val">{{ pstats.packing_eff }}<span class="suf">%</span></div></div>
-          <div class="mini-stat"><div class="mini-stat-label">CS Sales Open</div><div class="mini-stat-val">{{ pstats.tcs }}</div></div>
-          <div class="mini-stat"><div class="mini-stat-label">CS Fulfilment</div><div class="mini-stat-val">{{ pstats.cs_fulfilment }}<span class="suf">%</span></div></div>
-          <div class="mini-stat"><div class="mini-stat-label">Rack Organized</div><div class="mini-stat-val">{{ pstats.tro }}</div></div>
-          <div class="mini-stat"><div class="mini-stat-label">Table Clean</div><div class="mini-stat-val">{{ pstats.ttc }}</div></div>
-          <div class="mini-stat"><div class="mini-stat-label">Pick Speed/hr</div><div class="mini-stat-val">{{ pstats.pick_speed }}</div></div>
-          {% if staff_type=='checker' %}
-          <div class="mini-stat"><div class="mini-stat-label">Items Checked</div><div class="mini-stat-val">{{ pstats.tck }}</div></div>
-          <div class="mini-stat"><div class="mini-stat-label">Errors Found</div><div class="mini-stat-val">{{ pstats.ter }}</div></div>
-          <div class="mini-stat"><div class="mini-stat-label">Clean Rate</div><div class="mini-stat-val">{{ pstats.check_acc }}<span class="suf">%</span></div></div>
-          <div class="mini-stat"><div class="mini-stat-label">Error Rate</div><div class="mini-stat-val">{{ pstats.error_rate }}<span class="suf">%</span></div></div>
-          {% endif %}
-          <div class="mini-stat"><div class="mini-stat-label">Consistency</div><div class="mini-stat-val">{{ pstats.consistency }}<span class="suf">%</span></div></div>
-          <div class="mini-stat"><div class="mini-stat-label">Grade</div><div class="mini-stat-val" style="font-size:12px">{{ pstats.grade }}</div></div>
-          <div class="mini-stat"><div class="mini-stat-label">Potential Items</div><div class="mini-stat-val">{{ pstats.potential_items }}</div></div>
-          <div class="mini-stat"><div class="mini-stat-label">Gap Items</div><div class="mini-stat-val">{{ pstats.gap_items }}</div></div>
+    {% else %}
+    <form method="POST" autocomplete="off">
+      <div class="form-grid">
+        <div class="field">
+          <label>★ Sales Bills Packed (URGENT)</label>
+          <input type="number" name="sales_bills_open" min="0" value="0" required>
+        </div>
+
+        {% if staff_type == 'checker' %}
+        <div class="field">
+          <label>Items Checked</label>
+          <input type="number" name="checked" min="0" value="0" required>
+        </div>
+        <div class="field">
+          <label>Errors Found</label>
+          <input type="number" name="errors_found" min="0" value="0" required>
+        </div>
+        <div class="field">
+          <label>Items Picked (assist)</label>
+          <input type="number" name="picked" min="0" value="0">
         </div>
         {% else %}
-        <p style="font-size:13px;color:var(--muted);text-align:center;padding:18px 0">No entry for this period</p>
+        <div class="field">
+          <label>Items Picked</label>
+          <input type="number" name="picked" min="0" value="0" required>
+        </div>
+        <div class="field">
+          <label>Items Missed</label>
+          <input type="number" name="missed" min="0" value="0" required>
+        </div>
+        <div class="field">
+          <label>CS Sales Open</label>
+          <input type="number" name="cs_sales_open" min="0" value="0">
+        </div>
+        {% endif %}
+
+        <div class="field">
+          <label>Packing Done</label>
+          <input type="number" name="packing_done" min="0" value="0">
+        </div>
+        <div class="field">
+          <label>Total Time (mins, max 480)</label>
+          <input type="number" name="total_mins" min="0" max="480" value="0" required>
+          <small>Max 480 mins = 8 hours</small>
+        </div>
+
+        {% if staff_type == 'checker' %}
+        <div class="field">
+          <label>Check Time (mins, max 480)</label>
+          <input type="number" name="check_mins" min="0" max="480" value="0">
+        </div>
         {% endif %}
       </div>
-      {% endfor %}
-    </div>
+      <button type="submit" class="btn-submit">✅ Submit Today's Metrics</button>
+    </form>
+    {% endif %}
   </div>
 
-  <!-- HEATMAP -->
-  <div class="section-card" style="margin-bottom:22px;">
-    <div class="section-title"><span class="dot"></span>My Efficiency Heat Map — Last 30 Days</div>
-    <div id="myHeatmap" class="heatmap-grid"></div>
-    <div class="hm-legend">
-      <span>Low</span>
-      <span class="hm-swatch" style="background:#dbeafe"></span>
-      <span class="hm-swatch" style="background:#93c5fd"></span>
-      <span class="hm-swatch" style="background:#3b82f6"></span>
-      <span class="hm-swatch" style="background:#1d4ed8"></span>
-      <span class="hm-swatch" style="background:#1e3a8a"></span>
-      <span>High</span>
-      <span style="margin-left:8px;color:#94a3b8;font-size:10px;">Hover for date &amp; score</span>
-    </div>
-    <script type="application/json" id="heatmapData">{{ heatmap | tojson | safe }}</script>
-  </div>
-
-  <!-- LEADERBOARD + RECENT -->
+  <!-- CHART + PERIOD SUMMARY -->
+  {% if trend_labels %}
   <div class="two-col">
-    <div class="section-card">
-      <div class="section-title"><span class="dot"></span>{{ staff_type | title }} Leaderboard</div>
-      {% if leaderboard %}
-        {% for p in leaderboard[:8] %}
-        <div class="lb-item {% if p.id==session.user_id %}my-row{% endif %}">
-          <div class="lb-rank {% if loop.index<=3 %}top{% endif %}">
-            {% if loop.index==1 %}🥇{% elif loop.index==2 %}🥈{% elif loop.index==3 %}🥉{% else %}{{ loop.index }}{% endif %}
-          </div>
-          <div class="lb-avatar">{{ p.name[0]|upper }}</div>
-          <div style="flex:1">
-            <div class="lb-name">{{ p.name }}{% if p.id==session.user_id %} (You){% endif %}</div>
-            <div class="lb-name-sub">{{ p.grade }} · Acc {{ p.pick_acc }}% · Pkg {{ p.packing_eff }}%</div>
-          </div>
-          <div class="lb-score-wrap">
-            <div class="lb-bar-track"><div class="lb-bar-fill" style="width:{{ p.score }}%"></div></div>
-            <div class="lb-score">{{ p.score }}</div>
-          </div>
-        </div>
-        {% endfor %}
-      {% else %}
-        <p style="font-size:13px;color:var(--muted);text-align:center;padding:18px 0">No leaderboard data yet</p>
-      {% endif %}
+    <div class="card">
+      <div class="section-label">7-Day Accuracy Trend</div>
+      <div class="chart-wrap">
+        <canvas id="trendChart"></canvas>
+      </div>
     </div>
-
-    <div class="section-card">
-      <div class="section-title"><span class="dot"></span>Recent Entries</div>
-      {% if recent %}
-      <table class="recent-table">
-        <thead><tr><th>Date</th><th>SB</th><th>Picked</th><th>Missed</th><th>Pack</th><th>Accuracy</th></tr></thead>
+    <div class="card">
+      <div class="section-label">Period Summary</div>
+      <table class="ptable">
+        <thead>
+          <tr><th>Period</th><th>Accuracy</th><th>Speed</th><th>Grade</th><th>Days</th></tr>
+        </thead>
         <tbody>
-          {% for e in recent[:8] %}
+          {% if d_stats %}
           <tr>
-            <td>{{ e.entry_date.strftime('%d %b') }}</td>
-            <td>{{ e.effective_bills }}</td>
+            <td><strong>Today</strong></td>
+            <td>{{ d_stats.pick_acc }}%</td>
+            <td>{{ d_stats.pick_speed }}/hr</td>
+            <td><span class="tag {% if d_stats.grade == 'EXCELLENT' %}tag-ex{% elif d_stats.grade == 'GOOD' %}tag-good{% elif d_stats.grade == 'AVERAGE' %}tag-avg{% else %}tag-poor{% endif %}">{{ d_stats.grade }}</span></td>
+            <td>1</td>
+          </tr>
+          {% endif %}
+          {% if w_stats %}
+          <tr>
+            <td><strong>This Week</strong></td>
+            <td>{{ w_stats.pick_acc }}%</td>
+            <td>{{ w_stats.pick_speed }}/hr</td>
+            <td><span class="tag {% if w_stats.grade == 'EXCELLENT' %}tag-ex{% elif w_stats.grade == 'GOOD' %}tag-good{% elif w_stats.grade == 'AVERAGE' %}tag-avg{% else %}tag-poor{% endif %}">{{ w_stats.grade }}</span></td>
+            <td>{{ w_stats.days }}</td>
+          </tr>
+          {% endif %}
+          {% if m_stats %}
+          <tr>
+            <td><strong>This Month</strong></td>
+            <td>{{ m_stats.pick_acc }}%</td>
+            <td>{{ m_stats.pick_speed }}/hr</td>
+            <td><span class="tag {% if m_stats.grade == 'EXCELLENT' %}tag-ex{% elif m_stats.grade == 'GOOD' %}tag-good{% elif m_stats.grade == 'AVERAGE' %}tag-avg{% else %}tag-poor{% endif %}">{{ m_stats.grade }}</span></td>
+            <td>{{ m_stats.days }}</td>
+          </tr>
+          {% endif %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+  {% endif %}
+
+  <!-- RECENT HISTORY -->
+  {% if recent %}
+  <div class="card">
+    <div class="section-label">Recent History (last {{ recent|length }} entries)</div>
+    <div class="table-wrap">
+      <table class="htable">
+        <thead>
+          <tr>
+            <th>Date</th>
+            {% if staff_type == 'checker' %}
+            <th>Checked</th><th>Errors</th><th>Accuracy</th>
+            {% else %}
+            <th>Picked</th><th>Missed</th><th>Accuracy</th>
+            {% endif %}
+            <th>Bills</th><th>Packing</th><th>Time (h)</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for e in recent %}
+          <tr>
+            <td>{{ e.entry_date.strftime('%d %b %Y') }}</td>
+            {% if staff_type == 'checker' %}
+            <td>{{ e.checked }}</td>
+            <td>{{ e.errors_found }}</td>
+            {% set cacc = (((e.checked - e.errors_found) / e.checked * 100) | round(1)) if e.checked > 0 else 0 %}
+            <td><span class="tag {% if cacc >= 95 %}tag-ex{% elif cacc >= 85 %}tag-good{% elif cacc >= 70 %}tag-avg{% else %}tag-poor{% endif %}">{{ cacc }}%</span></td>
+            {% else %}
             <td>{{ e.picked }}</td>
             <td>{{ e.missed }}</td>
+            {% set acc = e.accuracy %}
+            <td><span class="tag {% if acc >= 95 %}tag-ex{% elif acc >= 85 %}tag-good{% elif acc >= 70 %}tag-avg{% else %}tag-poor{% endif %}">{{ acc }}%</span></td>
+            {% endif %}
+            <td>{{ e.sales_bills_open }}</td>
             <td>{{ e.packing_done }}</td>
-            <td><span class="acc-pill {% if e.accuracy>=95 %}acc-good{% elif e.accuracy>=88 %}acc-mid{% else %}acc-bad{% endif %}">{{ e.accuracy }}%</span></td>
+            <td>{{ "%.1f" | format(e.total_time or 0) }}</td>
           </tr>
           {% endfor %}
         </tbody>
       </table>
-      {% else %}
-        <p style="font-size:13px;color:var(--muted);text-align:center;padding:18px 0">No entries yet</p>
-      {% endif %}
     </div>
   </div>
-</main>
+  {% endif %}
+
+</div>
 
 <script>
-function switchPeriod(p,btn){
-  document.querySelectorAll('.period-tab').forEach(t=>t.classList.remove('active'));
-  document.querySelectorAll('.period-panel').forEach(t=>t.classList.remove('active'));
-  btn.classList.add('active');
-  document.getElementById('panel-'+p).classList.add('active');
-}
-// HEATMAP — reads from JSON script tag, guarded against null/non-object
-(function(){
-  try{
-    var raw=document.getElementById('heatmapData');
-    var parsed=raw?JSON.parse(raw.textContent):null;
-    var data=(parsed&&typeof parsed==='object'&&!Array.isArray(parsed))?parsed:{};
-    var today=new Date();
-    var grid=document.getElementById('myHeatmap');
-    if(!grid)return;
-    for(var i=29;i>=0;i--){
-      var d=new Date(today);d.setDate(today.getDate()-i);
-      var key=d.toISOString().slice(0,10);
-      var eff=data[key];
-      var cell=document.createElement('div');
-      cell.className='hm-cell';
-      cell.title=key+(eff!==undefined?' · Score: '+eff:' · No data');
-      cell.style.background=eff===undefined?'#f1f5f9':
-        eff>=85?'#1e3a8a':eff>=70?'#1d4ed8':eff>=55?'#3b82f6':eff>=40?'#93c5fd':'#dbeafe';
-      grid.appendChild(cell);
+// Chart.js trend — Jinja injects data, no template literals inside JS strings
+var chartLabels   = {{ trend_labels   | tojson }};
+var chartAccuracy = {{ trend_accuracy | tojson }};
+
+var ctx = document.getElementById('trendChart');
+if (ctx) {
+  new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels: chartLabels,
+      datasets: [{
+        label: 'Accuracy %',
+        data: chartAccuracy,
+        borderColor: '#1d4ed8',
+        backgroundColor: 'rgba(29,78,216,0.08)',
+        borderWidth: 2.5,
+        pointRadius: 4,
+        pointBackgroundColor: '#1d4ed8',
+        tension: 0.4,
+        fill: true,
+        spanGaps: true
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          callbacks: {
+            label: function(item) {
+              return (item.parsed.y !== null ? item.parsed.y : 'No data') + '% accuracy';
+            }
+          }
+        }
+      },
+      scales: {
+        x: {
+          grid: { color: 'rgba(0,0,0,0.04)' },
+          ticks: { font: { size: 11 }, color: '#64748b' }
+        },
+        y: {
+          min: 0, max: 100,
+          grid: { color: 'rgba(0,0,0,0.04)' },
+          ticks: {
+            font: { size: 11 }, color: '#64748b',
+            callback: function(v) { return v + '%'; }
+          }
+        }
+      }
     }
-  }catch(e){/* silent — no console warning needed */}
-})();
+  });
+}
 </script>
 </body>
 </html>
