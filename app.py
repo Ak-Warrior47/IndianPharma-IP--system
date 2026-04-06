@@ -14,20 +14,8 @@ from flask_sqlalchemy import SQLAlchemy
 from flask_socketio import SocketIO, emit
 from werkzeug.security import generate_password_hash, check_password_hash
 from werkzeug.middleware.proxy_fix import ProxyFix
-from flask_limiter import Limiter
-from flask_limiter.util import get_remote_address
-from flask_wtf.csrf import CSRFProtect
-from flask_caching import Cache
-import sentry_sdk
-from sentry_sdk.integrations.flask import FlaskIntegration
 
-# Sentry for error tracking (optional - add DSN in env)
-if os.environ.get("SENTRY_DSN"):
-    sentry_sdk.init(
-        dsn=os.environ.get("SENTRY_DSN"),
-        integrations=[FlaskIntegration()],
-        traces_sample_rate=0.5,
-    )
+# REMOVED: flask_limiter, flask_wtf.csrf, flask_caching, sentry_sdk
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -48,7 +36,7 @@ app.config.update(
     SQLALCHEMY_ENGINE_OPTIONS={"pool_pre_ping": True, "pool_recycle": 300}
 )
 
-# FIX: Proper DATABASE_URL handling with fallback
+# Database URL handling
 db_url = os.environ.get("DATABASE_URL")
 if not db_url:
     logger.warning("⚠️ DATABASE_URL not set! Using SQLite (local development mode)")
@@ -61,9 +49,8 @@ logger.info(f"Using database: {db_url.split('@')[0] if '@' in db_url else 'SQLit
 
 db = SQLAlchemy(app)
 socketio = SocketIO(app, cors_allowed_origins="*", async_mode="eventlet")
-csrf = CSRFProtect(app)
-limiter = Limiter(app, key_func=get_remote_address, default_limits=["200 per day"])
-cache = Cache(app, config={'CACHE_TYPE': 'simple' if not IS_PRODUCTION else 'redis', 'CACHE_REDIS_URL': os.environ.get("REDIS_URL")})
+
+# REMOVED: csrf, limiter, cache - these caused the errors
 
 
 # ─── MODELS ──────────────────────────────────────────────────────────────────
@@ -181,15 +168,13 @@ def build_analytics(entries: List[KPIEntry], staff_type: str = "picker") -> Opti
         packing_eff = round(safe_div(tpk, tsb) * 100, 1) if tsb > 0 else 0
         cs_fulfilment = round(min(safe_div(tpk, tcs) * 100, 100), 1) if tcs > 0 else 0
         
-        # Consistency calculation
+        # Consistency calculation (without numpy)
         daily_accs = [e.accuracy for e in entries if e.accuracy > 0]
         if len(daily_accs) > 1:
-            try:
-                import numpy as np
-                std_dev = np.std(daily_accs)
-                consistency = max(0, 100 - (std_dev * 2))
-            except:
-                consistency = 100 if daily_accs else 0
+            mean_acc = sum(daily_accs) / len(daily_accs)
+            variance = sum((a - mean_acc) ** 2 for a in daily_accs) / len(daily_accs)
+            std_dev = variance ** 0.5
+            consistency = max(0, 100 - (std_dev * 2))
         else:
             consistency = 100 if daily_accs else 0
 
@@ -304,7 +289,6 @@ def index():
 
 
 @app.route("/login", methods=["GET", "POST"])
-@limiter.limit("5 per minute")
 def login():
     if session.get("user_id"):
         return redirect(url_for("admin_dashboard") if session.get("is_admin") else url_for("dashboard"))
@@ -390,13 +374,15 @@ def dashboard():
                     db.session.add(ne)
                     db.session.commit()
                     
-                    # Check for personal best
+                    # Check for personal best (simple version without cache)
                     all_entries = KPIEntry.query.filter_by(emp_id=emp_id).all()
                     all_stats = build_analytics(all_entries, staff_type)
-                    prev_best = cache.get(f"pb_{emp_id}")
-                    if all_stats and (not prev_best or all_stats['eff_score'] > prev_best):
-                        cache.set(f"pb_{emp_id}", all_stats['eff_score'], timeout=86400)
-                        new_personal_best = True
+                    if all_stats:
+                        # Store in session instead of cache
+                        prev_best = session.get(f"pb_{emp_id}", 0)
+                        if all_stats['eff_score'] > prev_best:
+                            session[f"pb_{emp_id}"] = all_stats['eff_score']
+                            new_personal_best = True
                     
                     flash("✅ Metrics recorded successfully.", "success")
                     today_entry = ne
@@ -458,14 +444,13 @@ def dashboard():
 
 @app.route("/admin_dashboard")
 @admin_required
-@cache.cached(timeout=300, key_prefix='admin_dashboard')
 def admin_dashboard():
     try:
         employees = Employee.query.filter_by(is_admin=False).options(db.joinedload(Employee.entries)).all()
         rows = []
         today = date.today()
         for emp in employees:
-            ents = emp.entries  # Already loaded via joinedload
+            ents = emp.entries
             stats = build_analytics(ents, emp.staff_type)
             week_ents = [e for e in ents if e.entry_date >= today - timedelta(days=6)]
             week_stats = build_analytics(week_ents, emp.staff_type)
@@ -505,7 +490,6 @@ def admin_toggle_sunday(emp_id):
         if emp and not emp.is_admin:
             emp.sunday_override = not emp.sunday_override
             db.session.commit()
-            cache.delete('admin_dashboard')
             status = "enabled" if emp.sunday_override else "disabled"
             log_audit("sunday_toggle", emp.name, f"Sunday override {status}")
             flash(f"Sunday data entry {status} for {emp.name}.", "success")
@@ -539,7 +523,6 @@ def admin_add_user():
         emp.set_password(password)
         db.session.add(emp)
         db.session.commit()
-        cache.delete('admin_dashboard')
         log_audit("add_user", name, f"Added as {staff_type}")
         flash(f"✅ {name} added successfully.", "success")
     except Exception as e:
@@ -581,7 +564,6 @@ def admin_edit_user(emp_id):
             emp.set_password(new_password)
 
         db.session.commit()
-        cache.delete('admin_dashboard')
         log_audit("edit_user", name, f"Updated by admin")
         flash(f"✅ {emp.name} updated successfully.", "success")
     except Exception as e:
@@ -600,7 +582,6 @@ def admin_delete_user(emp_id):
             name = emp.name
             db.session.delete(emp)
             db.session.commit()
-            cache.delete('admin_dashboard')
             log_audit("delete_user", name, "User removed")
             flash(f"🗑️ {name} removed.", "success")
     except Exception as e:
