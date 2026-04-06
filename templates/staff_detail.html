@@ -131,16 +131,19 @@ body{font-family:'DM Sans',sans-serif;background:var(--page-bg);min-height:100vh
   </div>
   <nav class="sidebar-nav">
     <div class="nav-label">Navigation</div>
-    {% if session.is_admin %}
+    {% if is_admin %}
     <a href="/admin_dashboard" class="nav-link"><span class="icon">🏠</span> Admin Dashboard</a>
     {% else %}
     <a href="/dashboard" class="nav-link"><span class="icon">📊</span> My Dashboard</a>
     {% endif %}
     <a href="/staff/{{ emp.id }}" class="nav-link active"><span class="icon">👤</span> Staff Profile</a>
-    {% if session.is_admin %}
+    {% if is_admin %}
     <div class="nav-label">Export</div>
     <a href="/download/{{ emp.id }}" class="nav-link"><span class="icon">📄</span> Download PDF</a>
     <a href="/admin/export_csv" class="nav-link"><span class="icon">📥</span> Export CSV</a>
+    {% else %}
+    <div class="nav-label">Export</div>
+    <a href="/export_pdf" class="nav-link"><span class="icon">📄</span> Download My PDF</a>
     {% endif %}
   </nav>
   <div class="sidebar-footer">
@@ -151,7 +154,7 @@ body{font-family:'DM Sans',sans-serif;background:var(--page-bg);min-height:100vh
 </aside>
 
 <main class="main">
-  {% if session.is_admin %}
+  {% if is_admin %}
     <a href="/admin_dashboard" class="back-btn">← Back to Admin Dashboard</a>
   {% else %}
     <a href="/dashboard" class="back-btn">← Back to Dashboard</a>
@@ -185,8 +188,10 @@ body{font-family:'DM Sans',sans-serif;background:var(--page-bg);min-height:100vh
         <div class="hero-score-label">Efficiency Score</div>
         <div class="hero-score">{{ a_stats.eff_score if a_stats else '—' }}<span>/100</span></div>
         {% if a_stats %}<div class="hero-feedback">{{ a_stats.feedback }}</div>{% endif %}
-        {% if session.is_admin %}
+        {% if is_admin %}
           <a href="/download/{{ emp.id }}" class="btn-dl" style="margin-top:12px">📄 Download PDF</a>
+        {% else %}
+          <a href="/export_pdf" class="btn-dl" style="margin-top:12px">📄 Download My PDF</a>
         {% endif %}
       </div>
     </div>
