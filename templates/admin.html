@@ -250,6 +250,38 @@ tbody tr:hover td { background: #fafafa; }
 .dot-today { background: var(--success); }
 .dot-week  { background: var(--warn); }
 .dot-old   { background: #cbd5e1; }
+
+/* ── EMAIL AUTOCOMPLETE in add form ── */
+.field-wrap { position: relative; }
+.ac-list {
+  position: absolute; top: calc(100% + 4px); left: 0; right: 0;
+  background: var(--white); border: 1.5px solid var(--blue);
+  border-radius: 9px; box-shadow: 0 8px 24px rgba(0,0,0,0.12);
+  z-index: 300; overflow: hidden; display: none;
+}
+.ac-list.show { display: block; }
+.ac-item {
+  padding: 10px 13px; font-size: 13px; color: var(--text);
+  cursor: pointer; display: flex; align-items: center; gap: 8px;
+  transition: background 0.15s;
+}
+.ac-item:hover, .ac-item.sel { background: var(--blue-lite); }
+.ac-item .ac-domain { color: var(--blue); font-weight: 600; }
+
+/* ── RESPONSIVE FIXES ── */
+@media (max-width: 700px) {
+  .nav { padding: 0 14px; gap: 8px; }
+  .main { padding: 14px; }
+  .add-form-grid { grid-template-columns: 1fr; }
+  .modal { padding: 22px 16px; }
+  .modal-grid { grid-template-columns: 1fr; }
+  .overview-grid { grid-template-columns: 1fr 1fr; }
+  .actions { flex-wrap: wrap; }
+  .btn-export, .btn-logout { font-size: 11px; padding: 6px 11px; }
+}
+@media (max-width: 480px) {
+  .overview-grid { grid-template-columns: 1fr; }
+}
 </style>
 </head>
 <body>
@@ -344,11 +376,14 @@ tbody tr:hover td { background: #fafafa; }
       <div class="add-form-grid">
         <div class="field">
           <label>Full Name</label>
-          <input type="text" name="name" placeholder="Rahul Sharma" required>
+          <input type="text" name="name" id="addName" placeholder="Rahul Sharma" required
+                 oninput="capName(this)" autocomplete="off">
         </div>
-        <div class="field">
+        <div class="field field-wrap">
           <label>Email</label>
-          <input type="text" name="email" placeholder="rahul@pharmaip.com" required>
+          <input type="text" name="email" id="addEmail" placeholder="rahul@pharmaip.com" required
+                 oninput="handleAddEmail(this)" onkeydown="handleAddEmailKey(event)" autocomplete="off">
+          <div class="ac-list" id="addAcList"></div>
         </div>
         <div class="field">
           <label>Password (min 6 chars)</label>
@@ -495,6 +530,53 @@ tbody tr:hover td { background: #fafafa; }
 </div><!-- /main -->
 
 <script>
+// ── NAME AUTO-CAPITALIZE ──
+function capName(input) {
+  const pos = input.selectionStart;
+  input.value = input.value.replace(/\b\w/g, c => c.toUpperCase());
+  try { input.setSelectionRange(pos, pos); } catch(e){}
+}
+
+// ── ADD-FORM EMAIL AUTOCOMPLETE ──
+let addAcIdx = -1;
+function handleAddEmail(input) {
+  const val = input.value;
+  const list = document.getElementById('addAcList');
+  if (val.length > 0 && !val.includes('@')) {
+    const sug = val + '@pharmaip.com';
+    list.innerHTML = `<div class="ac-item" onclick="pickAddEmail('${escHtml(sug)}')" onmouseover="this.classList.add('sel')" onmouseout="this.classList.remove('sel')">📧 <span>${escHtml(val)}<span class="ac-domain">@pharmaip.com</span></span></div>`;
+    list.classList.add('show');
+    addAcIdx = -1;
+  } else {
+    list.classList.remove('show');
+  }
+}
+function handleAddEmailKey(e) {
+  const list = document.getElementById('addAcList');
+  if (!list.classList.contains('show')) return;
+  if (e.key === 'Enter' || e.key === 'Tab') {
+    e.preventDefault();
+    const item = list.querySelector('.ac-item');
+    if (item) item.click();
+  } else if (e.key === 'Escape') {
+    list.classList.remove('show');
+  }
+}
+function pickAddEmail(email) {
+  document.getElementById('addEmail').value = email;
+  document.getElementById('addAcList').classList.remove('show');
+  document.querySelector('[name="password"]').focus();
+}
+function escHtml(s) {
+  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+document.addEventListener('click', function(e) {
+  const wrap = document.querySelector('#addEmail')?.closest('.field-wrap');
+  if (wrap && !wrap.contains(e.target)) {
+    document.getElementById('addAcList')?.classList.remove('show');
+  }
+});
+
 // ── EDIT MODAL ──
 function openEdit(id, name, email, type) {
   document.getElementById('editForm').action = '/admin/edit_user/' + id;
