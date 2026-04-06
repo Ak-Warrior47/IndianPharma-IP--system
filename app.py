@@ -48,10 +48,16 @@ app.config.update(
     SQLALCHEMY_ENGINE_OPTIONS={"pool_pre_ping": True, "pool_recycle": 300}
 )
 
-db_url = os.environ.get("DATABASE_URL", "sqlite:///pharma_final.db")
-if db_url.startswith("postgres://"):
+# FIX: Proper DATABASE_URL handling with fallback
+db_url = os.environ.get("DATABASE_URL")
+if not db_url:
+    logger.warning("⚠️ DATABASE_URL not set! Using SQLite (local development mode)")
+    db_url = "sqlite:///pharma_final.db"
+elif db_url.startswith("postgres://"):
     db_url = db_url.replace("postgres://", "postgresql://", 1)
+
 app.config["SQLALCHEMY_DATABASE_URI"] = db_url
+logger.info(f"Using database: {db_url.split('@')[0] if '@' in db_url else 'SQLite (local)'}")
 
 db = SQLAlchemy(app)
 socketio = SocketIO(app, cors_allowed_origins="*", async_mode="eventlet")
@@ -178,9 +184,12 @@ def build_analytics(entries: List[KPIEntry], staff_type: str = "picker") -> Opti
         # Consistency calculation
         daily_accs = [e.accuracy for e in entries if e.accuracy > 0]
         if len(daily_accs) > 1:
-            import numpy as np
-            std_dev = np.std(daily_accs)
-            consistency = max(0, 100 - (std_dev * 2))
+            try:
+                import numpy as np
+                std_dev = np.std(daily_accs)
+                consistency = max(0, 100 - (std_dev * 2))
+            except:
+                consistency = 100 if daily_accs else 0
         else:
             consistency = 100 if daily_accs else 0
 
@@ -264,7 +273,7 @@ def init_db():
                 c1.set_password("test1234")
                 db.session.add(c1)
                 db.session.commit()
-                logger.info("DB init complete.")
+                logger.info("✅ Database initialized successfully")
         except Exception as e:
             logger.error(f"DB init error: {e}")
             db.session.rollback()
@@ -687,7 +696,7 @@ def handle_connect():
     emit('connected', {'message': 'Connected to KPI tracker'})
 
 
-# ─── ERROR HANDLERS ──────────────────────────────────────────────────────────
+# ─── ERROR HANDLERS ──────────────────────────────────────────────────────
 
 @app.errorhandler(404)
 def not_found(e):
