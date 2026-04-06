@@ -338,6 +338,7 @@ def run_migrations():
                 ("sunday_override", "BOOLEAN DEFAULT FALSE"),
                 ("twofa_secret",    "VARCHAR(32)"),
                 ("twofa_enabled",   "BOOLEAN DEFAULT FALSE"),
+                ("created_at",      "TIMESTAMP DEFAULT CURRENT_TIMESTAMP") # Add this line!
             ]
             for col, col_type in cols_to_add:
                 try:
