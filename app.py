@@ -15,8 +15,6 @@ from flask_socketio import SocketIO, emit
 from werkzeug.security import generate_password_hash, check_password_hash
 from werkzeug.middleware.proxy_fix import ProxyFix
 
-# REMOVED: flask_limiter, flask_wtf.csrf, flask_caching, sentry_sdk
-
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
@@ -36,7 +34,6 @@ app.config.update(
     SQLALCHEMY_ENGINE_OPTIONS={"pool_pre_ping": True, "pool_recycle": 300}
 )
 
-# Database URL handling
 db_url = os.environ.get("DATABASE_URL")
 if not db_url:
     logger.warning("⚠️ DATABASE_URL not set! Using SQLite (local development mode)")
@@ -49,8 +46,6 @@ logger.info(f"Using database: {db_url.split('@')[0] if '@' in db_url else 'SQLit
 
 db = SQLAlchemy(app)
 socketio = SocketIO(app, cors_allowed_origins="*", async_mode="eventlet")
-
-# REMOVED: csrf, limiter, cache - these caused the errors
 
 
 # ─── MODELS ──────────────────────────────────────────────────────────────────
@@ -94,7 +89,7 @@ class KPIEntry(db.Model):
     sweep            = db.Column(db.Float, default=0.0)
     entry_date       = db.Column(db.Date, nullable=False, index=True)
     report_sent      = db.Column(db.Boolean, default=False)
-    
+
     __table_args__ = (
         db.UniqueConstraint("emp_id", "entry_date", name="_emp_date_uc"),
         db.Index("idx_entry_date", "entry_date"),
@@ -106,6 +101,14 @@ class KPIEntry(db.Model):
     def accuracy(self):
         t = (self.picked or 0) + (self.missed or 0)
         return round((self.picked or 0) / t * 100, 1) if t > 0 else 0.0
+
+    @property
+    def effective_bills(self):
+        return self.sales_bills_open or self.bills or 0
+
+    @property
+    def effective_time(self):
+        return self.total_time or self.sweep or 0
 
     @property
     def _sales_bill_effective(self):
@@ -120,6 +123,12 @@ class KPIEntry(db.Model):
         if self.checked and self.checked > 0:
             return round((self.checked - (self.errors_found or 0)) / self.checked * 100, 1)
         return 0
+
+    @property
+    def pick_speed(self):
+        t = (self.picked or 0) + (self.missed or 0)
+        tt = self.total_time or self.sweep or 0
+        return round(t / max(tt, 0.001), 1) if tt > 0 else 0
 
 
 class AuditLog(db.Model):
@@ -160,15 +169,31 @@ def build_analytics(entries: List[KPIEntry], staff_type: str = "picker") -> Opti
         tcs  = sum(int(e.cs_sales_open or 0) for e in entries)
         tro  = sum(int(e.rack_organized or 0) for e in entries)
         ttc  = sum(int(e.table_clean or 0) for e in entries)
+        tct  = sum(float(e.check_time or 0) for e in entries)
         days = len(entries)
 
-        pick_acc   = round(safe_div(tp, ti) * 100, 1)
-        pick_speed = round(safe_div(ti, max(ts, 0.001)), 1)
-        check_acc  = round(safe_div(tck - ter, tck) * 100, 1) if tck > 0 else 0.0
+        pick_acc    = round(safe_div(tp, ti) * 100, 1)
+        pick_speed  = round(safe_div(ti, max(ts, 0.001)), 1)
+        check_acc   = round(safe_div(tck - ter, tck) * 100, 1) if tck > 0 else 0.0
+        error_rate  = round(safe_div(ter, tck) * 100, 1) if tck > 0 else 0.0
+        ck_speed    = round(safe_div(tck, max(tct, 0.001)), 1) if tct > 0 else 0.0
         packing_eff = round(safe_div(tpk, tsb) * 100, 1) if tsb > 0 else 0
         cs_fulfilment = round(min(safe_div(tpk, tcs) * 100, 100), 1) if tcs > 0 else 0
-        
-        # Consistency calculation (without numpy)
+
+        # Workspace score
+        workspace_score = round(safe_div(tro + ttc, 2 * days) * 100, 1) if days > 0 else 0
+
+        # Potential / gap
+        if staff_type == "checker":
+            potential_items = int(150 * tct)
+            gap_items = max(potential_items - tck, 0)
+            potential_eff = round(safe_div(tck, max(potential_items, 1)) * 100, 1)
+        else:
+            potential_items = int(200 * ts)
+            gap_items = max(potential_items - ti, 0)
+            potential_eff = round(safe_div(ti, max(potential_items, 1)) * 100, 1)
+
+        # Consistency
         daily_accs = [e.accuracy for e in entries if e.accuracy > 0]
         if len(daily_accs) > 1:
             mean_acc = sum(daily_accs) / len(daily_accs)
@@ -178,12 +203,68 @@ def build_analytics(entries: List[KPIEntry], staff_type: str = "picker") -> Opti
         else:
             consistency = 100 if daily_accs else 0
 
-        eff_score = (
-            round(pick_acc * 0.6 + min(pick_speed / 200, 1) * 40, 1)
-            if staff_type == "picker"
-            else round(check_acc * 0.8 + min(tck / 150, 1) * 20, 1)
-        )
-        grade = grade_from_score(eff_score)
+        # Trend (compare first half vs second half)
+        if len(entries) >= 4:
+            mid = len(entries) // 2
+            first_half = entries[mid:]   # older (entries sorted desc)
+            second_half = entries[:mid]  # newer
+            fh_acc = sum(e.accuracy for e in first_half) / len(first_half)
+            sh_acc = sum(e.accuracy for e in second_half) / len(second_half)
+            if sh_acc > fh_acc + 2:
+                trend = "improving"
+            elif sh_acc < fh_acc - 2:
+                trend = "declining"
+            else:
+                trend = "stable"
+        else:
+            trend = "stable"
+
+        # Efficiency score
+        if staff_type == "picker":
+            eff_score = round(
+                (pick_acc / 100) * 55 +
+                min(pick_speed / 200, 1) * 30 +
+                (workspace_score / 100) * 10 +
+                min(packing_eff / 100, 1) * 5,
+                1
+            )
+        else:
+            eff_score = round(
+                (check_acc / 100) * 65 +
+                min(ck_speed / 150, 1) * 25 +
+                (workspace_score / 100) * 10,
+                1
+            )
+        eff_score = min(eff_score, 100)
+
+        # Grade (enhanced for staff_detail)
+        if staff_type == "picker":
+            if pick_acc >= 98 and workspace_score >= 80:
+                grade = "ELITE"
+            elif pick_acc >= 95:
+                grade = "PROFICIENT"
+            elif pick_acc >= 88:
+                grade = "SATISFACTORY"
+            else:
+                grade = "RE-TRAINING"
+        else:
+            if check_acc >= 97 and workspace_score >= 80:
+                grade = "ELITE"
+            elif check_acc >= 94:
+                grade = "PROFICIENT"
+            elif check_acc >= 87:
+                grade = "SATISFACTORY"
+            else:
+                grade = "RE-TRAINING"
+
+        # Feedback
+        feedback_map = {
+            "ELITE": "Outstanding performance. Keep it up!",
+            "PROFICIENT": "Strong results. Minor improvements will push you to Elite.",
+            "SATISFACTORY": "Meets expectations. Focus on accuracy and workspace.",
+            "RE-TRAINING": "Performance needs attention. Please speak to your manager."
+        }
+        feedback = feedback_map.get(grade, "")
 
         return dict(
             pick_acc=pick_acc, pick_speed=pick_speed, check_acc=check_acc,
@@ -191,7 +272,12 @@ def build_analytics(entries: List[KPIEntry], staff_type: str = "picker") -> Opti
             tp=tp, tm=tm, tck=tck, ter=ter, tsb=tsb, tpk=tpk, ts=round(ts, 2),
             tpd=tpk, tcs=tcs, tro=tro, ttc=ttc,
             packing_eff=packing_eff, cs_fulfilment=cs_fulfilment,
-            consistency=round(consistency, 1)
+            consistency=round(consistency, 1),
+            error_rate=error_rate, ck_speed=ck_speed,
+            workspace_score=workspace_score,
+            potential_items=potential_items, gap_items=gap_items, potential_eff=potential_eff,
+            ttt=round(ts, 2),
+            trend=trend, feedback=feedback
         )
     except Exception as e:
         logger.error(f"build_analytics error: {e}")
@@ -243,10 +329,55 @@ def log_audit(action, target, details=""):
         db.session.rollback()
 
 
+def run_migrations():
+    """Add missing columns to existing tables without dropping them."""
+    try:
+        is_postgres = "postgresql" in app.config["SQLALCHEMY_DATABASE_URI"]
+        if is_postgres:
+            cols_to_add = [
+                ("sunday_override", "BOOLEAN DEFAULT FALSE"),
+                ("twofa_secret",    "VARCHAR(32)"),
+                ("twofa_enabled",   "BOOLEAN DEFAULT FALSE"),
+            ]
+            for col, col_type in cols_to_add:
+                try:
+                    db.session.execute(db.text(
+                        f"ALTER TABLE employees ADD COLUMN IF NOT EXISTS {col} {col_type}"
+                    ))
+                    db.session.commit()
+                    logger.info(f"✅ Column '{col}' ensured on employees table")
+                except Exception as ce:
+                    db.session.rollback()
+                    logger.warning(f"Column '{col}' migration skipped: {ce}")
+        else:
+            # SQLite doesn't support IF NOT EXISTS on ALTER TABLE
+            import sqlite3
+            db_path = app.config["SQLALCHEMY_DATABASE_URI"].replace("sqlite:///", "")
+            conn = sqlite3.connect(db_path)
+            cursor = conn.cursor()
+            cursor.execute("PRAGMA table_info(employees)")
+            existing = [row[1] for row in cursor.fetchall()]
+            sqlite_cols = {
+                "sunday_override": "BOOLEAN DEFAULT 0",
+                "twofa_secret": "VARCHAR(32)",
+                "twofa_enabled": "BOOLEAN DEFAULT 0",
+            }
+            for col, col_type in sqlite_cols.items():
+                if col not in existing:
+                    cursor.execute(f"ALTER TABLE employees ADD COLUMN {col} {col_type}")
+                    logger.info(f"✅ SQLite column '{col}' added")
+            conn.commit()
+            conn.close()
+    except Exception as e:
+        logger.error(f"Migration error: {e}")
+
+
 def init_db():
     with app.app_context():
         try:
             db.create_all()
+            # Run migrations for existing DBs
+            run_migrations()
             if not Employee.query.first():
                 admin = Employee(name="Admin", email="admin@pharmaip.com", staff_type="picker", is_admin=True, role="Admin")
                 admin.set_password("admin123")
@@ -298,26 +429,26 @@ def login():
             password = request.form.get("password", "")
             role_choice = request.form.get("staff_type", "").strip()
             user = Employee.query.filter_by(email=email).first()
-            
+
             if not user or not user.check_password(password):
                 flash("Invalid Pharma ID or Password.", "danger")
                 return render_template("login.html")
-            
+
             if not user.is_admin and role_choice in ("picker", "checker"):
                 user.staff_type = role_choice
                 db.session.commit()
-            
+
             session.clear()
             session.permanent = True
             session["user_id"] = user.id
             session["user_name"] = user.name
             session["staff_type"] = user.staff_type
             session["is_admin"] = bool(user.is_admin)
-            
+
             logger.info(f"User login successful: {email}")
             return redirect(url_for("admin_dashboard") if user.is_admin else url_for("dashboard"))
         except Exception as e:
-            logger.error(f"Login error for email: {email}")
+            logger.error(f"Login error: {e}")
             flash("System error. Please try again.", "danger")
     return render_template("login.html")
 
@@ -373,21 +504,18 @@ def dashboard():
                     )
                     db.session.add(ne)
                     db.session.commit()
-                    
-                    # Check for personal best (simple version without cache)
+
                     all_entries = KPIEntry.query.filter_by(emp_id=emp_id).all()
                     all_stats = build_analytics(all_entries, staff_type)
                     if all_stats:
-                        # Store in session instead of cache
                         prev_best = session.get(f"pb_{emp_id}", 0)
                         if all_stats['eff_score'] > prev_best:
                             session[f"pb_{emp_id}"] = all_stats['eff_score']
                             new_personal_best = True
-                    
+
                     flash("✅ Metrics recorded successfully.", "success")
                     today_entry = ne
-                    
-                    # Broadcast via socket
+
                     socketio.emit('entry_update', {'user': session.get('user_name'), 'accuracy': ne.accuracy})
                 except Exception as e:
                     db.session.rollback()
@@ -399,7 +527,6 @@ def dashboard():
         w_stats = build_analytics(get_period_entries(emp_id, "week"), staff_type)
         m_stats = build_analytics(get_period_entries(emp_id, "month"), staff_type)
 
-        # 7-day trend data
         trend_labels = []
         trend_accuracy = []
         trend_speed = []
@@ -480,6 +607,49 @@ def admin_dashboard():
         flash("Error loading admin dashboard.", "danger")
         return render_template("admin.html", rows=[], total_picked=0,
                                total_entries=0, active_today=0, emp_count=0, today=date.today())
+
+
+@app.route("/staff/<int:emp_id>")
+@login_required
+def staff_detail(emp_id):
+    # Admins can view any; staff can only view themselves
+    if not session.get("is_admin") and session.get("user_id") != emp_id:
+        return redirect(url_for("dashboard"))
+    try:
+        emp = db.session.get(Employee, emp_id)
+        if not emp:
+            flash("Employee not found.", "danger")
+            return redirect(url_for("admin_dashboard") if session.get("is_admin") else url_for("dashboard"))
+
+        entries = KPIEntry.query.filter_by(emp_id=emp_id).order_by(KPIEntry.entry_date.desc()).all()
+        today = date.today()
+
+        a_stats = build_analytics(entries, emp.staff_type)
+        d_stats = build_analytics(get_period_entries(emp_id, "day"), emp.staff_type)
+        w_stats = build_analytics(get_period_entries(emp_id, "week"), emp.staff_type)
+        m_stats = build_analytics(get_period_entries(emp_id, "month"), emp.staff_type)
+
+        # Heatmap: last 30 days
+        heatmap = {}
+        for e in entries:
+            delta = (today - e.entry_date).days
+            if delta <= 29:
+                heatmap[str(e.entry_date)] = e.accuracy
+
+        return render_template("staff_detail.html",
+            emp=emp,
+            entries=entries,
+            a_stats=a_stats,
+            d_stats=d_stats,
+            w_stats=w_stats,
+            m_stats=m_stats,
+            heatmap=heatmap,
+            today=today
+        )
+    except Exception as e:
+        logger.error(f"Staff detail error: {e}")
+        flash("Error loading staff profile.", "danger")
+        return redirect(url_for("admin_dashboard") if session.get("is_admin") else url_for("dashboard"))
 
 
 @app.route("/admin/toggle_sunday/<int:emp_id>", methods=["POST"])
@@ -564,7 +734,7 @@ def admin_edit_user(emp_id):
             emp.set_password(new_password)
 
         db.session.commit()
-        log_audit("edit_user", name, f"Updated by admin")
+        log_audit("edit_user", name, "Updated by admin")
         flash(f"✅ {emp.name} updated successfully.", "success")
     except Exception as e:
         db.session.rollback()
@@ -625,6 +795,13 @@ def admin_export_csv():
         return redirect(url_for("admin_dashboard"))
 
 
+# Alias for staff_detail template compatibility
+@app.route("/export_data")
+@admin_required
+def export_data():
+    return redirect(url_for("admin_export_csv"))
+
+
 @app.route("/export_pdf")
 @login_required
 def export_pdf():
@@ -633,7 +810,7 @@ def export_pdf():
         emp_id = session.get("user_id")
         emp = db.session.get(Employee, emp_id)
         all_entries = KPIEntry.query.filter_by(emp_id=emp_id).all()
-        
+
         payload = {
             "all_stats": build_analytics(all_entries, emp.staff_type),
             "day_stats": build_analytics(get_period_entries(emp_id, "day"), emp.staff_type),
@@ -642,7 +819,7 @@ def export_pdf():
             "staff_type": emp.staff_type,
             "all_entries": all_entries[-30:],
         }
-        
+
         pdf_buffer = generate_visual_pdf(emp.name, payload)
         return Response(
             pdf_buffer.getvalue(),
@@ -653,6 +830,40 @@ def export_pdf():
         logger.error(f"PDF export error: {e}")
         flash("Error generating PDF report.", "danger")
         return redirect(url_for("dashboard"))
+
+
+@app.route("/download/<int:emp_id>")
+@login_required
+def download_pdf(emp_id):
+    if not session.get("is_admin") and session.get("user_id") != emp_id:
+        return redirect(url_for("dashboard"))
+    try:
+        from utils import generate_visual_pdf
+        emp = db.session.get(Employee, emp_id)
+        if not emp:
+            flash("Employee not found.", "danger")
+            return redirect(url_for("admin_dashboard"))
+        all_entries = KPIEntry.query.filter_by(emp_id=emp_id).all()
+
+        payload = {
+            "all_stats": build_analytics(all_entries, emp.staff_type),
+            "day_stats": build_analytics(get_period_entries(emp_id, "day"), emp.staff_type),
+            "week_stats": build_analytics(get_period_entries(emp_id, "week"), emp.staff_type),
+            "month_stats": build_analytics(get_period_entries(emp_id, "month"), emp.staff_type),
+            "staff_type": emp.staff_type,
+            "all_entries": all_entries[-30:],
+        }
+
+        pdf_buffer = generate_visual_pdf(emp.name, payload)
+        return Response(
+            pdf_buffer.getvalue(),
+            mimetype="application/pdf",
+            headers={"Content-Disposition": f"attachment; filename=KRA_{emp.name}_{date.today()}.pdf"}
+        )
+    except Exception as e:
+        logger.error(f"Download PDF error: {e}")
+        flash("Error generating PDF.", "danger")
+        return redirect(url_for("admin_dashboard"))
 
 
 @app.route("/api/stats/<int:emp_id>")
