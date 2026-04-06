@@ -12,257 +12,433 @@
   --blue:      #1d4ed8;
   --blue-dark: #1e3a8a;
   --blue-lite: #eff6ff;
-  --blue-mid:  #dbeafe;
   --text:      #0f172a;
   --muted:     #64748b;
-  --border:    #e2e8f0;
-  --bg:        #f8fafc;
+  --border:    rgba(255,255,255,0.18);
+  --bg:        rgba(255,255,255,0.08);
   --white:     #ffffff;
   --success:   #16a34a;
   --danger:    #dc2626;
   --warn:      #d97706;
 }
 
+html, body { min-height: 100%; width: 100%; }
+
 body {
   font-family: 'DM Sans', sans-serif;
-  background: #ffffff;
   min-height: 100vh;
   display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding: 24px;
+  padding: 32px 16px;
   position: relative;
-  overflow: hidden;
+  overflow-x: hidden;
+  /* Deep midnight-blue background */
+  background: #060d1f;
 }
 
-/* Subtle background grid */
-body::before {
-  content: '';
+/* ── ANIMATED GRADIENT MESH BACKGROUND ── */
+.bg-mesh {
   position: fixed;
   inset: 0;
-  background-image:
-    linear-gradient(var(--border) 1px, transparent 1px),
-    linear-gradient(90deg, var(--border) 1px, transparent 1px);
-  background-size: 40px 40px;
-  opacity: 0.4;
+  z-index: 0;
+  overflow: hidden;
   pointer-events: none;
 }
-
-/* Accent blobs */
-body::after {
+.bg-mesh::before {
   content: '';
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(ellipse 80% 60% at 20% 10%, rgba(29,78,216,0.45) 0%, transparent 60%),
+    radial-gradient(ellipse 60% 50% at 80% 80%, rgba(14,165,233,0.3) 0%, transparent 55%),
+    radial-gradient(ellipse 50% 40% at 60% 20%, rgba(99,102,241,0.25) 0%, transparent 50%),
+    radial-gradient(ellipse 70% 60% at 10% 90%, rgba(6,182,212,0.2) 0%, transparent 55%);
+  animation: meshShift 12s ease-in-out infinite alternate;
+}
+@keyframes meshShift {
+  0%   { transform: scale(1) rotate(0deg); }
+  100% { transform: scale(1.08) rotate(2deg); }
+}
+
+/* ── PIXEL / STAR FIELD canvas ── */
+#pixelCanvas {
   position: fixed;
-  top: -120px; right: -120px;
-  width: 400px; height: 400px;
-  background: radial-gradient(circle, rgba(29,78,216,0.08) 0%, transparent 70%);
+  inset: 0;
+  z-index: 1;
   pointer-events: none;
 }
 
-.blob-bottom {
+/* ── WATER RIPPLE canvas (on card click) ── */
+#rippleCanvas {
   position: fixed;
-  bottom: -100px; left: -100px;
-  width: 350px; height: 350px;
-  background: radial-gradient(circle, rgba(29,78,216,0.06) 0%, transparent 70%);
+  inset: 0;
+  z-index: 2;
   pointer-events: none;
 }
 
+/* ── FLOATING ORBS (extra depth) ── */
+.orb {
+  position: fixed;
+  border-radius: 50%;
+  filter: blur(80px);
+  pointer-events: none;
+  z-index: 1;
+  animation: orbFloat linear infinite;
+}
+.orb1 { width:340px; height:340px; background:rgba(29,78,216,0.18); top:-80px; left:-60px; animation-duration:18s; }
+.orb2 { width:260px; height:260px; background:rgba(6,182,212,0.14); bottom:-60px; right:-40px; animation-duration:22s; animation-direction:reverse; }
+.orb3 { width:200px; height:200px; background:rgba(99,102,241,0.16); top:40%; left:60%; animation-duration:26s; }
+@keyframes orbFloat {
+  0%   { transform: translate(0,0) scale(1); }
+  33%  { transform: translate(30px,-20px) scale(1.05); }
+  66%  { transform: translate(-20px,25px) scale(0.97); }
+  100% { transform: translate(0,0) scale(1); }
+}
+
+/* ── CARD WRAP ── */
 .wrap {
   width: 100%;
   max-width: 420px;
   position: relative;
-  z-index: 1;
-  animation: fadeUp 0.5s ease both;
+  z-index: 10;
+  animation: fadeUp 0.55s cubic-bezier(0.22,1,0.36,1) both;
 }
-
 @keyframes fadeUp {
-  from { opacity: 0; transform: translateY(20px); }
-  to   { opacity: 1; transform: translateY(0); }
+  from { opacity: 0; transform: translateY(24px) scale(0.98); }
+  to   { opacity: 1; transform: translateY(0)    scale(1); }
 }
 
-/* Brand strip */
+/* ── BRAND ── */
 .brand {
   text-align: center;
-  margin-bottom: 32px;
+  margin-bottom: 26px;
 }
 .brand-icon {
-  width: 56px; height: 56px;
-  background: linear-gradient(135deg, var(--blue-dark) 0%, var(--blue) 100%);
-  border-radius: 16px;
+  width: 58px; height: 58px;
+  background: linear-gradient(135deg, rgba(29,78,216,0.9), rgba(14,165,233,0.9));
+  border-radius: 18px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   font-size: 26px;
-  margin-bottom: 16px;
-  box-shadow: 0 8px 24px rgba(29,78,216,0.3);
+  margin-bottom: 14px;
+  box-shadow: 0 0 0 1px rgba(255,255,255,0.12), 0 8px 28px rgba(29,78,216,0.5), 0 0 40px rgba(14,165,233,0.2);
+  position: relative;
+  animation: iconPulse 3s ease-in-out infinite;
+}
+.brand-icon::after {
+  content: '';
+  position: absolute;
+  inset: -1px;
+  border-radius: 19px;
+  background: linear-gradient(135deg, rgba(255,255,255,0.3) 0%, transparent 50%);
+  pointer-events: none;
+}
+@keyframes iconPulse {
+  0%, 100% { box-shadow: 0 0 0 1px rgba(255,255,255,0.12), 0 8px 28px rgba(29,78,216,0.5), 0 0 40px rgba(14,165,233,0.2); }
+  50%       { box-shadow: 0 0 0 1px rgba(255,255,255,0.18), 0 8px 36px rgba(29,78,216,0.7), 0 0 60px rgba(14,165,233,0.35); }
 }
 .brand-name {
   font-family: 'DM Serif Display', serif;
-  font-size: 26px;
-  color: var(--text);
-  letter-spacing: -0.5px;
+  font-size: 25px;
+  color: #fff;
+  letter-spacing: -0.3px;
+  display: block;
+  text-shadow: 0 2px 16px rgba(29,78,216,0.4);
 }
 .brand-sub {
-  font-size: 12px;
-  font-weight: 500;
-  color: var(--muted);
+  font-size: 10px;
+  font-weight: 600;
+  color: rgba(148,163,184,0.8);
   text-transform: uppercase;
-  letter-spacing: 2px;
-  margin-top: 4px;
+  letter-spacing: 2.5px;
+  margin-top: 5px;
+  display: block;
 }
 
-/* Card */
+/* ── GLASS CARD ── */
 .card {
-  background: var(--white);
-  border: 1px solid var(--border);
-  border-radius: 20px;
-  padding: 40px 36px;
-  box-shadow: 0 4px 6px rgba(0,0,0,0.04), 0 16px 48px rgba(0,0,0,0.07);
+  background: rgba(255,255,255,0.065);
+  border: 1px solid rgba(255,255,255,0.13);
+  border-radius: 22px;
+  padding: 36px 32px 30px;
+  width: 100%;
+  position: relative;
+  overflow: hidden;
+  /* glass blur */
+  backdrop-filter: blur(28px) saturate(160%);
+  -webkit-backdrop-filter: blur(28px) saturate(160%);
+  box-shadow:
+    0 0 0 1px rgba(255,255,255,0.06),
+    0 24px 64px rgba(0,0,0,0.45),
+    inset 0 1px 0 rgba(255,255,255,0.14);
 }
+
+/* glare sweep on card */
+.card::before {
+  content: '';
+  position: absolute;
+  top: 0; left: -100%;
+  width: 60%; height: 100%;
+  background: linear-gradient(
+    105deg,
+    transparent 30%,
+    rgba(255,255,255,0.07) 50%,
+    transparent 70%
+  );
+  animation: glareSweep 6s ease-in-out infinite;
+  pointer-events: none;
+  z-index: 0;
+}
+@keyframes glareSweep {
+  0%   { left: -100%; opacity: 0; }
+  10%  { opacity: 1; }
+  50%  { left: 160%; opacity: 1; }
+  60%  { opacity: 0; }
+  100% { left: 160%; opacity: 0; }
+}
+
+/* top edge highlight */
+.card::after {
+  content: '';
+  position: absolute;
+  top: 0; left: 10%; right: 10%;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.35), transparent);
+  pointer-events: none;
+}
+
+.card > * { position: relative; z-index: 1; }
 
 .card-title {
-  font-size: 20px;
+  font-size: 19px;
   font-weight: 700;
-  color: var(--text);
-  margin-bottom: 6px;
+  color: #fff;
+  margin-bottom: 5px;
 }
 .card-sub {
   font-size: 13px;
-  color: var(--muted);
-  margin-bottom: 28px;
+  color: rgba(148,163,184,0.85);
+  margin-bottom: 24px;
 }
 
-/* Alerts */
+/* ── ALERTS ── */
 .alert {
-  padding: 11px 14px;
+  padding: 11px 13px;
   border-radius: 10px;
   font-size: 13px;
   font-weight: 500;
-  margin-bottom: 18px;
+  margin-bottom: 16px;
   display: flex;
   align-items: center;
   gap: 8px;
+  backdrop-filter: blur(10px);
 }
-.alert-danger  { background: #fef2f2; color: var(--danger); border: 1px solid #fecaca; }
-.alert-success { background: #f0fdf4; color: var(--success); border: 1px solid #bbf7d0; }
-.alert-warning { background: #fffbeb; color: var(--warn);    border: 1px solid #fcd34d; }
+.alert-danger  { background: rgba(220,38,38,0.15);  color: #fca5a5; border: 1px solid rgba(220,38,38,0.3); }
+.alert-success { background: rgba(22,163,74,0.15);  color: #86efac; border: 1px solid rgba(22,163,74,0.3); }
+.alert-warning { background: rgba(217,119,6,0.15);  color: #fcd34d; border: 1px solid rgba(217,119,6,0.3); }
 
-/* Form */
-.field { margin-bottom: 18px; }
+/* ── FIELDS ── */
+.field { margin-bottom: 15px; position: relative; }
 .field label {
   display: block;
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 600;
-  color: #475569;
+  color: rgba(148,163,184,0.9);
   text-transform: uppercase;
-  letter-spacing: 0.6px;
-  margin-bottom: 8px;
+  letter-spacing: 0.7px;
+  margin-bottom: 7px;
 }
 .field input {
   width: 100%;
-  padding: 12px 14px;
-  border: 1.5px solid var(--border);
+  padding: 11px 13px;
+  border: 1px solid rgba(255,255,255,0.12);
   border-radius: 10px;
-  background: var(--bg);
+  background: rgba(255,255,255,0.06);
   font-size: 14px;
   font-family: 'DM Sans', sans-serif;
-  color: var(--text);
+  color: #fff;
   transition: border-color 0.2s, box-shadow 0.2s, background 0.2s;
+  backdrop-filter: blur(8px);
 }
+.field input::placeholder { color: rgba(148,163,184,0.5); }
 .field input:focus {
   outline: none;
-  border-color: var(--blue);
-  background: var(--white);
-  box-shadow: 0 0 0 3px rgba(29,78,216,0.1);
+  border-color: rgba(99,179,237,0.6);
+  background: rgba(255,255,255,0.1);
+  box-shadow: 0 0 0 3px rgba(29,78,216,0.2), 0 0 16px rgba(14,165,233,0.15);
 }
-.field input::placeholder { color: #94a3b8; }
 
-/* Role picker */
+/* ── EMAIL AUTOCOMPLETE ── */
+.autocomplete-list {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0; right: 0;
+  background: rgba(15,23,42,0.92);
+  border: 1px solid rgba(99,179,237,0.35);
+  border-radius: 10px;
+  box-shadow: 0 12px 28px rgba(0,0,0,0.5);
+  z-index: 200;
+  overflow: hidden;
+  display: none;
+  backdrop-filter: blur(20px);
+}
+.autocomplete-list.show { display: block; }
+.autocomplete-item {
+  padding: 11px 13px;
+  font-size: 13px;
+  color: rgba(226,232,240,0.9);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  transition: background 0.13s;
+}
+.autocomplete-item:hover, .autocomplete-item.selected {
+  background: rgba(29,78,216,0.25);
+}
+.autocomplete-item .at-domain { color: #60a5fa; font-weight: 700; }
+
+/* ── ROLE PICKER ── */
 .role-wrap {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 10px;
-  margin-top: 8px;
+  margin-top: 7px;
 }
+.role-opt { position: relative; }
 .role-opt input[type="radio"] { position: absolute; opacity: 0; pointer-events: none; }
 .role-opt label {
   display: flex;
   align-items: center;
   justify-content: center;
   gap: 7px;
-  padding: 11px 14px;
-  border: 1.5px solid var(--border);
+  padding: 11px 10px;
+  border: 1px solid rgba(255,255,255,0.1);
   border-radius: 10px;
-  background: var(--bg);
+  background: rgba(255,255,255,0.05);
   font-size: 13px;
   font-weight: 600;
-  color: var(--muted);
+  color: rgba(148,163,184,0.85);
   cursor: pointer;
   transition: all 0.2s;
+  width: 100%;
   text-transform: none;
   letter-spacing: 0;
   margin-bottom: 0;
+  backdrop-filter: blur(6px);
 }
 .role-opt input:checked + label {
-  border-color: var(--blue);
-  background: var(--blue-lite);
-  color: var(--blue);
+  border-color: rgba(99,179,237,0.5);
+  background: rgba(29,78,216,0.2);
+  color: #93c5fd;
+  box-shadow: inset 0 0 12px rgba(29,78,216,0.15), 0 0 8px rgba(29,78,216,0.2);
 }
-.role-opt label:hover { border-color: #93c5fd; background: var(--white); }
+.role-opt label:hover {
+  border-color: rgba(255,255,255,0.2);
+  background: rgba(255,255,255,0.09);
+  color: #e2e8f0;
+}
 
-/* Submit button */
+/* ── SIGN IN BUTTON ── */
 .btn-submit {
-  width: 100%;
-  padding: 13px;
-  background: linear-gradient(135deg, var(--blue-dark) 0%, var(--blue) 100%);
-  color: #fff;
-  border: none;
-  border-radius: 10px;
-  font-size: 14px;
-  font-weight: 700;
-  font-family: 'DM Sans', sans-serif;
-  cursor: pointer;
-  margin-top: 24px;
-  letter-spacing: 0.3px;
-  transition: all 0.25s;
-  box-shadow: 0 4px 14px rgba(29,78,216,0.35);
   display: flex;
   align-items: center;
   justify-content: center;
   gap: 8px;
+  width: 100%;
+  padding: 14px 0;
+  margin-top: 22px;
+  background: linear-gradient(135deg, #1e3a8a 0%, #1d4ed8 50%, #0ea5e9 100%);
+  color: #fff;
+  border: none;
+  border-radius: 11px;
+  font-size: 15px;
+  font-weight: 700;
+  font-family: 'DM Sans', sans-serif;
+  cursor: pointer;
+  letter-spacing: 0.4px;
+  transition: transform 0.22s, box-shadow 0.22s;
+  box-shadow:
+    0 4px 20px rgba(29,78,216,0.45),
+    0 0 40px rgba(14,165,233,0.15),
+    inset 0 1px 0 rgba(255,255,255,0.18);
+  min-height: 50px;
+  position: relative;
+  overflow: hidden;
 }
-.btn-submit:hover {
+/* shimmer overlay on button */
+.btn-submit::before {
+  content: '';
+  position: absolute;
+  top: 0; left: -120%;
+  width: 60%; height: 100%;
+  background: linear-gradient(105deg, transparent, rgba(255,255,255,0.18), transparent);
+  animation: btnShimmer 3s ease-in-out infinite;
+  pointer-events: none;
+}
+@keyframes btnShimmer {
+  0%   { left: -120%; }
+  60%  { left: 160%; }
+  100% { left: 160%; }
+}
+.btn-submit:hover  {
   transform: translateY(-2px);
-  box-shadow: 0 8px 24px rgba(29,78,216,0.45);
+  box-shadow: 0 8px 28px rgba(29,78,216,0.6), 0 0 50px rgba(14,165,233,0.25), inset 0 1px 0 rgba(255,255,255,0.22);
 }
 .btn-submit:active { transform: translateY(0); }
+.btn-submit:disabled { opacity: 0.6; cursor: not-allowed; transform: none; }
 
-/* Divider */
+/* ── DIVIDER + FOOT ── */
 .divider {
   height: 1px;
-  background: var(--border);
-  margin: 24px 0 20px;
+  background: rgba(255,255,255,0.1);
+  margin: 22px 0 16px;
 }
-
-/* Footer note */
 .foot-note {
   text-align: center;
   font-size: 12px;
-  color: #94a3b8;
+  color: rgba(148,163,184,0.55);
 }
-.foot-note strong { color: var(--blue); font-weight: 600; }
+.foot-note strong { color: #60a5fa; font-weight: 600; }
+
+/* ── RESPONSIVE ── */
+@media (max-width: 480px) {
+  body  { padding: 20px 12px; }
+  .card { padding: 28px 18px 24px; border-radius: 18px; }
+  .brand-name { font-size: 22px; }
+  .brand { margin-bottom: 20px; }
+}
+@media (max-width: 360px) {
+  body  { padding: 14px 10px; }
+  .card { padding: 22px 14px 20px; }
+  .brand-name { font-size: 20px; }
+  .field input { font-size: 13px; padding: 10px 11px; }
+  .role-opt label { font-size: 12px; padding: 10px 6px; }
+  .btn-submit { font-size: 14px; min-height: 46px; }
+}
 </style>
 </head>
 <body>
-<div class="blob-bottom"></div>
+
+<!-- Background layers -->
+<div class="bg-mesh"></div>
+<div class="orb orb1"></div>
+<div class="orb orb2"></div>
+<div class="orb orb3"></div>
+<canvas id="pixelCanvas"></canvas>
+<canvas id="rippleCanvas"></canvas>
 
 <div class="wrap">
   <div class="brand">
     <div class="brand-icon">🔬</div>
-    <div class="brand-name">Indian Pharma IP</div>
-    <div class="brand-sub">Operations KRA System</div>
+    <span class="brand-name">Indian Pharma IP</span>
+    <span class="brand-sub">Operations KRA System</span>
   </div>
 
-  <div class="card">
+  <div class="card" id="mainCard">
     <div class="card-title">Welcome back</div>
     <div class="card-sub">Sign in to your operations account</div>
 
@@ -274,15 +450,22 @@ body::after {
       {% endif %}
     {% endwith %}
 
-    <form method="POST" autocomplete="off">
-      <div class="field">
+    <form method="POST" autocomplete="off" id="loginForm">
+
+      <div class="field" id="emailField">
         <label for="email">Pharma ID (Email)</label>
-        <input type="text" id="email" name="email" placeholder="your@pharmaip.com" required autofocus>
+        <input type="text" id="email" name="email"
+               placeholder="yourname@pharmaip.com"
+               required autofocus autocomplete="off"
+               oninput="handleEmailInput(this)"
+               onkeydown="handleEmailKeydown(event)">
+        <div class="autocomplete-list" id="autocompleteList"></div>
       </div>
 
       <div class="field">
         <label for="password">Password</label>
-        <input type="password" id="password" name="password" placeholder="••••••••" required>
+        <input type="password" id="password" name="password"
+               placeholder="••••••••" required>
       </div>
 
       <div class="field">
@@ -299,9 +482,10 @@ body::after {
         </div>
       </div>
 
-      <button type="submit" class="btn-submit">
+      <button type="submit" class="btn-submit" id="signInBtn">
         <span>🚀</span> Sign In
       </button>
+
     </form>
 
     <div class="divider"></div>
@@ -310,5 +494,183 @@ body::after {
     </div>
   </div>
 </div>
+
+<script>
+// ═══════════════════════════════════════════
+//  PIXEL / STAR FIELD
+// ═══════════════════════════════════════════
+(function() {
+  const canvas = document.getElementById('pixelCanvas');
+  const ctx = canvas.getContext('2d');
+  let W, H, particles = [];
+
+  function resize() {
+    W = canvas.width  = window.innerWidth;
+    H = canvas.height = window.innerHeight;
+  }
+  resize();
+  window.addEventListener('resize', resize);
+
+  // Spawn floating pixel particles
+  for (let i = 0; i < 120; i++) {
+    particles.push({
+      x: Math.random() * 2000,
+      y: Math.random() * 2000,
+      size: Math.random() < 0.7 ? 1 : 2,
+      alpha: Math.random() * 0.6 + 0.1,
+      speed: Math.random() * 0.3 + 0.05,
+      twinkleSpeed: Math.random() * 0.02 + 0.005,
+      twinkleDir: Math.random() > 0.5 ? 1 : -1,
+      color: Math.random() < 0.6 ? '#60a5fa' : Math.random() < 0.5 ? '#a5f3fc' : '#fff',
+    });
+  }
+
+  function draw(ts) {
+    ctx.clearRect(0, 0, W, H);
+    for (const p of particles) {
+      // twinkle
+      p.alpha += p.twinkleSpeed * p.twinkleDir;
+      if (p.alpha > 0.75 || p.alpha < 0.05) p.twinkleDir *= -1;
+      // drift up slowly
+      p.y -= p.speed;
+      if (p.y < 0) { p.y = H; p.x = Math.random() * W; }
+
+      ctx.globalAlpha = p.alpha;
+      ctx.fillStyle = p.color;
+      if (p.size === 1) {
+        ctx.fillRect(Math.floor(p.x % W), Math.floor(p.y), 1, 1);
+      } else {
+        // small glowing square
+        ctx.shadowBlur = 6;
+        ctx.shadowColor = p.color;
+        ctx.fillRect(Math.floor(p.x % W) - 1, Math.floor(p.y) - 1, 2, 2);
+        ctx.shadowBlur = 0;
+      }
+    }
+    ctx.globalAlpha = 1;
+    requestAnimationFrame(draw);
+  }
+  requestAnimationFrame(draw);
+})();
+
+// ═══════════════════════════════════════════
+//  WATER RIPPLE (click/tap anywhere on page)
+// ═══════════════════════════════════════════
+(function() {
+  const canvas = document.getElementById('rippleCanvas');
+  const ctx = canvas.getContext('2d');
+  let W, H;
+  const ripples = [];
+
+  function resize() {
+    W = canvas.width  = window.innerWidth;
+    H = canvas.height = window.innerHeight;
+  }
+  resize();
+  window.addEventListener('resize', resize);
+
+  document.addEventListener('click', function(e) {
+    ripples.push({ x: e.clientX, y: e.clientY, r: 0, maxR: 160, alpha: 0.55 });
+  });
+  // also ripple on touch
+  document.addEventListener('touchstart', function(e) {
+    const t = e.touches[0];
+    ripples.push({ x: t.clientX, y: t.clientY, r: 0, maxR: 140, alpha: 0.5 });
+  }, { passive: true });
+
+  function draw() {
+    ctx.clearRect(0, 0, W, H);
+    for (let i = ripples.length - 1; i >= 0; i--) {
+      const rp = ripples[i];
+      rp.r    += 3.5;
+      rp.alpha -= 0.012;
+      if (rp.alpha <= 0) { ripples.splice(i, 1); continue; }
+
+      // outer ring
+      ctx.beginPath();
+      ctx.arc(rp.x, rp.y, rp.r, 0, Math.PI * 2);
+      ctx.strokeStyle = `rgba(99,179,237,${rp.alpha})`;
+      ctx.lineWidth = 1.5;
+      ctx.stroke();
+
+      // inner ring (offset)
+      if (rp.r > 20) {
+        ctx.beginPath();
+        ctx.arc(rp.x, rp.y, rp.r * 0.65, 0, Math.PI * 2);
+        ctx.strokeStyle = `rgba(14,165,233,${rp.alpha * 0.5})`;
+        ctx.lineWidth = 1;
+        ctx.stroke();
+      }
+    }
+    requestAnimationFrame(draw);
+  }
+  requestAnimationFrame(draw);
+})();
+
+// ═══════════════════════════════════════════
+//  EMAIL AUTOCOMPLETE
+// ═══════════════════════════════════════════
+let selectedIndex = -1;
+
+function handleEmailInput(input) {
+  const val = input.value;
+  const list = document.getElementById('autocompleteList');
+  if (val.length > 0 && !val.includes('@')) {
+    const sug = val + '@pharmaip.com';
+    list.innerHTML =
+      '<div class="autocomplete-item" id="ac0"' +
+      ' onclick="selectSuggestion(\'' + escHtml(sug) + '\')">' +
+      '📧 <span>' + escHtml(val) +
+      '<span class="at-domain">@pharmaip.com</span></span></div>';
+    list.classList.add('show');
+    selectedIndex = -1;
+  } else {
+    list.classList.remove('show');
+    selectedIndex = -1;
+  }
+}
+
+function handleEmailKeydown(e) {
+  const list = document.getElementById('autocompleteList');
+  if (!list.classList.contains('show')) return;
+  const items = list.querySelectorAll('.autocomplete-item');
+  if (e.key === 'ArrowDown') {
+    e.preventDefault();
+    selectedIndex = 0;
+    items.forEach((el, i) => el.classList.toggle('selected', i === 0));
+  } else if (e.key === 'Enter' || e.key === 'Tab') {
+    if (selectedIndex >= 0 && items[selectedIndex]) {
+      e.preventDefault(); items[selectedIndex].click();
+    } else if (items.length === 1) {
+      e.preventDefault(); items[0].click();
+    }
+  } else if (e.key === 'Escape') {
+    list.classList.remove('show');
+  }
+}
+
+function selectSuggestion(email) {
+  document.getElementById('email').value = email;
+  document.getElementById('autocompleteList').classList.remove('show');
+  document.getElementById('password').focus();
+}
+
+function escHtml(s) {
+  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;')
+          .replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+document.addEventListener('click', function(e) {
+  if (!document.getElementById('emailField').contains(e.target))
+    document.getElementById('autocompleteList').classList.remove('show');
+});
+
+// ── PREVENT DOUBLE SUBMIT ──
+document.getElementById('loginForm').addEventListener('submit', function() {
+  const btn = document.getElementById('signInBtn');
+  btn.disabled = true;
+  btn.innerHTML = '<span>⏳</span> Signing in…';
+});
+</script>
 </body>
 </html>
