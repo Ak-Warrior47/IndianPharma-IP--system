@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Admin | Indian Pharma IP</title>
+<title>Admin | Pharma IP System</title>
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&family=DM+Serif+Display&display=swap" rel="stylesheet">
 <style>
 *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
@@ -11,12 +11,13 @@
 :root {
   --blue:      #1d4ed8;
   --blue-dark: #1e3a8a;
-  --blue-lite: #eff6ff;
-  --blue-mid:  #dbeafe;
+  --blue-lite: #dbeafe;
+  --blue-mid:  #bfdbfe;
   --text:      #0f172a;
   --muted:     #64748b;
-  --border:    #e2e8f0;
-  --bg:        #f8fafc;
+  --border:    #c7d9f5;
+  --bg:        #eef4ff;
+  --page-bg:   #e8f0fe;
   --white:     #ffffff;
   --success:   #16a34a;
   --danger:    #dc2626;
@@ -28,7 +29,7 @@
 
 body {
   font-family: 'DM Sans', sans-serif;
-  background: #ffffff;
+  background: var(--page-bg);
   min-height: 100vh;
   color: var(--text);
 }
@@ -36,11 +37,12 @@ body {
 /* ── NAV ── */
 .nav {
   position: sticky; top: 0; z-index: 200;
-  background: rgba(255,255,255,0.94);
+  background: rgba(255,255,255,0.9);
   backdrop-filter: blur(14px);
   border-bottom: 1px solid var(--border);
   padding: 0 28px; height: 60px;
   display: flex; align-items: center; justify-content: space-between;
+  box-shadow: 0 1px 12px rgba(29,78,216,0.07);
 }
 .nav-brand {
   font-family: 'DM Serif Display', serif;
@@ -93,23 +95,24 @@ body {
   gap: 14px; margin-bottom: 22px;
 }
 .ov-card {
-  background: var(--white); border: 1px solid var(--border);
+  background: rgba(255,255,255,0.85); border: 1px solid var(--border);
   border-radius: 14px; padding: 18px 20px;
   transition: box-shadow 0.2s;
+  box-shadow: 0 1px 8px rgba(29,78,216,0.06);
 }
-.ov-card:hover { box-shadow: 0 4px 16px rgba(0,0,0,0.07); }
+.ov-card:hover { box-shadow: 0 4px 16px rgba(29,78,216,0.12); }
 .ov-label { font-size: 11px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: 0.6px; margin-bottom: 8px; }
 .ov-value { font-size: 28px; font-weight: 700; color: var(--text); }
 .ov-sub   { font-size: 12px; color: var(--muted); margin-top: 3px; }
-.ov-card.blue   { border-color: #bfdbfe; } .ov-card.blue .ov-value   { color: var(--blue);    }
-.ov-card.green  { border-color: #bbf7d0; } .ov-card.green .ov-value  { color: var(--success); }
-.ov-card.orange { border-color: #fed7aa; } .ov-card.orange .ov-value { color: #ea580c;        }
+.ov-card.blue   { border-color: var(--blue-mid); } .ov-card.blue .ov-value   { color: var(--blue);    }
+.ov-card.green  { border-color: #bbf7d0; }          .ov-card.green .ov-value  { color: var(--success); }
+.ov-card.orange { border-color: #fed7aa; }          .ov-card.orange .ov-value { color: #ea580c;        }
 
 /* ── CARD ── */
 .card {
-  background: var(--white); border: 1px solid var(--border);
+  background: rgba(255,255,255,0.85); border: 1px solid var(--border);
   border-radius: 16px; padding: 24px; margin-bottom: 20px;
-  box-shadow: 0 1px 3px rgba(0,0,0,0.04), 0 4px 12px rgba(0,0,0,0.05);
+  box-shadow: 0 2px 12px rgba(29,78,216,0.07), 0 1px 3px rgba(0,0,0,0.04);
 }
 .card-header {
   display: flex; align-items: center; justify-content: space-between;
@@ -128,7 +131,7 @@ body {
 .field label { font-size: 11px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: 0.6px; margin-bottom: 6px; }
 .field input, .field select {
   padding: 9px 12px; border: 1.5px solid var(--border); border-radius: 9px;
-  background: var(--bg); font-size: 13px; font-family: 'DM Sans', sans-serif; color: var(--text);
+  background: rgba(255,255,255,0.8); font-size: 13px; font-family: 'DM Sans', sans-serif; color: var(--text);
   transition: all 0.2s;
 }
 .field input:focus, .field select:focus {
@@ -157,7 +160,7 @@ thead th {
 }
 tbody td { padding: 12px 14px; border-bottom: 1px solid var(--border); font-size: 13px; vertical-align: middle; }
 tbody tr:last-child td { border-bottom: none; }
-tbody tr:hover td { background: #fafafa; }
+tbody tr:hover td { background: rgba(219,234,254,0.3); }
 
 .emp-name { font-weight: 700; color: var(--text); }
 .emp-email { font-size: 12px; color: var(--muted); margin-top: 1px; }
@@ -166,8 +169,8 @@ tbody tr:hover td { background: #fafafa; }
   display: inline-block; padding: 3px 10px; border-radius: 6px;
   font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px;
 }
-.type-picker  { background: #eff6ff; color: var(--blue); }
-.type-checker { background: #f5f3ff; color: #6d28d9; }
+.type-picker  { background: var(--blue-lite); color: var(--blue); border: 1px solid var(--blue-mid); }
+.type-checker { background: #f5f3ff; color: #6d28d9; border: 1px solid #ddd6fe; }
 
 .score-cell { font-weight: 700; font-size: 14px; }
 
@@ -191,6 +194,8 @@ tbody tr:hover td { background: #fafafa; }
 }
 .btn-edit    { background: var(--blue-lite); color: var(--blue); }
 .btn-edit:hover    { background: var(--blue-mid); }
+.btn-view    { background: var(--bg); color: var(--muted); border: 1px solid var(--border); }
+.btn-view:hover    { background: var(--blue-lite); color: var(--blue); }
 .btn-delete  { background: var(--red-bg); color: var(--danger); }
 .btn-delete:hover  { background: #fecdd3; }
 .btn-sunday  { background: #fef3c7; color: #b45309; }
@@ -208,8 +213,9 @@ tbody tr:hover td { background: #fafafa; }
 .modal {
   background: var(--white); border-radius: 20px;
   padding: 32px; max-width: 480px; width: 100%;
-  box-shadow: 0 20px 60px rgba(0,0,0,0.2);
+  box-shadow: 0 20px 60px rgba(29,78,216,0.15);
   animation: slideIn 0.2s ease;
+  border: 1px solid var(--border);
 }
 @keyframes slideIn { from { opacity: 0; transform: scale(0.95) translateY(10px); } to { opacity: 1; transform: scale(1) translateY(0); } }
 .modal-title { font-size: 18px; font-weight: 700; margin-bottom: 20px; color: var(--text); }
@@ -233,30 +239,19 @@ tbody tr:hover td { background: #fafafa; }
 .search-input {
   padding: 8px 14px; border: 1.5px solid var(--border); border-radius: 9px;
   font-size: 13px; font-family: 'DM Sans', sans-serif; color: var(--text);
-  background: var(--bg); transition: all 0.2s; min-width: 200px;
+  background: rgba(255,255,255,0.8); transition: all 0.2s; min-width: 200px;
 }
 .search-input:focus { outline: none; border-color: var(--blue); background: var(--white); box-shadow: 0 0 0 3px rgba(29,78,216,0.1); }
 
 /* ── NO DATA ── */
 .empty { text-align: center; padding: 40px; color: var(--muted); font-style: italic; }
 
-.divider { height: 1px; background: var(--border); margin: 20px 0; }
-
-/* ── LAST SEEN ── */
-.last-seen-dot {
-  width: 8px; height: 8px; border-radius: 50%;
-  display: inline-block; margin-right: 6px;
-}
-.dot-today { background: var(--success); }
-.dot-week  { background: var(--warn); }
-.dot-old   { background: #cbd5e1; }
-
 /* ── EMAIL AUTOCOMPLETE in add form ── */
 .field-wrap { position: relative; }
 .ac-list {
   position: absolute; top: calc(100% + 4px); left: 0; right: 0;
   background: var(--white); border: 1.5px solid var(--blue);
-  border-radius: 9px; box-shadow: 0 8px 24px rgba(0,0,0,0.12);
+  border-radius: 9px; box-shadow: 0 8px 24px rgba(29,78,216,0.15);
   z-index: 300; overflow: hidden; display: none;
 }
 .ac-list.show { display: block; }
@@ -268,7 +263,16 @@ tbody tr:hover td { background: #fafafa; }
 .ac-item:hover, .ac-item.sel { background: var(--blue-lite); }
 .ac-item .ac-domain { color: var(--blue); font-weight: 600; }
 
-/* ── RESPONSIVE FIXES ── */
+/* ── LAST SEEN ── */
+.last-seen-dot {
+  width: 8px; height: 8px; border-radius: 50%;
+  display: inline-block; margin-right: 6px;
+}
+.dot-today { background: var(--success); }
+.dot-week  { background: var(--warn); }
+.dot-old   { background: #cbd5e1; }
+
+/* ── RESPONSIVE ── */
 @media (max-width: 700px) {
   .nav { padding: 0 14px; gap: 8px; }
   .main { padding: 14px; }
@@ -323,7 +327,7 @@ tbody tr:hover td { background: #fafafa; }
 <!-- NAV -->
 <nav class="nav">
   <div class="nav-brand">
-    🔬 Indian Pharma IP
+    🔬 Pharma IP System
     <span class="pill-admin">Admin</span>
   </div>
   <div class="nav-right">
@@ -450,7 +454,7 @@ tbody tr:hover td { background: #fafafa; }
             <td>
               {% if r.stats %}
                 {% set g = r.stats.grade %}
-                <span class="tag {% if g == 'EXCELLENT' %}tag-ex{% elif g == 'GOOD' %}tag-good{% elif g == 'AVERAGE' %}tag-avg{% else %}tag-poor{% endif %}">{{ g }}</span>
+                <span class="tag {% if g in ['ELITE','EXCELLENT'] %}tag-ex{% elif g in ['GOOD','PROFICIENT'] %}tag-good{% elif g in ['AVERAGE','SATISFACTORY'] %}tag-avg{% else %}tag-poor{% endif %}">{{ g }}</span>
               {% else %}<span class="tag tag-none">No data</span>{% endif %}
             </td>
             <td>
@@ -461,6 +465,7 @@ tbody tr:hover td { background: #fafafa; }
             </td>
             <td>
               <div class="actions">
+                <a href="/staff/{{ r.emp.id }}" class="btn-sm btn-view">👤 View</a>
                 <button class="btn-sm btn-edit"
                   onclick="openEdit({{ r.emp.id }}, '{{ r.emp.name|e }}', '{{ r.emp.email|e }}', '{{ r.emp.staff_type }}')">
                   ✏️ Edit
@@ -517,7 +522,7 @@ tbody tr:hover td { background: #fafafa; }
             <td>{{ r.stats.days }}</td>
             <td>
               {% set g = r.stats.grade %}
-              <span class="tag {% if g == 'EXCELLENT' %}tag-ex{% elif g == 'GOOD' %}tag-good{% elif g == 'AVERAGE' %}tag-avg{% else %}tag-poor{% endif %}">{{ g }}</span>
+              <span class="tag {% if g in ['ELITE','EXCELLENT'] %}tag-ex{% elif g in ['GOOD','PROFICIENT'] %}tag-good{% elif g in ['AVERAGE','SATISFACTORY'] %}tag-avg{% else %}tag-poor{% endif %}">{{ g }}</span>
             </td>
           </tr>
           {% endif %}{% endfor %}
@@ -530,14 +535,12 @@ tbody tr:hover td { background: #fafafa; }
 </div><!-- /main -->
 
 <script>
-// ── NAME AUTO-CAPITALIZE ──
 function capName(input) {
   const pos = input.selectionStart;
   input.value = input.value.replace(/\b\w/g, c => c.toUpperCase());
   try { input.setSelectionRange(pos, pos); } catch(e){}
 }
 
-// ── ADD-FORM EMAIL AUTOCOMPLETE ──
 let addAcIdx = -1;
 function handleAddEmail(input) {
   const val = input.value;
@@ -577,7 +580,6 @@ document.addEventListener('click', function(e) {
   }
 });
 
-// ── EDIT MODAL ──
 function openEdit(id, name, email, type) {
   document.getElementById('editForm').action = '/admin/edit_user/' + id;
   document.getElementById('edit-name').value  = name;
@@ -592,7 +594,6 @@ document.getElementById('editModal').addEventListener('click', function(e) {
   if (e.target === this) closeEdit();
 });
 
-// ── SEARCH FILTER ──
 function filterTable() {
   const q    = document.getElementById('searchBox').value.toLowerCase();
   const rows = document.querySelectorAll('#staffTable tbody tr');
@@ -602,7 +603,6 @@ function filterTable() {
   });
 }
 
-// ── SOCKET.IO (safe) ──
 if (typeof io !== 'undefined') {
   const socket = io();
   socket.on('admin_alert', function(msg) {
