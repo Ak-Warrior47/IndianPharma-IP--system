@@ -326,8 +326,20 @@ table.htable tbody tr:hover td { background: var(--bg); }
 
 <script>
 // Chart.js trend — Jinja injects data, no template literals inside JS strings
-var chartLabels   = {{ trend_labels   | tojson }};
-var chartAccuracy = {{ trend_accuracy | tojson }};
+let chartLabels = [];
+let chartAccuracy = [];
+
+try {
+  chartLabels = JSON.parse('{{ trend_labels | tojson | safe }}');
+} catch (e) {
+  chartLabels = [];
+}
+
+try {
+  chartAccuracy = JSON.parse('{{ trend_accuracy | tojson | safe }}');
+} catch (e) {
+  chartAccuracy = [];
+}
 
 var ctx = document.getElementById('trendChart');
 if (ctx) {
