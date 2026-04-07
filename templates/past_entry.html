@@ -1,0 +1,243 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Past Entry | Pharma IP System</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&family=DM+Serif+Display&display=swap" rel="stylesheet">
+<style>
+*, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+:root {
+  --blue:      #1d4ed8;
+  --blue-dark: #1e3a8a;
+  --blue-lite: #dbeafe;
+  --blue-mid:  #bfdbfe;
+  --text:      #0f172a;
+  --muted:     #64748b;
+  --border:    #c7d9f5;
+  --bg:        #eef4ff;
+  --page-bg:   #e8f0fe;
+  --white:     #ffffff;
+  --success:   #16a34a;
+  --danger:    #dc2626;
+  --warn:      #d97706;
+  --green-bg:  #f0fdf4;
+  --red-bg:    #fef2f2;
+  --purple:    #6d28d9;
+  --purple-bg: #f5f3ff;
+  --purple-border: #ddd6fe;
+}
+
+body {
+  font-family: 'DM Sans', sans-serif;
+  background: var(--page-bg);
+  min-height: 100vh;
+  color: var(--text);
+}
+
+/* NAV */
+.nav {
+  position: sticky; top: 0; z-index: 100;
+  background: rgba(255,255,255,0.9);
+  backdrop-filter: blur(14px);
+  border-bottom: 1px solid var(--border);
+  padding: 0 28px; height: 60px;
+  display: flex; align-items: center; justify-content: space-between;
+  box-shadow: 0 1px 12px rgba(29,78,216,0.07);
+}
+.nav-brand { font-family: 'DM Serif Display', serif; font-size: 18px; color: var(--text); display: flex; align-items: center; gap: 10px; }
+.nav-pill {
+  font-family: 'DM Sans', sans-serif; font-size: 11px; font-weight: 600;
+  background: var(--purple-bg); color: var(--purple);
+  padding: 3px 10px; border-radius: 20px;
+  text-transform: uppercase; letter-spacing: 0.5px; border: 1px solid var(--purple-border);
+}
+.nav-right { display: flex; align-items: center; gap: 14px; }
+.nav-user { font-size: 13px; font-weight: 600; color: var(--muted); }
+.btn-back {
+  padding: 7px 16px; background: var(--bg); color: var(--muted);
+  border: 1px solid var(--border); border-radius: 8px;
+  font-size: 12px; font-weight: 600; cursor: pointer;
+  font-family: inherit; text-decoration: none; transition: all 0.2s;
+}
+.btn-back:hover { background: var(--blue-lite); color: var(--blue); }
+
+/* MAIN */
+.main { padding: 28px; max-width: 760px; margin: 0 auto; width: 100%; }
+
+/* ALERTS */
+.alert { padding: 12px 16px; border-radius: 10px; font-size: 13px; font-weight: 500; margin-bottom: 16px; }
+.alert-success { background: var(--green-bg); color: var(--success); border: 1px solid #bbf7d0; }
+.alert-warning { background: #fffbeb; color: var(--warn); border: 1px solid #fcd34d; }
+.alert-danger  { background: var(--red-bg); color: var(--danger); border: 1px solid #fecaca; }
+.alert-info    { background: var(--blue-lite); color: var(--blue); border: 1px solid var(--blue-mid); }
+
+/* CARD */
+.card {
+  background: rgba(255,255,255,0.85);
+  border: 1px solid var(--border);
+  border-radius: 16px; padding: 28px; margin-bottom: 20px;
+  box-shadow: 0 2px 12px rgba(29,78,216,0.07), 0 1px 3px rgba(0,0,0,0.04);
+  backdrop-filter: blur(8px);
+}
+
+/* DATE BANNER */
+.date-banner {
+  background: linear-gradient(135deg, var(--purple-bg), #ede9fe);
+  border: 1px solid var(--purple-border);
+  border-radius: 12px; padding: 16px 20px;
+  margin-bottom: 24px;
+  display: flex; align-items: center; gap: 12px;
+}
+.date-banner-icon { font-size: 28px; }
+.date-banner-text .label { font-size: 11px; font-weight: 600; color: var(--purple); text-transform: uppercase; letter-spacing: 0.6px; }
+.date-banner-text .value { font-size: 20px; font-weight: 700; color: #4c1d95; margin-top: 2px; }
+
+/* FORM */
+.section-title { font-size: 13px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: 0.6px; margin-bottom: 14px; padding-bottom: 8px; border-bottom: 1px solid var(--border); }
+.form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 20px; }
+@media (max-width: 560px) { .form-grid { grid-template-columns: 1fr; } }
+.field { display: flex; flex-direction: column; }
+.field label { font-size: 11px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: 0.6px; margin-bottom: 7px; }
+.field input {
+  padding: 10px 13px; border: 1.5px solid var(--border); border-radius: 9px;
+  background: rgba(255,255,255,0.8); font-size: 14px; font-family: 'DM Sans', sans-serif;
+  color: var(--text); transition: all 0.2s;
+}
+.field input:focus { outline: none; border-color: var(--purple); background: var(--white); box-shadow: 0 0 0 3px rgba(109,40,217,0.1); }
+.field small { font-size: 11px; color: var(--muted); margin-top: 4px; }
+.field .urgent { border-color: #f59e0b; background: #fffbeb; }
+.field .urgent:focus { border-color: var(--warn); box-shadow: 0 0 0 3px rgba(245,158,11,0.1); }
+
+.info-box {
+  background: var(--blue-lite); border: 1px solid var(--blue-mid);
+  border-radius: 10px; padding: 12px 16px; margin-bottom: 20px;
+  font-size: 12px; color: var(--blue); font-weight: 500;
+  display: flex; gap: 8px; align-items: flex-start;
+}
+
+/* SUBMIT */
+.btn-submit {
+  padding: 13px 28px;
+  background: linear-gradient(135deg, #7c3aed, #6d28d9);
+  color: #fff; border: none; border-radius: 10px;
+  font-size: 14px; font-weight: 700; font-family: inherit; cursor: pointer;
+  transition: all 0.25s; box-shadow: 0 4px 14px rgba(109,40,217,0.35);
+  width: 100%;
+}
+.btn-submit:hover { transform: translateY(-2px); box-shadow: 0 6px 20px rgba(109,40,217,0.45); }
+
+@media (max-width: 600px) {
+  .main { padding: 14px; }
+  .nav { padding: 0 14px; }
+  .card { padding: 18px 14px; }
+}
+</style>
+</head>
+<body>
+
+<nav class="nav">
+  <div class="nav-brand">
+    🔬 Pharma IP System
+    <span class="nav-pill">Past Entry</span>
+  </div>
+  <div class="nav-right">
+    <span class="nav-user">{{ user_name }}</span>
+    <a href="/dashboard" class="btn-back">← Back to Dashboard</a>
+  </div>
+</nav>
+
+<div class="main">
+
+  {% with messages = get_flashed_messages(with_categories=true) %}
+    {% if messages %}{% for cat, msg in messages %}
+    <div class="alert alert-{{ cat }}">{{ msg }}</div>
+    {% endfor %}{% endif %}
+  {% endwith %}
+
+  <!-- DATE BANNER -->
+  <div class="date-banner">
+    <div class="date-banner-icon">📅</div>
+    <div class="date-banner-text">
+      <div class="label">Submitting Past Data For</div>
+      <div class="value">{{ past_date.strftime('%A, %d %B %Y') }}</div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="info-box">
+      ℹ️ &nbsp;This window was opened by the admin for a date you missed. Fill your actual numbers for that day and submit. You can only submit once.
+    </div>
+
+    <form method="POST" autocomplete="off">
+
+      <!-- SECTION 1: Core picking metrics -->
+      <div class="section-title">📦 Picking & Bills</div>
+      <div class="form-grid">
+        <div class="field">
+          <label>★ Sales Bills Packed (URGENT)</label>
+          <input type="number" name="sales_bills_open" min="0" value="0" required class="urgent">
+        </div>
+
+        {% if staff_type == 'checker' %}
+        <div class="field">
+          <label>Items Checked</label>
+          <input type="number" name="checked" min="0" value="0" required>
+        </div>
+        <div class="field">
+          <label>Errors Found</label>
+          <input type="number" name="errors_found" min="0" value="0" required>
+        </div>
+        <div class="field">
+          <label>Items Picked (assist)</label>
+          <input type="number" name="picked" min="0" value="0">
+        </div>
+        <div class="field">
+          <label>Items Missed (assist)</label>
+          <input type="number" name="missed" min="0" value="0">
+        </div>
+        {% else %}
+        <div class="field">
+          <label>Items Picked</label>
+          <input type="number" name="picked" min="0" value="0" required>
+        </div>
+        <div class="field">
+          <label>Items Missed</label>
+          <input type="number" name="missed" min="0" value="0" required>
+        </div>
+        <div class="field">
+          <label>CS Sales Open</label>
+          <input type="number" name="cs_sales_open" min="0" value="0">
+        </div>
+        {% endif %}
+
+        <div class="field">
+          <label>Packing Done</label>
+          <input type="number" name="packing_done" min="0" value="0">
+        </div>
+      </div>
+
+      <!-- SECTION 2: Time -->
+      <div class="section-title">⏱ Time</div>
+      <div class="form-grid">
+        <div class="field">
+          <label>Total Time (mins, max 480)</label>
+          <input type="number" name="total_mins" min="0" max="480" value="0" required>
+          <small>Max 480 mins = 8 hours</small>
+        </div>
+        {% if staff_type == 'checker' %}
+        <div class="field">
+          <label>Check Time (mins, max 480)</label>
+          <input type="number" name="check_mins" min="0" max="480" value="0">
+          <small>Time spent checking</small>
+        </div>
+        {% endif %}
+      </div>
+
+      <button type="submit" class="btn-submit">✅ Submit Past Entry for {{ past_date.strftime('%d %b %Y') }}</button>
+    </form>
+  </div>
+
+</div>
+</body>
+</html>
