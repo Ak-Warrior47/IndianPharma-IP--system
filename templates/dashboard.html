@@ -138,6 +138,66 @@ table.htable tbody tr:last-child td { border-bottom: none; }
 table.htable tbody tr:hover td { background: var(--bg); }
 
 .section-label { font-size: 14px; font-weight: 700; color: var(--text); margin-bottom: 16px; }
+
+/* CHECKBOX TICK */
+.tick-row { display: flex; align-items: center; gap: 10px; padding: 10px 0; }
+.tick-row input[type="checkbox"] { width: 18px; height: 18px; accent-color: var(--blue); cursor: pointer; flex-shrink: 0; }
+.tick-row label { font-size: 13px; color: var(--text); font-weight: 500; cursor: pointer; }
+
+/* AUTO-TOTAL BAR (checker) */
+.total-bar {
+  display: flex; gap: 16px; flex-wrap: wrap;
+  background: var(--blue-lite); border: 1px solid var(--blue-mid);
+  border-radius: 10px; padding: 10px 16px; margin-bottom: 18px;
+  align-items: center;
+}
+.total-bar-item { font-size: 13px; color: var(--blue-dark); font-weight: 600; }
+.total-bar-item span { font-size: 17px; font-weight: 800; color: var(--blue); margin-left: 6px; }
+
+/* URGENT BADGE */
+.urgent-badge { display: inline-block; padding: 1px 7px; border-radius: 5px; font-size: 10px; font-weight: 700; background: var(--red-bg); color: var(--danger); border: 1px solid #fecaca; margin-left: 4px; vertical-align: middle; }
+
+/* RESPONSIVE — large desktop (≥1400px) */
+@media (min-width: 1400px) {
+  .main { padding: 36px; }
+  .kpi-value { font-size: 30px; }
+}
+/* RESPONSIVE — tablet (≤900px) */
+@media (max-width: 900px) {
+  .two-col { grid-template-columns: 1fr; }
+}
+/* RESPONSIVE — mobile (≤600px) */
+@media (max-width: 600px) {
+  .nav { padding: 0 12px; height: 54px; }
+  .nav-brand { font-size: 14px; gap: 7px; }
+  .nav-right { gap: 8px; }
+  .nav-right a[href*="export_pdf"] { display: none; }
+  .main { padding: 12px; }
+  .card { padding: 14px; border-radius: 12px; }
+  .kpi-grid { grid-template-columns: repeat(2, 1fr); gap: 9px; }
+  .kpi-value { font-size: 21px; }
+  .kpi-label { font-size: 10px; }
+  .kpi-sub { font-size: 11px; }
+  .form-grid { grid-template-columns: 1fr; }
+  .two-col { grid-template-columns: 1fr; }
+  .btn-submit { width: 100%; font-size: 13px; padding: 11px 16px; }
+  .total-bar { flex-direction: column; gap: 6px; padding: 10px 12px; }
+  .section-label { font-size: 13px; }
+  .chart-wrap { height: 180px; }
+  .ptable th, .ptable td { padding: 8px 10px; font-size: 12px; }
+  table.htable thead th, table.htable tbody td { padding: 9px 10px; font-size: 12px; }
+}
+/* RESPONSIVE — small mobile (≤400px) */
+@media (max-width: 400px) {
+  .nav-brand { font-size: 12px; gap: 5px; }
+  .nav-pill { font-size: 10px; padding: 2px 7px; }
+  .btn-logout { padding: 6px 10px; font-size: 11px; }
+  .kpi-grid { grid-template-columns: repeat(2, 1fr); gap: 7px; }
+  .kpi-value { font-size: 19px; }
+  .card { padding: 12px; }
+  .field label { font-size: 10px; }
+  .field input { font-size: 13px; padding: 9px 10px; }
+}
 </style>
 </head>
 <body>
@@ -203,68 +263,106 @@ table.htable tbody tr:hover td { background: var(--bg); }
     <div class="submitted-box">✅ Already submitted today. See you tomorrow!</div>
     <div class="kpi-grid">
       {% if staff_type == 'checker' %}
-      <div class="kpi-card"><div class="kpi-label">Checked</div><div class="kpi-value">{{ today_entry.checked }}</div></div>
-      <div class="kpi-card"><div class="kpi-label">Errors</div><div class="kpi-value">{{ today_entry.errors_found }}</div></div>
-      {% else %}
-      <div class="kpi-card"><div class="kpi-label">Picked</div><div class="kpi-value">{{ today_entry.picked }}</div></div>
-      <div class="kpi-card"><div class="kpi-label">Missed</div><div class="kpi-value">{{ today_entry.missed }}</div></div>
-      {% endif %}
-      <div class="kpi-card"><div class="kpi-label">Sales Bills</div><div class="kpi-value">{{ today_entry.sales_bills_open }}</div></div>
+      <div class="kpi-card"><div class="kpi-label">SB Checked</div><div class="kpi-value">{{ today_entry.sales_bills_open }}</div></div>
+      <div class="kpi-card"><div class="kpi-label">SB Checked Urgent</div><div class="kpi-value">{{ today_entry.cs_sales_open }}</div></div>
+      <div class="kpi-card"><div class="kpi-label">Item Checked</div><div class="kpi-value">{{ today_entry.checked }}</div></div>
+      <div class="kpi-card"><div class="kpi-label">Urgent Item Checked</div><div class="kpi-value">{{ today_entry.errors_found }}</div></div>
+      <div class="kpi-card"><div class="kpi-label">SB Open</div><div class="kpi-value">{{ today_entry.bills or 0 }}</div></div>
       <div class="kpi-card"><div class="kpi-label">Packing Done</div><div class="kpi-value">{{ today_entry.packing_done }}</div></div>
+      <div class="kpi-card c-blue"><div class="kpi-label">Total SB Checked</div><div class="kpi-value">{{ (today_entry.sales_bills_open or 0) + (today_entry.cs_sales_open or 0) }}</div></div>
+      <div class="kpi-card c-green"><div class="kpi-label">Total Items Checked</div><div class="kpi-value">{{ (today_entry.checked or 0) + (today_entry.errors_found or 0) }}</div></div>
+      {% else %}
+      <div class="kpi-card"><div class="kpi-label">SB Picked</div><div class="kpi-value">{{ today_entry.sales_bills_open }}</div></div>
+      <div class="kpi-card"><div class="kpi-label">Item Picked</div><div class="kpi-value">{{ today_entry.picked }}</div></div>
+      <div class="kpi-card"><div class="kpi-label">Item Missed</div><div class="kpi-value">{{ today_entry.missed }}</div></div>
+      <div class="kpi-card"><div class="kpi-label">CS in Sale Open</div><div class="kpi-value">{{ today_entry.cs_sales_open }}</div></div>
+      <div class="kpi-card"><div class="kpi-label">Table Clean</div><div class="kpi-value">{{ '✅' if today_entry.table_clean else '—' }}</div></div>
+      <div class="kpi-card"><div class="kpi-label">Rack Organised</div><div class="kpi-value">{{ '✅' if today_entry.rack_organized else '—' }}</div></div>
+      <div class="kpi-card"><div class="kpi-label">Packing Done</div><div class="kpi-value">{{ today_entry.packing_done }}</div></div>
+      {% endif %}
     </div>
 
     {% else %}
     <form method="POST" autocomplete="off">
       <div class="form-grid">
+
+        {% if staff_type == 'picker' %}
+        {# PICKER — order: SB Picked, Item Picked, Item Missed, CS in Sale Open, Table Clean (tick), Rack Organised (tick), Packing Done #}
         <div class="field">
-          <label>★ Sales Bills Packed (URGENT)</label>
+          <label>Sales Bill Picked</label>
           <input type="number" name="sales_bills_open" min="0" value="0" required>
         </div>
-
-        {% if staff_type == 'checker' %}
         <div class="field">
-          <label>Items Checked</label>
-          <input type="number" name="checked" min="0" value="0" required>
-        </div>
-        <div class="field">
-          <label>Errors Found</label>
-          <input type="number" name="errors_found" min="0" value="0" required>
-        </div>
-        <div class="field">
-          <label>Items Picked (assist)</label>
-          <input type="number" name="picked" min="0" value="0">
-        </div>
-        {% else %}
-        <div class="field">
-          <label>Items Picked</label>
+          <label>Item Picked</label>
           <input type="number" name="picked" min="0" value="0" required>
         </div>
         <div class="field">
-          <label>Items Missed</label>
+          <label>Item Missed</label>
           <input type="number" name="missed" min="0" value="0" required>
         </div>
         <div class="field">
-          <label>CS Sales Open</label>
+          <label>CS in Sale Open</label>
           <input type="number" name="cs_sales_open" min="0" value="0">
         </div>
-        {% endif %}
-
+        <div class="field">
+          <label>Table Clean</label>
+          <div class="tick-row">
+            <input type="checkbox" name="table_clean" id="table_clean" value="1">
+            <label for="table_clean">Mark as done</label>
+          </div>
+        </div>
+        <div class="field">
+          <label>Rack Organised</label>
+          <div class="tick-row">
+            <input type="checkbox" name="rack_organized" id="rack_organized" value="1">
+            <label for="rack_organized">Mark as done</label>
+          </div>
+        </div>
         <div class="field">
           <label>Packing Done</label>
           <input type="number" name="packing_done" min="0" value="0">
         </div>
-        <div class="field">
-          <label>Total Time (mins, max 480)</label>
-          <input type="number" name="total_mins" min="0" max="480" value="0" required>
-          <small>Max 480 mins = 8 hours</small>
-        </div>
+        <input type="hidden" name="total_mins" value="480">
+        <input type="hidden" name="check_mins" value="0">
 
-        {% if staff_type == 'checker' %}
-        <div class="field">
-          <label>Check Time (mins, max 480)</label>
-          <input type="number" name="check_mins" min="0" max="480" value="0">
+        {% elif staff_type == 'checker' %}
+        {# CHECKER — order: SB Checked, SB Checked Urgent, Item Checked, Urgent Item Checked, SB Open, Packing Done #}
+        </div>{# close form-grid before total bar #}
+        <div class="total-bar" id="total-bar">
+          <div class="total-bar-item">Total Sales Bills Checked: <span id="total-sb">0</span></div>
+          <div class="total-bar-item">Total Items Checked: <span id="total-items">0</span></div>
         </div>
+        <div class="form-grid">
+        <div class="field">
+          <label>Sales Bill Checked</label>
+          <input type="number" name="sales_bills_open" id="sb_normal" min="0" value="0" required oninput="updateTotals()">
+        </div>
+        <div class="field">
+          <label>Sales Bill Checked <span class="urgent-badge">URGENT</span></label>
+          <input type="number" name="cs_sales_open" id="sb_urgent" min="0" value="0" oninput="updateTotals()">
+        </div>
+        <div class="field">
+          <label>Item Checked</label>
+          <input type="number" name="checked" id="item_normal" min="0" value="0" required oninput="updateTotals()">
+        </div>
+        <div class="field">
+          <label>Urgent Item Checked <span class="urgent-badge">URGENT</span></label>
+          <input type="number" name="errors_found" id="item_urgent" min="0" value="0" oninput="updateTotals()">
+        </div>
+        <div class="field">
+          <label>Sales Bill Open</label>
+          <input type="number" name="bills" min="0" value="0">
+        </div>
+        <div class="field">
+          <label>Packing Done</label>
+          <input type="number" name="packing_done" min="0" value="0">
+        </div>
+        <input type="hidden" name="picked" value="0">
+        <input type="hidden" name="missed" value="0">
+        <input type="hidden" name="total_mins" value="480">
+        <input type="hidden" name="check_mins" value="480">
         {% endif %}
+
       </div>
       <button type="submit" class="btn-submit">✅ Submit Today's Metrics</button>
     </form>
@@ -330,11 +428,11 @@ table.htable tbody tr:hover td { background: var(--bg); }
           <tr>
             <th>Date</th>
             {% if staff_type == 'checker' %}
-            <th>Checked</th><th>Errors</th><th>Accuracy</th>
+            <th>SB Checked</th><th>SB Urgent</th><th>Item Checked</th><th>Item Urgent</th><th>SB Open</th><th>Packing</th><th>Total SB</th><th>Total Items</th>
             {% else %}
-            <th>Picked</th><th>Missed</th><th>Accuracy</th>
+            <th>SB Picked</th><th>Item Picked</th><th>Missed</th><th>CS Open</th><th>Table ✓</th><th>Rack ✓</th><th>Packing</th><th>Accuracy</th>
             {% endif %}
-            <th>Bills</th><th>Packing</th><th>Time (h)</th>
+            <th>Time (h)</th>
           </tr>
         </thead>
         <tbody>
@@ -342,18 +440,25 @@ table.htable tbody tr:hover td { background: var(--bg); }
           <tr>
             <td>{{ e.entry_date.strftime('%d %b %Y') }}</td>
             {% if staff_type == 'checker' %}
+            <td>{{ e.sales_bills_open }}</td>
+            <td>{{ e.cs_sales_open }}</td>
             <td>{{ e.checked }}</td>
             <td>{{ e.errors_found }}</td>
-            {% set cacc = (((e.checked - e.errors_found) / e.checked * 100) | round(1)) if e.checked > 0 else 0 %}
-            <td><span class="tag {% if cacc >= 95 %}tag-ex{% elif cacc >= 85 %}tag-good{% elif cacc >= 70 %}tag-avg{% else %}tag-poor{% endif %}">{{ cacc }}%</span></td>
+            <td>{{ e.bills or 0 }}</td>
+            <td>{{ e.packing_done }}</td>
+            <td>{{ (e.sales_bills_open or 0) + (e.cs_sales_open or 0) }}</td>
+            <td>{{ (e.checked or 0) + (e.errors_found or 0) }}</td>
             {% else %}
+            <td>{{ e.sales_bills_open }}</td>
             <td>{{ e.picked }}</td>
             <td>{{ e.missed }}</td>
+            <td>{{ e.cs_sales_open }}</td>
+            <td>{{ '✅' if e.table_clean else '—' }}</td>
+            <td>{{ '✅' if e.rack_organized else '—' }}</td>
+            <td>{{ e.packing_done }}</td>
             {% set acc = e.accuracy %}
             <td><span class="tag {% if acc >= 95 %}tag-ex{% elif acc >= 85 %}tag-good{% elif acc >= 70 %}tag-avg{% else %}tag-poor{% endif %}">{{ acc }}%</span></td>
             {% endif %}
-            <td>{{ e.sales_bills_open }}</td>
-            <td>{{ e.packing_done }}</td>
             <td>{{ "%.1f" | format(e.total_time or 0) }}</td>
           </tr>
           {% endfor %}
@@ -366,6 +471,16 @@ table.htable tbody tr:hover td { background: var(--bg); }
 </div>
 
 <script>
+function updateTotals() {
+  var sb1 = parseInt(document.getElementById('sb_normal') ? document.getElementById('sb_normal').value : 0) || 0;
+  var sb2 = parseInt(document.getElementById('sb_urgent') ? document.getElementById('sb_urgent').value : 0) || 0;
+  var it1 = parseInt(document.getElementById('item_normal') ? document.getElementById('item_normal').value : 0) || 0;
+  var it2 = parseInt(document.getElementById('item_urgent') ? document.getElementById('item_urgent').value : 0) || 0;
+  if (document.getElementById('total-sb'))    document.getElementById('total-sb').textContent    = sb1 + sb2;
+  if (document.getElementById('total-items')) document.getElementById('total-items').textContent = it1 + it2;
+}
+document.addEventListener('DOMContentLoaded', updateTotals);
+
 (function() {
   var chartLabels   = [];
   var chartAccuracy = [];
