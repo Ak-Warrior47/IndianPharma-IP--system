@@ -274,18 +274,54 @@ tbody tr:hover td { background: rgba(219,234,254,0.3); }
 .dot-old   { background: #cbd5e1; }
 
 /* ── RESPONSIVE ── */
-@media (max-width: 700px) {
-  .nav { padding: 0 14px; gap: 8px; }
-  .main { padding: 14px; }
-  .add-form-grid { grid-template-columns: 1fr; }
-  .modal { padding: 22px 16px; }
-  .modal-grid { grid-template-columns: 1fr; }
-  .overview-grid { grid-template-columns: 1fr 1fr; }
+/* Large desktop (≥1400px) */
+@media (min-width: 1400px) {
+  .main { padding: 36px; }
+  .ov-value { font-size: 32px; }
+}
+/* Tablet (≤900px) */
+@media (max-width: 900px) {
+  .nav { padding: 0 16px; gap: 8px; }
+  .main { padding: 16px; }
+  .add-form-grid { grid-template-columns: 1fr 1fr; }
+  .overview-grid { grid-template-columns: 1fr 1fr; gap: 10px; }
   .actions { flex-wrap: wrap; }
   .btn-export, .btn-logout { font-size: 11px; padding: 6px 11px; }
 }
+/* Mobile (≤700px) */
+@media (max-width: 700px) {
+  .nav { padding: 0 12px; height: 54px; }
+  .nav-brand { font-size: 15px; }
+  .main { padding: 12px; }
+  .add-form-grid { grid-template-columns: 1fr; }
+  .modal { padding: 22px 16px; }
+  .modal-grid { grid-template-columns: 1fr; }
+  .overview-grid { grid-template-columns: 1fr 1fr; gap: 9px; }
+  .card { padding: 16px; border-radius: 12px; }
+  .card-title { font-size: 14px; }
+  .ov-value { font-size: 24px; }
+  .actions { flex-wrap: wrap; gap: 4px; }
+  .btn-sm { font-size: 10px; padding: 5px 9px; }
+  thead th { font-size: 10px; padding: 9px 10px; }
+  tbody td { font-size: 12px; padding: 10px 10px; }
+  .search-input { min-width: 140px; font-size: 12px; }
+}
+/* Small mobile (≤480px) */
 @media (max-width: 480px) {
+  .overview-grid { grid-template-columns: 1fr 1fr; }
+  .nav-brand { font-size: 13px; gap: 6px; }
+  .pill-admin { font-size: 9px; padding: 2px 7px; }
+  .card-header { flex-direction: column; align-items: flex-start; }
+  .search-input { width: 100%; min-width: unset; }
+}
+/* Very small (≤380px) */
+@media (max-width: 380px) {
+  .main { padding: 9px; }
   .overview-grid { grid-template-columns: 1fr; }
+  .ov-card { padding: 14px 16px; }
+  .ov-value { font-size: 22px; }
+  .nav-brand { font-size: 12px; }
+  .btn-export { display: none; }
 }
 </style>
 </head>
