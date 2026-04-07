@@ -141,6 +141,16 @@ class AuditLog(db.Model):
     timestamp = db.Column(db.DateTime, default=datetime.utcnow)
 
 
+class PastEntryWindow(db.Model):
+    """Admin-opened windows that allow staff to submit data for a past date."""
+    __tablename__ = "past_entry_windows"
+    id          = db.Column(db.Integer, primary_key=True)
+    past_date   = db.Column(db.Date, nullable=False, unique=True)   # the date being opened
+    opened_by   = db.Column(db.Integer, db.ForeignKey("employees.id"))
+    opened_at   = db.Column(db.DateTime, default=datetime.utcnow)
+    is_active   = db.Column(db.Boolean, default=True)               # admin can close it again
+
+
 # ─── HELPERS ─────────────────────────────────────────────────────────────────
 
 def safe_div(a, b, default=0.0):
@@ -479,48 +489,16 @@ def dashboard():
                 try:
                     def gi(k): return max(0, int(request.form.get(k, 0) or 0))
                     def gf(k): return max(0, float(request.form.get(k, 0) or 0))
-                    def gb(k): return 1 if request.form.get(k) else 0
 
+                    picked = gi("picked")
+                    missed = gi("missed")
+                    sales_bills_open = gi("sales_bills_open")
+                    cs_sales_open = gi("cs_sales_open")
+                    packing_done = gi("packing_done")
                     total_mins = min(gf("total_mins"), 480)
                     check_mins = min(gf("check_mins"), 480)
-
-                    if staff_type == "picker":
-                        # Picker parameters (in order):
-                        # Sales bill picked → sales_bills_open
-                        # Item picked       → picked
-                        # Item missed       → missed
-                        # CS in sale open   → cs_sales_open
-                        # Table clean       → table_clean (checkbox)
-                        # Rack organised    → rack_organized (checkbox)
-                        # Packing done      → packing_done
-                        sales_bills_open = gi("sales_bills_open")
-                        picked           = gi("picked")
-                        missed           = gi("missed")
-                        cs_sales_open    = gi("cs_sales_open")
-                        table_clean      = gb("table_clean")
-                        rack_organized   = gb("rack_organized")
-                        packing_done     = gi("packing_done")
-                        checked          = 0
-                        errors_found     = 0
-                        bills            = 0
-                    else:
-                        # Checker parameters (in order):
-                        # Sales bill checked        → sales_bills_open
-                        # Sales bill checked Urgent → cs_sales_open
-                        # Item checked              → checked
-                        # Urgent item checked       → errors_found
-                        # Sales bill open           → bills
-                        # Packing done              → packing_done
-                        sales_bills_open = gi("sales_bills_open")
-                        cs_sales_open    = gi("cs_sales_open")
-                        checked          = gi("checked")
-                        errors_found     = gi("errors_found")
-                        bills            = gi("bills")
-                        packing_done     = gi("packing_done")
-                        picked           = 0
-                        missed           = 0
-                        table_clean      = 0
-                        rack_organized   = 0
+                    checked = gi("checked")
+                    errors_found = min(gi("errors_found"), checked)
 
                     ne = KPIEntry(
                         emp_id=emp_id,
@@ -529,13 +507,10 @@ def dashboard():
                         missed=missed,
                         cs_sales_open=cs_sales_open,
                         packing_done=packing_done,
-                        table_clean=table_clean,
-                        rack_organized=rack_organized,
                         total_time=round(total_mins / 60, 3),
                         checked=checked,
                         errors_found=errors_found,
                         check_time=round(check_mins / 60, 3),
-                        bills=bills,
                         entry_date=today
                     )
                     db.session.add(ne)
@@ -580,8 +555,17 @@ def dashboard():
                 trend_accuracy.append(None)
                 trend_speed.append(None)
 
+        # Find open windows where THIS staff hasn't submitted yet
+        open_wins = PastEntryWindow.query.filter_by(is_active=True).all()
+        pending_windows = []
+        for w in open_wins:
+            has_entry = KPIEntry.query.filter_by(emp_id=emp_id, entry_date=w.past_date).first()
+            if not has_entry:
+                pending_windows.append(w)
+
         return render_template("dashboard.html",
             user_name=session.get("user_name", "User"),
+            user_id=emp_id,
             staff_type=staff_type,
             today=today,
             today_entry=today_entry,
@@ -593,16 +577,17 @@ def dashboard():
             trend_accuracy=trend_accuracy,
             trend_speed=trend_speed,
             total_entries=len(all_entries),
-            new_personal_best=new_personal_best
+            new_personal_best=new_personal_best,
+            pending_windows=pending_windows
         )
     except Exception as e:
         logger.error(f"Dashboard error: {e}")
         flash("Error loading dashboard.", "danger")
         return render_template("dashboard.html",
-            user_name="User", staff_type="picker", today=date.today(),
+            user_name="User", user_id=0, staff_type="picker", today=date.today(),
             today_entry=None, d_stats=None, w_stats=None, m_stats=None,
             recent=[], trend_labels=[], trend_accuracy=[], trend_speed=[], total_entries=0,
-            new_personal_best=False)
+            new_personal_best=False, pending_windows=[])
 
 
 @app.route("/admin_dashboard")
@@ -629,6 +614,7 @@ def admin_dashboard():
         total_picked = sum(e.picked or 0 for e in all_ents)
         total_entries = len(all_ents)
         active_today = KPIEntry.query.filter_by(entry_date=today).count()
+        open_windows = PastEntryWindow.query.filter_by(is_active=True).order_by(PastEntryWindow.past_date.desc()).all()
 
         return render_template("admin.html",
             rows=rows,
@@ -636,13 +622,14 @@ def admin_dashboard():
             total_entries=total_entries,
             active_today=active_today,
             emp_count=len(employees),
-            today=today
+            today=today,
+            open_windows=open_windows
         )
     except Exception as e:
         logger.error(f"Admin dashboard error: {e}")
         flash("Error loading admin dashboard.", "danger")
         return render_template("admin.html", rows=[], total_picked=0,
-                               total_entries=0, active_today=0, emp_count=0, today=date.today())
+                               total_entries=0, active_today=0, emp_count=0, today=date.today(), open_windows=[])
 
 
 @app.route("/staff/<int:emp_id>")
@@ -900,6 +887,135 @@ def download_pdf(emp_id):
         logger.error(f"Download PDF error: {e}")
         flash("Error generating PDF.", "danger")
         return redirect(url_for("admin_dashboard"))
+
+
+# ─── PAST DATE ENTRY WINDOW ──────────────────────────────────────────────────
+
+@app.route("/admin/past_window", methods=["POST"])
+@admin_required
+def admin_open_past_window():
+    """Admin opens (or closes) a past-date entry window."""
+    try:
+        action    = request.form.get("action", "open")
+        date_str  = request.form.get("past_date", "").strip()
+        if not date_str:
+            flash("Please select a date.", "warning")
+            return redirect(url_for("admin_dashboard"))
+
+        past_date = datetime.strptime(date_str, "%Y-%m-%d").date()
+        today     = date.today()
+
+        if past_date >= today:
+            flash("You can only open windows for past dates (before today).", "warning")
+            return redirect(url_for("admin_dashboard"))
+
+        window = PastEntryWindow.query.filter_by(past_date=past_date).first()
+
+        if action == "close":
+            if window:
+                window.is_active = False
+                db.session.commit()
+                log_audit("close_past_window", str(past_date), "Admin closed past entry window")
+                flash(f"✅ Entry window for {past_date.strftime('%d %b %Y')} closed.", "success")
+            else:
+                flash("No window found for that date.", "warning")
+        else:
+            if window:
+                window.is_active  = True
+                window.opened_by  = session.get("user_id")
+                window.opened_at  = datetime.utcnow()
+            else:
+                window = PastEntryWindow(
+                    past_date  = past_date,
+                    opened_by  = session.get("user_id"),
+                    is_active  = True
+                )
+                db.session.add(window)
+            db.session.commit()
+            log_audit("open_past_window", str(past_date), "Admin opened past entry window")
+            flash(f"✅ Past entry window opened for {past_date.strftime('%d %b %Y')}. "
+                  f"Staff who haven't submitted can now enter their data.", "success")
+
+    except ValueError:
+        flash("Invalid date format.", "danger")
+    except Exception as e:
+        db.session.rollback()
+        logger.error(f"admin_open_past_window: {e}")
+        flash("Error updating entry window.", "danger")
+    return redirect(url_for("admin_dashboard"))
+
+
+@app.route("/past_entry/<date_str>", methods=["GET", "POST"])
+@login_required
+def past_entry(date_str):
+    """Staff submits KPI data for an admin-opened past date."""
+    try:
+        past_date = datetime.strptime(date_str, "%Y-%m-%d").date()
+    except ValueError:
+        flash("Invalid date.", "danger")
+        return redirect(url_for("dashboard"))
+
+    emp_id     = session.get("user_id")
+    staff_type = session.get("staff_type", "picker")
+    today      = date.today()
+
+    if past_date >= today:
+        flash("You can only submit data for past dates.", "warning")
+        return redirect(url_for("dashboard"))
+
+    window = PastEntryWindow.query.filter_by(past_date=past_date, is_active=True).first()
+    if not window:
+        flash("No active entry window for that date.", "warning")
+        return redirect(url_for("dashboard"))
+
+    existing = KPIEntry.query.filter_by(emp_id=emp_id, entry_date=past_date).first()
+    if existing:
+        flash(f"You have already submitted data for {past_date.strftime('%d %b %Y')}.", "info")
+        return redirect(url_for("dashboard"))
+
+    if request.method == "POST":
+        try:
+            def gi(k): return max(0, int(request.form.get(k, 0) or 0))
+            def gf(k): return max(0, float(request.form.get(k, 0) or 0))
+
+            picked           = gi("picked")
+            missed           = gi("missed")
+            sales_bills_open = gi("sales_bills_open")
+            cs_sales_open    = gi("cs_sales_open")
+            packing_done     = gi("packing_done")
+            total_mins       = min(gf("total_mins"), 480)
+            check_mins       = min(gf("check_mins"), 480)
+            checked          = gi("checked")
+            errors_found     = min(gi("errors_found"), checked)
+
+            ne = KPIEntry(
+                emp_id           = emp_id,
+                sales_bills_open = sales_bills_open,
+                picked           = picked,
+                missed           = missed,
+                cs_sales_open    = cs_sales_open,
+                packing_done     = packing_done,
+                total_time       = round(total_mins / 60, 3),
+                checked          = checked,
+                errors_found     = errors_found,
+                check_time       = round(check_mins / 60, 3),
+                entry_date       = past_date
+            )
+            db.session.add(ne)
+            db.session.commit()
+            log_audit("past_entry_submit", session.get("user_name", ""), f"Submitted past data for {past_date}")
+            flash(f"✅ Past entry for {past_date.strftime('%d %b %Y')} saved successfully.", "success")
+            return redirect(url_for("dashboard"))
+        except Exception as e:
+            db.session.rollback()
+            logger.error(f"past_entry POST: {e}")
+            flash("Error saving past entry.", "danger")
+
+    return render_template("past_entry.html",
+        past_date  = past_date,
+        staff_type = staff_type,
+        user_name  = session.get("user_name", "")
+    )
 
 
 @app.route("/api/stats/<int:emp_id>")
