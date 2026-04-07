@@ -479,16 +479,48 @@ def dashboard():
                 try:
                     def gi(k): return max(0, int(request.form.get(k, 0) or 0))
                     def gf(k): return max(0, float(request.form.get(k, 0) or 0))
+                    def gb(k): return 1 if request.form.get(k) else 0
 
-                    picked = gi("picked")
-                    missed = gi("missed")
-                    sales_bills_open = gi("sales_bills_open")
-                    cs_sales_open = gi("cs_sales_open")
-                    packing_done = gi("packing_done")
                     total_mins = min(gf("total_mins"), 480)
                     check_mins = min(gf("check_mins"), 480)
-                    checked = gi("checked")
-                    errors_found = min(gi("errors_found"), checked)
+
+                    if staff_type == "picker":
+                        # Picker parameters (in order):
+                        # Sales bill picked → sales_bills_open
+                        # Item picked       → picked
+                        # Item missed       → missed
+                        # CS in sale open   → cs_sales_open
+                        # Table clean       → table_clean (checkbox)
+                        # Rack organised    → rack_organized (checkbox)
+                        # Packing done      → packing_done
+                        sales_bills_open = gi("sales_bills_open")
+                        picked           = gi("picked")
+                        missed           = gi("missed")
+                        cs_sales_open    = gi("cs_sales_open")
+                        table_clean      = gb("table_clean")
+                        rack_organized   = gb("rack_organized")
+                        packing_done     = gi("packing_done")
+                        checked          = 0
+                        errors_found     = 0
+                        bills            = 0
+                    else:
+                        # Checker parameters (in order):
+                        # Sales bill checked        → sales_bills_open
+                        # Sales bill checked Urgent → cs_sales_open
+                        # Item checked              → checked
+                        # Urgent item checked       → errors_found
+                        # Sales bill open           → bills
+                        # Packing done              → packing_done
+                        sales_bills_open = gi("sales_bills_open")
+                        cs_sales_open    = gi("cs_sales_open")
+                        checked          = gi("checked")
+                        errors_found     = gi("errors_found")
+                        bills            = gi("bills")
+                        packing_done     = gi("packing_done")
+                        picked           = 0
+                        missed           = 0
+                        table_clean      = 0
+                        rack_organized   = 0
 
                     ne = KPIEntry(
                         emp_id=emp_id,
@@ -497,10 +529,13 @@ def dashboard():
                         missed=missed,
                         cs_sales_open=cs_sales_open,
                         packing_done=packing_done,
+                        table_clean=table_clean,
+                        rack_organized=rack_organized,
                         total_time=round(total_mins / 60, 3),
                         checked=checked,
                         errors_found=errors_found,
                         check_time=round(check_mins / 60, 3),
+                        bills=bills,
                         entry_date=today
                     )
                     db.session.add(ne)
