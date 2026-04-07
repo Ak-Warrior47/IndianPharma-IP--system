@@ -386,12 +386,34 @@ body {
 }
 .foot-note strong { color: #60a5fa; font-weight: 600; }
 
+/* Large screens — comfortable wider card */
+@media (min-width: 768px) {
+  .wrap { max-width: 440px; }
+  .card { padding: 42px 38px 34px; }
+}
+@media (min-width: 1200px) {
+  .wrap { max-width: 460px; }
+}
+/* Tablet (≤600px) */
+@media (max-width: 600px) {
+  .wrap { max-width: 100%; }
+  body { padding: 24px 14px; }
+  .card { padding: 30px 22px 26px; border-radius: 18px; }
+  .brand-name { font-size: 23px; }
+  .brand { margin-bottom: 22px; }
+}
+/* Mobile (≤480px) */
 @media (max-width: 480px) {
   body  { padding: 20px 12px; }
   .card { padding: 28px 18px 24px; border-radius: 18px; }
   .brand-name { font-size: 22px; }
   .brand { margin-bottom: 20px; }
+  .brand-icon { width: 52px; height: 52px; font-size: 22px; }
+  .card-title { font-size: 17px; }
+  .role-wrap { gap: 8px; }
+  .role-opt label { padding: 10px 8px; font-size: 13px; }
 }
+/* Small mobile (≤360px) */
 @media (max-width: 360px) {
   body  { padding: 14px 10px; }
   .card { padding: 22px 14px 20px; }
@@ -399,6 +421,8 @@ body {
   .field input { font-size: 13px; padding: 10px 11px; }
   .role-opt label { font-size: 12px; padding: 10px 6px; }
   .btn-submit { font-size: 14px; min-height: 46px; }
+  .brand-icon { width: 46px; height: 46px; font-size: 20px; border-radius: 14px; }
+  .brand-sub { font-size: 9px; letter-spacing: 2px; }
 }
 </style>
 </head>
