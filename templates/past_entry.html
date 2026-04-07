@@ -174,29 +174,37 @@ body {
       <!-- SECTION 1: Core picking metrics -->
       <div class="section-title">📦 Picking & Bills</div>
       <div class="form-grid">
+
+        {% if staff_type == 'checker' %}
+        <div class="field">
+          <label>★ Sales Bill Checked (URGENT)</label>
+          <input type="number" name="sales_bills_open" min="0" value="0" required class="urgent">
+        </div>
+        <div class="field">
+          <label>SB Checked Urgent</label>
+          <input type="number" name="cs_sales_open" min="0" value="0">
+        </div>
+        <div class="field">
+          <label>Item Checked</label>
+          <input type="number" name="checked" min="0" value="0" required>
+        </div>
+        <div class="field">
+          <label>Urgent Item Checked</label>
+          <input type="number" name="errors_found" min="0" value="0" required>
+        </div>
+        <div class="field">
+          <label>Sales Bill Open (assist)</label>
+          <input type="number" name="picked" min="0" value="0">
+        </div>
+        <div class="field">
+          <label>Packing Done</label>
+          <input type="number" name="packing_done" min="0" value="0">
+        </div>
+        {% else %}
         <div class="field">
           <label>★ Sales Bills Packed (URGENT)</label>
           <input type="number" name="sales_bills_open" min="0" value="0" required class="urgent">
         </div>
-
-        {% if staff_type == 'checker' %}
-        <div class="field">
-          <label>Items Checked</label>
-          <input type="number" name="checked" min="0" value="0" required>
-        </div>
-        <div class="field">
-          <label>Errors Found</label>
-          <input type="number" name="errors_found" min="0" value="0" required>
-        </div>
-        <div class="field">
-          <label>Items Picked (assist)</label>
-          <input type="number" name="picked" min="0" value="0">
-        </div>
-        <div class="field">
-          <label>Items Missed (assist)</label>
-          <input type="number" name="missed" min="0" value="0">
-        </div>
-        {% else %}
         <div class="field">
           <label>Items Picked</label>
           <input type="number" name="picked" min="0" value="0" required>
@@ -209,12 +217,11 @@ body {
           <label>CS Sales Open</label>
           <input type="number" name="cs_sales_open" min="0" value="0">
         </div>
-        {% endif %}
-
         <div class="field">
           <label>Packing Done</label>
           <input type="number" name="packing_done" min="0" value="0">
         </div>
+        {% endif %}
       </div>
 
       <!-- SECTION 2: Time -->
