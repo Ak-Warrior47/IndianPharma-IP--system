@@ -217,13 +217,23 @@ table.htable tbody tr:hover td { background: var(--bg); }
   <div class="kpi-grid">
     <div class="kpi-card c-blue">
       <div class="kpi-label">Today Accuracy</div>
+      {% if staff_type == 'checker' %}
+      <div class="kpi-value">{% if d_stats %}{{ d_stats.check_acc }}%{% else %}—{% endif %}</div>
+      <div class="kpi-sub">{% if d_stats %}{{ d_stats.tck }} checked, {{ d_stats.ter }} urgent{% else %}No entry yet{% endif %}</div>
+      {% else %}
       <div class="kpi-value">{% if d_stats %}{{ d_stats.pick_acc }}%{% else %}—{% endif %}</div>
       <div class="kpi-sub">{% if d_stats %}{{ d_stats.tp }} picked, {{ d_stats.tm }} missed{% else %}No entry yet{% endif %}</div>
+      {% endif %}
     </div>
     <div class="kpi-card c-green">
       <div class="kpi-label">Today Speed</div>
+      {% if staff_type == 'checker' %}
+      <div class="kpi-value">{% if d_stats %}{{ d_stats.ck_speed }}/hr{% else %}—{% endif %}</div>
+      <div class="kpi-sub">{% if d_stats %}{{ d_stats.ttt }}h check time{% else %}No entry yet{% endif %}</div>
+      {% else %}
       <div class="kpi-value">{% if d_stats %}{{ d_stats.pick_speed }}/hr{% else %}—{% endif %}</div>
       <div class="kpi-sub">{% if d_stats %}{{ d_stats.ts }}h worked{% else %}No entry yet{% endif %}</div>
+      {% endif %}
     </div>
     <div class="kpi-card c-orange">
       <div class="kpi-label">Efficiency Score</div>
@@ -246,38 +256,61 @@ table.htable tbody tr:hover td { background: var(--bg); }
     <div class="submitted-box">✅ Already submitted today. See you tomorrow!</div>
     <div class="kpi-grid">
       {% if staff_type == 'checker' %}
-      <div class="kpi-card"><div class="kpi-label">Checked</div><div class="kpi-value">{{ today_entry.checked }}</div></div>
-      <div class="kpi-card"><div class="kpi-label">Errors</div><div class="kpi-value">{{ today_entry.errors_found }}</div></div>
+      <div class="kpi-card"><div class="kpi-label">SB Checked</div><div class="kpi-value">{{ today_entry.sales_bills_open }}</div></div>
+      <div class="kpi-card"><div class="kpi-label">SB Checked Urgent</div><div class="kpi-value">{{ today_entry.cs_sales_open }}</div></div>
+      <div class="kpi-card"><div class="kpi-label">Item Checked</div><div class="kpi-value">{{ today_entry.checked }}</div></div>
+      <div class="kpi-card"><div class="kpi-label">Urgent Item Checked</div><div class="kpi-value">{{ today_entry.errors_found }}</div></div>
       {% else %}
+      <div class="kpi-card"><div class="kpi-label">Sales Bills</div><div class="kpi-value">{{ today_entry.sales_bills_open }}</div></div>
       <div class="kpi-card"><div class="kpi-label">Picked</div><div class="kpi-value">{{ today_entry.picked }}</div></div>
       <div class="kpi-card"><div class="kpi-label">Missed</div><div class="kpi-value">{{ today_entry.missed }}</div></div>
-      {% endif %}
-      <div class="kpi-card"><div class="kpi-label">Sales Bills</div><div class="kpi-value">{{ today_entry.sales_bills_open }}</div></div>
       <div class="kpi-card"><div class="kpi-label">Packing Done</div><div class="kpi-value">{{ today_entry.packing_done }}</div></div>
+      {% endif %}
     </div>
 
     {% else %}
     <form method="POST" autocomplete="off">
       <div class="form-grid">
+        {% if staff_type == 'checker' %}
+        <div class="field">
+          <label>★ Sales Bill Checked (URGENT)</label>
+          <input type="number" name="sales_bills_open" min="0" value="0" required>
+        </div>
+        <div class="field">
+          <label>SB Checked Urgent</label>
+          <input type="number" name="cs_sales_open" min="0" value="0">
+        </div>
+        <div class="field">
+          <label>Item Checked</label>
+          <input type="number" name="checked" min="0" value="0" required>
+        </div>
+        <div class="field">
+          <label>Urgent Item Checked</label>
+          <input type="number" name="errors_found" min="0" value="0" required>
+        </div>
+        <div class="field">
+          <label>Sales Bill Open</label>
+          <input type="number" name="picked" min="0" value="0">
+        </div>
+        <div class="field">
+          <label>Packing Done</label>
+          <input type="number" name="packing_done" min="0" value="0">
+        </div>
+        <div class="field">
+          <label>Total Time (mins, max 480)</label>
+          <input type="number" name="total_mins" min="0" max="480" value="0" required>
+          <small>Max 480 mins = 8 hours</small>
+        </div>
+        <div class="field">
+          <label>Check Time (mins, max 480)</label>
+          <input type="number" name="check_mins" min="0" max="480" value="0">
+          <small>Time spent checking</small>
+        </div>
+        {% else %}
         <div class="field">
           <label>★ Sales Bills Packed (URGENT)</label>
           <input type="number" name="sales_bills_open" min="0" value="0" required>
         </div>
-
-        {% if staff_type == 'checker' %}
-        <div class="field">
-          <label>Items Checked</label>
-          <input type="number" name="checked" min="0" value="0" required>
-        </div>
-        <div class="field">
-          <label>Errors Found</label>
-          <input type="number" name="errors_found" min="0" value="0" required>
-        </div>
-        <div class="field">
-          <label>Items Picked (assist)</label>
-          <input type="number" name="picked" min="0" value="0">
-        </div>
-        {% else %}
         <div class="field">
           <label>Items Picked</label>
           <input type="number" name="picked" min="0" value="0" required>
@@ -290,8 +323,6 @@ table.htable tbody tr:hover td { background: var(--bg); }
           <label>CS Sales Open</label>
           <input type="number" name="cs_sales_open" min="0" value="0">
         </div>
-        {% endif %}
-
         <div class="field">
           <label>Packing Done</label>
           <input type="number" name="packing_done" min="0" value="0">
@@ -300,12 +331,6 @@ table.htable tbody tr:hover td { background: var(--bg); }
           <label>Total Time (mins, max 480)</label>
           <input type="number" name="total_mins" min="0" max="480" value="0" required>
           <small>Max 480 mins = 8 hours</small>
-        </div>
-
-        {% if staff_type == 'checker' %}
-        <div class="field">
-          <label>Check Time (mins, max 480)</label>
-          <input type="number" name="check_mins" min="0" max="480" value="0">
         </div>
         {% endif %}
       </div>
@@ -333,8 +358,13 @@ table.htable tbody tr:hover td { background: var(--bg); }
           {% if d_stats %}
           <tr>
             <td><strong>Today</strong></td>
+            {% if staff_type == 'checker' %}
+            <td>{{ d_stats.check_acc }}%</td>
+            <td>{{ d_stats.ck_speed }}/hr</td>
+            {% else %}
             <td>{{ d_stats.pick_acc }}%</td>
             <td>{{ d_stats.pick_speed }}/hr</td>
+            {% endif %}
             <td><span class="tag {% if d_stats.grade in ['ELITE','EXCELLENT'] %}tag-ex{% elif d_stats.grade in ['GOOD','PROFICIENT'] %}tag-good{% elif d_stats.grade in ['AVERAGE','SATISFACTORY'] %}tag-avg{% else %}tag-poor{% endif %}">{{ d_stats.grade }}</span></td>
             <td>1</td>
           </tr>
@@ -342,8 +372,13 @@ table.htable tbody tr:hover td { background: var(--bg); }
           {% if w_stats %}
           <tr>
             <td><strong>This Week</strong></td>
+            {% if staff_type == 'checker' %}
+            <td>{{ w_stats.check_acc }}%</td>
+            <td>{{ w_stats.ck_speed }}/hr</td>
+            {% else %}
             <td>{{ w_stats.pick_acc }}%</td>
             <td>{{ w_stats.pick_speed }}/hr</td>
+            {% endif %}
             <td><span class="tag {% if w_stats.grade in ['ELITE','EXCELLENT'] %}tag-ex{% elif w_stats.grade in ['GOOD','PROFICIENT'] %}tag-good{% elif w_stats.grade in ['AVERAGE','SATISFACTORY'] %}tag-avg{% else %}tag-poor{% endif %}">{{ w_stats.grade }}</span></td>
             <td>{{ w_stats.days }}</td>
           </tr>
@@ -351,8 +386,13 @@ table.htable tbody tr:hover td { background: var(--bg); }
           {% if m_stats %}
           <tr>
             <td><strong>This Month</strong></td>
+            {% if staff_type == 'checker' %}
+            <td>{{ m_stats.check_acc }}%</td>
+            <td>{{ m_stats.ck_speed }}/hr</td>
+            {% else %}
             <td>{{ m_stats.pick_acc }}%</td>
             <td>{{ m_stats.pick_speed }}/hr</td>
+            {% endif %}
             <td><span class="tag {% if m_stats.grade in ['ELITE','EXCELLENT'] %}tag-ex{% elif m_stats.grade in ['GOOD','PROFICIENT'] %}tag-good{% elif m_stats.grade in ['AVERAGE','SATISFACTORY'] %}tag-avg{% else %}tag-poor{% endif %}">{{ m_stats.grade }}</span></td>
             <td>{{ m_stats.days }}</td>
           </tr>
@@ -373,11 +413,12 @@ table.htable tbody tr:hover td { background: var(--bg); }
           <tr>
             <th>Date</th>
             {% if staff_type == 'checker' %}
-            <th>Checked</th><th>Errors</th><th>Accuracy</th>
+            <th>SB Checked</th><th>SB Chkd Urgent</th><th>Item Checked</th><th>Urgent Item Chkd</th><th>SB Open</th><th>Packing</th><th>Clean Check Rate</th>
             {% else %}
             <th>Picked</th><th>Missed</th><th>Accuracy</th>
+            <th>Bills</th><th>Packing</th>
             {% endif %}
-            <th>Bills</th><th>Packing</th><th>Time (h)</th>
+            <th>Time (h)</th>
           </tr>
         </thead>
         <tbody>
@@ -385,8 +426,12 @@ table.htable tbody tr:hover td { background: var(--bg); }
           <tr>
             <td>{{ e.entry_date.strftime('%d %b %Y') }}</td>
             {% if staff_type == 'checker' %}
+            <td>{{ e.sales_bills_open }}</td>
+            <td>{{ e.cs_sales_open }}</td>
             <td>{{ e.checked }}</td>
             <td>{{ e.errors_found }}</td>
+            <td>{{ e.picked }}</td>
+            <td>{{ e.packing_done }}</td>
             {% set cacc = (((e.checked - e.errors_found) / e.checked * 100) | round(1)) if e.checked > 0 else 0 %}
             <td><span class="tag {% if cacc >= 95 %}tag-ex{% elif cacc >= 85 %}tag-good{% elif cacc >= 70 %}tag-avg{% else %}tag-poor{% endif %}">{{ cacc }}%</span></td>
             {% else %}
@@ -394,9 +439,9 @@ table.htable tbody tr:hover td { background: var(--bg); }
             <td>{{ e.missed }}</td>
             {% set acc = e.accuracy %}
             <td><span class="tag {% if acc >= 95 %}tag-ex{% elif acc >= 85 %}tag-good{% elif acc >= 70 %}tag-avg{% else %}tag-poor{% endif %}">{{ acc }}%</span></td>
-            {% endif %}
             <td>{{ e.sales_bills_open }}</td>
             <td>{{ e.packing_done }}</td>
+            {% endif %}
             <td>{{ "%.1f" | format(e.total_time or 0) }}</td>
           </tr>
           {% endfor %}
