@@ -251,18 +251,16 @@ def generate_visual_pdf(emp_name, payload):
 
         # ── PIE CHARTS ───────────────────────────────────────────────────
         elems.append(Paragraph("PERFORMANCE BREAKDOWN — PIE CHARTS", h2_st))
+        tp = all_s.get("tp", 0); tm = all_s.get("tm", 0)
         cur_eff = all_s.get("eff_score", 0)
+        p1 = _make_pie(["Picked", "Missed"], [tp, tm], [BLUE, LGRAY], "Item Pick vs Missed")
         p2 = _make_pie(["Current", "Gap"], [cur_eff, max(100-cur_eff, 0)], [DARK, LGRAY],
                        "Eff. vs Potential")
         if stype == "checker":
             tck = all_s.get("tck", 0); ter = all_s.get("ter", 0)
-            p1 = _make_pie(["Clean", "Errors"], [max(tck-ter, 0), ter],
-                           ["#0f766e", BLUE], "Items Checked vs Errors")
-            p3 = _make_pie(["Error Rate", "Clean Rate"], [all_s.get("error_rate",0), all_s.get("check_acc",0)],
-                           [BLUE, "#bfdbfe"], "Error vs Clean Rate")
+            p3 = _make_pie(["Errors Found", "Clean"], [ter, max(tck-ter, 0)],
+                           [BLUE, "#bfdbfe"], "Error Detection")
         else:
-            tp = all_s.get("tp", 0); tm = all_s.get("tm", 0)
-            p1 = _make_pie(["Picked", "Missed"], [tp, tm], [BLUE, LGRAY], "Item Pick vs Missed")
             tpd = all_s.get("tpd", 0); tsb = all_s.get("tsb", 0)
             p3 = _make_pie(["Packed", "Remaining"], [tpd, max(tsb-tpd, 0)],
                            [BLUE, "#bfdbfe"], "Sales Bill vs Packed")
@@ -278,28 +276,17 @@ def generate_visual_pdf(emp_name, payload):
         lbls  = ["Today", "Week", "Month", "All"]
         def gv(s, k): return (s[k] if s and s.get(k) is not None else 0)
 
-        eff_v = [gv(d_s,"eff_score"), gv(w_s,"eff_score"), gv(m_s,"eff_score"), gv(all_s,"eff_score")]
+        acc_v    = [gv(d_s,"pick_acc"),    gv(w_s,"pick_acc"),    gv(m_s,"pick_acc"),    gv(all_s,"pick_acc")]
+        eff_v    = [gv(d_s,"eff_score"),   gv(w_s,"eff_score"),   gv(m_s,"eff_score"),   gv(all_s,"eff_score")]
+        pkg_v    = [gv(d_s,"packing_eff"), gv(w_s,"packing_eff"), gv(m_s,"packing_eff"), gv(all_s,"packing_eff")]
+        cs_v     = [gv(d_s,"cs_fulfilment"),gv(w_s,"cs_fulfilment"),gv(m_s,"cs_fulfilment"),gv(all_s,"cs_fulfilment")]
 
-        if stype == "checker":
-            cr_v  = [gv(d_s,"check_acc"),  gv(w_s,"check_acc"),  gv(m_s,"check_acc"),  gv(all_s,"check_acc")]
-            er_v  = [gv(d_s,"error_rate"), gv(w_s,"error_rate"), gv(m_s,"error_rate"), gv(all_s,"error_rate")]
-            ck_v  = [gv(d_s,"ck_speed"),   gv(w_s,"ck_speed"),   gv(m_s,"ck_speed"),   gv(all_s,"ck_speed")]
-            bt = Table([
-                [_make_bars(cr_v,  lbls, "Clean Check Rate % by Period",  max_val=100)],
-                [_make_bars(eff_v, lbls, "Efficiency Score by Period",     max_val=100)],
-                [_make_bars(er_v,  lbls, "Error Rate % by Period",         max_val=100)],
-                [_make_bars(ck_v,  lbls, "Check Speed /hr by Period",      max_val=max(max(ck_v),1)*1.2)],
-            ])
-        else:
-            acc_v = [gv(d_s,"pick_acc"),    gv(w_s,"pick_acc"),    gv(m_s,"pick_acc"),    gv(all_s,"pick_acc")]
-            pkg_v = [gv(d_s,"packing_eff"), gv(w_s,"packing_eff"), gv(m_s,"packing_eff"), gv(all_s,"packing_eff")]
-            cs_v  = [gv(d_s,"cs_fulfilment"),gv(w_s,"cs_fulfilment"),gv(m_s,"cs_fulfilment"),gv(all_s,"cs_fulfilment")]
-            bt = Table([
-                [_make_bars(acc_v, lbls, "Pick Accuracy % by Period",     max_val=100)],
-                [_make_bars(eff_v, lbls, "Efficiency Score by Period",     max_val=100)],
-                [_make_bars(pkg_v, lbls, "Packing Efficiency % by Period", max_val=100)],
-                [_make_bars(cs_v,  lbls, "CS Fulfilment % by Period",      max_val=100)],
-            ])
+        bt = Table([
+            [_make_bars(acc_v,  lbls, "Pick Accuracy % by Period",      max_val=100)],
+            [_make_bars(eff_v,  lbls, "Efficiency Score by Period",      max_val=100)],
+            [_make_bars(pkg_v,  lbls, "Packing Efficiency % by Period",  max_val=100)],
+            [_make_bars(cs_v,   lbls, "CS Fulfilment % by Period",       max_val=100)],
+        ])
         bt.setStyle(TableStyle([
             ("ALIGN", (0,0),(-1,-1), "CENTER"),
             ("BOTTOMPADDING",(0,0),(-1,-1), 6)
@@ -330,20 +317,19 @@ def generate_visual_pdf(emp_name, payload):
                     ])
                 cws = [2.2*cm, 1.8*cm, 1.6*cm, 1.6*cm, 1.6*cm, 1.8*cm, 1.6*cm, 1.4*cm, 1.4*cm, 1.8*cm]
             else:
-                log = [["Date", "SB Checked", "SB Urgent", "Item Chkd", "Urgent", "CleanRate%",
+                log = [["Date", "Sales Bill", "Picked", "Missed", "Acc%", "Checked",
                         "Errors", "Err%", "Pack Done", "CS Open", "Chk hrs"]]
                 for e in entries:
                     log.append([
                         str(e.entry_date),
-                        int(e.sales_bills_open or 0),
-                        int(e.cs_sales_open or 0),
+                        e._sales_bill_effective,
+                        int(e.picked or 0), int(e.missed or 0),
+                        f"{e.accuracy}%",
                         int(e.checked or 0),
                         int(e.errors_found or 0),
                         f"{e.check_rate}%",
-                        int(e.errors_found or 0),
-                        f"{e.check_rate and round(100-e.check_rate,1) or 0}%",
                         int(e.packing_done or 0),
-                        int(e.picked or 0),
+                        int(e.cs_sales_open or 0),
                         round(float(e.check_time or 0), 2)
                     ])
                 cws = [2.0*cm, 1.6*cm, 1.4*cm, 1.4*cm, 1.4*cm, 1.6*cm,
