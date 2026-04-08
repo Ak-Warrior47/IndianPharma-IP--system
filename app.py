@@ -167,56 +167,45 @@ def grade_from_score(score):
     else:             return "NEEDS WORK"
 
 
-FIXED_HOURS_PER_DAY = 9.0  # All calculations use 9 hrs/day constant
-
 def build_analytics(entries: List[KPIEntry], staff_type: str = "picker") -> Optional[Dict[str, Any]]:
     try:
         if not entries: return None
-        days = len(entries)
-        ts_fixed = FIXED_HOURS_PER_DAY * days   # total hours = 9 * days
-
         tp   = sum(int(e.picked or 0) for e in entries)
         tm   = sum(int(e.missed or 0) for e in entries)
         ti   = tp + tm
-        # CHECKER: sales_bills_open = SB Checked Normal, cs_sales_open = SB Checked Urgent
-        tsb_normal  = sum(int(e.sales_bills_open or 0) for e in entries)
-        tsb_urgent  = sum(int(e.cs_sales_open or 0) for e in entries)
-        tsb_total   = tsb_normal + tsb_urgent   # total bills checked (checker) or bills (picker)
-        tsb  = tsb_total if staff_type == "checker" else sum(int(e.sales_bills_open or e.bills or 0) for e in entries)
-        # CHECKER: checked = Item Checked Normal, errors_found = Urgent Item Checked
-        tck_normal  = sum(int(e.checked or 0) for e in entries)
-        tck_urgent  = sum(int(e.errors_found or 0) for e in entries)
-        tck_total   = tck_normal + tck_urgent   # total items checked
-        # For clean-check-rate: errors = urgent items (they ARE the problematic items)
-        ter  = tck_urgent   # urgent items = errors for clean rate calc
+        tsb  = sum(int(e.sales_bills_open or e.bills or 0) for e in entries)
+        ts   = round(sum(float(e.total_time or e.sweep or 0) for e in entries), 3)
+        tck  = sum(int(e.checked or 0) for e in entries)
+        ter  = sum(int(e.errors_found or 0) for e in entries)
         tpk  = sum(int(e.packing_done or 0) for e in entries)
-        tcs  = sum(int(e.cs_sales_open or 0) for e in entries) if staff_type == "picker" else 0
+        tcs  = sum(int(e.cs_sales_open or 0) for e in entries)
+        tro  = sum(int(e.rack_organized or 0) for e in entries)
+        ttc  = sum(int(e.table_clean or 0) for e in entries)
+        tct  = sum(float(e.check_time or 0) for e in entries)
+        days = len(entries)
 
-        # ── PICKER metrics ────────────────────────────────────────────
-        pick_acc   = round(safe_div(tp, ti) * 100, 1)
-        # Speed: items / 9hrs per day
-        pick_speed = round(safe_div(ti, ts_fixed), 1)
-        packing_eff   = round(safe_div(tpk, tsb) * 100, 1) if tsb > 0 else 0
+        pick_acc    = round(safe_div(tp, ti) * 100, 1)
+        pick_speed  = round(safe_div(ti, max(ts, 0.001)), 1)
+        check_acc   = round(safe_div(max(tck - ter, 0), tck) * 100, 1) if tck > 0 else 0.0
+        error_rate  = round(safe_div(ter, tck) * 100, 1) if tck > 0 else 0.0
+        ck_speed    = round(safe_div(tck, max(tct, 0.001)), 1) if tct > 0 else 0.0
+        packing_eff = round(safe_div(tpk, tsb) * 100, 1) if tsb > 0 else 0
         cs_fulfilment = round(min(safe_div(tpk, tcs) * 100, 100), 1) if tcs > 0 else 0
 
-        # ── CHECKER metrics ───────────────────────────────────────────
-        # Clean check rate = (Total Items - Urgent Items) / Total Items * 100
-        check_acc  = round(safe_div(max(tck_total - ter, 0), tck_total) * 100, 1) if tck_total > 0 else 0.0
-        error_rate = round(safe_div(ter, tck_total) * 100, 1) if tck_total > 0 else 0.0
-        # Check speed = total items checked / 9hrs per day
-        ck_speed   = round(safe_div(tck_total, ts_fixed), 1)
+        # Workspace score
+        workspace_score = round(safe_div(tro + ttc, 2 * days) * 100, 1) if days > 0 else 0
 
-        # ── Potential / gap using 9hr constant ───────────────────────
+        # Potential / gap
         if staff_type == "checker":
-            potential_items = int(150 * ts_fixed)
-            gap_items = max(potential_items - tck_total, 0)
-            potential_eff = round(safe_div(tck_total, max(potential_items, 1)) * 100, 1)
+            potential_items = int(150 * tct)
+            gap_items = max(potential_items - tck, 0)
+            potential_eff = round(safe_div(tck, max(potential_items, 1)) * 100, 1)
         else:
-            potential_items = int(200 * ts_fixed)
+            potential_items = int(200 * ts)
             gap_items = max(potential_items - ti, 0)
             potential_eff = round(safe_div(ti, max(potential_items, 1)) * 100, 1)
 
-        # ── Consistency — role-correct metric ────────────────────────
+        # Consistency — role-correct metric
         if staff_type == "checker":
             daily_accs = [e.check_rate for e in entries if e.check_rate > 0]
         else:
@@ -224,66 +213,94 @@ def build_analytics(entries: List[KPIEntry], staff_type: str = "picker") -> Opti
         if len(daily_accs) > 1:
             mean_acc = sum(daily_accs) / len(daily_accs)
             variance = sum((a - mean_acc) ** 2 for a in daily_accs) / len(daily_accs)
-            consistency = max(0, 100 - (variance ** 0.5 * 2))
+            std_dev = variance ** 0.5
+            consistency = max(0, 100 - (std_dev * 2))
         else:
             consistency = 100 if daily_accs else 0
 
-        # ── Trend — role-correct metric ──────────────────────────────
+        # Trend (compare first half vs second half)
         if len(entries) >= 4:
             mid = len(entries) // 2
-            first_half = entries[mid:]
-            second_half = entries[:mid]
+            first_half = entries[mid:]   # older (entries sorted desc)
+            second_half = entries[:mid]  # newer
             if staff_type == "checker":
                 fh_acc = sum(e.check_rate for e in first_half) / len(first_half)
                 sh_acc = sum(e.check_rate for e in second_half) / len(second_half)
             else:
                 fh_acc = sum(e.accuracy for e in first_half) / len(first_half)
                 sh_acc = sum(e.accuracy for e in second_half) / len(second_half)
-            trend = "improving" if sh_acc > fh_acc + 2 else "declining" if sh_acc < fh_acc - 2 else "stable"
+            if sh_acc > fh_acc + 2:
+                trend = "improving"
+            elif sh_acc < fh_acc - 2:
+                trend = "declining"
+            else:
+                trend = "stable"
         else:
             trend = "stable"
 
-        # ── Efficiency score ─────────────────────────────────────────
+        # Efficiency score
         if staff_type == "picker":
             eff_score = round(
-                (pick_acc / 100) * 60 +
-                min(pick_speed / (200 / FIXED_HOURS_PER_DAY), 1) * 25 +
-                min(packing_eff / 100, 1) * 15,
+                (pick_acc / 100) * 55 +
+                min(pick_speed / 200, 1) * 30 +
+                (workspace_score / 100) * 10 +
+                min(packing_eff / 100, 1) * 5,
                 1
             )
-            grade = ("ELITE" if pick_acc >= 98 else
-                     "PROFICIENT" if pick_acc >= 95 else
-                     "SATISFACTORY" if pick_acc >= 88 else "RE-TRAINING")
         else:
             eff_score = round(
-                (check_acc / 100) * 70 +
-                min(ck_speed / (150 / FIXED_HOURS_PER_DAY), 1) * 30,
+                (check_acc / 100) * 65 +
+                min(ck_speed / 150, 1) * 25 +
+                (workspace_score / 100) * 10,
                 1
             )
-            grade = ("ELITE" if check_acc >= 97 else
-                     "PROFICIENT" if check_acc >= 94 else
-                     "SATISFACTORY" if check_acc >= 87 else "RE-TRAINING")
         eff_score = min(eff_score, 100)
 
+        # Grade (enhanced for staff_detail)
+        if staff_type == "picker":
+            if pick_acc >= 98 and workspace_score >= 80:
+                grade = "ELITE"
+            elif pick_acc >= 95:
+                grade = "PROFICIENT"
+            elif pick_acc >= 88:
+                grade = "SATISFACTORY"
+            else:
+                grade = "RE-TRAINING"
+        else:
+            if check_acc >= 97 and workspace_score >= 80:
+                grade = "ELITE"
+            elif check_acc >= 94:
+                grade = "PROFICIENT"
+            elif check_acc >= 87:
+                grade = "SATISFACTORY"
+            else:
+                grade = "RE-TRAINING"
+
+        # Feedback
         feedback_map = {
             "ELITE": "Outstanding performance. Keep it up!",
             "PROFICIENT": "Strong results. Minor improvements will push you to Elite.",
-            "SATISFACTORY": "Meets expectations. Focus on accuracy and speed.",
+            "SATISFACTORY": "Meets expectations. Focus on accuracy and workspace.",
             "RE-TRAINING": "Performance needs attention. Please speak to your manager."
         }
+        feedback = feedback_map.get(grade, "")
 
         return dict(
             pick_acc=pick_acc, pick_speed=pick_speed, check_acc=check_acc,
             eff_score=eff_score, grade=grade, days=days,
-            tp=tp, tm=tm, tck=tck_total, tck_normal=tck_normal, tck_urgent=tck_urgent,
-            ter=ter, tsb=tsb, tsb_normal=tsb_normal, tsb_urgent=tsb_urgent, tsb_total=tsb_total,
-            tpk=tpk, tpd=tpk, tcs=tcs,
+            tp=tp, tm=tm, tck=tck, ter=ter, tsb=tsb, tpk=tpk, ts=round(ts, 2),
+            tck_normal=sum(int(e.checked or 0) for e in entries) if staff_type=='checker' else 0,
+            tck_urgent=sum(int(e.errors_found or 0) for e in entries) if staff_type=='checker' else 0,
+            tsb_normal=sum(int(e.sales_bills_open or 0) for e in entries) if staff_type=='checker' else tsb,
+            tsb_urgent=sum(int(e.cs_sales_open or 0) for e in entries) if staff_type=='checker' else 0,
+            tpd=tpk, tcs=tcs, tro=tro, ttc=ttc,
             packing_eff=packing_eff, cs_fulfilment=cs_fulfilment,
-            consistency=round(consistency, 1), error_rate=error_rate, ck_speed=ck_speed,
-            workspace_score=0,
+            consistency=round(consistency, 1),
+            error_rate=error_rate, ck_speed=ck_speed,
+            workspace_score=workspace_score,
             potential_items=potential_items, gap_items=gap_items, potential_eff=potential_eff,
-            ts=round(ts_fixed, 2), ttt=round(ts_fixed, 2),
-            trend=trend, feedback=feedback_map.get(grade, "")
+            ttt=round(tct, 2) if staff_type == "checker" else round(ts, 2),
+            trend=trend, feedback=feedback
         )
     except Exception as e:
         logger.error(f"build_analytics error: {e}")
@@ -331,7 +348,7 @@ def log_audit(action, target, details=""):
         )
         db.session.add(log)
         db.session.commit()
-    except:
+    except Exception:
         db.session.rollback()
 
 
@@ -415,7 +432,7 @@ def health_check():
     try:
         db.session.execute(db.text("SELECT 1"))
         db_ok = True
-    except:
+    except Exception:
         db_ok = False
     return jsonify(status="ok", database="up" if db_ok else "down"), 200 if db_ok else 500
 
@@ -489,13 +506,15 @@ def dashboard():
                     sales_bills_open = gi("sales_bills_open")
                     cs_sales_open    = gi("cs_sales_open")
                     packing_done     = gi("packing_done")
+                    total_mins       = min(gf("total_mins"), 480)
+                    check_mins       = min(gf("check_mins"), 480)
+                    rack_organized   = 1 if request.form.get("rack_organized") == "yes" else 0
+                    table_clean      = 1 if request.form.get("table_clean") == "yes" else 0
 
                     if staff_type == "checker":
-                        # sales_bills_open=SB Checked Normal, cs_sales_open=SB Checked Urgent
-                        # checked=Item Checked Normal, errors_found=Urgent Item Checked
                         checked      = gi("checked")
-                        errors_found = gi("errors_found")
-                        picked       = 0
+                        errors_found = gi("errors_found")  # Urgent Item Checked — not capped
+                        picked       = gi("picked")         # SB Open assist
                         missed       = 0
                     else:
                         picked       = gi("picked")
@@ -510,12 +529,12 @@ def dashboard():
                         missed=missed,
                         cs_sales_open=cs_sales_open,
                         packing_done=packing_done,
-                        rack_organized=0,
-                        table_clean=0,
-                        total_time=9.0,
+                        rack_organized=rack_organized,
+                        table_clean=table_clean,
+                        total_time=round(total_mins / 60, 3),
                         checked=checked,
                         errors_found=errors_found,
-                        check_time=9.0,
+                        check_time=round(check_mins / 60, 3),
                         entry_date=today
                     )
                     db.session.add(ne)
@@ -553,8 +572,7 @@ def dashboard():
             if e:
                 if staff_type == "checker":
                     acc = e.check_rate
-                    ti_e = (e.checked or 0) + (e.errors_found or 0)
-                    spd = round(ti_e / 9.0, 1)
+                    spd = round(float((e.checked or 0) + (e.errors_found or 0)) / 9.0, 1)
                 else:
                     t = (e.picked or 0) + (e.missed or 0)
                     acc = round((e.picked or 0) / t * 100, 1) if t > 0 else 0
@@ -855,11 +873,12 @@ def export_pdf():
         }
 
         pdf_buffer = generate_visual_pdf(emp.name, payload)
+        pdf_bytes = pdf_buffer.read()
         return Response(
-            pdf_buffer.read(),
+            pdf_bytes,
             mimetype="application/pdf",
             headers={"Content-Disposition": f"attachment; filename=KRA_{emp.name}_{date.today()}.pdf",
-                     "Content-Length": str(len(pdf_buffer.getvalue()))}
+                     "Content-Length": str(len(pdf_bytes))}
         )
     except Exception as e:
         logger.error(f"PDF export error: {e}")
@@ -890,11 +909,12 @@ def download_pdf(emp_id):
         }
 
         pdf_buffer = generate_visual_pdf(emp.name, payload)
+        pdf_bytes = pdf_buffer.read()
         return Response(
-            pdf_buffer.read(),
+            pdf_bytes,
             mimetype="application/pdf",
             headers={"Content-Disposition": f"attachment; filename=KRA_{emp.name}_{date.today()}.pdf",
-                     "Content-Length": str(len(pdf_buffer.getvalue()))}
+                     "Content-Length": str(len(pdf_bytes))}
         )
     except Exception as e:
         logger.error(f"Download PDF error: {e}")
@@ -994,11 +1014,16 @@ def past_entry(date_str):
             sales_bills_open = gi("sales_bills_open")
             cs_sales_open    = gi("cs_sales_open")
             packing_done     = gi("packing_done")
+            total_mins       = min(gf("total_mins"), 480)
+            check_mins       = min(gf("check_mins"), 480)
+            rack_organized   = 0
+            table_clean      = 0
 
             if staff_type == "checker":
+                # checker: picked = SB Open assist, missed not used
                 checked      = gi("checked")
-                errors_found = gi("errors_found")
-                picked       = 0
+                errors_found = gi("errors_found")   # Urgent Item Checked — not capped
+                picked       = gi("picked")          # SB Open assist
                 missed       = 0
             else:
                 picked       = gi("picked")
@@ -1013,12 +1038,12 @@ def past_entry(date_str):
                 missed           = missed,
                 cs_sales_open    = cs_sales_open,
                 packing_done     = packing_done,
-                rack_organized   = 0,
-                table_clean      = 0,
-                total_time       = 9.0,
+                rack_organized   = rack_organized,
+                table_clean      = table_clean,
+                total_time       = round(total_mins / 60, 3),
                 checked          = checked,
                 errors_found     = errors_found,
-                check_time       = 9.0,
+                check_time       = round(check_mins / 60, 3),
                 entry_date       = past_date
             )
             db.session.add(ne)
