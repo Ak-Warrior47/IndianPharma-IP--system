@@ -28,10 +28,16 @@ app.config.update(
     SESSION_COOKIE_HTTPONLY=True,
     SESSION_COOKIE_SAMESITE='Strict',
     PERMANENT_SESSION_LIFETIME=timedelta(hours=8),
-    SESSION_REFRESH_EACH_REQUEST=True,
+    SESSION_REFRESH_EACH_REQUEST=False,
     PREFERRED_URL_SCHEME='https' if IS_PRODUCTION else 'http',
     SQLALCHEMY_TRACK_MODIFICATIONS=False,
-    SQLALCHEMY_ENGINE_OPTIONS={"pool_pre_ping": True, "pool_recycle": 300}
+    SQLALCHEMY_ENGINE_OPTIONS={
+        "pool_pre_ping": True,
+        "pool_recycle": 1800,
+        "pool_size": 10,
+        "max_overflow": 20,
+        "pool_timeout": 30,
+    }
 )
 
 db_url = os.environ.get("DATABASE_URL")
@@ -205,11 +211,8 @@ def build_analytics(entries: List[KPIEntry], staff_type: str = "picker") -> Opti
             gap_items = max(potential_items - ti, 0)
             potential_eff = round(safe_div(ti, max(potential_items, 1)) * 100, 1)
 
-        # Consistency — role-correct metric
-        if staff_type == "checker":
-            daily_accs = [e.check_rate for e in entries if e.check_rate > 0]
-        else:
-            daily_accs = [e.accuracy for e in entries if e.accuracy > 0]
+        # Consistency
+        daily_accs = [e.accuracy for e in entries if e.accuracy > 0]
         if len(daily_accs) > 1:
             mean_acc = sum(daily_accs) / len(daily_accs)
             variance = sum((a - mean_acc) ** 2 for a in daily_accs) / len(daily_accs)
@@ -223,12 +226,8 @@ def build_analytics(entries: List[KPIEntry], staff_type: str = "picker") -> Opti
             mid = len(entries) // 2
             first_half = entries[mid:]   # older (entries sorted desc)
             second_half = entries[:mid]  # newer
-            if staff_type == "checker":
-                fh_acc = sum(e.check_rate for e in first_half) / len(first_half)
-                sh_acc = sum(e.check_rate for e in second_half) / len(second_half)
-            else:
-                fh_acc = sum(e.accuracy for e in first_half) / len(first_half)
-                sh_acc = sum(e.accuracy for e in second_half) / len(second_half)
+            fh_acc = sum(e.accuracy for e in first_half) / len(first_half)
+            sh_acc = sum(e.accuracy for e in second_half) / len(second_half)
             if sh_acc > fh_acc + 2:
                 trend = "improving"
             elif sh_acc < fh_acc - 2:
@@ -289,10 +288,6 @@ def build_analytics(entries: List[KPIEntry], staff_type: str = "picker") -> Opti
             pick_acc=pick_acc, pick_speed=pick_speed, check_acc=check_acc,
             eff_score=eff_score, grade=grade, days=days,
             tp=tp, tm=tm, tck=tck, ter=ter, tsb=tsb, tpk=tpk, ts=round(ts, 2),
-            tck_normal=sum(int(e.checked or 0) for e in entries) if staff_type=='checker' else 0,
-            tck_urgent=sum(int(e.errors_found or 0) for e in entries) if staff_type=='checker' else 0,
-            tsb_normal=sum(int(e.sales_bills_open or 0) for e in entries) if staff_type=='checker' else tsb,
-            tsb_urgent=sum(int(e.cs_sales_open or 0) for e in entries) if staff_type=='checker' else 0,
             tpd=tpk, tcs=tcs, tro=tro, ttc=ttc,
             packing_eff=packing_eff, cs_fulfilment=cs_fulfilment,
             consistency=round(consistency, 1),
@@ -348,7 +343,7 @@ def log_audit(action, target, details=""):
         )
         db.session.add(log)
         db.session.commit()
-    except Exception:
+    except:
         db.session.rollback()
 
 
@@ -426,6 +421,14 @@ except Exception as _e:
 
 
 # ─── ROUTES ──────────────────────────────────────────────────────────────────
+
+@app.after_request
+def perf_headers(response):
+    if request.endpoint == 'static':
+        response.cache_control.max_age = 86400
+    elif request.endpoint in ('dashboard','admin_dashboard','staff_detail'):
+        response.cache_control.no_store = True
+    return response
 
 @app.route('/health')
 def health_check():
@@ -508,8 +511,6 @@ def dashboard():
                     packing_done     = gi("packing_done")
                     total_mins       = min(gf("total_mins"), 480)
                     check_mins       = min(gf("check_mins"), 480)
-                    rack_organized   = 1 if request.form.get("rack_organized") == "yes" else 0
-                    table_clean      = 1 if request.form.get("table_clean") == "yes" else 0
 
                     if staff_type == "checker":
                         checked      = gi("checked")
@@ -529,8 +530,6 @@ def dashboard():
                         missed=missed,
                         cs_sales_open=cs_sales_open,
                         packing_done=packing_done,
-                        rack_organized=rack_organized,
-                        table_clean=table_clean,
                         total_time=round(total_mins / 60, 3),
                         checked=checked,
                         errors_found=errors_found,
@@ -570,26 +569,26 @@ def dashboard():
             e = next((x for x in all_entries if x.entry_date == d), None)
             trend_labels.append(d.strftime("%a %d"))
             if e:
-                if staff_type == "checker":
-                    acc = e.check_rate
-                    spd = round(float((e.checked or 0) + (e.errors_found or 0)) / 9.0, 1)
-                else:
-                    t = (e.picked or 0) + (e.missed or 0)
-                    acc = round((e.picked or 0) / t * 100, 1) if t > 0 else 0
-                    spd = round(t / 9.0, 1)
+                t = (e.picked or 0) + (e.missed or 0)
+                acc = round((e.picked or 0) / t * 100, 1) if t > 0 else 0
+                spd = round(t / max(float(e.total_time or 0.001), 0.001), 1)
                 trend_accuracy.append(acc)
                 trend_speed.append(spd)
             else:
                 trend_accuracy.append(None)
                 trend_speed.append(None)
 
-        # Find open windows where THIS staff hasn't submitted yet
+        # Pending windows — single IN query instead of N+1
         open_wins = PastEntryWindow.query.filter_by(is_active=True).all()
-        pending_windows = []
-        for w in open_wins:
-            has_entry = KPIEntry.query.filter_by(emp_id=emp_id, entry_date=w.past_date).first()
-            if not has_entry:
-                pending_windows.append(w)
+        if open_wins:
+            open_dates = [w.past_date for w in open_wins]
+            filled = {row[0] for row in db.session.query(KPIEntry.entry_date).filter(
+                KPIEntry.emp_id == emp_id,
+                KPIEntry.entry_date.in_(open_dates)
+            ).all()}
+            pending_windows = [w for w in open_wins if w.past_date not in filled]
+        else:
+            pending_windows = []
 
         return render_template("dashboard.html",
             user_name=session.get("user_name", "User"),
@@ -622,27 +621,33 @@ def dashboard():
 @admin_required
 def admin_dashboard():
     try:
+        today = date.today()
+        week_start = today - timedelta(days=6)
         employees = Employee.query.filter_by(is_admin=False).options(db.joinedload(Employee.entries)).all()
         rows = []
-        today = date.today()
         for emp in employees:
-            ents = emp.entries
+            ents = sorted(emp.entries, key=lambda e: e.entry_date, reverse=True)
             stats = build_analytics(ents, emp.staff_type)
-            week_ents = [e for e in ents if e.entry_date >= today - timedelta(days=6)]
+            week_ents = [e for e in ents if e.entry_date >= week_start]
             week_stats = build_analytics(week_ents, emp.staff_type)
             rows.append({
-                'emp': emp,
-                'stats': stats,
-                'week_stats': week_stats,
+                'emp': emp, 'stats': stats, 'week_stats': week_stats,
                 'count': len(ents),
                 'last_entry': ents[0].entry_date if ents else None,
             })
 
-        all_ents = KPIEntry.query.all()
-        total_picked = sum(e.picked or 0 for e in all_ents)
-        total_entries = len(all_ents)
-        active_today = KPIEntry.query.filter_by(entry_date=today).count()
-        open_windows = PastEntryWindow.query.filter_by(is_active=True).order_by(PastEntryWindow.past_date.desc()).all()
+        # Aggregate queries — much faster than loading all rows
+        from sqlalchemy import func
+        agg = db.session.query(
+            func.count(KPIEntry.id).label('total'),
+            func.coalesce(func.sum(KPIEntry.picked), 0).label('picked')
+        ).first()
+        total_entries = int(agg.total or 0)
+        total_picked  = int(agg.picked or 0)
+        active_today  = db.session.query(func.count(KPIEntry.id)).filter(
+            KPIEntry.entry_date == today).scalar() or 0
+        open_windows  = PastEntryWindow.query.filter_by(is_active=True).order_by(
+            PastEntryWindow.past_date.desc()).all()
 
         return render_template("admin.html",
             rows=rows,
@@ -873,12 +878,10 @@ def export_pdf():
         }
 
         pdf_buffer = generate_visual_pdf(emp.name, payload)
-        pdf_bytes = pdf_buffer.read()
         return Response(
-            pdf_bytes,
+            pdf_buffer.getvalue(),
             mimetype="application/pdf",
-            headers={"Content-Disposition": f"attachment; filename=KRA_{emp.name}_{date.today()}.pdf",
-                     "Content-Length": str(len(pdf_bytes))}
+            headers={"Content-Disposition": f"attachment; filename=KRA_{emp.name}_{date.today()}.pdf"}
         )
     except Exception as e:
         logger.error(f"PDF export error: {e}")
@@ -909,12 +912,10 @@ def download_pdf(emp_id):
         }
 
         pdf_buffer = generate_visual_pdf(emp.name, payload)
-        pdf_bytes = pdf_buffer.read()
         return Response(
-            pdf_bytes,
+            pdf_buffer.getvalue(),
             mimetype="application/pdf",
-            headers={"Content-Disposition": f"attachment; filename=KRA_{emp.name}_{date.today()}.pdf",
-                     "Content-Length": str(len(pdf_bytes))}
+            headers={"Content-Disposition": f"attachment; filename=KRA_{emp.name}_{date.today()}.pdf"}
         )
     except Exception as e:
         logger.error(f"Download PDF error: {e}")
@@ -1016,8 +1017,6 @@ def past_entry(date_str):
             packing_done     = gi("packing_done")
             total_mins       = min(gf("total_mins"), 480)
             check_mins       = min(gf("check_mins"), 480)
-            rack_organized   = 0
-            table_clean      = 0
 
             if staff_type == "checker":
                 # checker: picked = SB Open assist, missed not used
@@ -1038,8 +1037,6 @@ def past_entry(date_str):
                 missed           = missed,
                 cs_sales_open    = cs_sales_open,
                 packing_done     = packing_done,
-                rack_organized   = rack_organized,
-                table_clean      = table_clean,
                 total_time       = round(total_mins / 60, 3),
                 checked          = checked,
                 errors_found     = errors_found,
