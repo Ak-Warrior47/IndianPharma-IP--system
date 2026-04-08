@@ -205,8 +205,8 @@ def build_analytics(entries: List[KPIEntry], staff_type: str = "picker") -> Opti
             gap_items = max(potential_items - ti, 0)
             potential_eff = round(safe_div(ti, max(potential_items, 1)) * 100, 1)
 
-        # Consistency
-        daily_accs = [e.accuracy for e in entries if e.accuracy > 0]
+        # Consistency — role-correct metric
+        daily_accs = [e.check_rate for e in entries if e.check_rate > 0] if staff_type == "checker" else [e.accuracy for e in entries if e.accuracy > 0]
         if len(daily_accs) > 1:
             mean_acc = sum(daily_accs) / len(daily_accs)
             variance = sum((a - mean_acc) ** 2 for a in daily_accs) / len(daily_accs)
@@ -220,8 +220,12 @@ def build_analytics(entries: List[KPIEntry], staff_type: str = "picker") -> Opti
             mid = len(entries) // 2
             first_half = entries[mid:]   # older (entries sorted desc)
             second_half = entries[:mid]  # newer
-            fh_acc = sum(e.accuracy for e in first_half) / len(first_half)
-            sh_acc = sum(e.accuracy for e in second_half) / len(second_half)
+            if staff_type == "checker":
+                fh_acc = sum(e.check_rate for e in first_half) / len(first_half)
+                sh_acc = sum(e.check_rate for e in second_half) / len(second_half)
+            else:
+                fh_acc = sum(e.accuracy for e in first_half) / len(first_half)
+                sh_acc = sum(e.accuracy for e in second_half) / len(second_half)
             if sh_acc > fh_acc + 2:
                 trend = "improving"
             elif sh_acc < fh_acc - 2:
@@ -497,6 +501,8 @@ def dashboard():
                     packing_done     = gi("packing_done")
                     total_mins       = min(gf("total_mins"), 480)
                     check_mins       = min(gf("check_mins"), 480)
+                    rack_organized   = 1 if request.form.get("rack_organized") == "yes" else 0
+                    table_clean      = 1 if request.form.get("table_clean") == "yes" else 0
 
                     if staff_type == "checker":
                         checked      = gi("checked")
@@ -516,6 +522,8 @@ def dashboard():
                         missed=missed,
                         cs_sales_open=cs_sales_open,
                         packing_done=packing_done,
+                        rack_organized=rack_organized,
+                        table_clean=table_clean,
                         total_time=round(total_mins / 60, 3),
                         checked=checked,
                         errors_found=errors_found,
@@ -555,9 +563,13 @@ def dashboard():
             e = next((x for x in all_entries if x.entry_date == d), None)
             trend_labels.append(d.strftime("%a %d"))
             if e:
-                t = (e.picked or 0) + (e.missed or 0)
-                acc = round((e.picked or 0) / t * 100, 1) if t > 0 else 0
-                spd = round(t / max(float(e.total_time or 0.001), 0.001), 1)
+                if staff_type == "checker":
+                    acc = e.check_rate
+                    spd = round(float(e.checked or 0) / max(float(e.check_time or 0.001), 0.001), 1)
+                else:
+                    t = (e.picked or 0) + (e.missed or 0)
+                    acc = round((e.picked or 0) / t * 100, 1) if t > 0 else 0
+                    spd = round(t / max(float(e.total_time or 0.001), 0.001), 1)
                 trend_accuracy.append(acc)
                 trend_speed.append(spd)
             else:
@@ -854,11 +866,10 @@ def export_pdf():
         }
 
         pdf_buffer = generate_visual_pdf(emp.name, payload)
-        return Response(
-            pdf_buffer.getvalue(),
-            mimetype="application/pdf",
-            headers={"Content-Disposition": f"attachment; filename=KRA_{emp.name}_{date.today()}.pdf"}
-        )
+        pdf_bytes = pdf_buffer.read()
+        return Response(pdf_bytes, mimetype="application/pdf",
+            headers={"Content-Disposition": f"attachment; filename=KRA_{emp.name}_{date.today()}.pdf",
+                     "Content-Length": str(len(pdf_bytes)), "Cache-Control": "no-cache"})
     except Exception as e:
         logger.error(f"PDF export error: {e}")
         flash("Error generating PDF report.", "danger")
@@ -888,11 +899,10 @@ def download_pdf(emp_id):
         }
 
         pdf_buffer = generate_visual_pdf(emp.name, payload)
-        return Response(
-            pdf_buffer.getvalue(),
-            mimetype="application/pdf",
-            headers={"Content-Disposition": f"attachment; filename=KRA_{emp.name}_{date.today()}.pdf"}
-        )
+        pdf_bytes = pdf_buffer.read()
+        return Response(pdf_bytes, mimetype="application/pdf",
+            headers={"Content-Disposition": f"attachment; filename=KRA_{emp.name}_{date.today()}.pdf",
+                     "Content-Length": str(len(pdf_bytes)), "Cache-Control": "no-cache"})
     except Exception as e:
         logger.error(f"Download PDF error: {e}")
         flash("Error generating PDF.", "danger")
@@ -993,6 +1003,8 @@ def past_entry(date_str):
             packing_done     = gi("packing_done")
             total_mins       = min(gf("total_mins"), 480)
             check_mins       = min(gf("check_mins"), 480)
+            rack_organized   = 1 if request.form.get("rack_organized") == "yes" else 0
+            table_clean      = 1 if request.form.get("table_clean") == "yes" else 0
 
             if staff_type == "checker":
                 # checker: picked = SB Open assist, missed not used
@@ -1013,6 +1025,8 @@ def past_entry(date_str):
                 missed           = missed,
                 cs_sales_open    = cs_sales_open,
                 packing_done     = packing_done,
+                rack_organized   = rack_organized,
+                table_clean      = table_clean,
                 total_time       = round(total_mins / 60, 3),
                 checked          = checked,
                 errors_found     = errors_found,
