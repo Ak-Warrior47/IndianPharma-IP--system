@@ -295,25 +295,34 @@ table.htable tbody tr:hover td { background: var(--bg); }
     <form method="POST" autocomplete="off">
       <div class="form-grid">
         {% if staff_type == 'checker' %}
+        <!-- LIVE TOTAL BANNER — updates as checker types -->
+        <div style="grid-column:span 2;display:flex;gap:10px;margin-bottom:4px;">
+          <div style="flex:1;background:rgba(219,234,254,0.85);border:1.5px solid rgba(29,78,216,0.25);border-radius:13px;padding:14px 18px;backdrop-filter:blur(10px);text-align:center;">
+            <div style="font-size:10px;font-weight:800;color:var(--blue);text-transform:uppercase;letter-spacing:.7px;margin-bottom:4px;">Total SB Checked</div>
+            <div style="font-size:30px;font-weight:800;color:#1e3a8a;" id="live_total_sb">0</div>
+            <div style="font-size:11px;color:var(--muted);margin-top:2px;">Normal + Urgent</div>
+          </div>
+          <div style="flex:1;background:rgba(240,253,244,0.85);border:1.5px solid rgba(22,163,74,0.25);border-radius:13px;padding:14px 18px;backdrop-filter:blur(10px);text-align:center;">
+            <div style="font-size:10px;font-weight:800;color:var(--ok);text-transform:uppercase;letter-spacing:.7px;margin-bottom:4px;">Total Items Checked</div>
+            <div style="font-size:30px;font-weight:800;color:#14532d;" id="live_total_items">0</div>
+            <div style="font-size:11px;color:var(--muted);margin-top:2px;">Normal + Urgent</div>
+          </div>
+        </div>
         <div class="field">
           <label>Sales Bill Checked (Normal)</label>
-          <input type="number" name="sales_bills_open" min="0" value="0" required>
+          <input type="number" name="sales_bills_open" id="f_sb_normal" min="0" value="0" required oninput="updateCheckerTotals()">
         </div>
         <div class="field">
           <label>SB Checked Urgent</label>
-          <input type="number" name="cs_sales_open" min="0" value="0">
+          <input type="number" name="cs_sales_open" id="f_sb_urgent" min="0" value="0" oninput="updateCheckerTotals()">
         </div>
         <div class="field">
-          <label>Item Checked</label>
-          <input type="number" name="checked" min="0" value="0" required>
+          <label>Item Checked (Normal)</label>
+          <input type="number" name="checked" id="f_item_normal" min="0" value="0" required oninput="updateCheckerTotals()">
         </div>
         <div class="field">
           <label>Urgent Item Checked</label>
-          <input type="number" name="errors_found" min="0" value="0" required>
-        </div>
-        <div class="field">
-          <label>Sales Bill Open</label>
-          <input type="number" name="picked" min="0" value="0">
+          <input type="number" name="errors_found" id="f_item_urgent" min="0" value="0" oninput="updateCheckerTotals()">
         </div>
         <div class="field">
           <label>Packing Done</label>
@@ -537,6 +546,16 @@ table.htable tbody tr:hover td { background: var(--bg); }
     }
   });
 })();
+function updateCheckerTotals(){
+  var sbN = parseInt(document.getElementById('f_sb_normal')?.value||0)||0;
+  var sbU = parseInt(document.getElementById('f_sb_urgent')?.value||0)||0;
+  var itN = parseInt(document.getElementById('f_item_normal')?.value||0)||0;
+  var itU = parseInt(document.getElementById('f_item_urgent')?.value||0)||0;
+  var tSB = document.getElementById('live_total_sb');
+  var tIT = document.getElementById('live_total_items');
+  if(tSB) tSB.textContent = sbN + sbU;
+  if(tIT) tIT.textContent = itN + itU;
+}
 function setYN(f,v){document.getElementById(f+'_val').value=v;document.getElementById(f+'_yes').classList.toggle('active',v==='yes');document.getElementById(f+'_no').classList.toggle('active',v==='no');}
 </script>
 </body>
