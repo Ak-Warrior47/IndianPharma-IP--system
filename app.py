@@ -120,12 +120,14 @@ class KPIEntry(db.Model):
 
     @property
     def check_rate(self):
+        """Clean check rate: (Item Checked - Urgent Item Checked) / Item Checked * 100"""
         if self.checked and self.checked > 0:
-            return round((self.checked - (self.errors_found or 0)) / self.checked * 100, 1)
+            return round(max(0, (self.checked - (self.errors_found or 0))) / self.checked * 100, 1)
         return 0
 
     @property
     def pick_speed(self):
+        """For pickers: items/hr. For checkers: items checked/check_time hr."""
         t = (self.picked or 0) + (self.missed or 0)
         tt = self.total_time or self.sweep or 0
         return round(t / max(tt, 0.001), 1) if tt > 0 else 0
@@ -184,7 +186,7 @@ def build_analytics(entries: List[KPIEntry], staff_type: str = "picker") -> Opti
 
         pick_acc    = round(safe_div(tp, ti) * 100, 1)
         pick_speed  = round(safe_div(ti, max(ts, 0.001)), 1)
-        check_acc   = round(safe_div(tck - ter, tck) * 100, 1) if tck > 0 else 0.0
+        check_acc   = round(safe_div(max(tck - ter, 0), tck) * 100, 1) if tck > 0 else 0.0
         error_rate  = round(safe_div(ter, tck) * 100, 1) if tck > 0 else 0.0
         ck_speed    = round(safe_div(tck, max(tct, 0.001)), 1) if tct > 0 else 0.0
         packing_eff = round(safe_div(tpk, tsb) * 100, 1) if tsb > 0 else 0
@@ -286,7 +288,7 @@ def build_analytics(entries: List[KPIEntry], staff_type: str = "picker") -> Opti
             error_rate=error_rate, ck_speed=ck_speed,
             workspace_score=workspace_score,
             potential_items=potential_items, gap_items=gap_items, potential_eff=potential_eff,
-            ttt=round(ts, 2),
+            ttt=round(tct, 2) if staff_type == "checker" else round(ts, 2),
             trend=trend, feedback=feedback
         )
     except Exception as e:
@@ -490,15 +492,22 @@ def dashboard():
                     def gi(k): return max(0, int(request.form.get(k, 0) or 0))
                     def gf(k): return max(0, float(request.form.get(k, 0) or 0))
 
-                    picked = gi("picked")
-                    missed = gi("missed")
                     sales_bills_open = gi("sales_bills_open")
-                    cs_sales_open = gi("cs_sales_open")
-                    packing_done = gi("packing_done")
-                    total_mins = min(gf("total_mins"), 480)
-                    check_mins = min(gf("check_mins"), 480)
-                    checked = gi("checked")
-                    errors_found = min(gi("errors_found"), checked)
+                    cs_sales_open    = gi("cs_sales_open")
+                    packing_done     = gi("packing_done")
+                    total_mins       = min(gf("total_mins"), 480)
+                    check_mins       = min(gf("check_mins"), 480)
+
+                    if staff_type == "checker":
+                        checked      = gi("checked")
+                        errors_found = gi("errors_found")  # Urgent Item Checked — not capped
+                        picked       = gi("picked")         # SB Open assist
+                        missed       = 0
+                    else:
+                        picked       = gi("picked")
+                        missed       = gi("missed")
+                        checked      = 0
+                        errors_found = 0
 
                     ne = KPIEntry(
                         emp_id=emp_id,
@@ -652,12 +661,12 @@ def staff_detail(emp_id):
         w_stats = build_analytics(get_period_entries(emp_id, "week"), emp.staff_type)
         m_stats = build_analytics(get_period_entries(emp_id, "month"), emp.staff_type)
 
-        # Heatmap: last 30 days
+        # Heatmap: last 30 days — use accuracy for pickers, check_rate for checkers
         heatmap = {}
         for e in entries:
             delta = (today - e.entry_date).days
             if delta <= 29:
-                heatmap[str(e.entry_date)] = e.accuracy
+                heatmap[str(e.entry_date)] = e.check_rate if emp.staff_type == "checker" else e.accuracy
 
         return render_template("staff_detail.html",
             emp=emp,
@@ -667,7 +676,8 @@ def staff_detail(emp_id):
             w_stats=w_stats,
             m_stats=m_stats,
             heatmap=heatmap,
-            today=today
+            today=today,
+            is_admin=bool(session.get("is_admin"))
         )
     except Exception as e:
         logger.error(f"Staff detail error: {e}")
@@ -978,15 +988,23 @@ def past_entry(date_str):
             def gi(k): return max(0, int(request.form.get(k, 0) or 0))
             def gf(k): return max(0, float(request.form.get(k, 0) or 0))
 
-            picked           = gi("picked")
-            missed           = gi("missed")
             sales_bills_open = gi("sales_bills_open")
             cs_sales_open    = gi("cs_sales_open")
             packing_done     = gi("packing_done")
             total_mins       = min(gf("total_mins"), 480)
             check_mins       = min(gf("check_mins"), 480)
-            checked          = gi("checked")
-            errors_found     = min(gi("errors_found"), checked)
+
+            if staff_type == "checker":
+                # checker: picked = SB Open assist, missed not used
+                checked      = gi("checked")
+                errors_found = gi("errors_found")   # Urgent Item Checked — not capped
+                picked       = gi("picked")          # SB Open assist
+                missed       = 0
+            else:
+                picked       = gi("picked")
+                missed       = gi("missed")
+                checked      = 0
+                errors_found = 0
 
             ne = KPIEntry(
                 emp_id           = emp_id,
