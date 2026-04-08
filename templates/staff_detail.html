@@ -245,6 +245,28 @@ body{font-family:'DM Sans',sans-serif;background:var(--page-bg);min-height:100vh
 
     {% if a_stats %}
     <div class="kpi-grid">
+      {% if emp.staff_type == 'checker' %}
+      <div class="kpi-card">
+        <div class="kpi-label">Clean Check Rate</div>
+        <div class="kpi-val">{{ a_stats.check_acc }}<span class="suf">%</span></div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-label">Error Rate</div>
+        <div class="kpi-val">{{ a_stats.error_rate }}<span class="suf">%</span></div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-label">Check Speed</div>
+        <div class="kpi-val">{{ a_stats.ck_speed }}<span class="suf">/hr</span></div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-label">Packing Done</div>
+        <div class="kpi-val">{{ a_stats.tpk }}</div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-label">Consistency</div>
+        <div class="kpi-val">{{ a_stats.consistency }}<span class="suf">%</span></div>
+      </div>
+      {% else %}
       <div class="kpi-card">
         <div class="kpi-label">Pick Accuracy</div>
         <div class="kpi-val">{{ a_stats.pick_acc }}<span class="suf">%</span></div>
@@ -261,12 +283,6 @@ body{font-family:'DM Sans',sans-serif;background:var(--page-bg);min-height:100vh
         <div class="kpi-label">Pick Speed</div>
         <div class="kpi-val">{{ a_stats.pick_speed }}<span class="suf">/hr</span></div>
       </div>
-      {% if emp.staff_type == 'checker' %}
-      <div class="kpi-card">
-        <div class="kpi-label">Clean Check Rate</div>
-        <div class="kpi-val">{{ a_stats.check_acc }}<span class="suf">%</span></div>
-      </div>
-      {% else %}
       <div class="kpi-card">
         <div class="kpi-label">Consistency</div>
         <div class="kpi-val">{{ a_stats.consistency }}<span class="suf">%</span></div>
@@ -390,7 +406,7 @@ body{font-family:'DM Sans',sans-serif;background:var(--page-bg);min-height:100vh
         <div class="mini-stat"><div class="mini-stat-label">SB Checked Urgent</div><div class="mini-stat-val">{{ pstats.tcs }}</div></div>
         <div class="mini-stat"><div class="mini-stat-label">Item Checked</div><div class="mini-stat-val">{{ pstats.tck }}</div></div>
         <div class="mini-stat"><div class="mini-stat-label">Urgent Item Checked</div><div class="mini-stat-val">{{ pstats.ter }}</div></div>
-        <div class="mini-stat"><div class="mini-stat-label">Sales Bill Open</div><div class="mini-stat-val">{{ pstats.tpd }}</div></div>
+        <div class="mini-stat"><div class="mini-stat-label">SB Open (assist)</div><div class="mini-stat-val">{{ pstats.tp }}</div></div>
         <div class="mini-stat"><div class="mini-stat-label">Packing Done</div><div class="mini-stat-val">{{ pstats.tpk }}</div></div>
         {# Calculated metrics #}
         <div class="mini-stat"><div class="mini-stat-label">Total SB Checked</div><div class="mini-stat-val">{{ (pstats.tsb or 0) + (pstats.tcs or 0) }}</div></div>
@@ -398,13 +414,12 @@ body{font-family:'DM Sans',sans-serif;background:var(--page-bg);min-height:100vh
         <div class="mini-stat"><div class="mini-stat-label">Clean Check Rate</div><div class="mini-stat-val">{{ pstats.check_acc }}<span class="suf">%</span></div></div>
         <div class="mini-stat"><div class="mini-stat-label">Error Rate</div><div class="mini-stat-val">{{ pstats.error_rate }}<span class="suf">%</span></div></div>
         <div class="mini-stat"><div class="mini-stat-label">Check Speed/hr</div><div class="mini-stat-val">{{ pstats.ck_speed }}</div></div>
-        <div class="mini-stat"><div class="mini-stat-label">Workspace Score</div><div class="mini-stat-val">{{ pstats.workspace_score }}<span class="suf">%</span></div></div>
         <div class="mini-stat"><div class="mini-stat-label">Consistency</div><div class="mini-stat-val">{{ pstats.consistency }}<span class="suf">%</span></div></div>
         <div class="mini-stat"><div class="mini-stat-label">Efficiency Score</div><div class="mini-stat-val">{{ pstats.eff_score }}<span class="suf">/100</span></div></div>
         <div class="mini-stat"><div class="mini-stat-label">Potential Items</div><div class="mini-stat-val">{{ pstats.potential_items }}</div></div>
         <div class="mini-stat"><div class="mini-stat-label">Potential Eff.</div><div class="mini-stat-val">{{ pstats.potential_eff }}<span class="suf">%</span></div></div>
         <div class="mini-stat"><div class="mini-stat-label">Gap Items</div><div class="mini-stat-val">{{ pstats.gap_items }}</div></div>
-        <div class="mini-stat"><div class="mini-stat-label">Total Time (hrs)</div><div class="mini-stat-val">{{ pstats.ttt }}</div></div>
+        <div class="mini-stat"><div class="mini-stat-label">Check Time (hrs)</div><div class="mini-stat-val">{{ pstats.ttt }}</div></div>
         <div class="mini-stat"><div class="mini-stat-label">Grade</div><div class="mini-stat-val" style="font-size:13px">{{ pstats.grade }}</div></div>
         {% endif %}
       </div>
@@ -426,10 +441,10 @@ body{font-family:'DM Sans',sans-serif;background:var(--page-bg);min-height:100vh
           <th>Date</th>
           {% if emp.staff_type == 'checker' %}
           <th>SB Checked</th>
-          <th>SB Checked Urgent</th>
+          <th>SB Chkd Urgent</th>
           <th>Item Checked</th>
           <th>Urgent Item Chkd</th>
-          <th>SB Open</th>
+          <th>SB Open (assist)</th>
           <th>Packing Done</th>
           <th>Total SB Chkd</th>
           <th>Total Items Chkd</th>
@@ -458,7 +473,7 @@ body{font-family:'DM Sans',sans-serif;background:var(--page-bg);min-height:100vh
           <td>{{ e.cs_sales_open }}</td>
           <td>{{ e.checked }}</td>
           <td>{{ e.errors_found }}</td>
-          <td>{{ e.bills or 0 }}</td>
+          <td>{{ e.picked }}</td>
           <td>{{ e.packing_done }}</td>
           <td>{{ (e.sales_bills_open or 0) + (e.cs_sales_open or 0) }}</td>
           <td>{{ (e.checked or 0) + (e.errors_found or 0) }}</td>
