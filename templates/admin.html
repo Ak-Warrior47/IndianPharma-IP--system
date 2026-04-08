@@ -147,7 +147,11 @@ body {
   transition: all 0.25s; box-shadow: 0 3px 10px rgba(29,78,216,0.3);
   display: inline-flex; align-items: center; gap: 6px;
 }
-.btn-add:hover { transform: translateY(-1px); box-shadow: 0 5px 16px rgba(29,78,216,0.4); }
+.btn-add:hover:not(:disabled) { transform: translateY(-1px); box-shadow: 0 5px 16px rgba(29,78,216,0.4); }
+.btn-add:disabled {
+  background: #cbd5e1; color: #94a3b8; cursor: not-allowed;
+  box-shadow: none; transform: none;
+}
 
 /* ── STAFF TABLE ── */
 .table-wrap { overflow-x: auto; }
@@ -574,8 +578,8 @@ tbody tr:hover td { background: rgba(219,234,254,0.3); }
           <tr>
             <th>Name</th><th>Type</th>
             <th>Accuracy</th><th>Speed /hr</th>
-            <th>Total Picked</th><th>Total Bills</th>
-            <th>Days Active</th><th>Grade</th>
+            <th>Items Processed</th><th>Total Bills</th>
+            <th>Days Active</th><th>Eff. Score</th><th>Grade</th>
           </tr>
         </thead>
         <tbody>
@@ -583,11 +587,18 @@ tbody tr:hover td { background: rgba(219,234,254,0.3); }
           <tr>
             <td><strong>{{ r.emp.name }}</strong></td>
             <td><span class="type-badge {% if r.emp.staff_type == 'picker' %}type-picker{% else %}type-checker{% endif %}">{{ r.emp.staff_type }}</span></td>
+            {% if r.emp.staff_type == 'checker' %}
+            <td>{{ r.stats.check_acc }}%</td>
+            <td>{{ r.stats.ck_speed }}</td>
+            <td>{{ "{:,}".format(r.stats.tck) }}</td>
+            {% else %}
             <td>{{ r.stats.pick_acc }}%</td>
             <td>{{ r.stats.pick_speed }}</td>
             <td>{{ "{:,}".format(r.stats.tp) }}</td>
+            {% endif %}
             <td>{{ "{:,}".format(r.stats.tsb) }}</td>
             <td>{{ r.stats.days }}</td>
+            <td class="score-cell">{{ r.stats.eff_score }}</td>
             <td>
               {% set g = r.stats.grade %}
               <span class="tag {% if g in ['ELITE','EXCELLENT'] %}tag-ex{% elif g in ['GOOD','PROFICIENT'] %}tag-good{% elif g in ['AVERAGE','SATISFACTORY'] %}tag-avg{% else %}tag-poor{% endif %}">{{ g }}</span>
@@ -607,7 +618,31 @@ function capName(input) {
   const pos = input.selectionStart;
   input.value = input.value.replace(/\b\w/g, c => c.toUpperCase());
   try { input.setSelectionRange(pos, pos); } catch(e){}
+  checkAddForm();
 }
+
+// Enable Save Details button only when required fields are filled
+function checkAddForm() {
+  const name  = document.getElementById('addName')?.value.trim();
+  const email = document.getElementById('addEmail')?.value.trim();
+  const pw    = document.querySelector('[name="password"]')?.value;
+  const btn   = document.getElementById('saveDetailsBtn');
+  if (!btn) return;
+  const filled = name && name.length > 0 && email && email.length > 0 && pw && pw.length >= 6;
+  btn.disabled = !filled;
+}
+
+document.addEventListener('DOMContentLoaded', function() {
+  // Wire up input listeners for add form fields
+  const fields = ['addName', 'addEmail'];
+  fields.forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.addEventListener('input', checkAddForm);
+  });
+  const pwField = document.querySelector('[name="password"]');
+  if (pwField) pwField.addEventListener('input', checkAddForm);
+  checkAddForm();
+});
 
 let addAcIdx = -1;
 function handleAddEmail(input) {
@@ -621,6 +656,7 @@ function handleAddEmail(input) {
   } else {
     list.classList.remove('show');
   }
+  checkAddForm();
 }
 function handleAddEmailKey(e) {
   const list = document.getElementById('addAcList');
@@ -637,6 +673,7 @@ function pickAddEmail(email) {
   document.getElementById('addEmail').value = email;
   document.getElementById('addAcList').classList.remove('show');
   document.querySelector('[name="password"]').focus();
+  checkAddForm();
 }
 function escHtml(s) {
   return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
