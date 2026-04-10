@@ -176,6 +176,11 @@ body {
       <div class="form-grid">
 
         {% if staff_type == 'checker' %}
+        <div class="field" style="grid-column:span 2;margin-bottom:10px;">
+          <label>★ Total Bills Received That Day</label>
+          <input type="number" name="bills_received" id="pe_bills_received" min="0" value="0" required oninput="updatePeTotals()">
+          <small>All bills given to you that day to check</small>
+        </div>
         <!-- LIVE TOTAL BANNER -->
         <div style="grid-column:span 2;display:flex;gap:10px;margin-bottom:4px;">
           <div style="flex:1;background:rgba(219,234,254,0.85);border:1.5px solid rgba(29,78,216,0.25);border-radius:13px;padding:14px 18px;backdrop-filter:blur(10px);text-align:center;">
@@ -187,6 +192,11 @@ body {
             <div style="font-size:10px;font-weight:800;color:#16a34a;text-transform:uppercase;letter-spacing:.7px;margin-bottom:4px;">Total Items Checked</div>
             <div style="font-size:30px;font-weight:800;color:#14532d;" id="pe_total_items">0</div>
             <div style="font-size:11px;color:#64748b;margin-top:2px;">Normal + Urgent</div>
+          </div>
+          <div style="flex:1;background:rgba(254,242,242,0.85);border:1.5px solid rgba(220,38,38,0.25);border-radius:13px;padding:14px 18px;backdrop-filter:blur(10px);text-align:center;">
+            <div style="font-size:10px;font-weight:800;color:#dc2626;text-transform:uppercase;letter-spacing:.7px;margin-bottom:4px;">Pending Bills</div>
+            <div style="font-size:30px;font-weight:800;color:#991b1b;" id="pe_pending">0</div>
+            <div style="font-size:11px;color:#64748b;margin-top:2px;">Received − Checked</div>
           </div>
         </div>
         <div class="field">
@@ -248,10 +258,16 @@ function updatePeTotals(){
   var sbU=parseInt(document.getElementById('pe_sb_urgent')?.value||0)||0;
   var itN=parseInt(document.getElementById('pe_item_normal')?.value||0)||0;
   var itU=parseInt(document.getElementById('pe_item_urgent')?.value||0)||0;
+  var brEl=document.getElementById('pe_bills_received');
+  var br=brEl?parseInt(brEl.value||0)||0:0;
+  var totalSB=sbN+sbU;
+  var pending=Math.max(br-totalSB,0);
   var tSB=document.getElementById('pe_total_sb');
   var tIT=document.getElementById('pe_total_items');
-  if(tSB) tSB.textContent=sbN+sbU;
+  var tPD=document.getElementById('pe_pending');
+  if(tSB) tSB.textContent=totalSB;
   if(tIT) tIT.textContent=itN+itU;
+  if(tPD){tPD.textContent=pending;tPD.style.color=pending>0?'#dc2626':'#16a34a';}
 }
 </script>
 </body>
