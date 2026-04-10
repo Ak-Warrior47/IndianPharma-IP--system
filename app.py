@@ -649,6 +649,55 @@ def admin_dashboard():
         open_windows  = PastEntryWindow.query.filter_by(is_active=True).order_by(
             PastEntryWindow.past_date.desc()).all()
 
+        # ── LEADERBOARD DATA ──────────────────────────────────────────────
+        rows_with_stats = [r for r in rows if r['stats']]
+
+        # Top 5 pickers by eff_score (all-time)
+        picker_rows = sorted(
+            [r for r in rows_with_stats if r['emp'].staff_type == 'picker'],
+            key=lambda r: r['stats']['eff_score'], reverse=True
+        )[:5]
+
+        # Top 5 checkers by eff_score (all-time)
+        checker_rows = sorted(
+            [r for r in rows_with_stats if r['emp'].staff_type == 'checker'],
+            key=lambda r: r['stats']['eff_score'], reverse=True
+        )[:5]
+
+        # Mixed top 5 — overall across both roles
+        mixed_rows = sorted(rows_with_stats, key=lambda r: r['stats']['eff_score'], reverse=True)[:5]
+
+        # ── WEEK LEADERBOARD ──────────────────────────────────────────────────
+        rows_week = [r for r in rows if r['week_stats']]
+        picker_week = sorted(
+            [r for r in rows_week if r['emp'].staff_type == 'picker'],
+            key=lambda r: r['week_stats']['eff_score'], reverse=True
+        )[:5]
+        checker_week = sorted(
+            [r for r in rows_week if r['emp'].staff_type == 'checker'],
+            key=lambda r: r['week_stats']['eff_score'], reverse=True
+        )[:5]
+        mixed_week = sorted(rows_week, key=lambda r: r['week_stats']['eff_score'], reverse=True)[:5]
+
+        # ── TEAM ANALYTICS ────────────────────────────────────────────────────
+        all_stats_list = [r['stats'] for r in rows_with_stats]
+        team_avg_eff   = round(sum(s['eff_score'] for s in all_stats_list) / len(all_stats_list), 1) if all_stats_list else 0
+        team_avg_acc   = round(sum(
+            s['check_acc'] if r['emp'].staff_type == 'checker' else s['pick_acc']
+            for r, s in [(r, r['stats']) for r in rows_with_stats]
+        ) / len(all_stats_list), 1) if all_stats_list else 0
+
+        grade_counts = {'ELITE': 0, 'PROFICIENT': 0, 'SATISFACTORY': 0, 'RE-TRAINING': 0}
+        for s in all_stats_list:
+            g = s.get('grade','RE-TRAINING')
+            if g in grade_counts: grade_counts[g] += 1
+
+        # Staff needing attention (RE-TRAINING grade)
+        needs_attention = [r for r in rows_with_stats if r['stats']['grade'] == 'RE-TRAINING']
+
+        # Improving staff (trend = improving this week)
+        improving = [r for r in rows_week if r['week_stats'].get('trend') == 'improving']
+
         return render_template("admin.html",
             rows=rows,
             total_picked=total_picked,
@@ -656,13 +705,29 @@ def admin_dashboard():
             active_today=active_today,
             emp_count=len(employees),
             today=today,
-            open_windows=open_windows
+            open_windows=open_windows,
+            picker_lb=picker_rows,
+            checker_lb=checker_rows,
+            mixed_lb=mixed_rows,
+            picker_week_lb=picker_week,
+            checker_week_lb=checker_week,
+            mixed_week_lb=mixed_week,
+            team_avg_eff=team_avg_eff,
+            team_avg_acc=team_avg_acc,
+            grade_counts=grade_counts,
+            needs_attention=needs_attention,
+            improving=improving,
         )
     except Exception as e:
         logger.error(f"Admin dashboard error: {e}")
         flash("Error loading admin dashboard.", "danger")
         return render_template("admin.html", rows=[], total_picked=0,
-                               total_entries=0, active_today=0, emp_count=0, today=date.today(), open_windows=[])
+                               total_entries=0, active_today=0, emp_count=0, today=date.today(),
+                               open_windows=[], picker_lb=[], checker_lb=[], mixed_lb=[],
+                               picker_week_lb=[], checker_week_lb=[], mixed_week_lb=[],
+                               team_avg_eff=0, team_avg_acc=0,
+                               grade_counts={'ELITE':0,'PROFICIENT':0,'SATISFACTORY':0,'RE-TRAINING':0},
+                               needs_attention=[], improving=[])
 
 
 @app.route("/staff/<int:emp_id>")
