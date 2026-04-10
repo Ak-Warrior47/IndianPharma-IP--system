@@ -19,26 +19,17 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 app = Flask(__name__)
-# Render sits behind a proxy — tell Flask to trust 1 hop
 app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1)
-
-IS_PRODUCTION = bool(os.environ.get("RENDER") or os.environ.get("DATABASE_URL"))
+IS_PRODUCTION = os.environ.get("RENDER") or os.environ.get("DATABASE_URL")
 
 app.config.update(
-    # ── Security ──────────────────────────────────────────────
-    SECRET_KEY=os.environ.get("SECRET_KEY", "pharma_ip_secret_ghost47_2024_xK9!"),
-    # ── Session cookie — Render runs HTTP internally behind HTTPS proxy ──
-    SESSION_COOKIE_SECURE=False,        # False — Render proxy handles HTTPS
+    SECRET_KEY=os.environ.get("SECRET_KEY", "pharma_secure_key_2024"),
+    SESSION_COOKIE_SECURE=False,
     SESSION_COOKIE_HTTPONLY=True,
-    SESSION_COOKIE_SAMESITE='Lax',      # Lax allows cookie on top-level redirects
-    SESSION_COOKIE_NAME='pharma_sess',  # unique name avoids stale cookie conflicts
-    SESSION_COOKIE_PATH='/',
-    SESSION_COOKIE_DOMAIN=None,         # let browser decide domain
+    SESSION_COOKIE_SAMESITE='Lax',
     PERMANENT_SESSION_LIFETIME=timedelta(hours=8),
     SESSION_REFRESH_EACH_REQUEST=False,
-    # ── URL scheme ────────────────────────────────────────────
     PREFERRED_URL_SCHEME='https',
-    # ── DB ───────────────────────────────────────────────────
     SQLALCHEMY_TRACK_MODIFICATIONS=False,
     SQLALCHEMY_ENGINE_OPTIONS={"pool_pre_ping": True, "pool_recycle": 300}
 )
@@ -331,7 +322,6 @@ def login_required(f):
 def admin_required(f):
     @wraps(f)
     def decorated(*args, **kwargs):
-        if not session.get("user_id"):  return redirect(url_for("login"))
         if not session.get("is_admin"): return redirect(url_for("dashboard"))
         return f(*args, **kwargs)
     return decorated
@@ -635,6 +625,32 @@ def admin_dashboard():
         active_today = KPIEntry.query.filter_by(entry_date=today).count()
         open_windows = PastEntryWindow.query.filter_by(is_active=True).order_by(PastEntryWindow.past_date.desc()).all()
 
+        # ── LEADERBOARD & ANALYTICS ──────────────────────────────
+        rows_with_stats = [r for r in rows if r['stats']]
+        picker_lb  = sorted([r for r in rows_with_stats if r['emp'].staff_type=='picker'],
+                             key=lambda r: r['stats']['eff_score'], reverse=True)[:5]
+        checker_lb = sorted([r for r in rows_with_stats if r['emp'].staff_type=='checker'],
+                             key=lambda r: r['stats']['eff_score'], reverse=True)[:5]
+        mixed_lb   = sorted(rows_with_stats, key=lambda r: r['stats']['eff_score'], reverse=True)[:5]
+        rows_week  = [r for r in rows if r['week_stats']]
+        picker_week_lb  = sorted([r for r in rows_week if r['emp'].staff_type=='picker'],
+                                  key=lambda r: r['week_stats']['eff_score'], reverse=True)[:5]
+        checker_week_lb = sorted([r for r in rows_week if r['emp'].staff_type=='checker'],
+                                  key=lambda r: r['week_stats']['eff_score'], reverse=True)[:5]
+        mixed_week_lb   = sorted(rows_week, key=lambda r: r['week_stats']['eff_score'], reverse=True)[:5]
+        all_s = [r['stats'] for r in rows_with_stats]
+        team_avg_eff = round(sum(s['eff_score'] for s in all_s)/len(all_s),1) if all_s else 0
+        team_avg_acc = round(sum(
+            s['check_acc'] if r['emp'].staff_type=='checker' else s['pick_acc']
+            for r,s in [(r,r['stats']) for r in rows_with_stats]
+        )/len(all_s),1) if all_s else 0
+        grade_counts = {"ELITE":0,"PROFICIENT":0,"SATISFACTORY":0,"RE-TRAINING":0}
+        for s in all_s:
+            g = s.get("grade","RE-TRAINING")
+            if g in grade_counts: grade_counts[g] += 1
+        needs_attention = [r for r in rows_with_stats if r["stats"]["grade"]=="RE-TRAINING"]
+        improving = [r for r in rows_week if r["week_stats"].get("trend")=="improving"]
+
         return render_template("admin.html",
             rows=rows,
             total_picked=total_picked,
@@ -642,13 +658,22 @@ def admin_dashboard():
             active_today=active_today,
             emp_count=len(employees),
             today=today,
-            open_windows=open_windows
+            open_windows=open_windows,
+            picker_lb=picker_lb, checker_lb=checker_lb, mixed_lb=mixed_lb,
+            picker_week_lb=picker_week_lb, checker_week_lb=checker_week_lb, mixed_week_lb=mixed_week_lb,
+            team_avg_eff=team_avg_eff, team_avg_acc=team_avg_acc,
+            grade_counts=grade_counts, needs_attention=needs_attention, improving=improving,
         )
     except Exception as e:
         logger.error(f"Admin dashboard error: {e}")
         flash("Error loading admin dashboard.", "danger")
         return render_template("admin.html", rows=[], total_picked=0,
-                               total_entries=0, active_today=0, emp_count=0, today=date.today(), open_windows=[])
+                               total_entries=0, active_today=0, emp_count=0, today=date.today(),
+                               open_windows=[], picker_lb=[], checker_lb=[], mixed_lb=[],
+                               picker_week_lb=[], checker_week_lb=[], mixed_week_lb=[],
+                               team_avg_eff=0, team_avg_acc=0,
+                               grade_counts={"ELITE":0,"PROFICIENT":0,"SATISFACTORY":0,"RE-TRAINING":0},
+                               needs_attention=[], improving=[])
 
 
 @app.route("/staff/<int:emp_id>")
