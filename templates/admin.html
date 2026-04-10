@@ -319,18 +319,6 @@ tbody tr:hover td { background: rgba(219,234,254,0.3); }
 @media (max-width: 480px) {
   .overview-grid { grid-template-columns: 1fr; }
 }
-
-/* ── LEADERBOARD TABS ── */
-.lb-tab {
-  padding: 6px 14px; border: 1px solid var(--border); border-radius: 8px;
-  font-size: 12px; font-weight: 700; font-family: inherit; cursor: pointer;
-  background: var(--bg); color: var(--muted); transition: all .2s;
-}
-.lb-tab.active { background: linear-gradient(135deg, var(--blue-dark), var(--blue)); color: #fff; border-color: transparent; }
-.lb-tab:not(.active):hover { background: var(--blue-lite); color: var(--blue); }
-@media(max-width:700px){
-  #lb-alltime-panel > div, #lb-week-panel > div { grid-template-columns: 1fr !important; }
-}
 </style>
 </head>
 <body>
@@ -464,7 +452,7 @@ tbody tr:hover td { background: rgba(219,234,254,0.3); }
         <div class="field">
           <label>Past Date</label>
           <input type="date" name="past_date" id="pastDatePicker" required
-                 max="">
+                 max="{{ today.strftime('%Y-%m-%d') }}">
         </div>
         <button type="submit" class="btn-open-win">📂 Open Entry Window</button>
       </div>
@@ -589,7 +577,7 @@ tbody tr:hover td { background: rgba(219,234,254,0.3); }
         <thead>
           <tr>
             <th>Name</th><th>Type</th>
-            <th>Score / Accuracy</th><th>Speed /hr</th>
+            <th>Accuracy</th><th>Speed /hr</th>
             <th>Items Processed</th><th>Total Bills</th>
             <th>Days Active</th><th>Eff. Score</th><th>Grade</th>
           </tr>
@@ -601,14 +589,14 @@ tbody tr:hover td { background: rgba(219,234,254,0.3); }
             <td><span class="type-badge {% if r.emp.staff_type == 'picker' %}type-picker{% else %}type-checker{% endif %}">{{ r.emp.staff_type }}</span></td>
             {% if r.emp.staff_type == 'checker' %}
             <td>{{ r.stats.eff_score }}/100</td>
-            <td>{{ r.stats.check_speed or r.stats.ck_speed }}/hr</td>
-            <td>{{ "{:,}".format(r.stats.tck_total or r.stats.tck) }}</td>
+            <td>{{ r.stats.ck_speed or r.stats.check_speed or 0 }}/hr</td>
+            <td>{{ (r.stats.tck or 0)|int }}</td>
             {% else %}
             <td>{{ r.stats.pick_acc }}%</td>
             <td>{{ r.stats.pick_speed }}</td>
-            <td>{{ "{:,}".format(r.stats.tp) }}</td>
+            <td>{{ (r.stats.tp or 0)|int }}</td>
             {% endif %}
-            <td>{{ "{:,}".format(r.stats.tsb_total if r.emp.staff_type == 'checker' else r.stats.tsb) }}</td>
+            <td>{{ (r.stats.tsb or 0)|int }}</td>
             <td>{{ r.stats.days }}</td>
             <td class="score-cell">{{ r.stats.eff_score }}</td>
             <td>
@@ -623,218 +611,9 @@ tbody tr:hover td { background: rgba(219,234,254,0.3); }
   </div>
   {% endif %}
 
-
-  <!-- ══════════ LEADERBOARD ══════════════════════════════════════════ -->
-  <div class="card" style="margin-bottom:20px;">
-    <div class="card-header">
-      <div class="card-title">🏆 Leaderboard</div>
-      <div style="display:flex;gap:8px;">
-        <button onclick="switchLB('alltime')" id="lb-alltime" class="lb-tab active">All Time</button>
-        <button onclick="switchLB('week')" id="lb-week" class="lb-tab">This Week</button>
-      </div>
-    </div>
-
-    <!-- ALL TIME LEADERBOARDS -->
-    <div id="lb-alltime-panel">
-      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px;flex-wrap:wrap;">
-
-        <!-- PICKERS TOP 5 -->
-        <div>
-          <div style="font-size:11px;font-weight:800;color:var(--blue);text-transform:uppercase;letter-spacing:.7px;margin-bottom:10px;display:flex;align-items:center;gap:6px;">📦 Top Pickers</div>
-          {% if picker_lb %}
-          {% for r in picker_lb %}
-          <div style="display:flex;align-items:center;gap:10px;padding:9px 12px;background:{% if loop.index0==0 %}rgba(255,215,0,0.12){% elif loop.index0==1 %}rgba(192,192,192,0.12){% elif loop.index0==2 %}rgba(205,127,50,0.1){% else %}rgba(238,244,255,0.5){% endif %};border:1px solid {% if loop.index0==0 %}rgba(255,215,0,0.3){% elif loop.index0==1 %}rgba(192,192,192,0.3){% elif loop.index0==2 %}rgba(205,127,50,0.2){% else %}var(--border){% endif %};border-radius:11px;margin-bottom:6px;">
-            <div style="font-size:18px;font-weight:900;color:{% if loop.index0==0 %}#ca8a04{% elif loop.index0==1 %}#94a3b8{% elif loop.index0==2 %}#92400e{% else %}var(--muted){% endif %};width:24px;text-align:center;">{% if loop.index0==0 %}🥇{% elif loop.index0==1 %}🥈{% elif loop.index0==2 %}🥉{% else %}{{ loop.index }}{% endif %}</div>
-            <div style="flex:1;min-width:0;">
-              <div style="font-size:13px;font-weight:700;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{{ r.emp.name }}</div>
-              <div style="font-size:11px;color:var(--muted);">{{ r.stats.pick_acc }}% acc · {{ r.stats.days }}d</div>
-            </div>
-            <div style="text-align:right;">
-              <div style="font-size:16px;font-weight:800;color:var(--blue);">{{ r.stats.eff_score }}</div>
-              <div style="font-size:10px;color:var(--muted);">/100</div>
-            </div>
-          </div>
-          {% endfor %}
-          {% else %}<div style="font-size:13px;color:var(--muted);padding:12px;">No picker data yet.</div>{% endif %}
-        </div>
-
-        <!-- CHECKERS TOP 5 -->
-        <div>
-          <div style="font-size:11px;font-weight:800;color:#6d28d9;text-transform:uppercase;letter-spacing:.7px;margin-bottom:10px;display:flex;align-items:center;gap:6px;">🔍 Top Checkers</div>
-          {% if checker_lb %}
-          {% for r in checker_lb %}
-          <div style="display:flex;align-items:center;gap:10px;padding:9px 12px;background:{% if loop.index0==0 %}rgba(255,215,0,0.12){% elif loop.index0==1 %}rgba(192,192,192,0.12){% elif loop.index0==2 %}rgba(205,127,50,0.1){% else %}rgba(245,243,255,0.5){% endif %};border:1px solid {% if loop.index0==0 %}rgba(255,215,0,0.3){% elif loop.index0==1 %}rgba(192,192,192,0.3){% elif loop.index0==2 %}rgba(205,127,50,0.2){% else %}rgba(167,139,250,0.2){% endif %};border-radius:11px;margin-bottom:6px;">
-            <div style="font-size:18px;font-weight:900;color:{% if loop.index0==0 %}#ca8a04{% elif loop.index0==1 %}#94a3b8{% elif loop.index0==2 %}#92400e{% else %}var(--muted){% endif %};width:24px;text-align:center;">{% if loop.index0==0 %}🥇{% elif loop.index0==1 %}🥈{% elif loop.index0==2 %}🥉{% else %}{{ loop.index }}{% endif %}</div>
-            <div style="flex:1;min-width:0;">
-              <div style="font-size:13px;font-weight:700;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{{ r.emp.name }}</div>
-              <div style="font-size:11px;color:var(--muted);">{{ r.stats.check_speed or r.stats.ck_speed }}/hr · {{ r.stats.days }}d</div>
-            </div>
-            <div style="text-align:right;">
-              <div style="font-size:16px;font-weight:800;color:#6d28d9;">{{ r.stats.eff_score }}</div>
-              <div style="font-size:10px;color:var(--muted);">/100</div>
-            </div>
-          </div>
-          {% endfor %}
-          {% else %}<div style="font-size:13px;color:var(--muted);padding:12px;">No checker data yet.</div>{% endif %}
-        </div>
-
-        <!-- MIXED TOP 5 -->
-        <div>
-          <div style="font-size:11px;font-weight:800;color:#16a34a;text-transform:uppercase;letter-spacing:.7px;margin-bottom:10px;display:flex;align-items:center;gap:6px;">⭐ Overall Top 5</div>
-          {% if mixed_lb %}
-          {% for r in mixed_lb %}
-          <div style="display:flex;align-items:center;gap:10px;padding:9px 12px;background:{% if loop.index0==0 %}rgba(255,215,0,0.12){% elif loop.index0==1 %}rgba(192,192,192,0.12){% elif loop.index0==2 %}rgba(205,127,50,0.1){% else %}rgba(240,253,244,0.5){% endif %};border:1px solid {% if loop.index0==0 %}rgba(255,215,0,0.3){% elif loop.index0==1 %}rgba(192,192,192,0.3){% elif loop.index0==2 %}rgba(205,127,50,0.2){% else %}rgba(22,163,74,0.15){% endif %};border-radius:11px;margin-bottom:6px;">
-            <div style="font-size:18px;font-weight:900;color:{% if loop.index0==0 %}#ca8a04{% elif loop.index0==1 %}#94a3b8{% elif loop.index0==2 %}#92400e{% else %}var(--muted){% endif %};width:24px;text-align:center;">{% if loop.index0==0 %}🥇{% elif loop.index0==1 %}🥈{% elif loop.index0==2 %}🥉{% else %}{{ loop.index }}{% endif %}</div>
-            <div style="flex:1;min-width:0;">
-              <div style="font-size:13px;font-weight:700;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{{ r.emp.name }}</div>
-              <div style="font-size:11px;color:var(--muted);">
-                <span style="background:{% if r.emp.staff_type=='picker' %}var(--blue-lite){% else %}#ede9fe{% endif %};color:{% if r.emp.staff_type=='picker' %}var(--blue){% else %}#6d28d9{% endif %};padding:1px 6px;border-radius:4px;font-weight:700;">{{ r.emp.staff_type }}</span>
-                · {{ r.stats.days }}d
-              </div>
-            </div>
-            <div style="text-align:right;">
-              <div style="font-size:16px;font-weight:800;color:#16a34a;">{{ r.stats.eff_score }}</div>
-              <div style="font-size:10px;color:var(--muted);">/100</div>
-            </div>
-          </div>
-          {% endfor %}
-          {% else %}<div style="font-size:13px;color:var(--muted);padding:12px;">No data yet.</div>{% endif %}
-        </div>
-
-      </div>
-    </div><!-- /alltime panel -->
-
-    <!-- WEEK LEADERBOARDS -->
-    <div id="lb-week-panel" style="display:none;">
-      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px;">
-
-        <div>
-          <div style="font-size:11px;font-weight:800;color:var(--blue);text-transform:uppercase;letter-spacing:.7px;margin-bottom:10px;">📦 Top Pickers — This Week</div>
-          {% if picker_week_lb %}
-          {% for r in picker_week_lb %}
-          <div style="display:flex;align-items:center;gap:10px;padding:9px 12px;background:{% if loop.index0==0 %}rgba(255,215,0,0.12){% else %}rgba(238,244,255,0.5){% endif %};border:1px solid {% if loop.index0==0 %}rgba(255,215,0,0.3){% else %}var(--border){% endif %};border-radius:11px;margin-bottom:6px;">
-            <div style="font-size:18px;font-weight:900;color:{% if loop.index0==0 %}#ca8a04{% elif loop.index0==1 %}#94a3b8{% elif loop.index0==2 %}#92400e{% else %}var(--muted){% endif %};width:24px;text-align:center;">{% if loop.index0==0 %}🥇{% elif loop.index0==1 %}🥈{% elif loop.index0==2 %}🥉{% else %}{{ loop.index }}{% endif %}</div>
-            <div style="flex:1;min-width:0;"><div style="font-size:13px;font-weight:700;color:var(--text);">{{ r.emp.name }}</div><div style="font-size:11px;color:var(--muted);">{{ r.week_stats.pick_acc }}% acc</div></div>
-            <div style="font-size:16px;font-weight:800;color:var(--blue);">{{ r.week_stats.eff_score }}</div>
-          </div>
-          {% endfor %}
-          {% else %}<div style="font-size:13px;color:var(--muted);padding:12px;">No picker data this week.</div>{% endif %}
-        </div>
-
-        <div>
-          <div style="font-size:11px;font-weight:800;color:#6d28d9;text-transform:uppercase;letter-spacing:.7px;margin-bottom:10px;">🔍 Top Checkers — This Week</div>
-          {% if checker_week_lb %}
-          {% for r in checker_week_lb %}
-          <div style="display:flex;align-items:center;gap:10px;padding:9px 12px;background:{% if loop.index0==0 %}rgba(255,215,0,0.12){% else %}rgba(245,243,255,0.5){% endif %};border:1px solid {% if loop.index0==0 %}rgba(255,215,0,0.3){% else %}rgba(167,139,250,0.2){% endif %};border-radius:11px;margin-bottom:6px;">
-            <div style="font-size:18px;font-weight:900;color:{% if loop.index0==0 %}#ca8a04{% elif loop.index0==1 %}#94a3b8{% elif loop.index0==2 %}#92400e{% else %}var(--muted){% endif %};width:24px;text-align:center;">{% if loop.index0==0 %}🥇{% elif loop.index0==1 %}🥈{% elif loop.index0==2 %}🥉{% else %}{{ loop.index }}{% endif %}</div>
-            <div style="flex:1;min-width:0;"><div style="font-size:13px;font-weight:700;color:var(--text);">{{ r.emp.name }}</div><div style="font-size:11px;color:var(--muted);">{{ r.week_stats.check_speed or r.week_stats.ck_speed }}/hr</div></div>
-            <div style="font-size:16px;font-weight:800;color:#6d28d9;">{{ r.week_stats.eff_score }}</div>
-          </div>
-          {% endfor %}
-          {% else %}<div style="font-size:13px;color:var(--muted);padding:12px;">No checker data this week.</div>{% endif %}
-        </div>
-
-        <div>
-          <div style="font-size:11px;font-weight:800;color:#16a34a;text-transform:uppercase;letter-spacing:.7px;margin-bottom:10px;">⭐ Overall — This Week</div>
-          {% if mixed_week_lb %}
-          {% for r in mixed_week_lb %}
-          <div style="display:flex;align-items:center;gap:10px;padding:9px 12px;background:{% if loop.index0==0 %}rgba(255,215,0,0.12){% else %}rgba(240,253,244,0.5){% endif %};border:1px solid {% if loop.index0==0 %}rgba(255,215,0,0.3){% else %}rgba(22,163,74,0.15){% endif %};border-radius:11px;margin-bottom:6px;">
-            <div style="font-size:18px;font-weight:900;color:{% if loop.index0==0 %}#ca8a04{% elif loop.index0==1 %}#94a3b8{% elif loop.index0==2 %}#92400e{% else %}var(--muted){% endif %};width:24px;text-align:center;">{% if loop.index0==0 %}🥇{% elif loop.index0==1 %}🥈{% elif loop.index0==2 %}🥉{% else %}{{ loop.index }}{% endif %}</div>
-            <div style="flex:1;min-width:0;"><div style="font-size:13px;font-weight:700;color:var(--text);">{{ r.emp.name }}</div><div style="font-size:11px;color:var(--muted);"><span style="background:{% if r.emp.staff_type=='picker' %}var(--blue-lite){% else %}#ede9fe{% endif %};color:{% if r.emp.staff_type=='picker' %}var(--blue){% else %}#6d28d9{% endif %};padding:1px 6px;border-radius:4px;font-weight:700;">{{ r.emp.staff_type }}</span></div></div>
-            <div style="font-size:16px;font-weight:800;color:#16a34a;">{{ r.week_stats.eff_score }}</div>
-          </div>
-          {% endfor %}
-          {% else %}<div style="font-size:13px;color:var(--muted);padding:12px;">No data this week.</div>{% endif %}
-        </div>
-
-      </div>
-    </div><!-- /week panel -->
-  </div>
-
-  <!-- ══════════ SMART ANALYTICS ══════════════════════════════════════ -->
-  <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:20px;">
-
-    <!-- Team Health -->
-    <div class="card">
-      <div class="card-header"><div class="card-title">📊 Team Health</div></div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:16px;">
-        <div style="background:rgba(238,244,255,0.7);border:1px solid var(--border);border-radius:12px;padding:14px;text-align:center;">
-          <div style="font-size:10px;font-weight:800;color:var(--muted);text-transform:uppercase;letter-spacing:.6px;margin-bottom:4px;">Avg Efficiency</div>
-          <div style="font-size:28px;font-weight:800;color:var(--blue);">{{ team_avg_eff }}</div>
-          <div style="font-size:11px;color:var(--muted);">/100 team avg</div>
-        </div>
-        <div style="background:rgba(238,244,255,0.7);border:1px solid var(--border);border-radius:12px;padding:14px;text-align:center;">
-          <div style="font-size:10px;font-weight:800;color:var(--muted);text-transform:uppercase;letter-spacing:.6px;margin-bottom:4px;">Avg Accuracy</div>
-          <div style="font-size:28px;font-weight:800;color:var(--blue);">{{ team_avg_acc }}%</div>
-          <div style="font-size:11px;color:var(--muted);">across all staff</div>
-        </div>
-      </div>
-      <!-- Grade distribution bars -->
-      <div style="font-size:10px;font-weight:800;color:var(--muted);text-transform:uppercase;letter-spacing:.6px;margin-bottom:10px;">Grade Distribution</div>
-      {% set total_staff = (grade_counts.ELITE + grade_counts.PROFICIENT + grade_counts.SATISFACTORY + grade_counts['RE-TRAINING']) %}
-      {% for grade, color, bg in [('ELITE','#6d28d9','rgba(109,40,217,0.12)'),('PROFICIENT','#16a34a','rgba(22,163,74,0.12)'),('SATISFACTORY','#d97706','rgba(217,119,6,0.12)'),('RE-TRAINING','#dc2626','rgba(220,38,38,0.12)')] %}
-      <div style="display:flex;align-items:center;gap:8px;margin-bottom:7px;">
-        <span style="font-size:11px;width:96px;color:var(--text);font-weight:600;">{{ grade }}</span>
-        <div style="flex:1;background:var(--border);border-radius:4px;height:8px;">
-          <div style="background:{{ color }};height:8px;border-radius:4px;width:{% if total_staff > 0 %}{{ ((grade_counts[grade] / total_staff)*100)|int }}{% else %}0{% endif %}%;transition:width .5s;"></div>
-        </div>
-        <span style="font-size:12px;font-weight:800;color:{{ color }};width:18px;text-align:right;">{{ grade_counts[grade] }}</span>
-      </div>
-      {% endfor %}
-    </div>
-
-    <!-- Recommendations -->
-    <div class="card">
-      <div class="card-header"><div class="card-title">💡 Recommendations</div></div>
-
-      {% if needs_attention %}
-      <div style="margin-bottom:14px;">
-        <div style="font-size:11px;font-weight:800;color:var(--danger);text-transform:uppercase;letter-spacing:.6px;margin-bottom:8px;">⚠️ Needs Attention (RE-TRAINING)</div>
-        {% for r in needs_attention %}
-        <div style="display:flex;align-items:center;justify-content:space-between;padding:8px 12px;background:var(--red-bg);border:1px solid #fecaca;border-radius:9px;margin-bottom:5px;">
-          <div>
-            <div style="font-size:13px;font-weight:700;color:var(--text);">{{ r.emp.name }}</div>
-            <div style="font-size:11px;color:var(--muted);">{{ r.emp.staff_type|title }} · {{ r.stats.days }} days · Score {{ r.stats.eff_score }}</div>
-          </div>
-          <a href="/staff/{{ r.emp.id }}" style="font-size:11px;font-weight:700;color:var(--danger);text-decoration:none;background:#fee2e2;padding:4px 10px;border-radius:6px;">View →</a>
-        </div>
-        {% endfor %}
-      </div>
-      {% endif %}
-
-      {% if improving %}
-      <div style="margin-bottom:14px;">
-        <div style="font-size:11px;font-weight:800;color:var(--success);text-transform:uppercase;letter-spacing:.6px;margin-bottom:8px;">📈 Improving This Week</div>
-        {% for r in improving %}
-        <div style="display:flex;align-items:center;justify-content:space-between;padding:8px 12px;background:var(--green-bg);border:1px solid #bbf7d0;border-radius:9px;margin-bottom:5px;">
-          <div>
-            <div style="font-size:13px;font-weight:700;color:var(--text);">{{ r.emp.name }}</div>
-            <div style="font-size:11px;color:var(--muted);">Week score: {{ r.week_stats.eff_score }} · {{ r.emp.staff_type|title }}</div>
-          </div>
-          <span style="font-size:11px;font-weight:700;color:var(--success);background:#dcfce7;padding:4px 10px;border-radius:6px;">↑ Trending Up</span>
-        </div>
-        {% endfor %}
-      </div>
-      {% endif %}
-
-      {% if not needs_attention and not improving %}
-      <div style="text-align:center;padding:28px 0;color:var(--muted);font-size:13px;">✅ All staff performing well this week!</div>
-      {% endif %}
-
-      <!-- Quick stats -->
-      <div style="padding-top:12px;border-top:1px solid var(--border);display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;text-align:center;">
-        <div><div style="font-size:20px;font-weight:800;color:var(--blue);">{{ active_today }}</div><div style="font-size:10px;color:var(--muted);">Active Today</div></div>
-        <div><div style="font-size:20px;font-weight:800;color:#16a34a;">{{ improving|length }}</div><div style="font-size:10px;color:var(--muted);">Improving</div></div>
-        <div><div style="font-size:20px;font-weight:800;color:var(--danger);">{{ needs_attention|length }}</div><div style="font-size:10px;color:var(--muted);">Need Help</div></div>
-      </div>
-    </div>
-
-  </div>
-
 </div><!-- /main -->
 
 <script>
-document.addEventListener('DOMContentLoaded',function(){var pk=document.getElementById('pastDatePicker');if(pk){var y=new Date();y.setDate(y.getDate()-1);pk.max=y.toISOString().split('T')[0];}});
 function capName(input) {
   const pos = input.selectionStart;
   input.value = input.value.replace(/\b\w/g, c => c.toUpperCase());
@@ -862,8 +641,6 @@ document.addEventListener('DOMContentLoaded', function() {
   });
   const pwField = document.querySelector('[name="password"]');
   if (pwField) pwField.addEventListener('input', checkAddForm);
-  const stField = document.querySelector('select[name="staff_type"]');
-  if (stField) stField.addEventListener('change', checkAddForm);
   checkAddForm();
 });
 
@@ -931,15 +708,7 @@ function filterTable() {
   });
 }
 
-
-function switchLB(tab) {
-  document.getElementById('lb-alltime-panel').style.display = tab === 'alltime' ? '' : 'none';
-  document.getElementById('lb-week-panel').style.display   = tab === 'week'    ? '' : 'none';
-  document.getElementById('lb-alltime').classList.toggle('active', tab === 'alltime');
-  document.getElementById('lb-week').classList.toggle('active',   tab === 'week');
-}
-
-if (typeof io !==  'undefined') {
+if (typeof io !== 'undefined') {
   const socket = io();
   socket.on('admin_alert', function(msg) {
     const el = document.createElement('div');
