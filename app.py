@@ -184,112 +184,125 @@ def build_analytics(entries: List[KPIEntry], staff_type: str = "picker") -> Opti
         tct  = sum(float(e.check_time or 0) for e in entries)
         days = len(entries)
 
-        pick_acc    = round(safe_div(tp, ti) * 100, 1)
-        pick_speed  = round(safe_div(ti, max(ts, 0.001)), 1)
-        check_acc   = round(safe_div(max(tck - ter, 0), tck) * 100, 1) if tck > 0 else 0.0
-        error_rate  = round(safe_div(ter, tck) * 100, 1) if tck > 0 else 0.0
-        ck_speed    = round(safe_div(tck, max(tct, 0.001)), 1) if tct > 0 else 0.0
-        packing_eff = round(safe_div(tpk, tsb) * 100, 1) if tsb > 0 else 0
-        cs_fulfilment = round(min(safe_div(tpk, tcs) * 100, 100), 1) if tcs > 0 else 0
+        # ── 9 HOUR CONSTANT — all calculations use this ──────────────
+        FIXED_HRS = 9.0
+        ts_total  = FIXED_HRS * days   # total hours = 9 × days
 
-        # Workspace score
-        workspace_score = round(safe_div(tro + ttc, 2 * days) * 100, 1) if days > 0 else 0
+        # ── CHECKER sums ──────────────────────────────────────────────
+        # checked=Items Normal, errors_found=Items Urgent, both = good work
+        tck_normal = tck   # already summed above
+        tck_urgent = ter   # already summed above
+        tck_total  = tck_normal + tck_urgent   # TOTAL items checked
 
-        # Potential / gap
+        tsb_normal = tsb   # SB Normal (already summed)
+        tsb_urgent = sum(int(e.cs_sales_open or 0) for e in entries) if staff_type == "checker" else 0
+        tsb_total  = tsb_normal + tsb_urgent
+
+        # ── PICKER calculations ────────────────────────────────────────
+        pick_acc   = round(safe_div(tp, ti) * 100, 1)
+        pick_speed = round(safe_div(ti, ts_total), 1)          # items / (9×days)
+        packing_eff   = round(safe_div(tpk, tsb_normal) * 100, 1) if tsb_normal > 0 else 0.0
+        cs_fulfilment = round(min(safe_div(tpk, tcs) * 100, 100.0), 1) if tcs > 0 else 0.0
+        workspace_score = round(safe_div(tro + ttc, 2 * days) * 100, 1) if days > 0 else 0.0
+
+        # ── CHECKER calculations ───────────────────────────────────────
+        # Speed = TOTAL items (normal + urgent) / (9hrs × days)
+        check_speed = round(safe_div(tck_total, ts_total), 1)
+        normal_pct  = round(safe_div(tck_normal, tck_total) * 100, 1) if tck_total > 0 else 0.0
+        urgent_pct  = round(safe_div(tck_urgent, tck_total) * 100, 1) if tck_total > 0 else 0.0
+        # check_acc = throughput score 0-100
+        check_acc   = round(min(safe_div(check_speed, 25.0), 1.0) * 100, 1)
+        error_rate  = urgent_pct   # display only
+        ck_speed    = check_speed  # alias
+
+        # ── POTENTIAL & GAP ───────────────────────────────────────────
         if staff_type == "checker":
-            potential_items = int(150 * tct)
-            gap_items = max(potential_items - tck, 0)
-            potential_eff = round(safe_div(tck, max(potential_items, 1)) * 100, 1)
+            potential_items = int(25.0 * ts_total)             # 25/hr × 9hr × days
+            gap_items       = max(potential_items - tck_total, 0)
+            potential_eff   = round(safe_div(tck_total, max(potential_items, 1)) * 100, 1)
         else:
-            potential_items = int(200 * ts)
-            gap_items = max(potential_items - ti, 0)
-            potential_eff = round(safe_div(ti, max(potential_items, 1)) * 100, 1)
+            potential_items = int(200.0 * ts_total)            # 200/hr × 9hr × days
+            gap_items       = max(potential_items - ti, 0)
+            potential_eff   = round(safe_div(ti, max(potential_items, 1)) * 100, 1)
 
-        # Consistency
-        daily_accs = [e.accuracy for e in entries if e.accuracy > 0]
-        if len(daily_accs) > 1:
-            mean_acc = sum(daily_accs) / len(daily_accs)
-            variance = sum((a - mean_acc) ** 2 for a in daily_accs) / len(daily_accs)
-            std_dev = variance ** 0.5
-            consistency = max(0, 100 - (std_dev * 2))
+        # ── CONSISTENCY ───────────────────────────────────────────────
+        if staff_type == "checker":
+            daily_rates = [((e.checked or 0) + (e.errors_found or 0)) / FIXED_HRS
+                           for e in entries if ((e.checked or 0) + (e.errors_found or 0)) > 0]
         else:
-            consistency = 100 if daily_accs else 0
+            daily_rates = [e.accuracy for e in entries if e.accuracy > 0]
+        if len(daily_rates) > 1:
+            mean_r   = sum(daily_rates) / len(daily_rates)
+            variance = sum((r - mean_r) ** 2 for r in daily_rates) / len(daily_rates)
+            consistency = round(max(0.0, 100.0 - (variance ** 0.5) * 2), 1)
+        else:
+            consistency = 100.0 if daily_rates else 0.0
 
-        # Trend (compare first half vs second half)
+        # ── TREND ─────────────────────────────────────────────────────
         if len(entries) >= 4:
-            mid = len(entries) // 2
-            first_half = entries[mid:]   # older (entries sorted desc)
-            second_half = entries[:mid]  # newer
-            fh_acc = sum(e.accuracy for e in first_half) / len(first_half)
-            sh_acc = sum(e.accuracy for e in second_half) / len(second_half)
-            if sh_acc > fh_acc + 2:
-                trend = "improving"
-            elif sh_acc < fh_acc - 2:
-                trend = "declining"
+            mid   = len(entries) // 2
+            older = entries[mid:]
+            newer = entries[:mid]
+            if staff_type == "checker":
+                def _spd(e): return ((e.checked or 0) + (e.errors_found or 0)) / FIXED_HRS
+                fh = sum(_spd(e) for e in older) / len(older)
+                sh = sum(_spd(e) for e in newer) / len(newer)
             else:
-                trend = "stable"
+                fh = sum(e.accuracy for e in older) / len(older)
+                sh = sum(e.accuracy for e in newer) / len(newer)
+            trend = "improving" if sh > fh + 2 else "declining" if sh < fh - 2 else "stable"
         else:
             trend = "stable"
 
-        # Efficiency score
+        # ── EFFICIENCY SCORE ──────────────────────────────────────────
         if staff_type == "picker":
             eff_score = round(
-                (pick_acc / 100) * 55 +
-                min(pick_speed / 200, 1) * 30 +
+                (pick_acc        / 100) * 55 +
+                min(pick_speed   / 200,  1.0) * 30 +
                 (workspace_score / 100) * 10 +
-                min(packing_eff / 100, 1) * 5,
-                1
-            )
+                min(packing_eff  / 100,  1.0) * 5, 1)
         else:
-            eff_score = round(
-                (check_acc / 100) * 65 +
-                min(ck_speed / 150, 1) * 25 +
-                (workspace_score / 100) * 10,
-                1
-            )
-        eff_score = min(eff_score, 100)
+            eff_score = round(min(check_speed / 25.0, 1.0) * 100, 1)
+        eff_score = min(round(eff_score, 1), 100.0)
 
-        # Grade (enhanced for staff_detail)
+        # ── GRADE ─────────────────────────────────────────────────────
         if staff_type == "picker":
-            if pick_acc >= 98 and workspace_score >= 80:
-                grade = "ELITE"
-            elif pick_acc >= 95:
-                grade = "PROFICIENT"
-            elif pick_acc >= 88:
-                grade = "SATISFACTORY"
-            else:
-                grade = "RE-TRAINING"
+            if   pick_acc >= 98 and workspace_score >= 80: grade = "ELITE"
+            elif pick_acc >= 95:                           grade = "PROFICIENT"
+            elif pick_acc >= 88:                           grade = "SATISFACTORY"
+            else:                                          grade = "RE-TRAINING"
         else:
-            if check_acc >= 97 and workspace_score >= 80:
-                grade = "ELITE"
-            elif check_acc >= 94:
-                grade = "PROFICIENT"
-            elif check_acc >= 87:
-                grade = "SATISFACTORY"
-            else:
-                grade = "RE-TRAINING"
+            if   check_speed >= 28: grade = "ELITE"
+            elif check_speed >= 22: grade = "PROFICIENT"
+            elif check_speed >= 15: grade = "SATISFACTORY"
+            else:                   grade = "RE-TRAINING"
 
-        # Feedback
         feedback_map = {
-            "ELITE": "Outstanding performance. Keep it up!",
-            "PROFICIENT": "Strong results. Minor improvements will push you to Elite.",
-            "SATISFACTORY": "Meets expectations. Focus on accuracy and workspace.",
-            "RE-TRAINING": "Performance needs attention. Please speak to your manager."
+            "ELITE":        "Outstanding performance. Keep it up!",
+            "PROFICIENT":   "Strong results. Minor improvements will push you to Elite.",
+            "SATISFACTORY": "Meets expectations. Keep pushing to reach Proficient.",
+            "RE-TRAINING":  "Performance needs attention. Please speak to your manager.",
         }
-        feedback = feedback_map.get(grade, "")
 
         return dict(
-            pick_acc=pick_acc, pick_speed=pick_speed, check_acc=check_acc,
-            eff_score=eff_score, grade=grade, days=days,
-            tp=tp, tm=tm, tck=tck, ter=ter, tsb=tsb, tpk=tpk, ts=round(ts, 2),
-            tpd=tpk, tcs=tcs, tro=tro, ttc=ttc,
+            pick_acc=pick_acc, pick_speed=pick_speed,
             packing_eff=packing_eff, cs_fulfilment=cs_fulfilment,
-            consistency=round(consistency, 1),
-            error_rate=error_rate, ck_speed=ck_speed,
             workspace_score=workspace_score,
-            potential_items=potential_items, gap_items=gap_items, potential_eff=potential_eff,
-            ttt=round(tct, 2) if staff_type == "checker" else round(ts, 2),
-            trend=trend, feedback=feedback
+            tp=tp, tm=tm, ti=ti, tcs=tcs, tro=tro, ttc=ttc,
+            check_acc=check_acc, error_rate=error_rate,
+            check_speed=check_speed, ck_speed=check_speed,
+            normal_pct=normal_pct, urgent_pct=urgent_pct,
+            tck=tck_total, tck_normal=tck_normal, tck_urgent=tck_urgent,
+            tck_total=tck_total, ter=tck_urgent,
+            tsb=tsb_normal, tsb_normal=tsb_normal,
+            tsb_urgent=tsb_urgent, tsb_total=tsb_total,
+            tpk=tpk, tpd=tpk,
+            eff_score=eff_score, grade=grade, days=days,
+            consistency=consistency, trend=trend,
+            feedback=feedback_map.get(grade, ""),
+            potential_items=potential_items, gap_items=gap_items,
+            potential_eff=potential_eff,
+            ts=round(ts_total, 2), ttt=round(ts_total, 2),
         )
     except Exception as e:
         logger.error(f"build_analytics error: {e}")
