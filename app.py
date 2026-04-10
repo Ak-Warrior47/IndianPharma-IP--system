@@ -19,16 +19,26 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 app = Flask(__name__)
-app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_port=1, x_prefix=1)
+# Render sits behind a proxy — tell Flask to trust 1 hop
+app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1)
+
+IS_PRODUCTION = bool(os.environ.get("RENDER") or os.environ.get("DATABASE_URL"))
 
 app.config.update(
-    SECRET_KEY=os.environ.get("SECRET_KEY", "pharma_secure_key_2024"),
-    # Only use Secure cookies in Production (prevents login failure on Render)
-    SESSION_COOKIE_SECURE=True if IS_PRODUCTION else False,
+    # ── Security ──────────────────────────────────────────────
+    SECRET_KEY=os.environ.get("SECRET_KEY", "pharma_ip_secret_ghost47_2024_xK9!"),
+    # ── Session cookie — Render runs HTTP internally behind HTTPS proxy ──
+    SESSION_COOKIE_SECURE=False,        # False — Render proxy handles HTTPS
     SESSION_COOKIE_HTTPONLY=True,
-    SESSION_COOKIE_SAMESITE='Lax',
-    SESSION_COOKIE_NAME='pharma_ip_sess',
+    SESSION_COOKIE_SAMESITE='Lax',      # Lax allows cookie on top-level redirects
+    SESSION_COOKIE_NAME='pharma_sess',  # unique name avoids stale cookie conflicts
+    SESSION_COOKIE_PATH='/',
+    SESSION_COOKIE_DOMAIN=None,         # let browser decide domain
     PERMANENT_SESSION_LIFETIME=timedelta(hours=8),
+    SESSION_REFRESH_EACH_REQUEST=False,
+    # ── URL scheme ────────────────────────────────────────────
+    PREFERRED_URL_SCHEME='https',
+    # ── DB ───────────────────────────────────────────────────
     SQLALCHEMY_TRACK_MODIFICATIONS=False,
     SQLALCHEMY_ENGINE_OPTIONS={"pool_pre_ping": True, "pool_recycle": 300}
 )
@@ -229,15 +239,6 @@ def build_analytics(entries: List[KPIEntry], staff_type: str = "picker") -> Opti
                 trend = "stable"
         else:
             trend = "stable"
-            # Trend (compare first half vs second half)
-        if len(entries) >= 4:
-            mid = len(entries) // 2
-            first_half = entries[mid:]   # older
-            second_half = entries[:mid]  # newer
-            
-            # Prevent empty slice errors
-            fh_acc = sum(e.accuracy for e in first_half) / len(first_half) if first_half else 0
-            sh_acc = sum(e.accuracy for e in second_half) / len(second_half) if second_half else 0
 
         # Efficiency score
         if staff_type == "picker":
@@ -330,7 +331,7 @@ def login_required(f):
 def admin_required(f):
     @wraps(f)
     def decorated(*args, **kwargs):
-        if not session.get("user_id"): return redirect(url_for("login"))
+        if not session.get("user_id"):  return redirect(url_for("login"))
         if not session.get("is_admin"): return redirect(url_for("dashboard"))
         return f(*args, **kwargs)
     return decorated
@@ -1083,32 +1084,3 @@ def server_error(e):
 
 if __name__ == "__main__":
     socketio.run(app, host="0.0.0.0", port=int(os.environ.get("PORT", 10000)))
-@app.route("/admin/delete_user/<int:emp_id>", methods=["POST"])
-@admin_required
-def admin_delete_user(emp_id):
-    try:
-        # Prevent self-deletion
-        if emp_id == session.get("user_id"):
-            flash("❌ Security Error: You cannot delete your own admin account.", "danger")
-            return redirect(url_for("admin_dashboard"))
-
-        emp = db.session.get(Employee, emp_id)
-        if emp and not emp.is_admin:
-            name = emp.name
-            db.session.delete(emp)
-            db.session.commit()
-            log_audit("delete_user", name, f"Admin {session.get('user_name')} deleted this account.")
-            flash(f"✅ User '{name}' and all associated records deleted.", "success")
-        else:
-            flash("User not found or cannot be deleted.", "warning")
-            
-    except Exception as e:
-        db.session.rollback()
-        logger.error(f"delete_user: {e}")
-        flash("System error during deletion.", "danger")
-        
-    return redirect(url_for("admin_dashboard"))
-
-# Ensure the SocketIO app runs correctly
-if __name__ == "__main__":
-    socketio.run(app, debug=not IS_PRODUCTION)
