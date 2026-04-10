@@ -552,10 +552,16 @@ function updateCheckerTotals(){
   var sbU = parseInt(document.getElementById('f_sb_urgent')?.value||0)||0;
   var itN = parseInt(document.getElementById('f_item_normal')?.value||0)||0;
   var itU = parseInt(document.getElementById('f_item_urgent')?.value||0)||0;
+  var brEl = document.querySelector('[name="bills_received"]');
+  var br  = brEl ? parseInt(brEl.value||0)||0 : 0;
+  var totalSB = sbN + sbU;
+  var pending = Math.max(br - totalSB, 0);
   var tSB = document.getElementById('live_total_sb');
   var tIT = document.getElementById('live_total_items');
-  if(tSB) tSB.textContent = sbN + sbU;
+  var tPD = document.getElementById('live_pending');
+  if(tSB) tSB.textContent = totalSB;
   if(tIT) tIT.textContent = itN + itU;
+  if(tPD){ tPD.textContent = pending; tPD.style.color = pending > 0 ? '#dc2626' : '#16a34a'; }
 }
 function setYN(f,v){document.getElementById(f+'_val').value=v;document.getElementById(f+'_yes').classList.toggle('active',v==='yes');document.getElementById(f+'_no').classList.toggle('active',v==='no');}
 </script>
