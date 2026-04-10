@@ -18,7 +18,7 @@ from werkzeug.middleware.proxy_fix import ProxyFix
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# Updated ProxyFix for better header handling
+app = Flask(__name__)
 app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_port=1, x_prefix=1)
 
 app.config.update(
