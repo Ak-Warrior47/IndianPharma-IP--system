@@ -588,15 +588,15 @@ tbody tr:hover td { background: rgba(219,234,254,0.3); }
             <td><strong>{{ r.emp.name }}</strong></td>
             <td><span class="type-badge {% if r.emp.staff_type == 'picker' %}type-picker{% else %}type-checker{% endif %}">{{ r.emp.staff_type }}</span></td>
             {% if r.emp.staff_type == 'checker' %}
-            <td>{{ r.stats.eff_score }}/100</td>
-            <td>{{ r.stats.ck_speed or r.stats.check_speed or 0 }}/hr</td>
-            <td>{{ (r.stats.tck or 0)|int }}</td>
+            <td>{{ r.stats.eff_score or 0 }}/100</td>
+            <td>{{ r.stats.ck_speed or 0 }}/hr</td>
+            <td>{{ r.stats.tck or 0 }}</td>
             {% else %}
-            <td>{{ r.stats.pick_acc }}%</td>
-            <td>{{ r.stats.pick_speed }}</td>
-            <td>{{ (r.stats.tp or 0)|int }}</td>
+            <td>{{ r.stats.pick_acc or 0 }}%</td>
+            <td>{{ r.stats.pick_speed or 0 }}</td>
+            <td>{{ r.stats.tp or 0 }}</td>
             {% endif %}
-            <td>{{ (r.stats.tsb or 0)|int }}</td>
+            <td>{{ r.stats.tsb or 0 }}</td>
             <td>{{ r.stats.days }}</td>
             <td class="score-cell">{{ r.stats.eff_score }}</td>
             <td>
