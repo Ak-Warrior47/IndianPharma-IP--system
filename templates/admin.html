@@ -589,7 +589,7 @@ tbody tr:hover td { background: rgba(219,234,254,0.3); }
         <thead>
           <tr>
             <th>Name</th><th>Type</th>
-            <th>Accuracy</th><th>Speed /hr</th>
+            <th>Score / Accuracy</th><th>Speed /hr</th>
             <th>Items Processed</th><th>Total Bills</th>
             <th>Days Active</th><th>Eff. Score</th><th>Grade</th>
           </tr>
@@ -600,15 +600,15 @@ tbody tr:hover td { background: rgba(219,234,254,0.3); }
             <td><strong>{{ r.emp.name }}</strong></td>
             <td><span class="type-badge {% if r.emp.staff_type == 'picker' %}type-picker{% else %}type-checker{% endif %}">{{ r.emp.staff_type }}</span></td>
             {% if r.emp.staff_type == 'checker' %}
-            <td>{{ r.stats.check_acc }}%</td>
-            <td>{{ r.stats.ck_speed }}</td>
-            <td>{{ "{:,}".format(r.stats.tck) }}</td>
+            <td>{{ r.stats.eff_score }}/100</td>
+            <td>{{ r.stats.check_speed or r.stats.ck_speed }}/hr</td>
+            <td>{{ "{:,}".format(r.stats.tck_total or r.stats.tck) }}</td>
             {% else %}
             <td>{{ r.stats.pick_acc }}%</td>
             <td>{{ r.stats.pick_speed }}</td>
             <td>{{ "{:,}".format(r.stats.tp) }}</td>
             {% endif %}
-            <td>{{ "{:,}".format(r.stats.tsb) }}</td>
+            <td>{{ "{:,}".format(r.stats.tsb_total if r.emp.staff_type == 'checker' else r.stats.tsb) }}</td>
             <td>{{ r.stats.days }}</td>
             <td class="score-cell">{{ r.stats.eff_score }}</td>
             <td>
@@ -667,7 +667,7 @@ tbody tr:hover td { background: rgba(219,234,254,0.3); }
             <div style="font-size:18px;font-weight:900;color:{% if loop.index0==0 %}#ca8a04{% elif loop.index0==1 %}#94a3b8{% elif loop.index0==2 %}#92400e{% else %}var(--muted){% endif %};width:24px;text-align:center;">{% if loop.index0==0 %}🥇{% elif loop.index0==1 %}🥈{% elif loop.index0==2 %}🥉{% else %}{{ loop.index }}{% endif %}</div>
             <div style="flex:1;min-width:0;">
               <div style="font-size:13px;font-weight:700;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{{ r.emp.name }}</div>
-              <div style="font-size:11px;color:var(--muted);">{{ r.stats.check_acc }}% clean · {{ r.stats.days }}d</div>
+              <div style="font-size:11px;color:var(--muted);">{{ r.stats.check_speed or r.stats.ck_speed }}/hr · {{ r.stats.days }}d</div>
             </div>
             <div style="text-align:right;">
               <div style="font-size:16px;font-weight:800;color:#6d28d9;">{{ r.stats.eff_score }}</div>
@@ -727,7 +727,7 @@ tbody tr:hover td { background: rgba(219,234,254,0.3); }
           {% for r in checker_week_lb %}
           <div style="display:flex;align-items:center;gap:10px;padding:9px 12px;background:{% if loop.index0==0 %}rgba(255,215,0,0.12){% else %}rgba(245,243,255,0.5){% endif %};border:1px solid {% if loop.index0==0 %}rgba(255,215,0,0.3){% else %}rgba(167,139,250,0.2){% endif %};border-radius:11px;margin-bottom:6px;">
             <div style="font-size:18px;font-weight:900;color:{% if loop.index0==0 %}#ca8a04{% elif loop.index0==1 %}#94a3b8{% elif loop.index0==2 %}#92400e{% else %}var(--muted){% endif %};width:24px;text-align:center;">{% if loop.index0==0 %}🥇{% elif loop.index0==1 %}🥈{% elif loop.index0==2 %}🥉{% else %}{{ loop.index }}{% endif %}</div>
-            <div style="flex:1;min-width:0;"><div style="font-size:13px;font-weight:700;color:var(--text);">{{ r.emp.name }}</div><div style="font-size:11px;color:var(--muted);">{{ r.week_stats.check_acc }}% clean</div></div>
+            <div style="flex:1;min-width:0;"><div style="font-size:13px;font-weight:700;color:var(--text);">{{ r.emp.name }}</div><div style="font-size:11px;color:var(--muted);">{{ r.week_stats.check_speed or r.week_stats.ck_speed }}/hr</div></div>
             <div style="font-size:16px;font-weight:800;color:#6d28d9;">{{ r.week_stats.eff_score }}</div>
           </div>
           {% endfor %}
