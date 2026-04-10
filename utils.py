@@ -148,12 +148,12 @@ def generate_visual_pdf(emp_name, payload):
         if stype == "picker":
             formula_lines = [
                 "Pick Accuracy (%)    = Picked / (Picked + Missed) × 100",
-                "Pick Speed (/hr)     = (Picked + Missed) / Total Time (hrs)",
+                "Pick Speed (/hr)     = (Picked + Missed) / (9 hrs × Days)",
                 "Packing Efficiency   = Packing Done / Sales Bill Packed × 100",
                 "CS Fulfilment (%)    = min(Packing Done / CS Sales Open × 100, 100)",
                 "Efficiency Score     = (Pick Acc/100)×50 + min(Speed/200,1)×30"
                                        " + (Pack Eff/100)×12 + (CS Fulfil/100)×8  [max 100]",
-                "Potential Items      = 200 × Total Time (hrs)",
+                "Potential Items      = 200 items/hr × 9 hrs × Days",
                 "Gap Items            = Potential Items − Actual Items",
                 "Consistency (%)      = max(0, 100 − std_dev(daily_acc) × 2)",
                 "GRADE: ELITE=Acc≥98%+PkgEff≥95%+CSFul≥90% | PROFICIENT=Acc≥95%+PkgEff≥85%"
@@ -162,15 +162,15 @@ def generate_visual_pdf(emp_name, payload):
         else:
             formula_lines = [
                 "Pick Accuracy (%)    = Picked / (Picked + Missed) × 100",
-                "Clean Check Rate (%) = (Checked − Errors Found) / Checked × 100",
+                "Total Items Checked  = Items Normal + Urgent Items (both = good work)",
                 "Error Rate (%)       = Errors Found / Checked × 100",
-                "Check Speed (/hr)    = Checked / Check Time (hrs)",
+                "Check Speed (/hr)    = Total Items Checked / (9 hrs × Days)",
                 "Efficiency Score     = (Clean Rate/100)×70 + min(Speed/150,1)×30  [max 100]",
-                "Potential Items      = 150 × Check Time (hrs)",
+                "Potential Items      = 25 items/hr × 9 hrs × Days",
                 "Gap Items            = Potential Items − Checked",
                 "Consistency (%)      = max(0, 100 − std_dev(daily_clean_rate) × 2)",
-                "GRADE: ELITE=CleanRate≥97%+ck≥10 | PROFICIENT=≥94% | "
-                "SATISFACTORY=≥87% | RE-TRAINING=<87%",
+                "GRADE: ELITE=Speed≥28/hr | PROFICIENT=≥22/hr | "
+                "SATISFACTORY=≥15/hr | RE-TRAINING=<15/hr",
             ]
         for line in formula_lines:
             elems.append(Paragraph(line, formula_st))
@@ -216,9 +216,9 @@ def generate_visual_pdf(emp_name, payload):
                 ["Packing Eff. %",     sv(d_s,"packing_eff","%"),  sv(w_s,"packing_eff","%"),  sv(m_s,"packing_eff","%"),  sv(all_s,"packing_eff","%")],
                 ["CS Sales Open",      sv(d_s,"tcs"),              sv(w_s,"tcs"),              sv(m_s,"tcs"),              sv(all_s,"tcs")],
                 ["CS Fulfilment %",    sv(d_s,"cs_fulfilment","%"),sv(w_s,"cs_fulfilment","%"),sv(m_s,"cs_fulfilment","%"),sv(all_s,"cs_fulfilment","%")],
-                ["Clean Check Rate",   sv(d_s,"check_acc","%"),    sv(w_s,"check_acc","%"),    sv(m_s,"check_acc","%"),    sv(all_s,"check_acc","%")],
+                ["Throughput Score",   sv(d_s,"eff_score"),        sv(w_s,"eff_score"),        sv(m_s,"eff_score"),        sv(all_s,"eff_score")],
                 ["Error Rate",         sv(d_s,"error_rate","%"),   sv(w_s,"error_rate","%"),   sv(m_s,"error_rate","%"),   sv(all_s,"error_rate","%")],
-                ["Items Checked",      sv(d_s,"tck"),              sv(w_s,"tck"),              sv(m_s,"tck"),              sv(all_s,"tck")],
+                ["Items Checked",      sv(d_s,"tck_total"),              sv(w_s,"tck_total"),              sv(m_s,"tck_total"),              sv(all_s,"tck_total")],
                 ["Errors Found",       sv(d_s,"ter"),              sv(w_s,"ter"),              sv(m_s,"ter"),              sv(all_s,"ter")],
                 ["Check Speed /hr",    sv(d_s,"ck_speed"),         sv(w_s,"ck_speed"),         sv(m_s,"ck_speed"),         sv(all_s,"ck_speed")],
                 ["Rack Organized",     sv(d_s,"tro"),              sv(w_s,"tro"),              sv(m_s,"tro"),              sv(all_s,"tro")],
