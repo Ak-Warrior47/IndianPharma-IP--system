@@ -463,8 +463,9 @@ table.htable tbody tr:hover td { background: var(--bg); }
             <td>{{ e.checked }}</td>
             <td>{{ e.errors_found }}</td>
             <td><strong>{{ (e.checked or 0)+(e.errors_found or 0) }}</strong></td>
-            {% set cacc = e.check_rate %}
-            <td><span class="tag {% if cacc >= 95 %}tag-ex{% elif cacc >= 85 %}tag-good{% elif cacc >= 70 %}tag-avg{% else %}tag-poor{% endif %}">{{ cacc }}%</span></td>
+            {% set e_tot = (e.checked or 0) + (e.errors_found or 0) %}
+            {% set cacc = ((e.checked or 0) / e_tot * 100) | round(1) if e_tot > 0 else 0 %}
+            <td><span class="tag {% if cacc >= 60 %}tag-ex{% elif cacc >= 40 %}tag-good{% else %}tag-poor{% endif %}">{{ cacc }}%</span></td>
             <td>{{ e.packing_done }}</td>
             {% else %}
             <td>{{ e.picked }}</td>
