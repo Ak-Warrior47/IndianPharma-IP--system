@@ -19,17 +19,17 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 app = Flask(__name__)
-app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_port=1, x_prefix=1)
+app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1)
 IS_PRODUCTION = os.environ.get("RENDER") or os.environ.get("DATABASE_URL")
 
 app.config.update(
     SECRET_KEY=os.environ.get("SECRET_KEY", "pharma_secure_key_2024"),
-    SESSION_COOKIE_SECURE=bool(IS_PRODUCTION),
+    SESSION_COOKIE_SECURE=False,
     SESSION_COOKIE_HTTPONLY=True,
-    SESSION_COOKIE_SAMESITE='Strict',
+    SESSION_COOKIE_SAMESITE='Lax',
     PERMANENT_SESSION_LIFETIME=timedelta(hours=8),
-    SESSION_REFRESH_EACH_REQUEST=True,
-    PREFERRED_URL_SCHEME='https' if IS_PRODUCTION else 'http',
+    SESSION_REFRESH_EACH_REQUEST=False,
+    PREFERRED_URL_SCHEME='https',
     SQLALCHEMY_TRACK_MODIFICATIONS=False,
     SQLALCHEMY_ENGINE_OPTIONS={"pool_pre_ping": True, "pool_recycle": 300}
 )
@@ -335,6 +335,7 @@ def login_required(f):
 def admin_required(f):
     @wraps(f)
     def decorated(*args, **kwargs):
+        if not session.get("user_id"): return redirect(url_for("login"))
         if not session.get("is_admin"): return redirect(url_for("dashboard"))
         return f(*args, **kwargs)
     return decorated
@@ -641,20 +642,46 @@ def admin_dashboard():
         active_today = KPIEntry.query.filter_by(entry_date=today).count()
         open_windows = PastEntryWindow.query.filter_by(is_active=True).order_by(PastEntryWindow.past_date.desc()).all()
 
+        rws = [r for r in rows if r['stats']]
+        def srt(lst, wk=False):
+            k = 'week_stats' if wk else 'stats'
+            return sorted([r for r in lst if r[k]], key=lambda r: r[k]['eff_score'], reverse=True)[:5]
+        picker_lb       = srt([r for r in rws if r['emp'].staff_type=='picker'])
+        checker_lb      = srt([r for r in rws if r['emp'].staff_type=='checker'])
+        mixed_lb        = srt(rws)
+        rw2             = [r for r in rows if r['week_stats']]
+        picker_week_lb  = srt([r for r in rw2 if r['emp'].staff_type=='picker'], wk=True)
+        checker_week_lb = srt([r for r in rw2 if r['emp'].staff_type=='checker'], wk=True)
+        mixed_week_lb   = srt(rw2, wk=True)
+        all_s = [r['stats'] for r in rws]
+        team_avg_eff = round(sum(s['eff_score'] for s in all_s)/len(all_s),1) if all_s else 0
+        team_avg_acc = round(sum(s.get('check_acc',0) if r['emp'].staff_type=='checker' else s.get('pick_acc',0) for r,s in [(r,r['stats']) for r in rws])/len(all_s),1) if all_s else 0
+        grade_counts = {"ELITE":0,"PROFICIENT":0,"SATISFACTORY":0,"RE-TRAINING":0}
+        for s in all_s:
+            g = s.get("grade","RE-TRAINING")
+            if g in grade_counts: grade_counts[g] += 1
+        needs_attention = [r for r in rws if r["stats"].get("grade")=="RE-TRAINING"]
+        improving = [r for r in rw2 if r["week_stats"].get("trend")=="improving"]
+
         return render_template("admin.html",
-            rows=rows,
-            total_picked=total_picked,
-            total_entries=total_entries,
-            active_today=active_today,
-            emp_count=len(employees),
-            today=today,
-            open_windows=open_windows
+            rows=rows, total_picked=total_picked, total_entries=total_entries,
+            active_today=active_today, emp_count=len(employees), today=today,
+            open_windows=open_windows,
+            picker_lb=picker_lb, checker_lb=checker_lb, mixed_lb=mixed_lb,
+            picker_week_lb=picker_week_lb, checker_week_lb=checker_week_lb, mixed_week_lb=mixed_week_lb,
+            team_avg_eff=team_avg_eff, team_avg_acc=team_avg_acc,
+            grade_counts=grade_counts, needs_attention=needs_attention, improving=improving,
         )
     except Exception as e:
         logger.error(f"Admin dashboard error: {e}")
         flash("Error loading admin dashboard.", "danger")
         return render_template("admin.html", rows=[], total_picked=0,
-                               total_entries=0, active_today=0, emp_count=0, today=date.today(), open_windows=[])
+                               total_entries=0, active_today=0, emp_count=0, today=date.today(),
+                               open_windows=[], picker_lb=[], checker_lb=[], mixed_lb=[],
+                               picker_week_lb=[], checker_week_lb=[], mixed_week_lb=[],
+                               team_avg_eff=0, team_avg_acc=0, improving=[],
+                               grade_counts={"ELITE":0,"PROFICIENT":0,"SATISFACTORY":0,"RE-TRAINING":0},
+                               needs_attention=[])
 
 
 @app.route("/staff/<int:emp_id>")
@@ -1088,6 +1115,26 @@ def server_error(e):
 
 
 # ─── MAIN ────────────────────────────────────────────────────────────────────
+
+@app.route("/admin/migrate_checker/<int:emp_id>")
+@admin_required
+def migrate_checker_data(emp_id):
+    try:
+        emp = db.session.get(Employee, emp_id)
+        if not emp: return jsonify(error="Not found"), 404
+        entries = KPIEntry.query.filter_by(emp_id=emp_id).all()
+        migrated = 0
+        for e in entries:
+            if (e.picked or 0) > 0 and (e.checked or 0) == 0:
+                e.checked = e.picked; e.errors_found = e.missed; e.picked = 0; e.missed = 0
+                migrated += 1
+        emp.staff_type = "checker"
+        db.session.commit()
+        return jsonify(success=True, employee=emp.name, entries_migrated=migrated)
+    except Exception as ex:
+        db.session.rollback()
+        return jsonify(error=str(ex)), 500
+
 
 if __name__ == "__main__":
     socketio.run(app, host="0.0.0.0", port=int(os.environ.get("PORT", 10000)))
