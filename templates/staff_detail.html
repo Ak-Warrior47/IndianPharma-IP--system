@@ -298,27 +298,27 @@ body{font-family:'DM Sans',sans-serif;background:var(--page-bg);min-height:100vh
     <div class="formula-title">📐 Formula Reference — How scores are calculated</div>
     <div class="formula-grid">
       {% if emp.staff_type == 'picker' %}
-      <div class="formula-row"><b>Pick Accuracy</b> = Item Picked ÷ (Item Picked + Item Missed) × 100</div>
-      <div class="formula-row"><b>Pick Speed</b> = (Item Picked + Item Missed) ÷ Total Time (hrs)</div>
+      <div class="formula-row"><b>Pick Accuracy</b> = Items Picked ÷ (Picked + Missed) × 100</div>
+      <div class="formula-row"><b>Pick Speed</b> = (Picked + Missed) ÷ (9 hrs × Days)</div>
       <div class="formula-row"><b>Packing Eff.</b> = Packing Done ÷ Sales Bill Picked × 100</div>
-      <div class="formula-row"><b>CS Fulfilment</b> = min(Packing Done ÷ CS in Sale Open × 100, 100)</div>
-      <div class="formula-row"><b>Workspace Score</b> = (Rack Organised + Table Clean Days) ÷ (2 × Days) × 100</div>
-      <div class="formula-row"><b>Efficiency Score</b> = Acc×55 + Speed×30 + Workspace×10 + Pack×5</div>
-      <div class="formula-row"><b>Potential Items</b> = 200 × Total Time (hrs)</div>
-      <div class="formula-row"><b>Consistency</b> = max(0, 100 − std_dev(daily_acc) × 2)</div>
+      <div class="formula-row"><b>CS Fulfilment</b> = min(Packing Done ÷ CS Sales Open × 100, 100)</div>
+      <div class="formula-row"><b>Workspace Score</b> = (Rack + Table Days) ÷ (2 × Days) × 100</div>
+      <div class="formula-row"><b>Efficiency Score</b> = Acc×55 + Speed×30 + Workspace×10 + Packing×5</div>
+      <div class="formula-row"><b>Potential Items</b> = 200 × 9 hrs × Days</div>
+      <div class="formula-row"><b>Consistency</b> = max(0, 100 − std_dev(daily_accuracy) × 2)</div>
       <div class="formula-row"><b>ELITE</b>: Acc≥98% + Workspace≥80%</div>
       <div class="formula-row"><b>PROFICIENT</b>: Acc≥95% · <b>SATISFACTORY</b>: Acc≥88%</div>
       {% else %}
-      <div class="formula-row"><b>Total SB Checked</b> = Sales Bill Checked + Sales Bill Checked Urgent</div>
-      <div class="formula-row"><b>Total Items Checked</b> = Item Checked + Urgent Item Checked</div>
-      <div class="formula-row"><b>Clean Check Rate</b> = (Item Checked − Urgent Item Checked) ÷ Item Checked × 100</div>
-      <div class="formula-row"><b>Error Rate</b> = Urgent Item Checked ÷ Item Checked × 100</div>
-      <div class="formula-row"><b>Check Speed</b> = Item Checked ÷ Check Time (hrs)</div>
-      <div class="formula-row"><b>Workspace Score</b> = (Rack + Table Days) ÷ (2 × Days) × 100</div>
-      <div class="formula-row"><b>Efficiency Score</b> = CleanRate×65 + Speed×25 + Workspace×10</div>
-      <div class="formula-row"><b>Potential Items</b> = 150 × Check Time (hrs)</div>
-      <div class="formula-row"><b>ELITE</b>: CleanRate≥97% + Workspace≥80%</div>
-      <div class="formula-row"><b>PROFICIENT</b>: ≥94% · <b>SATISFACTORY</b>: ≥87%</div>
+      <div class="formula-row"><b>Total SB Checked</b> = SB Normal + SB Urgent (urgent done first)</div>
+      <div class="formula-row"><b>Total Items Checked</b> = Items Normal + Urgent Items (both = good work)</div>
+      <div class="formula-row"><b>Normal %</b> = Items Normal ÷ Total Items × 100 (info only)</div>
+      <div class="formula-row"><b>Urgent %</b> = Urgent Items ÷ Total Items × 100 (info only)</div>
+      <div class="formula-row"><b>Check Speed</b> = Total Items Checked ÷ (9 hrs × Days)</div>
+      <div class="formula-row"><b>Efficiency Score</b> = min(Check Speed ÷ 25, 1) × 100</div>
+      <div class="formula-row"><b>Potential Items</b> = 25 items/hr × 9 hrs × Days</div>
+      <div class="formula-row"><b>Consistency</b> = max(0, 100 − std_dev(daily_speed) × 2)</div>
+      <div class="formula-row"><b>ELITE</b>: Speed ≥28/hr · <b>PROFICIENT</b>: ≥22/hr</div>
+      <div class="formula-row"><b>SATISFACTORY</b>: ≥15/hr · <b>RE-TRAINING</b>: &lt;15/hr</div>
       {% endif %}
     </div>
   </div>
