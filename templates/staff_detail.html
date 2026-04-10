@@ -314,11 +314,15 @@ body{font-family:'DM Sans',sans-serif;background:var(--page-bg);min-height:100vh
       <div class="formula-row"><b>Normal %</b> = Items Normal ÷ Total Items × 100 (info only)</div>
       <div class="formula-row"><b>Urgent %</b> = Urgent Items ÷ Total Items × 100 (info only)</div>
       <div class="formula-row"><b>Check Speed</b> = Total Items Checked ÷ (9 hrs × Days)</div>
-      <div class="formula-row"><b>Efficiency Score</b> = min(Check Speed ÷ 25, 1) × 100</div>
+      <div class="formula-row"><b>Pending Bills</b> = Bills Received − Total SB Checked</div>
+      <div class="formula-row"><b>Clearance Rate</b> = Total SB Checked ÷ Bills Received × 100</div>
+      <div class="formula-row"><b>Efficiency Score</b> = Speed×70 + Clearance Rate×30</div>
       <div class="formula-row"><b>Potential Items</b> = 25 items/hr × 9 hrs × Days</div>
       <div class="formula-row"><b>Consistency</b> = max(0, 100 − std_dev(daily_speed) × 2)</div>
-      <div class="formula-row"><b>ELITE</b>: Speed ≥28/hr · <b>PROFICIENT</b>: ≥22/hr</div>
-      <div class="formula-row"><b>SATISFACTORY</b>: ≥15/hr · <b>RE-TRAINING</b>: &lt;15/hr</div>
+      <div class="formula-row"><b>ELITE</b>: Speed≥28/hr + Clearance≥90%</div>
+      <div class="formula-row"><b>PROFICIENT</b>: Speed≥22/hr + Clearance≥75%</div>
+      <div class="formula-row"><b>SATISFACTORY</b>: Speed≥15/hr + Clearance≥50%</div>
+      <div class="formula-row"><b>RE-TRAINING</b>: Below Satisfactory</div>
       {% endif %}
     </div>
   </div>
@@ -403,11 +407,15 @@ body{font-family:'DM Sans',sans-serif;background:var(--page-bg);min-height:100vh
         {% else %}
         {# Checker parameters — in order #}
         <div class="mini-stat"><div class="mini-stat-label">Sales Bill Checked</div><div class="mini-stat-val">{{ pstats.tsb }}</div></div>
+        <div class="mini-stat"><div class="mini-stat-label">SB Checked Normal</div><div class="mini-stat-val">{{ pstats.tsb_normal or pstats.tsb or 0 }}</div></div>
         <div class="mini-stat"><div class="mini-stat-label">SB Checked Urgent</div><div class="mini-stat-val">{{ pstats.tcs }}</div></div>
         <div class="mini-stat"><div class="mini-stat-label">Item Checked</div><div class="mini-stat-val">{{ pstats.tck }}</div></div>
         <div class="mini-stat"><div class="mini-stat-label">Urgent Item Checked</div><div class="mini-stat-val">{{ pstats.ter }}</div></div>
         <div class="mini-stat"><div class="mini-stat-label">SB Open (assist)</div><div class="mini-stat-val">{{ pstats.tp }}</div></div>
         <div class="mini-stat"><div class="mini-stat-label">Packing Done</div><div class="mini-stat-val">{{ pstats.tpk }}</div></div>
+        <div class="mini-stat"><div class="mini-stat-label">Bills Received</div><div class="mini-stat-val">{{ pstats.tbr or 0 }}</div></div>
+        <div class="mini-stat"><div class="mini-stat-label" style="color:#dc2626">Pending Bills</div><div class="mini-stat-val" style="color:{{ '#dc2626' if (pstats.pending_bills or 0) > 0 else '#16a34a' }}">{{ pstats.pending_bills or 0 }}</div></div>
+        <div class="mini-stat"><div class="mini-stat-label">Clearance Rate</div><div class="mini-stat-val">{{ pstats.clearance_rate or 100 }}<span class="suf">%</span></div></div>
         {# Calculated metrics #}
         <div class="mini-stat"><div class="mini-stat-label">Total SB Checked</div><div class="mini-stat-val">{{ (pstats.tsb or 0) + (pstats.tcs or 0) }}</div></div>
         <div class="mini-stat"><div class="mini-stat-label">Total Items Checked</div><div class="mini-stat-val">{{ pstats.tck_total or pstats.tck or 0 }}</div></div>
@@ -448,6 +456,9 @@ body{font-family:'DM Sans',sans-serif;background:var(--page-bg);min-height:100vh
           <th>Packing Done</th>
           <th>Total SB Chkd</th>
           <th>Total Items Chkd</th>
+          <th>Bills Rcvd</th>
+          <th>Pending</th>
+          <th>Clearance%</th>
           <th>Normal %</th>
           <th>Speed/hr</th>
           {% else %}
@@ -477,6 +488,12 @@ body{font-family:'DM Sans',sans-serif;background:var(--page-bg);min-height:100vh
           <td>{{ e.packing_done }}</td>
           <td>{{ (e.sales_bills_open or 0) + (e.cs_sales_open or 0) }}</td>
           <td>{{ (e.checked or 0) + (e.errors_found or 0) }}</td>
+          <td>{{ e.bills_received or 0 }}</td>
+          {% set e_sb_checked = (e.sales_bills_open or 0)+(e.cs_sales_open or 0) %}
+          {% set e_pending = [((e.bills_received or 0) - e_sb_checked), 0]|max %}
+          {% set e_clearance = (e_sb_checked / (e.bills_received or 1) * 100)|round(1) if (e.bills_received or 0) > 0 else 100 %}
+          <td style="color:{% if e_pending > 0 %}#dc2626{% else %}#16a34a{% endif %}">{{ e_pending }}</td>
+          <td>{{ e_clearance }}%</td>
           {% set e_total = (e.checked or 0) + (e.errors_found or 0) %}
           {% set e_normal_pct = ((e.checked or 0) / e_total * 100) | round(1) if e_total > 0 else 0 %}
           {% set e_speed = (e_total / 9.0) | round(1) %}
