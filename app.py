@@ -19,17 +19,17 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 app = Flask(__name__)
-app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1)
+app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_port=1, x_prefix=1)
 IS_PRODUCTION = os.environ.get("RENDER") or os.environ.get("DATABASE_URL")
 
 app.config.update(
     SECRET_KEY=os.environ.get("SECRET_KEY", "pharma_secure_key_2024"),
-    SESSION_COOKIE_SECURE=False,
+    SESSION_COOKIE_SECURE=bool(IS_PRODUCTION),
     SESSION_COOKIE_HTTPONLY=True,
-    SESSION_COOKIE_SAMESITE='Lax',
+    SESSION_COOKIE_SAMESITE='Strict',
     PERMANENT_SESSION_LIFETIME=timedelta(hours=8),
-    SESSION_REFRESH_EACH_REQUEST=False,
-    PREFERRED_URL_SCHEME='https',
+    SESSION_REFRESH_EACH_REQUEST=True,
+    PREFERRED_URL_SCHEME='https' if IS_PRODUCTION else 'http',
     SQLALCHEMY_TRACK_MODIFICATIONS=False,
     SQLALCHEMY_ENGINE_OPTIONS={"pool_pre_ping": True, "pool_recycle": 300}
 )
@@ -89,6 +89,7 @@ class KPIEntry(db.Model):
     sweep            = db.Column(db.Float, default=0.0)
     entry_date       = db.Column(db.Date, nullable=False, index=True)
     report_sent      = db.Column(db.Boolean, default=False)
+    bills_received   = db.Column(db.Integer, default=0)  # Checker: total bills received today
 
     __table_args__ = (
         db.UniqueConstraint("emp_id", "entry_date", name="_emp_date_uc"),
@@ -120,10 +121,15 @@ class KPIEntry(db.Model):
 
     @property
     def check_rate(self):
-        """Clean check rate: (Item Checked - Urgent Item Checked) / Item Checked * 100"""
-        if self.checked and self.checked > 0:
-            return round(max(0, (self.checked - (self.errors_found or 0))) / self.checked * 100, 1)
-        return 0
+        """Normal rate = checked / (checked + errors_found) × 100"""
+        total = (self.checked or 0) + (self.errors_found or 0)
+        return round((self.checked or 0) / total * 100, 1) if total > 0 else 0.0
+
+    @property
+    def daily_speed(self):
+        """Check speed for this single entry: (checked + errors_found) / 9hrs"""
+        total = (self.checked or 0) + (self.errors_found or 0)
+        return round(total / 9.0, 1)
 
     @property
     def pick_speed(self):
@@ -183,99 +189,92 @@ def build_analytics(entries: List[KPIEntry], staff_type: str = "picker") -> Opti
         ttc  = sum(int(e.table_clean or 0) for e in entries)
         tct  = sum(float(e.check_time or 0) for e in entries)
         days = len(entries)
+        # Checker: bills received today (entered by checker)
+        tbr = sum(int(e.bills_received or 0) for e in entries) if staff_type == "checker" else 0
 
-        # ── 9 HOUR CONSTANT — all calculations use this ──────────────
-        FIXED_HRS = 9.0
-        ts_total  = FIXED_HRS * days   # total hours = 9 × days
+        FIXED_HRS   = 9.0
+        ts_total    = FIXED_HRS * days
+        tck_normal  = tck
+        tck_urgent  = ter
+        tck_total   = tck_normal + tck_urgent
+        tsb_normal  = tsb
+        tsb_urgent  = sum(int(e.cs_sales_open or 0) for e in entries) if staff_type == "checker" else 0
+        tsb_total   = tsb_normal + tsb_urgent
 
-        # ── CHECKER sums ──────────────────────────────────────────────
-        # checked=Items Normal, errors_found=Items Urgent, both = good work
-        tck_normal = tck   # already summed above
-        tck_urgent = ter   # already summed above
-        tck_total  = tck_normal + tck_urgent   # TOTAL items checked
+        # Pending bills = received - checked (checker only)
+        tsb_checked_total = tsb_normal + tsb_urgent if staff_type == "checker" else 0
+        pending_bills  = max(tbr - tsb_checked_total, 0) if tbr > 0 else 0
+        clearance_rate = round(safe_div(tsb_checked_total, tbr) * 100, 1) if tbr > 0 else 100.0
 
-        tsb_normal = tsb   # SB Normal (already summed)
-        tsb_urgent = sum(int(e.cs_sales_open or 0) for e in entries) if staff_type == "checker" else 0
-        tsb_total  = tsb_normal + tsb_urgent
-
-        # ── PICKER calculations ────────────────────────────────────────
-        pick_acc   = round(safe_div(tp, ti) * 100, 1)
-        pick_speed = round(safe_div(ti, ts_total), 1)          # items / (9×days)
-        packing_eff   = round(safe_div(tpk, tsb_normal) * 100, 1) if tsb_normal > 0 else 0.0
-        cs_fulfilment = round(min(safe_div(tpk, tcs) * 100, 100.0), 1) if tcs > 0 else 0.0
+        pick_acc        = round(safe_div(tp, ti) * 100, 1)
+        pick_speed      = round(safe_div(ti, ts_total), 1)
+        packing_eff     = round(safe_div(tpk, tsb_normal) * 100, 1) if tsb_normal > 0 else 0.0
+        cs_fulfilment   = round(min(safe_div(tpk, tcs) * 100, 100.0), 1) if tcs > 0 else 0.0
         workspace_score = round(safe_div(tro + ttc, 2 * days) * 100, 1) if days > 0 else 0.0
 
-        # ── CHECKER calculations ───────────────────────────────────────
-        # Speed = TOTAL items (normal + urgent) / (9hrs × days)
         check_speed = round(safe_div(tck_total, ts_total), 1)
         normal_pct  = round(safe_div(tck_normal, tck_total) * 100, 1) if tck_total > 0 else 0.0
         urgent_pct  = round(safe_div(tck_urgent, tck_total) * 100, 1) if tck_total > 0 else 0.0
-        # check_acc = throughput score 0-100
         check_acc   = round(min(safe_div(check_speed, 25.0), 1.0) * 100, 1)
-        error_rate  = urgent_pct   # display only
-        ck_speed    = check_speed  # alias
+        error_rate  = urgent_pct
+        ck_speed    = check_speed
 
-        # ── POTENTIAL & GAP ───────────────────────────────────────────
         if staff_type == "checker":
-            potential_items = int(25.0 * ts_total)             # 25/hr × 9hr × days
+            potential_items = int(25.0 * ts_total)
             gap_items       = max(potential_items - tck_total, 0)
             potential_eff   = round(safe_div(tck_total, max(potential_items, 1)) * 100, 1)
         else:
-            potential_items = int(200.0 * ts_total)            # 200/hr × 9hr × days
+            potential_items = int(200.0 * ts_total)
             gap_items       = max(potential_items - ti, 0)
             potential_eff   = round(safe_div(ti, max(potential_items, 1)) * 100, 1)
 
-        # ── CONSISTENCY ───────────────────────────────────────────────
         if staff_type == "checker":
-            daily_rates = [((e.checked or 0) + (e.errors_found or 0)) / FIXED_HRS
-                           for e in entries if ((e.checked or 0) + (e.errors_found or 0)) > 0]
+            daily_rates = [((e.checked or 0)+(e.errors_found or 0))/FIXED_HRS
+                           for e in entries if ((e.checked or 0)+(e.errors_found or 0))>0]
         else:
             daily_rates = [e.accuracy for e in entries if e.accuracy > 0]
         if len(daily_rates) > 1:
-            mean_r   = sum(daily_rates) / len(daily_rates)
-            variance = sum((r - mean_r) ** 2 for r in daily_rates) / len(daily_rates)
-            consistency = round(max(0.0, 100.0 - (variance ** 0.5) * 2), 1)
+            mean_r   = sum(daily_rates)/len(daily_rates)
+            variance = sum((r-mean_r)**2 for r in daily_rates)/len(daily_rates)
+            consistency = round(max(0.0, 100.0-(variance**0.5)*2), 1)
         else:
             consistency = 100.0 if daily_rates else 0.0
 
-        # ── TREND ─────────────────────────────────────────────────────
         if len(entries) >= 4:
-            mid   = len(entries) // 2
+            mid   = len(entries)//2
             older = entries[mid:]
             newer = entries[:mid]
             if staff_type == "checker":
-                def _spd(e): return ((e.checked or 0) + (e.errors_found or 0)) / FIXED_HRS
-                fh = sum(_spd(e) for e in older) / len(older)
-                sh = sum(_spd(e) for e in newer) / len(newer)
+                def _s(e): return ((e.checked or 0)+(e.errors_found or 0))/FIXED_HRS
+                fh = sum(_s(e) for e in older)/len(older)
+                sh = sum(_s(e) for e in newer)/len(newer)
             else:
-                fh = sum(e.accuracy for e in older) / len(older)
-                sh = sum(e.accuracy for e in newer) / len(newer)
-            trend = "improving" if sh > fh + 2 else "declining" if sh < fh - 2 else "stable"
+                fh = sum(e.accuracy for e in older)/len(older)
+                sh = sum(e.accuracy for e in newer)/len(newer)
+            trend = "improving" if sh>fh+2 else "declining" if sh<fh-2 else "stable"
         else:
             trend = "stable"
 
-        # ── EFFICIENCY SCORE ──────────────────────────────────────────
         if staff_type == "picker":
-            eff_score = round(
-                (pick_acc        / 100) * 55 +
-                min(pick_speed   / 200,  1.0) * 30 +
-                (workspace_score / 100) * 10 +
-                min(packing_eff  / 100,  1.0) * 5, 1)
+            eff_score = round((pick_acc/100)*55+min(pick_speed/200,1.0)*30+(workspace_score/100)*10+min(packing_eff/100,1.0)*5, 1)
         else:
-            eff_score = round(min(check_speed / 25.0, 1.0) * 100, 1)
-        eff_score = min(round(eff_score, 1), 100.0)
+            # Speed 70% + Clearance Rate 30% (pending bills penalise score)
+            speed_score     = min(safe_div(check_speed, 25.0), 1.0) * 70
+            clearance_score = (clearance_rate / 100.0) * 30
+            eff_score = round(speed_score + clearance_score, 1)
+        eff_score = min(round(eff_score,1), 100.0)
 
-        # ── GRADE ─────────────────────────────────────────────────────
         if staff_type == "picker":
-            if   pick_acc >= 98 and workspace_score >= 80: grade = "ELITE"
-            elif pick_acc >= 95:                           grade = "PROFICIENT"
-            elif pick_acc >= 88:                           grade = "SATISFACTORY"
-            else:                                          grade = "RE-TRAINING"
+            if   pick_acc>=98 and workspace_score>=80: grade="ELITE"
+            elif pick_acc>=95:                         grade="PROFICIENT"
+            elif pick_acc>=88:                         grade="SATISFACTORY"
+            else:                                      grade="RE-TRAINING"
         else:
-            if   check_speed >= 28: grade = "ELITE"
-            elif check_speed >= 22: grade = "PROFICIENT"
-            elif check_speed >= 15: grade = "SATISFACTORY"
-            else:                   grade = "RE-TRAINING"
+            # Grade: speed + clearance rate (pending bills drop grade)
+            if   check_speed>=28 and clearance_rate>=90: grade="ELITE"
+            elif check_speed>=22 and clearance_rate>=75: grade="PROFICIENT"
+            elif check_speed>=15 and clearance_rate>=50: grade="SATISFACTORY"
+            else:                                         grade="RE-TRAINING"
 
         feedback_map = {
             "ELITE":        "Outstanding performance. Keep it up!",
@@ -297,12 +296,13 @@ def build_analytics(entries: List[KPIEntry], staff_type: str = "picker") -> Opti
             tsb=tsb_normal, tsb_normal=tsb_normal,
             tsb_urgent=tsb_urgent, tsb_total=tsb_total,
             tpk=tpk, tpd=tpk,
+            tbr=tbr, pending_bills=pending_bills, clearance_rate=clearance_rate,
             eff_score=eff_score, grade=grade, days=days,
             consistency=consistency, trend=trend,
-            feedback=feedback_map.get(grade, ""),
+            feedback=feedback_map.get(grade,""),
             potential_items=potential_items, gap_items=gap_items,
             potential_eff=potential_eff,
-            ts=round(ts_total, 2), ttt=round(ts_total, 2),
+            ts=round(ts_total,2), ttt=round(ts_total,2),
         )
     except Exception as e:
         logger.error(f"build_analytics error: {e}")
@@ -335,7 +335,6 @@ def login_required(f):
 def admin_required(f):
     @wraps(f)
     def decorated(*args, **kwargs):
-        if not session.get("user_id"): return redirect(url_for("login"))
         if not session.get("is_admin"): return redirect(url_for("dashboard"))
         return f(*args, **kwargs)
     return decorated
@@ -364,7 +363,8 @@ def run_migrations():
                 ("sunday_override", "BOOLEAN DEFAULT FALSE"),
                 ("twofa_secret",    "VARCHAR(32)"),
                 ("twofa_enabled",   "BOOLEAN DEFAULT FALSE"),
-                ("created_at",      "TIMESTAMP DEFAULT CURRENT_TIMESTAMP") # Add this line!
+                ("created_at",      "TIMESTAMP DEFAULT CURRENT_TIMESTAMP"),
+                ("bills_received",   "INTEGER DEFAULT 0"),
             ]
             for col, col_type in cols_to_add:
                 try:
@@ -513,10 +513,11 @@ def dashboard():
                     check_mins       = min(gf("check_mins"), 480)
 
                     if staff_type == "checker":
-                        checked      = gi("checked")
-                        errors_found = gi("errors_found")  # Urgent Item Checked — not capped
-                        picked       = gi("picked")         # SB Open assist
-                        missed       = 0
+                        checked        = gi("checked")
+                        errors_found   = gi("errors_found")
+                        picked         = gi("picked")
+                        missed         = 0
+                        bills_received = gi("bills_received")
                     else:
                         picked       = gi("picked")
                         missed       = gi("missed")
@@ -534,6 +535,7 @@ def dashboard():
                         checked=checked,
                         errors_found=errors_found,
                         check_time=round(check_mins / 60, 3),
+                        bills_received=bills_received if staff_type=="checker" else 0,
                         entry_date=today
                     )
                     db.session.add(ne)
@@ -639,51 +641,20 @@ def admin_dashboard():
         active_today = KPIEntry.query.filter_by(entry_date=today).count()
         open_windows = PastEntryWindow.query.filter_by(is_active=True).order_by(PastEntryWindow.past_date.desc()).all()
 
-        # Leaderboard & analytics
-        rws = [r for r in rows if r['stats']]
-        def srt(lst, key='eff_score', wk=False):
-            k = 'week_stats' if wk else 'stats'
-            return sorted([r for r in lst if r[k]], key=lambda r: r[k][key], reverse=True)[:5]
-        picker_lb       = srt([r for r in rws if r['emp'].staff_type=='picker'])
-        checker_lb      = srt([r for r in rws if r['emp'].staff_type=='checker'])
-        mixed_lb        = srt(rws)
-        rw2 = [r for r in rows if r['week_stats']]
-        picker_week_lb  = srt([r for r in rw2 if r['emp'].staff_type=='picker'], wk=True)
-        checker_week_lb = srt([r for r in rw2 if r['emp'].staff_type=='checker'], wk=True)
-        mixed_week_lb   = srt(rw2, wk=True)
-        all_s = [r['stats'] for r in rws]
-        team_avg_eff = round(sum(s['eff_score'] for s in all_s)/len(all_s),1) if all_s else 0
-        team_avg_acc = round(sum(
-            s.get('check_acc',0) if r['emp'].staff_type=='checker' else s.get('pick_acc',0)
-            for r,s in [(r,r['stats']) for r in rws]
-        )/len(all_s),1) if all_s else 0
-        grade_counts = {"ELITE":0,"PROFICIENT":0,"SATISFACTORY":0,"RE-TRAINING":0}
-        for s in all_s:
-            g = s.get("grade","RE-TRAINING")
-            if g in grade_counts: grade_counts[g] += 1
-        needs_attention = [r for r in rws if r["stats"].get("grade")=="RE-TRAINING"]
-        improving = [r for r in rw2 if r["week_stats"].get("trend")=="improving"]
-
         return render_template("admin.html",
-            rows=rows, total_picked=total_picked, total_entries=total_entries,
-            active_today=active_today, emp_count=len(employees), today=today,
-            open_windows=open_windows,
-            picker_lb=picker_lb, checker_lb=checker_lb, mixed_lb=mixed_lb,
-            picker_week_lb=picker_week_lb, checker_week_lb=checker_week_lb,
-            mixed_week_lb=mixed_week_lb, team_avg_eff=team_avg_eff,
-            team_avg_acc=team_avg_acc, grade_counts=grade_counts,
-            needs_attention=needs_attention, improving=improving,
+            rows=rows,
+            total_picked=total_picked,
+            total_entries=total_entries,
+            active_today=active_today,
+            emp_count=len(employees),
+            today=today,
+            open_windows=open_windows
         )
     except Exception as e:
         logger.error(f"Admin dashboard error: {e}")
         flash("Error loading admin dashboard.", "danger")
         return render_template("admin.html", rows=[], total_picked=0,
-            total_entries=0, active_today=0, emp_count=0, today=date.today(),
-            open_windows=[], picker_lb=[], checker_lb=[], mixed_lb=[],
-            picker_week_lb=[], checker_week_lb=[], mixed_week_lb=[],
-            team_avg_eff=0, team_avg_acc=0, improving=[],
-            grade_counts={"ELITE":0,"PROFICIENT":0,"SATISFACTORY":0,"RE-TRAINING":0},
-            needs_attention=[])
+                               total_entries=0, active_today=0, emp_count=0, today=date.today(), open_windows=[])
 
 
 @app.route("/staff/<int:emp_id>")
@@ -1040,11 +1011,11 @@ def past_entry(date_str):
             check_mins       = min(gf("check_mins"), 480)
 
             if staff_type == "checker":
-                # checker: picked = SB Open assist, missed not used
-                checked      = gi("checked")
-                errors_found = gi("errors_found")   # Urgent Item Checked — not capped
-                picked       = gi("picked")          # SB Open assist
-                missed       = 0
+                checked        = gi("checked")
+                errors_found   = gi("errors_found")
+                picked         = gi("picked")
+                missed         = 0
+                bills_received = gi("bills_received")
             else:
                 picked       = gi("picked")
                 missed       = gi("missed")
@@ -1062,6 +1033,7 @@ def past_entry(date_str):
                 checked          = checked,
                 errors_found     = errors_found,
                 check_time       = round(check_mins / 60, 3),
+                bills_received   = bills_received if staff_type=="checker" else 0,
                 entry_date       = past_date
             )
             db.session.add(ne)
@@ -1116,49 +1088,6 @@ def server_error(e):
 
 
 # ─── MAIN ────────────────────────────────────────────────────────────────────
-
-
-@app.route("/admin/migrate_checker/<int:emp_id>")
-@admin_required
-def migrate_checker_data(emp_id):
-    """One-time route: migrate picker fields → checker fields for a staff member.
-    Use when staff was entered as picker but should be checker.
-    Visit: /admin/migrate_checker/<emp_id>
-    Delete this route after use.
-    """
-    try:
-        emp = db.session.get(Employee, emp_id)
-        if not emp:
-            return jsonify(error="Employee not found"), 404
-
-        entries = KPIEntry.query.filter_by(emp_id=emp_id).all()
-        migrated = 0
-        for e in entries:
-            if (e.picked or 0) > 0 and (e.checked or 0) == 0:
-                # Move picker data → checker fields
-                e.checked      = e.picked        # Items Checked Normal
-                e.errors_found = e.missed         # Items Checked Urgent
-                e.sales_bills_open = e.sales_bills_open  # SB Normal (stays)
-                e.picked  = 0
-                e.missed  = 0
-                migrated += 1
-
-        # Set staff_type to checker
-        emp.staff_type = "checker"
-        db.session.commit()
-
-        return jsonify(
-            success=True,
-            employee=emp.name,
-            staff_type=emp.staff_type,
-            entries_migrated=migrated,
-            message=f"✅ Migrated {migrated} entries for {emp.name} to checker format. DELETE THIS ROUTE NOW."
-        )
-    except Exception as e:
-        db.session.rollback()
-        logger.error(f"Migration error: {e}")
-        return jsonify(error=str(e)), 500
-
 
 if __name__ == "__main__":
     socketio.run(app, host="0.0.0.0", port=int(os.environ.get("PORT", 10000)))
