@@ -322,6 +322,7 @@ def login_required(f):
 def admin_required(f):
     @wraps(f)
     def decorated(*args, **kwargs):
+        if not session.get("user_id"): return redirect(url_for("login"))
         if not session.get("is_admin"): return redirect(url_for("dashboard"))
         return f(*args, **kwargs)
     return decorated
@@ -625,55 +626,51 @@ def admin_dashboard():
         active_today = KPIEntry.query.filter_by(entry_date=today).count()
         open_windows = PastEntryWindow.query.filter_by(is_active=True).order_by(PastEntryWindow.past_date.desc()).all()
 
-        # ── LEADERBOARD & ANALYTICS ──────────────────────────────
-        rows_with_stats = [r for r in rows if r['stats']]
-        picker_lb  = sorted([r for r in rows_with_stats if r['emp'].staff_type=='picker'],
-                             key=lambda r: r['stats']['eff_score'], reverse=True)[:5]
-        checker_lb = sorted([r for r in rows_with_stats if r['emp'].staff_type=='checker'],
-                             key=lambda r: r['stats']['eff_score'], reverse=True)[:5]
-        mixed_lb   = sorted(rows_with_stats, key=lambda r: r['stats']['eff_score'], reverse=True)[:5]
-        rows_week  = [r for r in rows if r['week_stats']]
-        picker_week_lb  = sorted([r for r in rows_week if r['emp'].staff_type=='picker'],
-                                  key=lambda r: r['week_stats']['eff_score'], reverse=True)[:5]
-        checker_week_lb = sorted([r for r in rows_week if r['emp'].staff_type=='checker'],
-                                  key=lambda r: r['week_stats']['eff_score'], reverse=True)[:5]
-        mixed_week_lb   = sorted(rows_week, key=lambda r: r['week_stats']['eff_score'], reverse=True)[:5]
-        all_s = [r['stats'] for r in rows_with_stats]
+        # Leaderboard & analytics
+        rws = [r for r in rows if r['stats']]
+        def srt(lst, key='eff_score', wk=False):
+            k = 'week_stats' if wk else 'stats'
+            return sorted([r for r in lst if r[k]], key=lambda r: r[k][key], reverse=True)[:5]
+        picker_lb       = srt([r for r in rws if r['emp'].staff_type=='picker'])
+        checker_lb      = srt([r for r in rws if r['emp'].staff_type=='checker'])
+        mixed_lb        = srt(rws)
+        rw2 = [r for r in rows if r['week_stats']]
+        picker_week_lb  = srt([r for r in rw2 if r['emp'].staff_type=='picker'], wk=True)
+        checker_week_lb = srt([r for r in rw2 if r['emp'].staff_type=='checker'], wk=True)
+        mixed_week_lb   = srt(rw2, wk=True)
+        all_s = [r['stats'] for r in rws]
         team_avg_eff = round(sum(s['eff_score'] for s in all_s)/len(all_s),1) if all_s else 0
         team_avg_acc = round(sum(
-            s['check_acc'] if r['emp'].staff_type=='checker' else s['pick_acc']
-            for r,s in [(r,r['stats']) for r in rows_with_stats]
+            s.get('check_acc',0) if r['emp'].staff_type=='checker' else s.get('pick_acc',0)
+            for r,s in [(r,r['stats']) for r in rws]
         )/len(all_s),1) if all_s else 0
         grade_counts = {"ELITE":0,"PROFICIENT":0,"SATISFACTORY":0,"RE-TRAINING":0}
         for s in all_s:
             g = s.get("grade","RE-TRAINING")
             if g in grade_counts: grade_counts[g] += 1
-        needs_attention = [r for r in rows_with_stats if r["stats"]["grade"]=="RE-TRAINING"]
-        improving = [r for r in rows_week if r["week_stats"].get("trend")=="improving"]
+        needs_attention = [r for r in rws if r["stats"].get("grade")=="RE-TRAINING"]
+        improving = [r for r in rw2 if r["week_stats"].get("trend")=="improving"]
 
         return render_template("admin.html",
-            rows=rows,
-            total_picked=total_picked,
-            total_entries=total_entries,
-            active_today=active_today,
-            emp_count=len(employees),
-            today=today,
+            rows=rows, total_picked=total_picked, total_entries=total_entries,
+            active_today=active_today, emp_count=len(employees), today=today,
             open_windows=open_windows,
             picker_lb=picker_lb, checker_lb=checker_lb, mixed_lb=mixed_lb,
-            picker_week_lb=picker_week_lb, checker_week_lb=checker_week_lb, mixed_week_lb=mixed_week_lb,
-            team_avg_eff=team_avg_eff, team_avg_acc=team_avg_acc,
-            grade_counts=grade_counts, needs_attention=needs_attention, improving=improving,
+            picker_week_lb=picker_week_lb, checker_week_lb=checker_week_lb,
+            mixed_week_lb=mixed_week_lb, team_avg_eff=team_avg_eff,
+            team_avg_acc=team_avg_acc, grade_counts=grade_counts,
+            needs_attention=needs_attention, improving=improving,
         )
     except Exception as e:
         logger.error(f"Admin dashboard error: {e}")
         flash("Error loading admin dashboard.", "danger")
         return render_template("admin.html", rows=[], total_picked=0,
-                               total_entries=0, active_today=0, emp_count=0, today=date.today(),
-                               open_windows=[], picker_lb=[], checker_lb=[], mixed_lb=[],
-                               picker_week_lb=[], checker_week_lb=[], mixed_week_lb=[],
-                               team_avg_eff=0, team_avg_acc=0,
-                               grade_counts={"ELITE":0,"PROFICIENT":0,"SATISFACTORY":0,"RE-TRAINING":0},
-                               needs_attention=[], improving=[])
+            total_entries=0, active_today=0, emp_count=0, today=date.today(),
+            open_windows=[], picker_lb=[], checker_lb=[], mixed_lb=[],
+            picker_week_lb=[], checker_week_lb=[], mixed_week_lb=[],
+            team_avg_eff=0, team_avg_acc=0, improving=[],
+            grade_counts={"ELITE":0,"PROFICIENT":0,"SATISFACTORY":0,"RE-TRAINING":0},
+            needs_attention=[])
 
 
 @app.route("/staff/<int:emp_id>")
@@ -1106,6 +1103,49 @@ def server_error(e):
 
 
 # ─── MAIN ────────────────────────────────────────────────────────────────────
+
+
+@app.route("/admin/migrate_checker/<int:emp_id>")
+@admin_required
+def migrate_checker_data(emp_id):
+    """One-time route: migrate picker fields → checker fields for a staff member.
+    Use when staff was entered as picker but should be checker.
+    Visit: /admin/migrate_checker/<emp_id>
+    Delete this route after use.
+    """
+    try:
+        emp = db.session.get(Employee, emp_id)
+        if not emp:
+            return jsonify(error="Employee not found"), 404
+
+        entries = KPIEntry.query.filter_by(emp_id=emp_id).all()
+        migrated = 0
+        for e in entries:
+            if (e.picked or 0) > 0 and (e.checked or 0) == 0:
+                # Move picker data → checker fields
+                e.checked      = e.picked        # Items Checked Normal
+                e.errors_found = e.missed         # Items Checked Urgent
+                e.sales_bills_open = e.sales_bills_open  # SB Normal (stays)
+                e.picked  = 0
+                e.missed  = 0
+                migrated += 1
+
+        # Set staff_type to checker
+        emp.staff_type = "checker"
+        db.session.commit()
+
+        return jsonify(
+            success=True,
+            employee=emp.name,
+            staff_type=emp.staff_type,
+            entries_migrated=migrated,
+            message=f"✅ Migrated {migrated} entries for {emp.name} to checker format. DELETE THIS ROUTE NOW."
+        )
+    except Exception as e:
+        db.session.rollback()
+        logger.error(f"Migration error: {e}")
+        return jsonify(error=str(e)), 500
+
 
 if __name__ == "__main__":
     socketio.run(app, host="0.0.0.0", port=int(os.environ.get("PORT", 10000)))
