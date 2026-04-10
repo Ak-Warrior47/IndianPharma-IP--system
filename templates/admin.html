@@ -1,724 +1,1151 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Admin | Pharma IP System</title>
-<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&family=DM+Serif+Display&display=swap" rel="stylesheet">
-<script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.2/socket.io.min.js"></script>
-<style>
-*, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+import eventlet
+eventlet.monkey_patch()
 
-:root {
-  --blue:      #1d4ed8;
-  --blue-dark: #1e3a8a;
-  --blue-lite: #dbeafe;
-  --blue-mid:  #bfdbfe;
-  --text:      #0f172a;
-  --muted:     #64748b;
-  --border:    #c7d9f5;
-  --bg:        #eef4ff;
-  --page-bg:   #e8f0fe;
-  --white:     #ffffff;
-  --success:   #16a34a;
-  --danger:    #dc2626;
-  --warn:      #d97706;
-  --green-bg:  #f0fdf4;
-  --red-bg:    #fef2f2;
-  --orange-bg: #fff7ed;
-}
+import os
+import logging
+import io
+import csv
+from datetime import date, timedelta, datetime
+from functools import wraps
+from typing import List, Optional, Dict, Any
 
-body {
-  font-family: 'DM Sans', sans-serif;
-  background: var(--page-bg);
-  min-height: 100vh;
-  color: var(--text);
-}
+from flask import Flask, render_template, request, redirect, url_for, flash, session, Response, jsonify
+from flask_sqlalchemy import SQLAlchemy
+from flask_socketio import SocketIO, emit
+from werkzeug.security import generate_password_hash, check_password_hash
+from werkzeug.middleware.proxy_fix import ProxyFix
 
-/* ── NAV ── */
-.nav {
-  position: sticky; top: 0; z-index: 200;
-  background: rgba(255,255,255,0.9);
-  backdrop-filter: blur(14px);
-  border-bottom: 1px solid var(--border);
-  padding: 0 28px; height: 60px;
-  display: flex; align-items: center; justify-content: space-between;
-  box-shadow: 0 1px 12px rgba(29,78,216,0.07);
-}
-.nav-brand {
-  font-family: 'DM Serif Display', serif;
-  font-size: 18px; color: var(--text);
-  display: flex; align-items: center; gap: 10px;
-}
-.nav-brand .pill-admin {
-  font-family: 'DM Sans', sans-serif;
-  font-size: 10px; font-weight: 700;
-  padding: 3px 10px; border-radius: 20px;
-  background: linear-gradient(135deg, var(--blue-dark), var(--blue));
-  color: #fff; text-transform: uppercase; letter-spacing: 1px;
-}
-.nav-right { display: flex; align-items: center; gap: 12px; }
-.btn-export {
-  padding: 7px 16px;
-  background: var(--green-bg); color: var(--success);
-  border: 1px solid #bbf7d0; border-radius: 8px;
-  font-size: 12px; font-weight: 600; cursor: pointer;
-  text-decoration: none; font-family: inherit; transition: all 0.2s;
-  display: inline-flex; align-items: center; gap: 6px;
-}
-.btn-export:hover { background: #dcfce7; }
-.btn-logout {
-  padding: 7px 16px;
-  background: var(--red-bg); color: var(--danger);
-  border: 1px solid #fecaca; border-radius: 8px;
-  font-size: 12px; font-weight: 600; cursor: pointer;
-  font-family: inherit; transition: all 0.2s;
-}
-.btn-logout:hover { background: #fee2e2; }
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
-/* ── MAIN ── */
-.main { padding: 28px; max-width: 1400px; margin: 0 auto; }
+app = Flask(__name__)
+app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1)
+IS_PRODUCTION = os.environ.get("RENDER") or os.environ.get("DATABASE_URL")
 
-/* ── ALERTS ── */
-.alert {
-  padding: 12px 16px; border-radius: 10px;
-  font-size: 13px; font-weight: 500; margin-bottom: 16px;
-  display: flex; align-items: center; gap: 8px;
-}
-.alert-success { background: var(--green-bg); color: var(--success); border: 1px solid #bbf7d0; }
-.alert-warning { background: #fffbeb; color: var(--warn); border: 1px solid #fcd34d; }
-.alert-danger  { background: var(--red-bg); color: var(--danger); border: 1px solid #fecaca; }
+app.config.update(
+    SECRET_KEY=os.environ.get("SECRET_KEY", "pharma_secure_key_2024"),
+    SESSION_COOKIE_SECURE=False,
+    SESSION_COOKIE_HTTPONLY=True,
+    SESSION_COOKIE_SAMESITE='Lax',
+    PERMANENT_SESSION_LIFETIME=timedelta(hours=8),
+    SESSION_REFRESH_EACH_REQUEST=False,
+    PREFERRED_URL_SCHEME='https',
+    SQLALCHEMY_TRACK_MODIFICATIONS=False,
+    SQLALCHEMY_ENGINE_OPTIONS={"pool_pre_ping": True, "pool_recycle": 300}
+)
 
-/* ── OVERVIEW STATS ── */
-.overview-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
-  gap: 14px; margin-bottom: 22px;
-}
-.ov-card {
-  background: rgba(255,255,255,0.85); border: 1px solid var(--border);
-  border-radius: 14px; padding: 18px 20px;
-  transition: box-shadow 0.2s;
-  box-shadow: 0 1px 8px rgba(29,78,216,0.06);
-}
-.ov-card:hover { box-shadow: 0 4px 16px rgba(29,78,216,0.12); }
-.ov-label { font-size: 11px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: 0.6px; margin-bottom: 8px; }
-.ov-value { font-size: 28px; font-weight: 700; color: var(--text); }
-.ov-sub   { font-size: 12px; color: var(--muted); margin-top: 3px; }
-.ov-card.blue   { border-color: var(--blue-mid); } .ov-card.blue .ov-value   { color: var(--blue);    }
-.ov-card.green  { border-color: #bbf7d0; }          .ov-card.green .ov-value  { color: var(--success); }
-.ov-card.orange { border-color: #fed7aa; }          .ov-card.orange .ov-value { color: #ea580c;        }
+db_url = os.environ.get("DATABASE_URL")
+if not db_url:
+    logger.warning("⚠️ DATABASE_URL not set! Using SQLite (local development mode)")
+    db_url = "sqlite:///pharma_final.db"
+elif db_url.startswith("postgres://"):
+    db_url = db_url.replace("postgres://", "postgresql://", 1)
 
-/* ── CARD ── */
-.card {
-  background: rgba(255,255,255,0.85); border: 1px solid var(--border);
-  border-radius: 16px; padding: 24px; margin-bottom: 20px;
-  box-shadow: 0 2px 12px rgba(29,78,216,0.07), 0 1px 3px rgba(0,0,0,0.04);
-}
-.card-header {
-  display: flex; align-items: center; justify-content: space-between;
-  margin-bottom: 20px; flex-wrap: wrap; gap: 12px;
-}
-.card-title { font-size: 16px; font-weight: 700; color: var(--text); display: flex; align-items: center; gap: 8px; }
-.card-title .cnt { font-size: 12px; font-weight: 600; background: var(--bg); color: var(--muted); padding: 2px 10px; border-radius: 20px; border: 1px solid var(--border); }
+app.config["SQLALCHEMY_DATABASE_URI"] = db_url
+logger.info(f"Using database: {db_url.split('@')[0] if '@' in db_url else 'SQLite (local)'}")
 
-/* ── ADD FORM ── */
-.add-form-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-  gap: 12px; margin-bottom: 16px;
-}
-.field { display: flex; flex-direction: column; }
-.field label { font-size: 11px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: 0.6px; margin-bottom: 6px; }
-.field input, .field select {
-  padding: 9px 12px; border: 1.5px solid var(--border); border-radius: 9px;
-  background: rgba(255,255,255,0.8); font-size: 13px; font-family: 'DM Sans', sans-serif; color: var(--text);
-  transition: all 0.2s;
-}
-.field input:focus, .field select:focus {
-  outline: none; border-color: var(--blue); background: var(--white);
-  box-shadow: 0 0 0 3px rgba(29,78,216,0.1);
-}
-.btn-add {
-  padding: 10px 20px;
-  background: linear-gradient(135deg, var(--blue-dark), var(--blue));
-  color: #fff; border: none; border-radius: 9px;
-  font-size: 13px; font-weight: 700; font-family: inherit; cursor: pointer;
-  transition: all 0.25s; box-shadow: 0 3px 10px rgba(29,78,216,0.3);
-  display: inline-flex; align-items: center; gap: 6px;
-}
-.btn-add:hover:not(:disabled) { transform: translateY(-1px); box-shadow: 0 5px 16px rgba(29,78,216,0.4); }
-.btn-add:disabled {
-  background: #cbd5e1; color: #94a3b8; cursor: not-allowed;
-  box-shadow: none; transform: none;
-}
+db = SQLAlchemy(app)
+socketio = SocketIO(app, cors_allowed_origins="*", async_mode="eventlet")
 
-/* ── STAFF TABLE ── */
-.table-wrap { overflow-x: auto; }
-table { width: 100%; border-collapse: collapse; }
-thead th {
-  text-align: left; padding: 11px 14px;
-  border-bottom: 2px solid var(--border);
-  font-size: 11px; font-weight: 600; color: var(--muted);
-  text-transform: uppercase; letter-spacing: 0.6px;
-  background: var(--bg); white-space: nowrap;
-}
-tbody td { padding: 12px 14px; border-bottom: 1px solid var(--border); font-size: 13px; vertical-align: middle; }
-tbody tr:last-child td { border-bottom: none; }
-tbody tr:hover td { background: rgba(219,234,254,0.3); }
 
-.emp-name { font-weight: 700; color: var(--text); }
-.emp-email { font-size: 12px; color: var(--muted); margin-top: 1px; }
+# ─── MODELS ──────────────────────────────────────────────────────────────────
 
-.type-badge {
-  display: inline-block; padding: 3px 10px; border-radius: 6px;
-  font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px;
-}
-.type-picker  { background: var(--blue-lite); color: var(--blue); border: 1px solid var(--blue-mid); }
-.type-checker { background: #f5f3ff; color: #6d28d9; border: 1px solid #ddd6fe; }
+class Employee(db.Model):
+    __tablename__ = "employees"
+    id            = db.Column(db.Integer, primary_key=True)
+    name          = db.Column(db.String(100), nullable=False)
+    email         = db.Column(db.String(100), unique=True, nullable=False, index=True)
+    password_hash = db.Column(db.String(255), nullable=False)
+    staff_type    = db.Column(db.String(20), default="picker")
+    role          = db.Column(db.String(100), default="Operations Specialist")
+    is_admin      = db.Column(db.Boolean, default=False)
+    sunday_override = db.Column(db.Boolean, default=False)
+    twofa_secret  = db.Column(db.String(32), nullable=True)
+    twofa_enabled = db.Column(db.Boolean, default=False)
+    created_at    = db.Column(db.DateTime, default=datetime.utcnow)
+    entries = db.relationship("KPIEntry", backref="owner", lazy="select", cascade="all, delete-orphan")
 
-.score-cell { font-weight: 700; font-size: 14px; }
+    def set_password(self, pw): self.password_hash = generate_password_hash(pw)
+    def check_password(self, pw): return check_password_hash(self.password_hash, pw)
 
-.tag {
-  display: inline-block; padding: 2px 8px; border-radius: 5px;
-  font-size: 11px; font-weight: 700;
-}
-.tag-ex   { background: #ede9fe; color: #6d28d9; }
-.tag-good { background: #dcfce7; color: #15803d; }
-.tag-avg  { background: #fef9c3; color: #92400e; }
-.tag-poor { background: #fee2e2; color: #b91c1c; }
-.tag-none { background: var(--bg); color: var(--muted); }
 
-/* ── ACTION BUTTONS ── */
-.actions { display: flex; gap: 6px; flex-wrap: nowrap; }
-.btn-sm {
-  padding: 6px 11px; border: none; border-radius: 7px;
-  font-size: 11px; font-weight: 700; cursor: pointer;
-  font-family: inherit; transition: all 0.2s; white-space: nowrap;
-  display: inline-flex; align-items: center; gap: 4px;
-}
-.btn-edit    { background: var(--blue-lite); color: var(--blue); }
-.btn-edit:hover    { background: var(--blue-mid); }
-.btn-view    { background: var(--bg); color: var(--muted); border: 1px solid var(--border); }
-.btn-view:hover    { background: var(--blue-lite); color: var(--blue); }
-.btn-delete  { background: var(--red-bg); color: var(--danger); }
-.btn-delete:hover  { background: #fecdd3; }
-.btn-sunday  { background: #fef3c7; color: #b45309; }
-.btn-sunday:hover  { background: #fde68a; }
-.btn-sunday.sun-on { background: var(--green-bg); color: var(--success); }
-.btn-sunday.sun-on:hover { background: #dcfce7; }
+class KPIEntry(db.Model):
+    __tablename__ = "kpi_entries"
+    id               = db.Column(db.Integer, primary_key=True)
+    emp_id           = db.Column(db.Integer, db.ForeignKey("employees.id", ondelete="CASCADE"), nullable=False)
+    sales_bills_open = db.Column(db.Integer, default=0)
+    picked           = db.Column(db.Integer, default=0)
+    missed           = db.Column(db.Integer, default=0)
+    cs_sales_open    = db.Column(db.Integer, default=0)
+    packing_done     = db.Column(db.Integer, default=0)
+    rack_organized   = db.Column(db.Integer, default=0)
+    table_clean      = db.Column(db.Integer, default=0)
+    total_time       = db.Column(db.Float, default=0.0)
+    checked          = db.Column(db.Integer, default=0)
+    errors_found     = db.Column(db.Integer, default=0)
+    check_time       = db.Column(db.Float, default=0.0)
+    bills            = db.Column(db.Integer, default=0)
+    boxes            = db.Column(db.Integer, default=0)
+    sweep            = db.Column(db.Float, default=0.0)
+    entry_date       = db.Column(db.Date, nullable=False, index=True)
+    report_sent      = db.Column(db.Boolean, default=False)
 
-/* ── PAST WINDOW ── */
-.past-window-section { margin-bottom: 20px; }
-.pw-form-row {
-  display: flex; gap: 12px; align-items: flex-end; flex-wrap: wrap;
-}
-.pw-form-row .field { flex: 1; min-width: 160px; }
-.btn-open-win {
-  padding: 10px 20px;
-  background: linear-gradient(135deg, #7c3aed, #6d28d9);
-  color: #fff; border: none; border-radius: 9px;
-  font-size: 13px; font-weight: 700; font-family: inherit; cursor: pointer;
-  transition: all 0.25s; box-shadow: 0 3px 10px rgba(109,40,217,0.3);
-  display: inline-flex; align-items: center; gap: 6px; white-space: nowrap;
-}
-.btn-open-win:hover { transform: translateY(-1px); box-shadow: 0 5px 16px rgba(109,40,217,0.4); }
-.pw-active-list { margin-top: 16px; }
-.pw-active-title { font-size: 12px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: 0.6px; margin-bottom: 10px; }
-.pw-chip {
-  display: inline-flex; align-items: center; gap: 8px;
-  background: #f5f3ff; border: 1px solid #ddd6fe; border-radius: 8px;
-  padding: 6px 12px; margin: 4px 4px 4px 0; font-size: 12px; font-weight: 600; color: #6d28d9;
-}
-.pw-chip .pw-close {
-  background: none; border: none; cursor: pointer; font-size: 13px;
-  color: #9ca3af; padding: 0; line-height: 1; transition: color 0.15s;
-}
-.pw-chip .pw-close:hover { color: var(--danger); }
+    __table_args__ = (
+        db.UniqueConstraint("emp_id", "entry_date", name="_emp_date_uc"),
+        db.Index("idx_entry_date", "entry_date"),
+        db.Index("idx_emp_date", "emp_id", "entry_date"),
+        db.Index("idx_emp_id", "emp_id"),
+    )
 
-/* ── EDIT MODAL ── */
-.modal-backdrop {
-  display: none; position: fixed; inset: 0; z-index: 500;
-  background: rgba(15,23,42,0.45); backdrop-filter: blur(4px);
-  align-items: center; justify-content: center; padding: 20px;
-}
-.modal-backdrop.open { display: flex; }
-.modal {
-  background: var(--white); border-radius: 20px;
-  padding: 32px; max-width: 480px; width: 100%;
-  box-shadow: 0 20px 60px rgba(29,78,216,0.15);
-  animation: slideIn 0.2s ease;
-  border: 1px solid var(--border);
-}
-@keyframes slideIn { from { opacity: 0; transform: scale(0.95) translateY(10px); } to { opacity: 1; transform: scale(1) translateY(0); } }
-.modal-title { font-size: 18px; font-weight: 700; margin-bottom: 20px; color: var(--text); }
-.modal-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 20px; }
-.modal-actions { display: flex; gap: 10px; justify-content: flex-end; }
-.btn-cancel {
-  padding: 9px 18px; background: var(--bg); color: var(--muted);
-  border: 1px solid var(--border); border-radius: 9px;
-  font-size: 13px; font-weight: 600; cursor: pointer; font-family: inherit; transition: all 0.2s;
-}
-.btn-cancel:hover { background: var(--border); }
-.btn-save {
-  padding: 9px 22px; background: linear-gradient(135deg, var(--blue-dark), var(--blue));
-  color: #fff; border: none; border-radius: 9px;
-  font-size: 13px; font-weight: 700; cursor: pointer; font-family: inherit; transition: all 0.25s;
-  box-shadow: 0 3px 10px rgba(29,78,216,0.3);
-}
-.btn-save:hover { transform: translateY(-1px); }
+    @property
+    def accuracy(self):
+        t = (self.picked or 0) + (self.missed or 0)
+        return round((self.picked or 0) / t * 100, 1) if t > 0 else 0.0
 
-/* ── SEARCH ── */
-.search-input {
-  padding: 8px 14px; border: 1.5px solid var(--border); border-radius: 9px;
-  font-size: 13px; font-family: 'DM Sans', sans-serif; color: var(--text);
-  background: rgba(255,255,255,0.8); transition: all 0.2s; min-width: 200px;
-}
-.search-input:focus { outline: none; border-color: var(--blue); background: var(--white); box-shadow: 0 0 0 3px rgba(29,78,216,0.1); }
+    @property
+    def effective_bills(self):
+        return self.sales_bills_open or self.bills or 0
 
-/* ── NO DATA ── */
-.empty { text-align: center; padding: 40px; color: var(--muted); font-style: italic; }
+    @property
+    def effective_time(self):
+        return self.total_time or self.sweep or 0
 
-/* ── EMAIL AUTOCOMPLETE in add form ── */
-.field-wrap { position: relative; }
-.ac-list {
-  position: absolute; top: calc(100% + 4px); left: 0; right: 0;
-  background: var(--white); border: 1.5px solid var(--blue);
-  border-radius: 9px; box-shadow: 0 8px 24px rgba(29,78,216,0.15);
-  z-index: 300; overflow: hidden; display: none;
-}
-.ac-list.show { display: block; }
-.ac-item {
-  padding: 10px 13px; font-size: 13px; color: var(--text);
-  cursor: pointer; display: flex; align-items: center; gap: 8px;
-  transition: background 0.15s;
-}
-.ac-item:hover, .ac-item.sel { background: var(--blue-lite); }
-.ac-item .ac-domain { color: var(--blue); font-weight: 600; }
+    @property
+    def _sales_bill_effective(self):
+        return self.sales_bills_open or self.bills or 0
 
-/* ── LAST SEEN ── */
-.last-seen-dot {
-  width: 8px; height: 8px; border-radius: 50%;
-  display: inline-block; margin-right: 6px;
-}
-.dot-today { background: var(--success); }
-.dot-week  { background: var(--warn); }
-.dot-old   { background: #cbd5e1; }
+    @property
+    def _total_time_hrs(self):
+        return self.total_time or self.sweep or 0
 
-/* ── RESPONSIVE ── */
-@media (max-width: 700px) {
-  .nav { padding: 0 14px; gap: 8px; }
-  .main { padding: 14px; }
-  .add-form-grid { grid-template-columns: 1fr; }
-  .modal { padding: 22px 16px; }
-  .modal-grid { grid-template-columns: 1fr; }
-  .overview-grid { grid-template-columns: 1fr 1fr; }
-  .actions { flex-wrap: wrap; }
-  .btn-export, .btn-logout { font-size: 11px; padding: 6px 11px; }
-}
-@media (max-width: 480px) {
-  .overview-grid { grid-template-columns: 1fr; }
-}
-</style>
-</head>
-<body>
+    @property
+    def check_rate(self):
+        """Clean check rate: (Item Checked - Urgent Item Checked) / Item Checked * 100"""
+        if self.checked and self.checked > 0:
+            return round(max(0, (self.checked - (self.errors_found or 0))) / self.checked * 100, 1)
+        return 0
 
-<!-- EDIT MODAL -->
-<div class="modal-backdrop" id="editModal">
-  <div class="modal">
-    <div class="modal-title">✏️ Edit Employee</div>
-    <form method="POST" id="editForm" autocomplete="off">
-      <div class="modal-grid">
-        <div class="field" style="grid-column: span 2;">
-          <label>Full Name</label>
-          <input type="text" name="name" id="edit-name" required>
-        </div>
-        <div class="field" style="grid-column: span 2;">
-          <label>Email</label>
-          <input type="email" name="email" id="edit-email" required>
-        </div>
-        <div class="field">
-          <label>Staff Type</label>
-          <select name="staff_type" id="edit-type">
-            <option value="picker">Picker</option>
-            <option value="checker">Checker</option>
-          </select>
-        </div>
-        <div class="field">
-          <label>New Password (optional)</label>
-          <input type="password" name="new_password" placeholder="Leave blank to keep">
-        </div>
-      </div>
-      <div class="modal-actions">
-        <button type="button" class="btn-cancel" onclick="closeEdit()">Cancel</button>
-        <button type="submit" class="btn-save">💾 Save Changes</button>
-      </div>
-    </form>
-  </div>
-</div>
+    @property
+    def pick_speed(self):
+        """For pickers: items/hr. For checkers: items checked/check_time hr."""
+        t = (self.picked or 0) + (self.missed or 0)
+        tt = self.total_time or self.sweep or 0
+        return round(t / max(tt, 0.001), 1) if tt > 0 else 0
 
-<!-- NAV -->
-<nav class="nav">
-  <div class="nav-brand">
-    🔬 Pharma IP System
-    <span class="pill-admin">Admin</span>
-  </div>
-  <div class="nav-right">
-    <a href="/admin/export_csv" class="btn-export">📥 Export CSV</a>
-    <form method="POST" action="/logout">
-      <button type="submit" class="btn-logout">🚪 Logout</button>
-    </form>
-  </div>
-</nav>
 
-<div class="main">
+class AuditLog(db.Model):
+    __tablename__ = "audit_logs"
+    id = db.Column(db.Integer, primary_key=True)
+    admin_id = db.Column(db.Integer, db.ForeignKey("employees.id"))
+    action = db.Column(db.String(100))
+    target = db.Column(db.String(100))
+    details = db.Column(db.Text)
+    timestamp = db.Column(db.DateTime, default=datetime.utcnow)
 
-  <!-- FLASH -->
-  {% with messages = get_flashed_messages(with_categories=true) %}
-    {% if messages %}{% for cat, msg in messages %}
-    <div class="alert alert-{{ cat }}">{{ msg }}</div>
-    {% endfor %}{% endif %}
-  {% endwith %}
 
-  <!-- OVERVIEW STATS -->
-  <div class="overview-grid">
-    <div class="ov-card blue">
-      <div class="ov-label">Total Staff</div>
-      <div class="ov-value">{{ emp_count }}</div>
-      <div class="ov-sub">Active employees</div>
-    </div>
-    <div class="ov-card green">
-      <div class="ov-label">Active Today</div>
-      <div class="ov-value">{{ active_today }}</div>
-      <div class="ov-sub">Submitted metrics</div>
-    </div>
-    <div class="ov-card orange">
-      <div class="ov-label">Total Entries</div>
-      <div class="ov-value">{{ total_entries }}</div>
-      <div class="ov-sub">All time records</div>
-    </div>
-    <div class="ov-card">
-      <div class="ov-label">Total Picked</div>
-      <div class="ov-value">{{ "{:,}".format(total_picked) }}</div>
-      <div class="ov-sub">Items all time</div>
-    </div>
-  </div>
+class PastEntryWindow(db.Model):
+    """Admin-opened windows that allow staff to submit data for a past date."""
+    __tablename__ = "past_entry_windows"
+    id          = db.Column(db.Integer, primary_key=True)
+    past_date   = db.Column(db.Date, nullable=False, unique=True)   # the date being opened
+    opened_by   = db.Column(db.Integer, db.ForeignKey("employees.id"))
+    opened_at   = db.Column(db.DateTime, default=datetime.utcnow)
+    is_active   = db.Column(db.Boolean, default=True)               # admin can close it again
 
-  <!-- ADD EMPLOYEE -->
-  <div class="card">
-    <div class="card-header">
-      <div class="card-title">➕ Add New Employee</div>
-    </div>
-    <form method="POST" action="/admin/add_user" autocomplete="off">
-      <div class="add-form-grid">
-        <div class="field">
-          <label>Full Name</label>
-          <input type="text" name="name" id="addName" placeholder="Rahul Sharma" required
-                 oninput="capName(this)" autocomplete="off">
-        </div>
-        <div class="field field-wrap">
-          <label>Email</label>
-          <input type="text" name="email" id="addEmail" placeholder="rahul@pharmaip.com" required
-                 oninput="handleAddEmail(this)" onkeydown="handleAddEmailKey(event)" autocomplete="off">
-          <div class="ac-list" id="addAcList"></div>
-        </div>
-        <div class="field">
-          <label>Password (min 6 chars)</label>
-          <input type="password" name="password" minlength="6" required>
-        </div>
-        <div class="field">
-          <label>Staff Type</label>
-          <select name="staff_type" required>
-            <option value="picker">📦 Picker</option>
-            <option value="checker">🔍 Checker</option>
-          </select>
-        </div>
-      </div>
-      <button type="submit" class="btn-add" id="saveDetailsBtn" disabled>💾 Save Details</button>
-    </form>
-  </div>
 
-  <!-- PAST DATE ENTRY WINDOW -->
-  <div class="card past-window-section">
-    <div class="card-header">
-      <div class="card-title">📅 Open Past Date Entry</div>
-    </div>
-    <p style="font-size:13px;color:var(--muted);margin-bottom:16px;">
-      Select any past date and open an entry window. All staff who have <strong>not yet submitted</strong> data for that day will be able to enter it from their dashboard.
-    </p>
-    <form method="POST" action="/admin/past_window" autocomplete="off">
-      <input type="hidden" name="action" value="open">
-      <div class="pw-form-row">
-        <div class="field">
-          <label>Past Date</label>
-          <input type="date" name="past_date" id="pastDatePicker" required
-                 max="{{ today.strftime('%Y-%m-%d') }}">
-        </div>
-        <button type="submit" class="btn-open-win">📂 Open Entry Window</button>
-      </div>
-    </form>
+# ─── HELPERS ─────────────────────────────────────────────────────────────────
 
-    {% if open_windows %}
-    <div class="pw-active-list">
-      <div class="pw-active-title">🟢 Currently Open Windows</div>
-      {% for w in open_windows %}
-      <span class="pw-chip">
-        📅 {{ w.past_date.strftime('%d %b %Y') }}
-        <form method="POST" action="/admin/past_window" style="display:inline;margin:0;">
-          <input type="hidden" name="action" value="close">
-          <input type="hidden" name="past_date" value="{{ w.past_date.strftime('%Y-%m-%d') }}">
-          <button type="submit" class="pw-close" title="Close this window">✕</button>
-        </form>
-      </span>
-      {% endfor %}
-    </div>
-    {% else %}
-    <p style="font-size:12px;color:var(--muted);margin-top:12px;">No windows currently open.</p>
-    {% endif %}
-  </div>
+def safe_div(a, b, default=0.0):
+    try: return a / b if b else default
+    except Exception: return default
 
-  <!-- STAFF TABLE -->
-  <div class="card">
-    <div class="card-header">
-      <div class="card-title">
-        👥 Staff Management
-        <span class="cnt">{{ rows|length }} employees</span>
-      </div>
-      <input class="search-input" type="text" id="searchBox" placeholder="🔍 Search name or email…" oninput="filterTable()">
-    </div>
 
-    {% if rows %}
-    <div class="table-wrap">
-      <table id="staffTable">
-        <thead>
-          <tr>
-            <th>Employee</th>
-            <th>Type</th>
-            <th>Entries</th>
-            <th>All-Time Score</th>
-            <th>Week Score</th>
-            <th>Grade</th>
-            <th>Last Entry</th>
-            <th>Actions</th>
-          </tr>
-        </thead>
-        <tbody>
-          {% for r in rows %}
-          {% set today_flag = (r.last_entry and r.last_entry.strftime('%Y-%m-%d') == today.strftime('%Y-%m-%d')) if r.last_entry else false %}
-          {% set this_week  = (r.last_entry and (today - r.last_entry).days <= 6) if r.last_entry else false %}
-          <tr>
-            <td>
-              <div class="emp-name">{{ r.emp.name }}</div>
-              <div class="emp-email">{{ r.emp.email }}</div>
-            </td>
-            <td>
-              <span class="type-badge {% if r.emp.staff_type == 'picker' %}type-picker{% else %}type-checker{% endif %}">
-                {{ r.emp.staff_type }}
-              </span>
-            </td>
-            <td>{{ r.count }}</td>
-            <td class="score-cell">
-              {% if r.stats %}{{ r.stats.eff_score }}{% else %}<span style="color:var(--muted)">—</span>{% endif %}
-            </td>
-            <td class="score-cell">
-              {% if r.week_stats %}{{ r.week_stats.eff_score }}{% else %}<span style="color:var(--muted)">—</span>{% endif %}
-            </td>
-            <td>
-              {% if r.stats %}
-                {% set g = r.stats.grade %}
-                <span class="tag {% if g in ['ELITE','EXCELLENT'] %}tag-ex{% elif g in ['GOOD','PROFICIENT'] %}tag-good{% elif g in ['AVERAGE','SATISFACTORY'] %}tag-avg{% else %}tag-poor{% endif %}">{{ g }}</span>
-              {% else %}<span class="tag tag-none">No data</span>{% endif %}
-            </td>
-            <td>
-              {% if r.last_entry %}
-                <span class="last-seen-dot {% if today_flag %}dot-today{% elif this_week %}dot-week{% else %}dot-old{% endif %}"></span>
-                {{ r.last_entry.strftime('%d %b') }}
-              {% else %}<span style="color:var(--muted)">Never</span>{% endif %}
-            </td>
-            <td>
-              <div class="actions">
-                <a href="/staff/{{ r.emp.id }}" class="btn-sm btn-view">👤 View</a>
-                <button class="btn-sm btn-edit"
-                  onclick="openEdit({{ r.emp.id }}, '{{ r.emp.name|e }}', '{{ r.emp.email|e }}', '{{ r.emp.staff_type }}')">
-                  ✏️ Edit
-                </button>
-                <form method="POST" action="/admin/delete_user/{{ r.emp.id }}" style="display:inline;">
-                  <button type="submit" class="btn-sm btn-delete"
-                    onclick="return confirm('Delete {{ r.emp.name|e }}? This removes all their KPI data.')">
-                    🗑️
-                  </button>
-                </form>
-                <form method="POST" action="/admin/toggle_sunday/{{ r.emp.id }}" style="display:inline;">
-                  <button type="submit" class="btn-sm btn-sunday {% if r.emp.sunday_override %}sun-on{% endif %}"
-                    title="Sunday data entry override">
-                    {% if r.emp.sunday_override %}☀️ Sun ON{% else %}☀️ Off{% endif %}
-                  </button>
-                </form>
-              </div>
-            </td>
-          </tr>
-          {% endfor %}
-        </tbody>
-      </table>
-    </div>
-    {% else %}
-    <div class="empty">No employees yet. Add your first team member above.</div>
-    {% endif %}
-  </div>
+def grade_from_score(score):
+    if score >= 90:   return "EXCELLENT"
+    elif score >= 75: return "GOOD"
+    elif score >= 60: return "AVERAGE"
+    else:             return "NEEDS WORK"
 
-  <!-- PERFORMANCE SUMMARY -->
-  {% if rows %}
-  <div class="card">
-    <div class="card-header">
-      <div class="card-title">📊 Performance Summary — All Time</div>
-    </div>
-    <div class="table-wrap">
-      <table>
-        <thead>
-          <tr>
-            <th>Name</th><th>Type</th>
-            <th>Accuracy</th><th>Speed /hr</th>
-            <th>Items Processed</th><th>Total Bills</th>
-            <th>Days Active</th><th>Eff. Score</th><th>Grade</th>
-          </tr>
-        </thead>
-        <tbody>
-          {% for r in rows %}{% if r.stats %}
-          <tr>
-            <td><strong>{{ r.emp.name }}</strong></td>
-            <td><span class="type-badge {% if r.emp.staff_type == 'picker' %}type-picker{% else %}type-checker{% endif %}">{{ r.emp.staff_type }}</span></td>
-            {% if r.emp.staff_type == 'checker' %}
-            <td>{{ r.stats.eff_score or 0 }}/100</td>
-            <td>{{ r.stats.ck_speed or 0 }}/hr</td>
-            <td>{{ r.stats.tck or 0 }}</td>
-            {% else %}
-            <td>{{ r.stats.pick_acc or 0 }}%</td>
-            <td>{{ r.stats.pick_speed or 0 }}</td>
-            <td>{{ r.stats.tp or 0 }}</td>
-            {% endif %}
-            <td>{{ r.stats.tsb or 0 }}</td>
-            <td>{{ r.stats.days }}</td>
-            <td class="score-cell">{{ r.stats.eff_score }}</td>
-            <td>
-              {% set g = r.stats.grade %}
-              <span class="tag {% if g in ['ELITE','EXCELLENT'] %}tag-ex{% elif g in ['GOOD','PROFICIENT'] %}tag-good{% elif g in ['AVERAGE','SATISFACTORY'] %}tag-avg{% else %}tag-poor{% endif %}">{{ g }}</span>
-            </td>
-          </tr>
-          {% endif %}{% endfor %}
-        </tbody>
-      </table>
-    </div>
-  </div>
-  {% endif %}
 
-</div><!-- /main -->
+def build_analytics(entries: List[KPIEntry], staff_type: str = "picker") -> Optional[Dict[str, Any]]:
+    try:
+        if not entries: return None
+        tp   = sum(int(e.picked or 0) for e in entries)
+        tm   = sum(int(e.missed or 0) for e in entries)
+        ti   = tp + tm
+        tsb  = sum(int(e.sales_bills_open or e.bills or 0) for e in entries)
+        ts   = round(sum(float(e.total_time or e.sweep or 0) for e in entries), 3)
+        tck  = sum(int(e.checked or 0) for e in entries)
+        ter  = sum(int(e.errors_found or 0) for e in entries)
+        tpk  = sum(int(e.packing_done or 0) for e in entries)
+        tcs  = sum(int(e.cs_sales_open or 0) for e in entries)
+        tro  = sum(int(e.rack_organized or 0) for e in entries)
+        ttc  = sum(int(e.table_clean or 0) for e in entries)
+        tct  = sum(float(e.check_time or 0) for e in entries)
+        days = len(entries)
 
-<script>
-function capName(input) {
-  const pos = input.selectionStart;
-  input.value = input.value.replace(/\b\w/g, c => c.toUpperCase());
-  try { input.setSelectionRange(pos, pos); } catch(e){}
-  checkAddForm();
-}
+        pick_acc    = round(safe_div(tp, ti) * 100, 1)
+        pick_speed  = round(safe_div(ti, max(ts, 0.001)), 1)
+        check_acc   = round(safe_div(max(tck - ter, 0), tck) * 100, 1) if tck > 0 else 0.0
+        error_rate  = round(safe_div(ter, tck) * 100, 1) if tck > 0 else 0.0
+        ck_speed    = round(safe_div(tck, max(tct, 0.001)), 1) if tct > 0 else 0.0
+        packing_eff = round(safe_div(tpk, tsb) * 100, 1) if tsb > 0 else 0
+        cs_fulfilment = round(min(safe_div(tpk, tcs) * 100, 100), 1) if tcs > 0 else 0
 
-// Enable Save Details button only when required fields are filled
-function checkAddForm() {
-  const name  = document.getElementById('addName')?.value.trim();
-  const email = document.getElementById('addEmail')?.value.trim();
-  const pw    = document.querySelector('[name="password"]')?.value;
-  const btn   = document.getElementById('saveDetailsBtn');
-  if (!btn) return;
-  const filled = name && name.length > 0 && email && email.length > 0 && pw && pw.length >= 6;
-  btn.disabled = !filled;
-}
+        # Workspace score
+        workspace_score = round(safe_div(tro + ttc, 2 * days) * 100, 1) if days > 0 else 0
 
-document.addEventListener('DOMContentLoaded', function() {
-  // Wire up input listeners for add form fields
-  const fields = ['addName', 'addEmail'];
-  fields.forEach(id => {
-    const el = document.getElementById(id);
-    if (el) el.addEventListener('input', checkAddForm);
-  });
-  const pwField = document.querySelector('[name="password"]');
-  if (pwField) pwField.addEventListener('input', checkAddForm);
-  checkAddForm();
-});
+        # Potential / gap
+        if staff_type == "checker":
+            potential_items = int(150 * tct)
+            gap_items = max(potential_items - tck, 0)
+            potential_eff = round(safe_div(tck, max(potential_items, 1)) * 100, 1)
+        else:
+            potential_items = int(200 * ts)
+            gap_items = max(potential_items - ti, 0)
+            potential_eff = round(safe_div(ti, max(potential_items, 1)) * 100, 1)
 
-let addAcIdx = -1;
-function handleAddEmail(input) {
-  const val = input.value;
-  const list = document.getElementById('addAcList');
-  if (val.length > 0 && !val.includes('@')) {
-    const sug = val + '@pharmaip.com';
-    list.innerHTML = `<div class="ac-item" onclick="pickAddEmail('${escHtml(sug)}')" onmouseover="this.classList.add('sel')" onmouseout="this.classList.remove('sel')">📧 <span>${escHtml(val)}<span class="ac-domain">@pharmaip.com</span></span></div>`;
-    list.classList.add('show');
-    addAcIdx = -1;
-  } else {
-    list.classList.remove('show');
-  }
-  checkAddForm();
-}
-function handleAddEmailKey(e) {
-  const list = document.getElementById('addAcList');
-  if (!list.classList.contains('show')) return;
-  if (e.key === 'Enter' || e.key === 'Tab') {
-    e.preventDefault();
-    const item = list.querySelector('.ac-item');
-    if (item) item.click();
-  } else if (e.key === 'Escape') {
-    list.classList.remove('show');
-  }
-}
-function pickAddEmail(email) {
-  document.getElementById('addEmail').value = email;
-  document.getElementById('addAcList').classList.remove('show');
-  document.querySelector('[name="password"]').focus();
-  checkAddForm();
-}
-function escHtml(s) {
-  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
-}
-document.addEventListener('click', function(e) {
-  const wrap = document.querySelector('#addEmail')?.closest('.field-wrap');
-  if (wrap && !wrap.contains(e.target)) {
-    document.getElementById('addAcList')?.classList.remove('show');
-  }
-});
+        # Consistency
+        daily_accs = [e.accuracy for e in entries if e.accuracy > 0]
+        if len(daily_accs) > 1:
+            mean_acc = sum(daily_accs) / len(daily_accs)
+            variance = sum((a - mean_acc) ** 2 for a in daily_accs) / len(daily_accs)
+            std_dev = variance ** 0.5
+            consistency = max(0, 100 - (std_dev * 2))
+        else:
+            consistency = 100 if daily_accs else 0
 
-function openEdit(id, name, email, type) {
-  document.getElementById('editForm').action = '/admin/edit_user/' + id;
-  document.getElementById('edit-name').value  = name;
-  document.getElementById('edit-email').value = email;
-  document.getElementById('edit-type').value  = type;
-  document.getElementById('editModal').classList.add('open');
-}
-function closeEdit() {
-  document.getElementById('editModal').classList.remove('open');
-}
-document.getElementById('editModal').addEventListener('click', function(e) {
-  if (e.target === this) closeEdit();
-});
+        # Trend (compare first half vs second half)
+        if len(entries) >= 4:
+            mid = len(entries) // 2
+            first_half = entries[mid:]   # older (entries sorted desc)
+            second_half = entries[:mid]  # newer
+            fh_acc = sum(e.accuracy for e in first_half) / len(first_half)
+            sh_acc = sum(e.accuracy for e in second_half) / len(second_half)
+            if sh_acc > fh_acc + 2:
+                trend = "improving"
+            elif sh_acc < fh_acc - 2:
+                trend = "declining"
+            else:
+                trend = "stable"
+        else:
+            trend = "stable"
 
-function filterTable() {
-  const q    = document.getElementById('searchBox').value.toLowerCase();
-  const rows = document.querySelectorAll('#staffTable tbody tr');
-  rows.forEach(row => {
-    const text = row.textContent.toLowerCase();
-    row.style.display = text.includes(q) ? '' : 'none';
-  });
-}
+        # Efficiency score
+        if staff_type == "picker":
+            eff_score = round(
+                (pick_acc / 100) * 55 +
+                min(pick_speed / 200, 1) * 30 +
+                (workspace_score / 100) * 10 +
+                min(packing_eff / 100, 1) * 5,
+                1
+            )
+        else:
+            eff_score = round(
+                (check_acc / 100) * 65 +
+                min(ck_speed / 150, 1) * 25 +
+                (workspace_score / 100) * 10,
+                1
+            )
+        eff_score = min(eff_score, 100)
 
-if (typeof io !== 'undefined') {
-  const socket = io();
-  socket.on('admin_alert', function(msg) {
-    const el = document.createElement('div');
-    el.className = 'alert alert-warning';
-    el.style.cssText = 'position:fixed;top:70px;right:20px;z-index:999;max-width:340px;animation:slideIn 0.3s ease;';
-    el.textContent = '⚠️ ' + msg.name + ' — ' + msg.eff + '% accuracy';
-    document.body.appendChild(el);
-    setTimeout(() => el.remove(), 5000);
-  });
-}
-</script>
-</body>
-</html>
+        # Grade (enhanced for staff_detail)
+        if staff_type == "picker":
+            if pick_acc >= 98 and workspace_score >= 80:
+                grade = "ELITE"
+            elif pick_acc >= 95:
+                grade = "PROFICIENT"
+            elif pick_acc >= 88:
+                grade = "SATISFACTORY"
+            else:
+                grade = "RE-TRAINING"
+        else:
+            if check_acc >= 97 and workspace_score >= 80:
+                grade = "ELITE"
+            elif check_acc >= 94:
+                grade = "PROFICIENT"
+            elif check_acc >= 87:
+                grade = "SATISFACTORY"
+            else:
+                grade = "RE-TRAINING"
+
+        # Feedback
+        feedback_map = {
+            "ELITE": "Outstanding performance. Keep it up!",
+            "PROFICIENT": "Strong results. Minor improvements will push you to Elite.",
+            "SATISFACTORY": "Meets expectations. Focus on accuracy and workspace.",
+            "RE-TRAINING": "Performance needs attention. Please speak to your manager."
+        }
+        feedback = feedback_map.get(grade, "")
+
+        return dict(
+            pick_acc=pick_acc, pick_speed=pick_speed, check_acc=check_acc,
+            eff_score=eff_score, grade=grade, days=days,
+            tp=tp, tm=tm, tck=tck, ter=ter, tsb=tsb, tpk=tpk, ts=round(ts, 2),
+            tpd=tpk, tcs=tcs, tro=tro, ttc=ttc,
+            packing_eff=packing_eff, cs_fulfilment=cs_fulfilment,
+            consistency=round(consistency, 1),
+            error_rate=error_rate, ck_speed=ck_speed,
+            workspace_score=workspace_score,
+            potential_items=potential_items, gap_items=gap_items, potential_eff=potential_eff,
+            ttt=round(tct, 2) if staff_type == "checker" else round(ts, 2),
+            trend=trend, feedback=feedback
+        )
+    except Exception as e:
+        logger.error(f"build_analytics error: {e}")
+        return None
+
+
+def get_period_entries(emp_id: int, period: str) -> List[KPIEntry]:
+    today = date.today()
+    starts = {"day": today, "week": today - timedelta(days=6), "month": today - timedelta(days=29)}
+    start = starts.get(period, today)
+    try:
+        return KPIEntry.query.filter(
+            KPIEntry.emp_id == emp_id,
+            KPIEntry.entry_date >= start,
+            KPIEntry.entry_date <= today
+        ).order_by(KPIEntry.entry_date.desc()).all()
+    except Exception as e:
+        logger.error(f"get_period_entries: {e}")
+        return []
+
+
+def login_required(f):
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        if not session.get("user_id"): return redirect(url_for("login"))
+        return f(*args, **kwargs)
+    return decorated
+
+
+def admin_required(f):
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        if not session.get("user_id"): return redirect(url_for("login"))
+        if not session.get("is_admin"): return redirect(url_for("dashboard"))
+        return f(*args, **kwargs)
+    return decorated
+
+
+def log_audit(action, target, details=""):
+    try:
+        log = AuditLog(
+            admin_id=session.get("user_id"),
+            action=action,
+            target=target,
+            details=details
+        )
+        db.session.add(log)
+        db.session.commit()
+    except:
+        db.session.rollback()
+
+
+def run_migrations():
+    """Add missing columns to existing tables without dropping them."""
+    try:
+        is_postgres = "postgresql" in app.config["SQLALCHEMY_DATABASE_URI"]
+        if is_postgres:
+            cols_to_add = [
+                ("sunday_override", "BOOLEAN DEFAULT FALSE"),
+                ("twofa_secret",    "VARCHAR(32)"),
+                ("twofa_enabled",   "BOOLEAN DEFAULT FALSE"),
+                ("created_at",      "TIMESTAMP DEFAULT CURRENT_TIMESTAMP") # Add this line!
+            ]
+            for col, col_type in cols_to_add:
+                try:
+                    db.session.execute(db.text(
+                        f"ALTER TABLE employees ADD COLUMN IF NOT EXISTS {col} {col_type}"
+                    ))
+                    db.session.commit()
+                    logger.info(f"✅ Column '{col}' ensured on employees table")
+                except Exception as ce:
+                    db.session.rollback()
+                    logger.warning(f"Column '{col}' migration skipped: {ce}")
+        else:
+            # SQLite doesn't support IF NOT EXISTS on ALTER TABLE
+            import sqlite3
+            db_path = app.config["SQLALCHEMY_DATABASE_URI"].replace("sqlite:///", "")
+            conn = sqlite3.connect(db_path)
+            cursor = conn.cursor()
+            cursor.execute("PRAGMA table_info(employees)")
+            existing = [row[1] for row in cursor.fetchall()]
+            sqlite_cols = {
+                "sunday_override": "BOOLEAN DEFAULT 0",
+                "twofa_secret": "VARCHAR(32)",
+                "twofa_enabled": "BOOLEAN DEFAULT 0",
+            }
+            for col, col_type in sqlite_cols.items():
+                if col not in existing:
+                    cursor.execute(f"ALTER TABLE employees ADD COLUMN {col} {col_type}")
+                    logger.info(f"✅ SQLite column '{col}' added")
+            conn.commit()
+            conn.close()
+    except Exception as e:
+        logger.error(f"Migration error: {e}")
+
+
+def init_db():
+    with app.app_context():
+        try:
+            db.create_all()
+            # Run migrations for existing DBs
+            run_migrations()
+            if not Employee.query.first():
+                admin = Employee(name="Admin", email="admin@pharmaip.com", staff_type="picker", is_admin=True, role="Admin")
+                admin.set_password("admin123")
+                db.session.add(admin)
+                p1 = Employee(name="Rahul Sharma", email="rahul@pharmaip.com", staff_type="picker", role="Picker")
+                p1.set_password("test1234")
+                db.session.add(p1)
+                c1 = Employee(name="Priya Patel", email="priya@pharmaip.com", staff_type="checker", role="Checker")
+                c1.set_password("test1234")
+                db.session.add(c1)
+                db.session.commit()
+                logger.info("✅ Database initialized successfully")
+        except Exception as e:
+            logger.error(f"DB init error: {e}")
+            db.session.rollback()
+
+
+try:
+    init_db()
+except Exception as _e:
+    logger.error(f"DB init failed: {_e}")
+
+
+# ─── ROUTES ──────────────────────────────────────────────────────────────────
+
+@app.route('/health')
+def health_check():
+    try:
+        db.session.execute(db.text("SELECT 1"))
+        db_ok = True
+    except:
+        db_ok = False
+    return jsonify(status="ok", database="up" if db_ok else "down"), 200 if db_ok else 500
+
+
+@app.route("/")
+def index():
+    if not session.get("user_id"): return redirect(url_for("login"))
+    return redirect(url_for("admin_dashboard") if session.get("is_admin") else url_for("dashboard"))
+
+
+@app.route("/login", methods=["GET", "POST"])
+def login():
+    if session.get("user_id"):
+        return redirect(url_for("admin_dashboard") if session.get("is_admin") else url_for("dashboard"))
+    if request.method == "POST":
+        try:
+            email = request.form.get("email", "").lower().strip()
+            password = request.form.get("password", "")
+            role_choice = request.form.get("staff_type", "").strip()
+            user = Employee.query.filter_by(email=email).first()
+
+            if not user or not user.check_password(password):
+                flash("Invalid Pharma ID or Password.", "danger")
+                return render_template("login.html")
+
+            if not user.is_admin and role_choice in ("picker", "checker"):
+                user.staff_type = role_choice
+                db.session.commit()
+
+            session.clear()
+            session.permanent = True
+            session["user_id"] = user.id
+            session["user_name"] = user.name
+            session["staff_type"] = user.staff_type
+            session["is_admin"] = bool(user.is_admin)
+
+            logger.info(f"User login successful: {email}")
+            return redirect(url_for("admin_dashboard") if user.is_admin else url_for("dashboard"))
+        except Exception as e:
+            logger.error(f"Login error: {e}")
+            flash("System error. Please try again.", "danger")
+    return render_template("login.html")
+
+
+@app.route("/logout", methods=["GET", "POST"])
+def logout():
+    session.clear()
+    return redirect(url_for("login"))
+
+
+@app.route("/dashboard", methods=["GET", "POST"])
+@login_required
+def dashboard():
+    try:
+        emp_id = session.get("user_id")
+        staff_type = session.get("staff_type", "picker")
+        today = date.today()
+        today_entry = KPIEntry.query.filter_by(emp_id=emp_id, entry_date=today).first()
+        new_personal_best = False
+
+        if request.method == "POST" and not today_entry:
+            is_sunday = today.weekday() == 6
+            emp = db.session.get(Employee, emp_id)
+            if is_sunday and not (emp and emp.sunday_override):
+                flash("📅 Sunday is a holiday. No data submission allowed.", "warning")
+            else:
+                try:
+                    def gi(k): return max(0, int(request.form.get(k, 0) or 0))
+                    def gf(k): return max(0, float(request.form.get(k, 0) or 0))
+
+                    sales_bills_open = gi("sales_bills_open")
+                    cs_sales_open    = gi("cs_sales_open")
+                    packing_done     = gi("packing_done")
+                    total_mins       = min(gf("total_mins"), 480)
+                    check_mins       = min(gf("check_mins"), 480)
+
+                    if staff_type == "checker":
+                        checked      = gi("checked")
+                        errors_found = gi("errors_found")  # Urgent Item Checked — not capped
+                        picked       = gi("picked")         # SB Open assist
+                        missed       = 0
+                    else:
+                        picked       = gi("picked")
+                        missed       = gi("missed")
+                        checked      = 0
+                        errors_found = 0
+
+                    ne = KPIEntry(
+                        emp_id=emp_id,
+                        sales_bills_open=sales_bills_open,
+                        picked=picked,
+                        missed=missed,
+                        cs_sales_open=cs_sales_open,
+                        packing_done=packing_done,
+                        total_time=round(total_mins / 60, 3),
+                        checked=checked,
+                        errors_found=errors_found,
+                        check_time=round(check_mins / 60, 3),
+                        entry_date=today
+                    )
+                    db.session.add(ne)
+                    db.session.commit()
+
+                    all_entries = KPIEntry.query.filter_by(emp_id=emp_id).all()
+                    all_stats = build_analytics(all_entries, staff_type)
+                    if all_stats:
+                        prev_best = session.get(f"pb_{emp_id}", 0)
+                        if all_stats['eff_score'] > prev_best:
+                            session[f"pb_{emp_id}"] = all_stats['eff_score']
+                            new_personal_best = True
+
+                    flash("✅ Metrics recorded successfully.", "success")
+                    today_entry = ne
+
+                    socketio.emit('entry_update', {'user': session.get('user_name'), 'accuracy': ne.accuracy})
+                except Exception as e:
+                    db.session.rollback()
+                    logger.error(f"Dashboard POST: {e}")
+                    flash("Error saving metrics.", "danger")
+
+        all_entries = KPIEntry.query.filter_by(emp_id=emp_id).order_by(KPIEntry.entry_date.desc()).all()
+        d_stats = build_analytics(get_period_entries(emp_id, "day"), staff_type)
+        w_stats = build_analytics(get_period_entries(emp_id, "week"), staff_type)
+        m_stats = build_analytics(get_period_entries(emp_id, "month"), staff_type)
+
+        trend_labels = []
+        trend_accuracy = []
+        trend_speed = []
+        for i in range(6, -1, -1):
+            d = today - timedelta(days=i)
+            e = next((x for x in all_entries if x.entry_date == d), None)
+            trend_labels.append(d.strftime("%a %d"))
+            if e:
+                t = (e.picked or 0) + (e.missed or 0)
+                acc = round((e.picked or 0) / t * 100, 1) if t > 0 else 0
+                spd = round(t / max(float(e.total_time or 0.001), 0.001), 1)
+                trend_accuracy.append(acc)
+                trend_speed.append(spd)
+            else:
+                trend_accuracy.append(None)
+                trend_speed.append(None)
+
+        # Find open windows where THIS staff hasn't submitted yet
+        open_wins = PastEntryWindow.query.filter_by(is_active=True).all()
+        pending_windows = []
+        for w in open_wins:
+            has_entry = KPIEntry.query.filter_by(emp_id=emp_id, entry_date=w.past_date).first()
+            if not has_entry:
+                pending_windows.append(w)
+
+        return render_template("dashboard.html",
+            user_name=session.get("user_name", "User"),
+            user_id=emp_id,
+            staff_type=staff_type,
+            today=today,
+            today_entry=today_entry,
+            d_stats=d_stats,
+            w_stats=w_stats,
+            m_stats=m_stats,
+            recent=all_entries[:14],
+            trend_labels=trend_labels,
+            trend_accuracy=trend_accuracy,
+            trend_speed=trend_speed,
+            total_entries=len(all_entries),
+            new_personal_best=new_personal_best,
+            pending_windows=pending_windows
+        )
+    except Exception as e:
+        logger.error(f"Dashboard error: {e}")
+        flash("Error loading dashboard.", "danger")
+        return render_template("dashboard.html",
+            user_name="User", user_id=0, staff_type="picker", today=date.today(),
+            today_entry=None, d_stats=None, w_stats=None, m_stats=None,
+            recent=[], trend_labels=[], trend_accuracy=[], trend_speed=[], total_entries=0,
+            new_personal_best=False, pending_windows=[])
+
+
+@app.route("/admin_dashboard")
+@admin_required
+def admin_dashboard():
+    try:
+        employees = Employee.query.filter_by(is_admin=False).options(db.joinedload(Employee.entries)).all()
+        rows = []
+        today = date.today()
+        for emp in employees:
+            ents = emp.entries
+            stats = build_analytics(ents, emp.staff_type)
+            week_ents = [e for e in ents if e.entry_date >= today - timedelta(days=6)]
+            week_stats = build_analytics(week_ents, emp.staff_type)
+            rows.append({
+                'emp': emp,
+                'stats': stats,
+                'week_stats': week_stats,
+                'count': len(ents),
+                'last_entry': ents[0].entry_date if ents else None,
+            })
+
+        all_ents = KPIEntry.query.all()
+        total_picked = sum(e.picked or 0 for e in all_ents)
+        total_entries = len(all_ents)
+        active_today = KPIEntry.query.filter_by(entry_date=today).count()
+        open_windows = PastEntryWindow.query.filter_by(is_active=True).order_by(PastEntryWindow.past_date.desc()).all()
+
+        # Leaderboard & analytics
+        rws = [r for r in rows if r['stats']]
+        def srt(lst, key='eff_score', wk=False):
+            k = 'week_stats' if wk else 'stats'
+            return sorted([r for r in lst if r[k]], key=lambda r: r[k][key], reverse=True)[:5]
+        picker_lb       = srt([r for r in rws if r['emp'].staff_type=='picker'])
+        checker_lb      = srt([r for r in rws if r['emp'].staff_type=='checker'])
+        mixed_lb        = srt(rws)
+        rw2 = [r for r in rows if r['week_stats']]
+        picker_week_lb  = srt([r for r in rw2 if r['emp'].staff_type=='picker'], wk=True)
+        checker_week_lb = srt([r for r in rw2 if r['emp'].staff_type=='checker'], wk=True)
+        mixed_week_lb   = srt(rw2, wk=True)
+        all_s = [r['stats'] for r in rws]
+        team_avg_eff = round(sum(s['eff_score'] for s in all_s)/len(all_s),1) if all_s else 0
+        team_avg_acc = round(sum(
+            s.get('check_acc',0) if r['emp'].staff_type=='checker' else s.get('pick_acc',0)
+            for r,s in [(r,r['stats']) for r in rws]
+        )/len(all_s),1) if all_s else 0
+        grade_counts = {"ELITE":0,"PROFICIENT":0,"SATISFACTORY":0,"RE-TRAINING":0}
+        for s in all_s:
+            g = s.get("grade","RE-TRAINING")
+            if g in grade_counts: grade_counts[g] += 1
+        needs_attention = [r for r in rws if r["stats"].get("grade")=="RE-TRAINING"]
+        improving = [r for r in rw2 if r["week_stats"].get("trend")=="improving"]
+
+        return render_template("admin.html",
+            rows=rows, total_picked=total_picked, total_entries=total_entries,
+            active_today=active_today, emp_count=len(employees), today=today,
+            open_windows=open_windows,
+            picker_lb=picker_lb, checker_lb=checker_lb, mixed_lb=mixed_lb,
+            picker_week_lb=picker_week_lb, checker_week_lb=checker_week_lb,
+            mixed_week_lb=mixed_week_lb, team_avg_eff=team_avg_eff,
+            team_avg_acc=team_avg_acc, grade_counts=grade_counts,
+            needs_attention=needs_attention, improving=improving,
+        )
+    except Exception as e:
+        logger.error(f"Admin dashboard error: {e}")
+        flash("Error loading admin dashboard.", "danger")
+        return render_template("admin.html", rows=[], total_picked=0,
+            total_entries=0, active_today=0, emp_count=0, today=date.today(),
+            open_windows=[], picker_lb=[], checker_lb=[], mixed_lb=[],
+            picker_week_lb=[], checker_week_lb=[], mixed_week_lb=[],
+            team_avg_eff=0, team_avg_acc=0, improving=[],
+            grade_counts={"ELITE":0,"PROFICIENT":0,"SATISFACTORY":0,"RE-TRAINING":0},
+            needs_attention=[])
+
+
+@app.route("/staff/<int:emp_id>")
+@login_required
+def staff_detail(emp_id):
+    # Admins can view any; staff can only view themselves
+    if not session.get("is_admin") and session.get("user_id") != emp_id:
+        return redirect(url_for("dashboard"))
+    try:
+        emp = db.session.get(Employee, emp_id)
+        if not emp:
+            flash("Employee not found.", "danger")
+            return redirect(url_for("admin_dashboard") if session.get("is_admin") else url_for("dashboard"))
+
+        entries = KPIEntry.query.filter_by(emp_id=emp_id).order_by(KPIEntry.entry_date.desc()).all()
+        today = date.today()
+
+        a_stats = build_analytics(entries, emp.staff_type)
+        d_stats = build_analytics(get_period_entries(emp_id, "day"), emp.staff_type)
+        w_stats = build_analytics(get_period_entries(emp_id, "week"), emp.staff_type)
+        m_stats = build_analytics(get_period_entries(emp_id, "month"), emp.staff_type)
+
+        # Heatmap: last 30 days — use accuracy for pickers, check_rate for checkers
+        heatmap = {}
+        for e in entries:
+            delta = (today - e.entry_date).days
+            if delta <= 29:
+                heatmap[str(e.entry_date)] = e.check_rate if emp.staff_type == "checker" else e.accuracy
+
+        return render_template("staff_detail.html",
+            emp=emp,
+            entries=entries,
+            a_stats=a_stats,
+            d_stats=d_stats,
+            w_stats=w_stats,
+            m_stats=m_stats,
+            heatmap=heatmap,
+            today=today,
+            is_admin=bool(session.get("is_admin"))
+        )
+    except Exception as e:
+        logger.error(f"Staff detail error: {e}")
+        flash("Error loading staff profile.", "danger")
+        return redirect(url_for("admin_dashboard") if session.get("is_admin") else url_for("dashboard"))
+
+
+@app.route("/admin/toggle_sunday/<int:emp_id>", methods=["POST"])
+@admin_required
+def admin_toggle_sunday(emp_id):
+    try:
+        emp = db.session.get(Employee, emp_id)
+        if emp and not emp.is_admin:
+            emp.sunday_override = not emp.sunday_override
+            db.session.commit()
+            status = "enabled" if emp.sunday_override else "disabled"
+            log_audit("sunday_toggle", emp.name, f"Sunday override {status}")
+            flash(f"Sunday data entry {status} for {emp.name}.", "success")
+    except Exception as e:
+        db.session.rollback()
+        logger.error(f"toggle_sunday: {e}")
+        flash("Error updating Sunday override.", "danger")
+    return redirect(url_for("admin_dashboard"))
+
+
+@app.route("/admin/add_user", methods=["POST"])
+@admin_required
+def admin_add_user():
+    try:
+        name = request.form.get("name", "").strip()
+        email = request.form.get("email", "").lower().strip()
+        password = request.form.get("password", "")
+        staff_type = request.form.get("staff_type", "picker").strip()
+
+        if not name or not email or not password:
+            flash("All fields required.", "danger")
+            return redirect(url_for("admin_dashboard"))
+        if len(password) < 6:
+            flash("Password must be at least 6 characters.", "danger")
+            return redirect(url_for("admin_dashboard"))
+        if Employee.query.filter_by(email=email).first():
+            flash(f"Email '{email}' already exists.", "warning")
+            return redirect(url_for("admin_dashboard"))
+
+        emp = Employee(name=name, email=email, staff_type=staff_type, role=f"Operations {staff_type.title()}")
+        emp.set_password(password)
+        db.session.add(emp)
+        db.session.commit()
+        log_audit("add_user", name, f"Added as {staff_type}")
+        flash(f"✅ {name} added successfully.", "success")
+    except Exception as e:
+        db.session.rollback()
+        logger.error(f"add_user: {e}")
+        flash("Error adding user.", "danger")
+    return redirect(url_for("admin_dashboard"))
+
+
+@app.route("/admin/edit_user/<int:emp_id>", methods=["POST"])
+@admin_required
+def admin_edit_user(emp_id):
+    try:
+        emp = db.session.get(Employee, emp_id)
+        if not emp or emp.is_admin:
+            flash("Employee not found.", "danger")
+            return redirect(url_for("admin_dashboard"))
+
+        name = request.form.get("name", "").strip()
+        email = request.form.get("email", "").lower().strip()
+        staff_type = request.form.get("staff_type", emp.staff_type).strip()
+        new_password = request.form.get("new_password", "").strip()
+
+        if name:
+            emp.name = name
+        if email and email != emp.email:
+            existing = Employee.query.filter_by(email=email).first()
+            if existing and existing.id != emp_id:
+                flash(f"Email '{email}' already taken.", "warning")
+                return redirect(url_for("admin_dashboard"))
+            emp.email = email
+        if staff_type in ("picker", "checker"):
+            emp.staff_type = staff_type
+            emp.role = f"Operations {staff_type.title()}"
+        if new_password:
+            if len(new_password) < 6:
+                flash("New password must be at least 6 characters.", "danger")
+                return redirect(url_for("admin_dashboard"))
+            emp.set_password(new_password)
+
+        db.session.commit()
+        log_audit("edit_user", name, "Updated by admin")
+        flash(f"✅ {emp.name} updated successfully.", "success")
+    except Exception as e:
+        db.session.rollback()
+        logger.error(f"edit_user: {e}")
+        flash("Error updating user.", "danger")
+    return redirect(url_for("admin_dashboard"))
+
+
+@app.route("/admin/delete_user/<int:emp_id>", methods=["POST"])
+@admin_required
+def admin_delete_user(emp_id):
+    try:
+        emp = db.session.get(Employee, emp_id)
+        if emp and not emp.is_admin:
+            name = emp.name
+            db.session.delete(emp)
+            db.session.commit()
+            log_audit("delete_user", name, "User removed")
+            flash(f"🗑️ {name} removed.", "success")
+    except Exception as e:
+        db.session.rollback()
+        logger.error(f"delete_user: {e}")
+        flash("Error deleting user.", "danger")
+    return redirect(url_for("admin_dashboard"))
+
+
+@app.route("/admin/export_csv")
+@admin_required
+def admin_export_csv():
+    try:
+        output = io.StringIO()
+        writer = csv.writer(output)
+        writer.writerow(["Employee", "Email", "Type", "Date", "Picked", "Missed",
+                         "Accuracy%", "SalesBills", "Packing", "Checked", "Errors",
+                         "TotalTimeHrs", "CheckTimeHrs"])
+        employees = Employee.query.filter_by(is_admin=False).all()
+        for emp in employees:
+            entries = KPIEntry.query.filter_by(emp_id=emp.id).order_by(KPIEntry.entry_date).all()
+            for e in entries:
+                t = (e.picked or 0) + (e.missed or 0)
+                acc = round((e.picked or 0) / t * 100, 1) if t > 0 else 0
+                writer.writerow([
+                    emp.name, emp.email, emp.staff_type, e.entry_date,
+                    e.picked, e.missed, acc,
+                    e.sales_bills_open, e.packing_done,
+                    e.checked, e.errors_found,
+                    round(e.total_time or 0, 2), round(e.check_time or 0, 2)
+                ])
+        output.seek(0)
+        return Response(
+            output.getvalue(),
+            mimetype="text/csv",
+            headers={"Content-Disposition": f"attachment; filename=pharma_kpi_{date.today()}.csv"}
+        )
+    except Exception as e:
+        logger.error(f"export_csv: {e}")
+        flash("Error exporting data.", "danger")
+        return redirect(url_for("admin_dashboard"))
+
+
+# Alias for staff_detail template compatibility
+@app.route("/export_data")
+@admin_required
+def export_data():
+    return redirect(url_for("admin_export_csv"))
+
+
+@app.route("/export_pdf")
+@login_required
+def export_pdf():
+    try:
+        from utils import generate_visual_pdf
+        emp_id = session.get("user_id")
+        emp = db.session.get(Employee, emp_id)
+        all_entries = KPIEntry.query.filter_by(emp_id=emp_id).all()
+
+        payload = {
+            "all_stats": build_analytics(all_entries, emp.staff_type),
+            "day_stats": build_analytics(get_period_entries(emp_id, "day"), emp.staff_type),
+            "week_stats": build_analytics(get_period_entries(emp_id, "week"), emp.staff_type),
+            "month_stats": build_analytics(get_period_entries(emp_id, "month"), emp.staff_type),
+            "staff_type": emp.staff_type,
+            "all_entries": all_entries[-30:],
+        }
+
+        pdf_buffer = generate_visual_pdf(emp.name, payload)
+        return Response(
+            pdf_buffer.getvalue(),
+            mimetype="application/pdf",
+            headers={"Content-Disposition": f"attachment; filename=KRA_{emp.name}_{date.today()}.pdf"}
+        )
+    except Exception as e:
+        logger.error(f"PDF export error: {e}")
+        flash("Error generating PDF report.", "danger")
+        return redirect(url_for("dashboard"))
+
+
+@app.route("/download/<int:emp_id>")
+@login_required
+def download_pdf(emp_id):
+    if not session.get("is_admin") and session.get("user_id") != emp_id:
+        return redirect(url_for("dashboard"))
+    try:
+        from utils import generate_visual_pdf
+        emp = db.session.get(Employee, emp_id)
+        if not emp:
+            flash("Employee not found.", "danger")
+            return redirect(url_for("admin_dashboard"))
+        all_entries = KPIEntry.query.filter_by(emp_id=emp_id).all()
+
+        payload = {
+            "all_stats": build_analytics(all_entries, emp.staff_type),
+            "day_stats": build_analytics(get_period_entries(emp_id, "day"), emp.staff_type),
+            "week_stats": build_analytics(get_period_entries(emp_id, "week"), emp.staff_type),
+            "month_stats": build_analytics(get_period_entries(emp_id, "month"), emp.staff_type),
+            "staff_type": emp.staff_type,
+            "all_entries": all_entries[-30:],
+        }
+
+        pdf_buffer = generate_visual_pdf(emp.name, payload)
+        return Response(
+            pdf_buffer.getvalue(),
+            mimetype="application/pdf",
+            headers={"Content-Disposition": f"attachment; filename=KRA_{emp.name}_{date.today()}.pdf"}
+        )
+    except Exception as e:
+        logger.error(f"Download PDF error: {e}")
+        flash("Error generating PDF.", "danger")
+        return redirect(url_for("admin_dashboard"))
+
+
+# ─── PAST DATE ENTRY WINDOW ──────────────────────────────────────────────────
+
+@app.route("/admin/past_window", methods=["POST"])
+@admin_required
+def admin_open_past_window():
+    """Admin opens (or closes) a past-date entry window."""
+    try:
+        action    = request.form.get("action", "open")
+        date_str  = request.form.get("past_date", "").strip()
+        if not date_str:
+            flash("Please select a date.", "warning")
+            return redirect(url_for("admin_dashboard"))
+
+        past_date = datetime.strptime(date_str, "%Y-%m-%d").date()
+        today     = date.today()
+
+        if past_date >= today:
+            flash("You can only open windows for past dates (before today).", "warning")
+            return redirect(url_for("admin_dashboard"))
+
+        window = PastEntryWindow.query.filter_by(past_date=past_date).first()
+
+        if action == "close":
+            if window:
+                window.is_active = False
+                db.session.commit()
+                log_audit("close_past_window", str(past_date), "Admin closed past entry window")
+                flash(f"✅ Entry window for {past_date.strftime('%d %b %Y')} closed.", "success")
+            else:
+                flash("No window found for that date.", "warning")
+        else:
+            if window:
+                window.is_active  = True
+                window.opened_by  = session.get("user_id")
+                window.opened_at  = datetime.utcnow()
+            else:
+                window = PastEntryWindow(
+                    past_date  = past_date,
+                    opened_by  = session.get("user_id"),
+                    is_active  = True
+                )
+                db.session.add(window)
+            db.session.commit()
+            log_audit("open_past_window", str(past_date), "Admin opened past entry window")
+            flash(f"✅ Past entry window opened for {past_date.strftime('%d %b %Y')}. "
+                  f"Staff who haven't submitted can now enter their data.", "success")
+
+    except ValueError:
+        flash("Invalid date format.", "danger")
+    except Exception as e:
+        db.session.rollback()
+        logger.error(f"admin_open_past_window: {e}")
+        flash("Error updating entry window.", "danger")
+    return redirect(url_for("admin_dashboard"))
+
+
+@app.route("/past_entry/<date_str>", methods=["GET", "POST"])
+@login_required
+def past_entry(date_str):
+    """Staff submits KPI data for an admin-opened past date."""
+    try:
+        past_date = datetime.strptime(date_str, "%Y-%m-%d").date()
+    except ValueError:
+        flash("Invalid date.", "danger")
+        return redirect(url_for("dashboard"))
+
+    emp_id     = session.get("user_id")
+    staff_type = session.get("staff_type", "picker")
+    today      = date.today()
+
+    if past_date >= today:
+        flash("You can only submit data for past dates.", "warning")
+        return redirect(url_for("dashboard"))
+
+    window = PastEntryWindow.query.filter_by(past_date=past_date, is_active=True).first()
+    if not window:
+        flash("No active entry window for that date.", "warning")
+        return redirect(url_for("dashboard"))
+
+    existing = KPIEntry.query.filter_by(emp_id=emp_id, entry_date=past_date).first()
+    if existing:
+        flash(f"You have already submitted data for {past_date.strftime('%d %b %Y')}.", "info")
+        return redirect(url_for("dashboard"))
+
+    if request.method == "POST":
+        try:
+            def gi(k): return max(0, int(request.form.get(k, 0) or 0))
+            def gf(k): return max(0, float(request.form.get(k, 0) or 0))
+
+            sales_bills_open = gi("sales_bills_open")
+            cs_sales_open    = gi("cs_sales_open")
+            packing_done     = gi("packing_done")
+            total_mins       = min(gf("total_mins"), 480)
+            check_mins       = min(gf("check_mins"), 480)
+
+            if staff_type == "checker":
+                # checker: picked = SB Open assist, missed not used
+                checked      = gi("checked")
+                errors_found = gi("errors_found")   # Urgent Item Checked — not capped
+                picked       = gi("picked")          # SB Open assist
+                missed       = 0
+            else:
+                picked       = gi("picked")
+                missed       = gi("missed")
+                checked      = 0
+                errors_found = 0
+
+            ne = KPIEntry(
+                emp_id           = emp_id,
+                sales_bills_open = sales_bills_open,
+                picked           = picked,
+                missed           = missed,
+                cs_sales_open    = cs_sales_open,
+                packing_done     = packing_done,
+                total_time       = round(total_mins / 60, 3),
+                checked          = checked,
+                errors_found     = errors_found,
+                check_time       = round(check_mins / 60, 3),
+                entry_date       = past_date
+            )
+            db.session.add(ne)
+            db.session.commit()
+            log_audit("past_entry_submit", session.get("user_name", ""), f"Submitted past data for {past_date}")
+            flash(f"✅ Past entry for {past_date.strftime('%d %b %Y')} saved successfully.", "success")
+            return redirect(url_for("dashboard"))
+        except Exception as e:
+            db.session.rollback()
+            logger.error(f"past_entry POST: {e}")
+            flash("Error saving past entry.", "danger")
+
+    return render_template("past_entry.html",
+        past_date  = past_date,
+        staff_type = staff_type,
+        user_name  = session.get("user_name", "")
+    )
+
+
+@app.route("/api/stats/<int:emp_id>")
+@login_required
+def api_stats(emp_id):
+    if not session.get("is_admin") and session.get("user_id") != emp_id:
+        return jsonify(error="Unauthorized"), 403
+    try:
+        emp = db.session.get(Employee, emp_id)
+        if not emp:
+            return jsonify(error="Not found"), 404
+        entries = KPIEntry.query.filter_by(emp_id=emp_id).all()
+        stats = build_analytics(entries, emp.staff_type)
+        return jsonify(stats=stats, name=emp.name, staff_type=emp.staff_type)
+    except Exception as e:
+        logger.error(f"api_stats: {e}")
+        return jsonify(error="Server error"), 500
+
+
+@socketio.on('connect')
+def handle_connect():
+    emit('connected', {'message': 'Connected to KPI tracker'})
+
+
+# ─── ERROR HANDLERS ──────────────────────────────────────────────────────
+
+@app.errorhandler(404)
+def not_found(e):
+    return redirect(url_for("login"))
+
+@app.errorhandler(500)
+def server_error(e):
+    logger.error(f"500: {e}")
+    return redirect(url_for("login"))
+
+
+# ─── MAIN ────────────────────────────────────────────────────────────────────
+
+
+@app.route("/admin/migrate_checker/<int:emp_id>")
+@admin_required
+def migrate_checker_data(emp_id):
+    """One-time route: migrate picker fields → checker fields for a staff member.
+    Use when staff was entered as picker but should be checker.
+    Visit: /admin/migrate_checker/<emp_id>
+    Delete this route after use.
+    """
+    try:
+        emp = db.session.get(Employee, emp_id)
+        if not emp:
+            return jsonify(error="Employee not found"), 404
+
+        entries = KPIEntry.query.filter_by(emp_id=emp_id).all()
+        migrated = 0
+        for e in entries:
+            if (e.picked or 0) > 0 and (e.checked or 0) == 0:
+                # Move picker data → checker fields
+                e.checked      = e.picked        # Items Checked Normal
+                e.errors_found = e.missed         # Items Checked Urgent
+                e.sales_bills_open = e.sales_bills_open  # SB Normal (stays)
+                e.picked  = 0
+                e.missed  = 0
+                migrated += 1
+
+        # Set staff_type to checker
+        emp.staff_type = "checker"
+        db.session.commit()
+
+        return jsonify(
+            success=True,
+            employee=emp.name,
+            staff_type=emp.staff_type,
+            entries_migrated=migrated,
+            message=f"✅ Migrated {migrated} entries for {emp.name} to checker format. DELETE THIS ROUTE NOW."
+        )
+    except Exception as e:
+        db.session.rollback()
+        logger.error(f"Migration error: {e}")
+        return jsonify(error=str(e)), 500
+
+
+if __name__ == "__main__":
+    socketio.run(app, host="0.0.0.0", port=int(os.environ.get("PORT", 10000)))
