@@ -24,9 +24,10 @@ IS_PRODUCTION = os.environ.get("RENDER") or os.environ.get("DATABASE_URL")
 
 app.config.update(
     SECRET_KEY=os.environ.get("SECRET_KEY", "pharma_secure_key_2024"),
-    SESSION_COOKIE_SECURE=False,  # Render handles HTTPS at proxy level
+    SESSION_COOKIE_SECURE=False,
     SESSION_COOKIE_HTTPONLY=True,
     SESSION_COOKIE_SAMESITE='Lax',
+    SESSION_COOKIE_NAME='pharma_session',
     PERMANENT_SESSION_LIFETIME=timedelta(hours=8),
     SESSION_REFRESH_EACH_REQUEST=False,
     PREFERRED_URL_SCHEME='https',
@@ -322,6 +323,7 @@ def login_required(f):
 def admin_required(f):
     @wraps(f)
     def decorated(*args, **kwargs):
+        if not session.get("user_id"): return redirect(url_for("login"))
         if not session.get("is_admin"): return redirect(url_for("dashboard"))
         return f(*args, **kwargs)
     return decorated
