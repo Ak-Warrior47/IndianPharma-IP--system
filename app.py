@@ -360,14 +360,14 @@ def run_migrations():
     try:
         is_postgres = "postgresql" in app.config["SQLALCHEMY_DATABASE_URI"]
         if is_postgres:
-            cols_to_add = [
+            # Migrate employees table
+            emp_cols = [
                 ("sunday_override", "BOOLEAN DEFAULT FALSE"),
                 ("twofa_secret",    "VARCHAR(32)"),
                 ("twofa_enabled",   "BOOLEAN DEFAULT FALSE"),
                 ("created_at",      "TIMESTAMP DEFAULT CURRENT_TIMESTAMP"),
-                ("bills_received",   "INTEGER DEFAULT 0"),
             ]
-            for col, col_type in cols_to_add:
+            for col, col_type in emp_cols:
                 try:
                     db.session.execute(db.text(
                         f"ALTER TABLE employees ADD COLUMN IF NOT EXISTS {col} {col_type}"
@@ -377,6 +377,20 @@ def run_migrations():
                 except Exception as ce:
                     db.session.rollback()
                     logger.warning(f"Column '{col}' migration skipped: {ce}")
+            # Migrate kpi_entries table
+            kpi_cols = [
+                ("bills_received", "INTEGER DEFAULT 0"),
+            ]
+            for col, col_type in kpi_cols:
+                try:
+                    db.session.execute(db.text(
+                        f"ALTER TABLE kpi_entries ADD COLUMN IF NOT EXISTS {col} {col_type}"
+                    ))
+                    db.session.commit()
+                    logger.info(f"✅ Column '{col}' ensured on kpi_entries table")
+                except Exception as ce:
+                    db.session.rollback()
+                    logger.warning(f"kpi_entries column '{col}' migration skipped: {ce}")
         else:
             # SQLite doesn't support IF NOT EXISTS on ALTER TABLE
             import sqlite3
