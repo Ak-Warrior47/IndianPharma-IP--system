@@ -176,10 +176,15 @@ body {
       <div class="form-grid">
 
         {% if staff_type == 'checker' %}
-        <div class="field" style="grid-column:span 2;margin-bottom:10px;">
+        <div class="field">
           <label>★ Total Bills Received That Day</label>
           <input type="number" name="bills_received" id="pe_bills_received" min="0" value="0" required oninput="updatePeTotals()">
-          <small>All bills given to you that day to check</small>
+          <small>All bills given to you that day</small>
+        </div>
+        <div class="field">
+          <label>★ Pending Bills (not checked)</label>
+          <input type="number" name="pending_bills_manual" id="pe_pending_manual" min="0" value="0" oninput="updatePeTotals()">
+          <small>Bills you could not complete that day</small>
         </div>
         <!-- LIVE TOTAL BANNER -->
         <div style="grid-column:span 2;display:flex;gap:10px;margin-bottom:4px;">
@@ -196,7 +201,12 @@ body {
           <div style="flex:1;background:rgba(254,242,242,0.85);border:1.5px solid rgba(220,38,38,0.25);border-radius:13px;padding:14px 18px;backdrop-filter:blur(10px);text-align:center;">
             <div style="font-size:10px;font-weight:800;color:#dc2626;text-transform:uppercase;letter-spacing:.7px;margin-bottom:4px;">Pending Bills</div>
             <div style="font-size:30px;font-weight:800;color:#991b1b;" id="pe_pending">0</div>
-            <div style="font-size:11px;color:#64748b;margin-top:2px;">Received − Checked</div>
+            <div style="font-size:11px;color:#64748b;margin-top:2px;">Manually entered</div>
+          </div>
+          <div style="flex:1;background:rgba(240,253,244,0.85);border:1.5px solid rgba(22,163,74,0.25);border-radius:13px;padding:14px 18px;backdrop-filter:blur(10px);text-align:center;">
+            <div style="font-size:10px;font-weight:800;color:#16a34a;text-transform:uppercase;letter-spacing:.7px;margin-bottom:4px;">Clearance Rate</div>
+            <div style="font-size:30px;font-weight:800;color:#14532d;" id="pe_clearance">100%</div>
+            <div style="font-size:11px;color:#64748b;margin-top:2px;">Checked÷(Checked+Pending)</div>
           </div>
         </div>
         <div class="field">
@@ -220,6 +230,11 @@ body {
           <input type="number" name="packing_done" min="0" value="0">
         </div>
         {% else %}
+        <div class="field">
+          <label>★ Total Bills Received to Pick</label>
+          <input type="number" name="total_bills_received" min="0" value="0" required>
+          <small>Total bills given to you that day</small>
+        </div>
         <div class="field">
           <label>Sales Bill Picked</label>
           <input type="number" name="sales_bills_open" min="0" value="0" required class="urgent">
@@ -258,16 +273,18 @@ function updatePeTotals(){
   var sbU=parseInt(document.getElementById('pe_sb_urgent')?.value||0)||0;
   var itN=parseInt(document.getElementById('pe_item_normal')?.value||0)||0;
   var itU=parseInt(document.getElementById('pe_item_urgent')?.value||0)||0;
-  var brEl=document.getElementById('pe_bills_received');
-  var br=brEl?parseInt(brEl.value||0)||0:0;
+  var pd=parseInt(document.getElementById('pe_pending_manual')?.value||0)||0;
   var totalSB=sbN+sbU;
-  var pending=Math.max(br-totalSB,0);
+  var totalForClearance=totalSB+pd;
+  var clearance=totalForClearance>0?Math.round(totalSB/totalForClearance*100):100;
   var tSB=document.getElementById('pe_total_sb');
   var tIT=document.getElementById('pe_total_items');
   var tPD=document.getElementById('pe_pending');
+  var tCL=document.getElementById('pe_clearance');
   if(tSB) tSB.textContent=totalSB;
   if(tIT) tIT.textContent=itN+itU;
-  if(tPD){tPD.textContent=pending;tPD.style.color=pending>0?'#dc2626':'#16a34a';}
+  if(tPD){tPD.textContent=pd;tPD.style.color=pd>0?'#dc2626':'#16a34a';}
+  if(tCL){tCL.textContent=clearance+'%';tCL.style.color=clearance>=90?'#16a34a':clearance>=75?'#d97706':'#dc2626';}
 }
 </script>
 </body>
