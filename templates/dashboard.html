@@ -295,6 +295,11 @@ table.htable tbody tr:hover td { background: var(--bg); }
     <form method="POST" autocomplete="off">
       <div class="form-grid">
         {% if staff_type == 'checker' %}
+        <div class="field" style="grid-column:span 2;">
+          <label>★ Total Bills Received Today</label>
+          <input type="number" name="bills_received" id="f_bills_received" min="0" value="0" required oninput="updateCheckerTotals()">
+          <small>All bills given to you today to check</small>
+        </div>
         <!-- LIVE TOTAL BANNER — updates as checker types -->
         <div style="grid-column:span 2;display:flex;gap:10px;margin-bottom:4px;">
           <div style="flex:1;background:rgba(219,234,254,0.85);border:1.5px solid rgba(29,78,216,0.25);border-radius:13px;padding:14px 18px;backdrop-filter:blur(10px);text-align:center;">
@@ -306,6 +311,11 @@ table.htable tbody tr:hover td { background: var(--bg); }
             <div style="font-size:10px;font-weight:800;color:var(--ok);text-transform:uppercase;letter-spacing:.7px;margin-bottom:4px;">Total Items Checked</div>
             <div style="font-size:30px;font-weight:800;color:#14532d;" id="live_total_items">0</div>
             <div style="font-size:11px;color:var(--muted);margin-top:2px;">Normal + Urgent</div>
+          </div>
+          <div style="flex:1;background:rgba(254,242,242,0.85);border:1.5px solid rgba(220,38,38,0.25);border-radius:13px;padding:14px 18px;backdrop-filter:blur(10px);text-align:center;">
+            <div style="font-size:10px;font-weight:800;color:#dc2626;text-transform:uppercase;letter-spacing:.7px;margin-bottom:4px;">Pending Bills</div>
+            <div style="font-size:30px;font-weight:800;color:#991b1b;" id="live_pending">0</div>
+            <div style="font-size:11px;color:var(--muted);margin-top:2px;">Received − Checked</div>
           </div>
         </div>
         <div class="field">
