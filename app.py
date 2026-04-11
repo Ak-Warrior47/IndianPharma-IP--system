@@ -89,7 +89,9 @@ class KPIEntry(db.Model):
     sweep            = db.Column(db.Float, default=0.0)
     entry_date       = db.Column(db.Date, nullable=False, index=True)
     report_sent      = db.Column(db.Boolean, default=False)
-    bills_received   = db.Column(db.Integer, default=0)  # Checker: total bills received today
+    bills_received   = db.Column(db.Integer, default=0)  # Checker: total bills received (manual)
+    pending_bills_manual = db.Column(db.Integer, default=0)  # Checker: manually entered pending bills
+    total_bills_received = db.Column(db.Integer, default=0)  # Picker: total bills given to pick
 
     __table_args__ = (
         db.UniqueConstraint("emp_id", "entry_date", name="_emp_date_uc"),
@@ -189,8 +191,11 @@ def build_analytics(entries: List[KPIEntry], staff_type: str = "picker") -> Opti
         ttc  = sum(int(e.table_clean or 0) for e in entries)
         tct  = sum(float(e.check_time or 0) for e in entries)
         days = len(entries)
-        # Checker: bills received today (entered by checker)
-        tbr = sum(int(e.bills_received or 0) for e in entries) if staff_type == "checker" else 0
+        # Checker: bills received + pending (both manual entry)
+        tbr  = sum(int(e.bills_received or 0) for e in entries) if staff_type == "checker" else 0
+        tpbm = sum(int(e.pending_bills_manual or 0) for e in entries) if staff_type == "checker" else 0
+        # Picker: total bills received to pick
+        tbr_picker = sum(int(e.total_bills_received or 0) for e in entries) if staff_type == "picker" else 0
 
         FIXED_HRS   = 9.0
         ts_total    = FIXED_HRS * days
@@ -201,10 +206,13 @@ def build_analytics(entries: List[KPIEntry], staff_type: str = "picker") -> Opti
         tsb_urgent  = sum(int(e.cs_sales_open or 0) for e in entries) if staff_type == "checker" else 0
         tsb_total   = tsb_normal + tsb_urgent
 
-        # Pending bills = received - checked (checker only)
+        # Checker: clearance = SB Checked / (SB Checked + Pending Manual)
         tsb_checked_total = tsb_normal + tsb_urgent if staff_type == "checker" else 0
-        pending_bills  = max(tbr - tsb_checked_total, 0) if tbr > 0 else 0
-        clearance_rate = round(safe_div(tsb_checked_total, tbr) * 100, 1) if tbr > 0 else 100.0
+        pending_bills  = tpbm  # now manually entered by checker
+        total_for_clearance = tsb_checked_total + pending_bills
+        clearance_rate = round(safe_div(tsb_checked_total, total_for_clearance) * 100, 1) if total_for_clearance > 0 else 100.0
+        # Picker: bill fulfilment = SB Picked / Total Bills Received
+        bill_fulfilment = round(min(safe_div(tsb_normal, tbr_picker) * 100, 100.0), 1) if tbr_picker > 0 else 0.0
 
         pick_acc        = round(safe_div(tp, ti) * 100, 1)
         pick_speed      = round(safe_div(ti, ts_total), 1)
@@ -256,7 +264,13 @@ def build_analytics(entries: List[KPIEntry], staff_type: str = "picker") -> Opti
             trend = "stable"
 
         if staff_type == "picker":
-            eff_score = round((pick_acc/100)*55+min(pick_speed/200,1.0)*30+(workspace_score/100)*10+min(packing_eff/100,1.0)*5, 1)
+            eff_score = round(
+                (pick_acc        / 100) * 45 +
+                min(pick_speed   / 200, 1.0) * 25 +
+                (bill_fulfilment / 100) * 20 +
+                (workspace_score / 100) * 5 +
+                min(packing_eff  / 100, 1.0) * 5,
+                1)
         else:
             # Speed 70% + Clearance Rate 30% (pending bills penalise score)
             speed_score     = min(safe_div(check_speed, 25.0), 1.0) * 70
@@ -265,9 +279,9 @@ def build_analytics(entries: List[KPIEntry], staff_type: str = "picker") -> Opti
         eff_score = min(round(eff_score,1), 100.0)
 
         if staff_type == "picker":
-            if   pick_acc>=98 and workspace_score>=80: grade="ELITE"
-            elif pick_acc>=95:                         grade="PROFICIENT"
-            elif pick_acc>=88:                         grade="SATISFACTORY"
+            if   pick_acc>=98 and bill_fulfilment>=95: grade="ELITE"
+            elif pick_acc>=95 and bill_fulfilment>=85: grade="PROFICIENT"
+            elif pick_acc>=88 and bill_fulfilment>=70: grade="SATISFACTORY"
             else:                                      grade="RE-TRAINING"
         else:
             # Grade: speed + clearance rate (pending bills drop grade)
@@ -297,6 +311,7 @@ def build_analytics(entries: List[KPIEntry], staff_type: str = "picker") -> Opti
             tsb_urgent=tsb_urgent, tsb_total=tsb_total,
             tpk=tpk, tpd=tpk,
             tbr=tbr, pending_bills=pending_bills, clearance_rate=clearance_rate,
+            tbr_picker=tbr_picker, bill_fulfilment=bill_fulfilment,
             eff_score=eff_score, grade=grade, days=days,
             consistency=consistency, trend=trend,
             feedback=feedback_map.get(grade,""),
@@ -379,7 +394,9 @@ def run_migrations():
                     logger.warning(f"Column '{col}' migration skipped: {ce}")
             # Migrate kpi_entries table
             kpi_cols = [
-                ("bills_received", "INTEGER DEFAULT 0"),
+                ("bills_received",      "INTEGER DEFAULT 0"),
+                ("pending_bills_manual","INTEGER DEFAULT 0"),
+                ("total_bills_received","INTEGER DEFAULT 0"),
             ]
             for col, col_type in kpi_cols:
                 try:
@@ -528,11 +545,12 @@ def dashboard():
                     check_mins       = min(gf("check_mins"), 480)
 
                     if staff_type == "checker":
-                        checked        = gi("checked")
-                        errors_found   = gi("errors_found")
-                        picked         = gi("picked")
-                        missed         = 0
-                        bills_received = gi("bills_received")
+                        checked              = gi("checked")
+                        errors_found         = gi("errors_found")
+                        picked               = gi("picked")
+                        missed               = 0
+                        bills_received       = gi("bills_received")
+                        pending_bills_manual = gi("pending_bills_manual")
                     else:
                         picked       = gi("picked")
                         missed       = gi("missed")
@@ -551,6 +569,8 @@ def dashboard():
                         errors_found=errors_found,
                         check_time=round(check_mins / 60, 3),
                         bills_received=bills_received if staff_type=="checker" else 0,
+                        pending_bills_manual=pending_bills_manual if staff_type=="checker" else 0,
+                        total_bills_received=total_bills_received if staff_type=="picker" else 0,
                         entry_date=today
                     )
                     db.session.add(ne)
@@ -1052,11 +1072,12 @@ def past_entry(date_str):
             check_mins       = min(gf("check_mins"), 480)
 
             if staff_type == "checker":
-                checked        = gi("checked")
-                errors_found   = gi("errors_found")
-                picked         = gi("picked")
-                missed         = 0
-                bills_received = gi("bills_received")
+                checked              = gi("checked")
+                errors_found         = gi("errors_found")
+                picked               = gi("picked")
+                missed               = 0
+                bills_received       = gi("bills_received")
+                pending_bills_manual = gi("pending_bills_manual")
             else:
                 picked       = gi("picked")
                 missed       = gi("missed")
@@ -1074,8 +1095,10 @@ def past_entry(date_str):
                 checked          = checked,
                 errors_found     = errors_found,
                 check_time       = round(check_mins / 60, 3),
-                bills_received   = bills_received if staff_type=="checker" else 0,
-                entry_date       = past_date
+                bills_received        = bills_received if staff_type=="checker" else 0,
+                pending_bills_manual  = pending_bills_manual if staff_type=="checker" else 0,
+                total_bills_received  = total_bills_received if staff_type=="picker" else 0,
+                entry_date            = past_date
             )
             db.session.add(ne)
             db.session.commit()
