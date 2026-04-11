@@ -300,22 +300,23 @@ body{font-family:'DM Sans',sans-serif;background:var(--page-bg);min-height:100vh
       {% if emp.staff_type == 'picker' %}
       <div class="formula-row"><b>Pick Accuracy</b> = Items Picked ÷ (Picked + Missed) × 100</div>
       <div class="formula-row"><b>Pick Speed</b> = (Picked + Missed) ÷ (9 hrs × Days)</div>
+      <div class="formula-row"><b>Bill Fulfilment</b> = Sales Bill Picked ÷ Total Bills Received × 100</div>
       <div class="formula-row"><b>Packing Eff.</b> = Packing Done ÷ Sales Bill Picked × 100</div>
       <div class="formula-row"><b>CS Fulfilment</b> = min(Packing Done ÷ CS Sales Open × 100, 100)</div>
       <div class="formula-row"><b>Workspace Score</b> = (Rack + Table Days) ÷ (2 × Days) × 100</div>
-      <div class="formula-row"><b>Efficiency Score</b> = Acc×55 + Speed×30 + Workspace×10 + Packing×5</div>
+      <div class="formula-row"><b>Efficiency Score</b> = Acc×45 + Speed×25 + BillFulfilment×20 + Workspace×5 + Packing×5</div>
       <div class="formula-row"><b>Potential Items</b> = 200 × 9 hrs × Days</div>
       <div class="formula-row"><b>Consistency</b> = max(0, 100 − std_dev(daily_accuracy) × 2)</div>
-      <div class="formula-row"><b>ELITE</b>: Acc≥98% + Workspace≥80%</div>
-      <div class="formula-row"><b>PROFICIENT</b>: Acc≥95% · <b>SATISFACTORY</b>: Acc≥88%</div>
+      <div class="formula-row"><b>ELITE</b>: Acc≥98% + BillFulfilment≥95%</div>
+      <div class="formula-row"><b>PROFICIENT</b>: Acc≥95%+Fulfilment≥85% · <b>SATISFACTORY</b>: Acc≥88%+Fulfilment≥70%</div>
       {% else %}
       <div class="formula-row"><b>Total SB Checked</b> = SB Normal + SB Urgent (urgent done first)</div>
       <div class="formula-row"><b>Total Items Checked</b> = Items Normal + Urgent Items (both = good work)</div>
       <div class="formula-row"><b>Normal %</b> = Items Normal ÷ Total Items × 100 (info only)</div>
       <div class="formula-row"><b>Urgent %</b> = Urgent Items ÷ Total Items × 100 (info only)</div>
       <div class="formula-row"><b>Check Speed</b> = Total Items Checked ÷ (9 hrs × Days)</div>
-      <div class="formula-row"><b>Pending Bills</b> = Bills Received − Total SB Checked</div>
-      <div class="formula-row"><b>Clearance Rate</b> = Total SB Checked ÷ Bills Received × 100</div>
+      <div class="formula-row"><b>Pending Bills</b> = Manually entered by checker</div>
+      <div class="formula-row"><b>Clearance Rate</b> = SB Checked ÷ (SB Checked + Pending) × 100</div>
       <div class="formula-row"><b>Efficiency Score</b> = Speed×70 + Clearance Rate×30</div>
       <div class="formula-row"><b>Potential Items</b> = 25 items/hr × 9 hrs × Days</div>
       <div class="formula-row"><b>Consistency</b> = max(0, 100 − std_dev(daily_speed) × 2)</div>
@@ -392,6 +393,8 @@ body{font-family:'DM Sans',sans-serif;background:var(--page-bg);min-height:100vh
         <div class="mini-stat"><div class="mini-stat-label">Rack Organised ✓</div><div class="mini-stat-val">{{ pstats.tro }}</div></div>
         <div class="mini-stat"><div class="mini-stat-label">Packing Done</div><div class="mini-stat-val">{{ pstats.tpd }}</div></div>
         {# Calculated metrics #}
+        <div class="mini-stat"><div class="mini-stat-label">Total Bills Received</div><div class="mini-stat-val">{{ pstats.tbr_picker or 0 }}</div></div>
+        <div class="mini-stat"><div class="mini-stat-label">Bill Fulfilment</div><div class="mini-stat-val">{{ pstats.bill_fulfilment or 0 }}<span class="suf">%</span></div></div>
         <div class="mini-stat"><div class="mini-stat-label">Pick Accuracy</div><div class="mini-stat-val">{{ pstats.pick_acc }}<span class="suf">%</span></div></div>
         <div class="mini-stat"><div class="mini-stat-label">Pick Speed/hr</div><div class="mini-stat-val">{{ pstats.pick_speed }}</div></div>
         <div class="mini-stat"><div class="mini-stat-label">Packing Eff.</div><div class="mini-stat-val">{{ pstats.packing_eff }}<span class="suf">%</span></div></div>
@@ -414,7 +417,7 @@ body{font-family:'DM Sans',sans-serif;background:var(--page-bg);min-height:100vh
         <div class="mini-stat"><div class="mini-stat-label">SB Open (assist)</div><div class="mini-stat-val">{{ pstats.tp }}</div></div>
         <div class="mini-stat"><div class="mini-stat-label">Packing Done</div><div class="mini-stat-val">{{ pstats.tpk }}</div></div>
         <div class="mini-stat"><div class="mini-stat-label">Bills Received</div><div class="mini-stat-val">{{ pstats.tbr or 0 }}</div></div>
-        <div class="mini-stat"><div class="mini-stat-label" style="color:#dc2626">Pending Bills</div><div class="mini-stat-val" style="color:{{ '#dc2626' if (pstats.pending_bills or 0) > 0 else '#16a34a' }}">{{ pstats.pending_bills or 0 }}</div></div>
+        <div class="mini-stat"><div class="mini-stat-label" style="color:#dc2626">Pending Bills</div><div class="mini-stat-val" style="color:{{ '#dc2626' if (pstats.pending_bills or 0) > 0 else '#16a34a' }}">{{ pstats.pending_bills or 0 }} <span style="font-size:10px;color:var(--muted);">(manual)</span></div></div>
         <div class="mini-stat"><div class="mini-stat-label">Clearance Rate</div><div class="mini-stat-val">{{ pstats.clearance_rate or 100 }}<span class="suf">%</span></div></div>
         {# Calculated metrics #}
         <div class="mini-stat"><div class="mini-stat-label">Total SB Checked</div><div class="mini-stat-val">{{ (pstats.tsb or 0) + (pstats.tcs or 0) }}</div></div>
