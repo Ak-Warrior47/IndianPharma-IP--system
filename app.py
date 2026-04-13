@@ -556,6 +556,8 @@ def dashboard():
                         missed       = gi("missed")
                         checked      = 0
                         errors_found = 0
+                        total_bills_received = gi("total_bills_received")
+                        
 
                     ne = KPIEntry(
                         emp_id=emp_id,
@@ -1083,6 +1085,7 @@ def past_entry(date_str):
                 missed       = gi("missed")
                 checked      = 0
                 errors_found = 0
+                total_bills_received = gi("total_bills_received")
 
             ne = KPIEntry(
                 emp_id           = emp_id,
