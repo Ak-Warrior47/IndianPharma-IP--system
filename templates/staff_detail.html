@@ -247,16 +247,16 @@ body{font-family:'DM Sans',sans-serif;background:var(--page-bg);min-height:100vh
     <div class="kpi-grid">
       {% if emp.staff_type == 'checker' %}
       <div class="kpi-card">
-        <div class="kpi-label">Clean Check Rate</div>
-        <div class="kpi-val">{{ a_stats.check_acc }}<span class="suf">%</span></div>
-      </div>
-      <div class="kpi-card">
-        <div class="kpi-label">Error Rate</div>
-        <div class="kpi-val">{{ a_stats.error_rate }}<span class="suf">%</span></div>
+        <div class="kpi-label">Efficiency Score</div>
+        <div class="kpi-val">{{ a_stats.eff_score }}<span class="suf">/100</span></div>
       </div>
       <div class="kpi-card">
         <div class="kpi-label">Check Speed</div>
-        <div class="kpi-val">{{ a_stats.ck_speed }}<span class="suf">/hr</span></div>
+        <div class="kpi-val">{{ a_stats.check_speed or a_stats.ck_speed }}<span class="suf">/hr</span></div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-label">Clearance Rate</div>
+        <div class="kpi-val">{{ a_stats.clearance_rate or 100 }}<span class="suf">%</span></div>
       </div>
       <div class="kpi-card">
         <div class="kpi-label">Packing Done</div>
