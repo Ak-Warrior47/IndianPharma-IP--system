@@ -809,7 +809,12 @@ def staff_detail(emp_id):
         for e in entries:
             delta = (today - e.entry_date).days
             if delta <= 29:
-                heatmap[str(e.entry_date)] = e.check_rate if emp.staff_type == "checker" else e.accuracy
+                if emp.staff_type == "checker":
+                    tck_day = (e.checked or 0) + (e.errors_found or 0)
+                    daily_spd = round(tck_day / 9.0, 1)
+                    heatmap[str(e.entry_date)] = min(round(daily_spd / 50 * 100, 1), 100)
+                else:
+                    heatmap[str(e.entry_date)] = e.accuracy
 
         return render_template("staff_detail.html",
             emp=emp,
