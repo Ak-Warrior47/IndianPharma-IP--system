@@ -263,7 +263,36 @@ def build_analytics(entries: List[KPIEntry], staff_type: str = "picker") -> Opti
         else:
             trend = "stable"
 
-        if staff_type == "picker":
+        if staff_type == "purchaser":
+            # Purchaser params using DB fields:
+            # sales_bills_open = Total PO Bills Received
+            # checked          = Purchase Bills Checked
+            # picked           = Purchase Bill Entry
+            # errors_found     = Number of Items
+            # cs_sales_open    = CS in Purchase Open
+            # packing_done     = CS in Purchase Received
+            # rack_organized   = Items Racked
+            pur_bills_received = tsb_normal           # Total PO Bills Received
+            pur_bills_checked  = tck_normal            # Purchase Bills Checked
+            pur_bill_entry     = tp                    # Purchase Bill Entry
+            pur_items          = tck_urgent            # Number of Items (errors_found)
+            pur_cs_open        = tcs                   # CS in Purchase Open
+            pur_cs_received    = tpk                   # CS in Purchase Received
+            pur_items_racked   = tro                   # Items Racked
+
+            pur_bill_rate      = round(safe_div(pur_bills_checked, pur_bills_received) * 100, 1) if pur_bills_received > 0 else 0.0
+            pur_cs_fulfilment  = round(min(safe_div(pur_cs_received, pur_cs_open) * 100, 100.0), 1) if pur_cs_open > 0 else 100.0
+            pur_racking_eff    = round(safe_div(pur_items_racked, pur_items) * 100, 1) if pur_items > 0 else 0.0
+            pur_speed          = round(safe_div(pur_items, ts_total), 1)
+
+            eff_score = round(
+                (pur_bill_rate     / 100) * 40 +
+                min(pur_speed      / 50,  1.0) * 25 +
+                (pur_cs_fulfilment / 100) * 20 +
+                (pur_racking_eff   / 100) * 15,
+                1)
+
+        elif staff_type == "picker":
             eff_score = round(
                 (pick_acc        / 100) * 45 +
                 min(pick_speed   / 200, 1.0) * 25 +
@@ -283,6 +312,12 @@ def build_analytics(entries: List[KPIEntry], staff_type: str = "picker") -> Opti
             elif pick_acc>=95 and bill_fulfilment>=85: grade="PROFICIENT"
             elif pick_acc>=88 and bill_fulfilment>=70: grade="SATISFACTORY"
             else:                                      grade="RE-TRAINING"
+        elif staff_type == "purchaser":
+            # Purchaser grade based on Bill Processing Rate + CS Fulfilment
+            if   pur_bill_rate>=95 and pur_cs_fulfilment>=90: grade="ELITE"
+            elif pur_bill_rate>=85 and pur_cs_fulfilment>=75: grade="PROFICIENT"
+            elif pur_bill_rate>=70:                            grade="SATISFACTORY"
+            else:                                              grade="RE-TRAINING"
         else:
             # Grade: speed + clearance rate (pending bills drop grade)
             if   check_speed>=28 and clearance_rate>=90: grade="ELITE"
@@ -290,12 +325,20 @@ def build_analytics(entries: List[KPIEntry], staff_type: str = "picker") -> Opti
             elif check_speed>=15 and clearance_rate>=50: grade="SATISFACTORY"
             else:                                         grade="RE-TRAINING"
 
-        feedback_map = {
-            "ELITE":        "Outstanding performance. Keep it up!",
-            "PROFICIENT":   "Strong results. Minor improvements will push you to Elite.",
-            "SATISFACTORY": "Meets expectations. Keep pushing to reach Proficient.",
-            "RE-TRAINING":  "Performance needs attention. Please speak to your manager.",
-        }
+        if staff_type == "purchaser":
+            feedback_map = {
+                "ELITE":        "Outstanding procurement! All bills processed and CS fulfilled.",
+                "PROFICIENT":   "Good procurement performance. Push CS fulfilment higher.",
+                "SATISFACTORY": "Meets expectations. Focus on bill processing rate.",
+                "RE-TRAINING":  "Performance needs attention. Please speak to your manager.",
+            }
+        else:
+            feedback_map = {
+                "ELITE":        "Outstanding performance. Keep it up!",
+                "PROFICIENT":   "Strong results. Minor improvements will push you to Elite.",
+                "SATISFACTORY": "Meets expectations. Keep pushing to reach Proficient.",
+                "RE-TRAINING":  "Performance needs attention. Please speak to your manager.",
+            }
 
         return dict(
             pick_acc=pick_acc, pick_speed=pick_speed,
@@ -312,6 +355,17 @@ def build_analytics(entries: List[KPIEntry], staff_type: str = "picker") -> Opti
             tpk=tpk, tpd=tpk,
             tbr=tbr, pending_bills=pending_bills, clearance_rate=clearance_rate,
             tbr_picker=tbr_picker, bill_fulfilment=bill_fulfilment,
+            pur_bills_received=pur_bills_received if staff_type=="purchaser" else 0,
+            pur_bills_checked=pur_bills_checked if staff_type=="purchaser" else 0,
+            pur_bill_entry=pur_bill_entry if staff_type=="purchaser" else 0,
+            pur_items=pur_items if staff_type=="purchaser" else 0,
+            pur_cs_open=pur_cs_open if staff_type=="purchaser" else 0,
+            pur_cs_received=pur_cs_received if staff_type=="purchaser" else 0,
+            pur_items_racked=pur_items_racked if staff_type=="purchaser" else 0,
+            pur_bill_rate=pur_bill_rate if staff_type=="purchaser" else 0,
+            pur_cs_fulfilment=pur_cs_fulfilment if staff_type=="purchaser" else 0,
+            pur_racking_eff=pur_racking_eff if staff_type=="purchaser" else 0,
+            pur_speed=pur_speed if staff_type=="purchaser" else 0,
             eff_score=eff_score, grade=grade, days=days,
             consistency=consistency, trend=trend,
             feedback=feedback_map.get(grade,""),
@@ -493,7 +547,7 @@ def login():
                 flash("Invalid Pharma ID or Password.", "danger")
                 return render_template("login.html")
 
-            if not user.is_admin and role_choice in ("picker", "checker"):
+            if not user.is_admin and role_choice in ("picker", "checker", "purchaser"):
                 user.staff_type = role_choice
                 db.session.commit()
 
@@ -544,7 +598,19 @@ def dashboard():
                     total_mins       = min(gf("total_mins"), 480)
                     check_mins       = min(gf("check_mins"), 480)
 
-                    if staff_type == "checker":
+                    if staff_type == "purchaser":
+                        sales_bills_open = gi("sales_bills_open")   # PO Bills Received
+                        checked          = gi("checked")             # PO Bills Checked
+                        picked           = gi("picked")              # PO Bill Entry
+                        errors_found     = gi("errors_found")        # Number of Items
+                        cs_sales_open    = gi("cs_sales_open")       # CS in PO Open
+                        packing_done     = gi("packing_done")        # CS in PO Received
+                        rack_organized   = gi("rack_organized")      # Items Racked
+                        missed           = 0
+                        bills_received   = 0
+                        pending_bills_manual = 0
+                        total_bills_received = 0
+                    elif staff_type == "checker":
                         checked              = gi("checked")
                         errors_found         = gi("errors_found")
                         picked               = gi("picked")
@@ -556,8 +622,6 @@ def dashboard():
                         missed       = gi("missed")
                         checked      = 0
                         errors_found = 0
-                        total_bills_received = gi("total_bills_received")
-                        
 
                     ne = KPIEntry(
                         emp_id=emp_id,
@@ -801,7 +865,7 @@ def admin_add_user():
             flash(f"Email '{email}' already exists.", "warning")
             return redirect(url_for("admin_dashboard"))
 
-        emp = Employee(name=name, email=email, staff_type=staff_type, role=f"Operations {staff_type.title()}")
+        emp = Employee(name=name, email=email, staff_type=staff_type, role=f"Operations {staff_type.title() if staff_type != 'purchaser' else 'Purchaser'}")
         emp.set_password(password)
         db.session.add(emp)
         db.session.commit()
@@ -836,7 +900,7 @@ def admin_edit_user(emp_id):
                 flash(f"Email '{email}' already taken.", "warning")
                 return redirect(url_for("admin_dashboard"))
             emp.email = email
-        if staff_type in ("picker", "checker"):
+        if staff_type in ("picker", "checker", "purchaser"):
             emp.staff_type = staff_type
             emp.role = f"Operations {staff_type.title()}"
         if new_password:
@@ -1073,7 +1137,19 @@ def past_entry(date_str):
             total_mins       = min(gf("total_mins"), 480)
             check_mins       = min(gf("check_mins"), 480)
 
-            if staff_type == "checker":
+            if staff_type == "purchaser":
+                sales_bills_open = gi("sales_bills_open")
+                checked          = gi("checked")
+                picked           = gi("picked")
+                errors_found     = gi("errors_found")
+                cs_sales_open    = gi("cs_sales_open")
+                packing_done     = gi("packing_done")
+                rack_organized   = gi("rack_organized")
+                missed           = 0
+                bills_received   = 0
+                pending_bills_manual = 0
+                total_bills_received = 0
+            elif staff_type == "checker":
                 checked              = gi("checked")
                 errors_found         = gi("errors_found")
                 picked               = gi("picked")
@@ -1085,7 +1161,6 @@ def past_entry(date_str):
                 missed       = gi("missed")
                 checked      = 0
                 errors_found = 0
-                total_bills_received = gi("total_bills_received")
 
             ne = KPIEntry(
                 emp_id           = emp_id,
