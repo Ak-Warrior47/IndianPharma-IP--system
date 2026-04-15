@@ -148,29 +148,38 @@ def generate_visual_pdf(emp_name, payload):
         if stype == "picker":
             formula_lines = [
                 "Pick Accuracy (%)    = Picked / (Picked + Missed) × 100",
+                "Bill Fulfilment (%)  = Sales Bill Picked / Total Bills Received × 100",
                 "Pick Speed (/hr)     = (Picked + Missed) / (9 hrs × Days)",
-                "Packing Efficiency   = Packing Done / Sales Bill Packed × 100",
+                "Packing Efficiency   = Packing Done / Sales Bill Picked × 100",
                 "CS Fulfilment (%)    = min(Packing Done / CS Sales Open × 100, 100)",
-                "Efficiency Score     = (Pick Acc/100)×50 + min(Speed/200,1)×30"
-                                       " + (Pack Eff/100)×12 + (CS Fulfil/100)×8  [max 100]",
+                "Efficiency Score     = Acc×45 + Speed×25 + BillFulfilment×20 + Workspace×5 + Packing×5",
                 "Potential Items      = 200 items/hr × 9 hrs × Days",
-                "Gap Items            = Potential Items − Actual Items",
-                "Consistency (%)      = max(0, 100 − std_dev(daily_acc) × 2)",
-                "GRADE: ELITE=Acc≥98%+PkgEff≥95%+CSFul≥90% | PROFICIENT=Acc≥95%+PkgEff≥85%"
-                "| SATISFACTORY=Acc≥88% | RE-TRAINING=Acc<88%",
+                "Consistency (%)      = max(0, 100 − std_dev(daily_accuracy) × 2)",
+                "GRADE: ELITE=Acc≥98%+BillFulfilment≥95% | PROFICIENT=Acc≥95%+Fulfilment≥85%"
+                " | SATISFACTORY=Acc≥88%+Fulfilment≥70% | RE-TRAINING=below",
             ]
-        else:
+        elif stype == "checker":
             formula_lines = [
-                "Pick Accuracy (%)    = Picked / (Picked + Missed) × 100",
+                "Total SB Checked     = SB Normal + SB Urgent (urgent done first)",
                 "Total Items Checked  = Items Normal + Urgent Items (both = good work)",
-                "Error Rate (%)       = Errors Found / Checked × 100",
+                "Pending Bills        = Manually entered by checker",
+                "Clearance Rate (%)   = SB Checked / (SB Checked + Pending) × 100",
                 "Check Speed (/hr)    = Total Items Checked / (9 hrs × Days)",
-                "Efficiency Score     = (Clean Rate/100)×70 + min(Speed/150,1)×30  [max 100]",
+                "Efficiency Score     = min(Speed/25,1)×70 + Clearance Rate×30",
                 "Potential Items      = 25 items/hr × 9 hrs × Days",
-                "Gap Items            = Potential Items − Checked",
-                "Consistency (%)      = max(0, 100 − std_dev(daily_clean_rate) × 2)",
-                "GRADE: ELITE=Speed≥28/hr | PROFICIENT=≥22/hr | "
-                "SATISFACTORY=≥15/hr | RE-TRAINING=<15/hr",
+                "Consistency (%)      = max(0, 100 − std_dev(daily_speed) × 2)",
+                "GRADE: ELITE=Speed≥28/hr+Clearance≥90% | PROFICIENT=Speed≥22/hr+Clearance≥75%"
+                " | SATISFACTORY=Speed≥15/hr+Clearance≥50% | RE-TRAINING=below",
+            ]
+        else:  # purchaser
+            formula_lines = [
+                "Bill Processing Rate = PO Bills Checked / PO Bills Received × 100",
+                "CS Fulfilment (%)    = CS in PO Received / CS in PO Open × 100",
+                "Racking Efficiency   = Items Racked / Number of Items × 100",
+                "Processing Speed     = Number of Items / (9 hrs × Days)",
+                "Efficiency Score     = BillRate×40 + Speed×25 + CS×20 + Racking×15",
+                "GRADE: ELITE=BillRate≥95%+CS≥90% | PROFICIENT=BillRate≥85%+CS≥75%"
+                " | SATISFACTORY=BillRate≥70% | RE-TRAINING=below",
             ]
         for line in formula_lines:
             elems.append(Paragraph(line, formula_st))
@@ -188,47 +197,59 @@ def generate_visual_pdf(emp_name, payload):
             rows_data = [
                 ["Metric", "Today", "This Week", "This Month", "All-Time"],
                 ["Pick Accuracy",      sv(d_s,"pick_acc","%"),     sv(w_s,"pick_acc","%"),     sv(m_s,"pick_acc","%"),     sv(all_s,"pick_acc","%")],
+                ["Bill Fulfilment %",  sv(d_s,"bill_fulfilment","%"),sv(w_s,"bill_fulfilment","%"),sv(m_s,"bill_fulfilment","%"),sv(all_s,"bill_fulfilment","%")],
+                ["Total Bills Rcvd",   sv(d_s,"tbr_picker"),       sv(w_s,"tbr_picker"),       sv(m_s,"tbr_picker"),       sv(all_s,"tbr_picker")],
                 ["Item Picked",        sv(d_s,"tp"),               sv(w_s,"tp"),               sv(m_s,"tp"),               sv(all_s,"tp")],
                 ["Item Missed",        sv(d_s,"tm"),               sv(w_s,"tm"),               sv(m_s,"tm"),               sv(all_s,"tm")],
                 ["Pick Speed /hr",     sv(d_s,"pick_speed"),       sv(w_s,"pick_speed"),       sv(m_s,"pick_speed"),       sv(all_s,"pick_speed")],
-                ["Sales Bill Packed",  sv(d_s,"tsb"),              sv(w_s,"tsb"),              sv(m_s,"tsb"),              sv(all_s,"tsb")],
+                ["Sales Bill Picked",  sv(d_s,"tsb"),              sv(w_s,"tsb"),              sv(m_s,"tsb"),              sv(all_s,"tsb")],
                 ["Packing Done",       sv(d_s,"tpd"),              sv(w_s,"tpd"),              sv(m_s,"tpd"),              sv(all_s,"tpd")],
                 ["Packing Eff. %",     sv(d_s,"packing_eff","%"),  sv(w_s,"packing_eff","%"),  sv(m_s,"packing_eff","%"),  sv(all_s,"packing_eff","%")],
                 ["CS Sales Open",      sv(d_s,"tcs"),              sv(w_s,"tcs"),              sv(m_s,"tcs"),              sv(all_s,"tcs")],
                 ["CS Fulfilment %",    sv(d_s,"cs_fulfilment","%"),sv(w_s,"cs_fulfilment","%"),sv(m_s,"cs_fulfilment","%"),sv(all_s,"cs_fulfilment","%")],
-                ["Rack Organized",     sv(d_s,"tro"),              sv(w_s,"tro"),              sv(m_s,"tro"),              sv(all_s,"tro")],
-                ["Table Clean",        sv(d_s,"ttc"),              sv(w_s,"ttc"),              sv(m_s,"ttc"),              sv(all_s,"ttc")],
-                ["Total Time (hrs)",   sv(d_s,"ttt"),              sv(w_s,"ttt"),              sv(m_s,"ttt"),              sv(all_s,"ttt")],
+                ["Workspace Score %",  sv(d_s,"workspace_score","%"),sv(w_s,"workspace_score","%"),sv(m_s,"workspace_score","%"),sv(all_s,"workspace_score","%")],
                 ["Efficiency Score",   sv(d_s,"eff_score"),        sv(w_s,"eff_score"),        sv(m_s,"eff_score"),        sv(all_s,"eff_score")],
                 ["Consistency %",      sv(d_s,"consistency","%"),  sv(w_s,"consistency","%"),  sv(m_s,"consistency","%"),  sv(all_s,"consistency","%")],
                 ["Potential Items",    sv(d_s,"potential_items"),  sv(w_s,"potential_items"),  sv(m_s,"potential_items"),  sv(all_s,"potential_items")],
-                ["Potential Eff.",     sv(d_s,"potential_eff"),    sv(w_s,"potential_eff"),    sv(m_s,"potential_eff"),    sv(all_s,"potential_eff")],
                 ["Gap Items",          sv(d_s,"gap_items"),        sv(w_s,"gap_items"),        sv(m_s,"gap_items"),        sv(all_s,"gap_items")],
             ]
-        else:
+        elif stype == "checker":
             rows_data = [
                 ["Metric", "Today", "This Week", "This Month", "All-Time"],
-                ["Pick Accuracy",      sv(d_s,"pick_acc","%"),     sv(w_s,"pick_acc","%"),     sv(m_s,"pick_acc","%"),     sv(all_s,"pick_acc","%")],
-                ["Item Picked",        sv(d_s,"tp"),               sv(w_s,"tp"),               sv(m_s,"tp"),               sv(all_s,"tp")],
-                ["Item Missed",        sv(d_s,"tm"),               sv(w_s,"tm"),               sv(m_s,"tm"),               sv(all_s,"tm")],
-                ["Sales Bill Packed",  sv(d_s,"tsb"),              sv(w_s,"tsb"),              sv(m_s,"tsb"),              sv(all_s,"tsb")],
-                ["Packing Done",       sv(d_s,"tpd"),              sv(w_s,"tpd"),              sv(m_s,"tpd"),              sv(all_s,"tpd")],
-                ["Packing Eff. %",     sv(d_s,"packing_eff","%"),  sv(w_s,"packing_eff","%"),  sv(m_s,"packing_eff","%"),  sv(all_s,"packing_eff","%")],
-                ["CS Sales Open",      sv(d_s,"tcs"),              sv(w_s,"tcs"),              sv(m_s,"tcs"),              sv(all_s,"tcs")],
-                ["CS Fulfilment %",    sv(d_s,"cs_fulfilment","%"),sv(w_s,"cs_fulfilment","%"),sv(m_s,"cs_fulfilment","%"),sv(all_s,"cs_fulfilment","%")],
+                ["SB Normal",          sv(d_s,"tsb_normal"),       sv(w_s,"tsb_normal"),       sv(m_s,"tsb_normal"),       sv(all_s,"tsb_normal")],
+                ["SB Urgent",          sv(d_s,"tsb_urgent"),       sv(w_s,"tsb_urgent"),       sv(m_s,"tsb_urgent"),       sv(all_s,"tsb_urgent")],
+                ["Total SB Checked",   sv(d_s,"tsb_total"),        sv(w_s,"tsb_total"),        sv(m_s,"tsb_total"),        sv(all_s,"tsb_total")],
+                ["Items Normal",       sv(d_s,"tck_normal"),       sv(w_s,"tck_normal"),       sv(m_s,"tck_normal"),       sv(all_s,"tck_normal")],
+                ["Items Urgent",       sv(d_s,"tck_urgent"),       sv(w_s,"tck_urgent"),       sv(m_s,"tck_urgent"),       sv(all_s,"tck_urgent")],
+                ["Total Items",        sv(d_s,"tck_total"),        sv(w_s,"tck_total"),        sv(m_s,"tck_total"),        sv(all_s,"tck_total")],
+                ["Normal %",           sv(d_s,"normal_pct","%"),   sv(w_s,"normal_pct","%"),   sv(m_s,"normal_pct","%"),   sv(all_s,"normal_pct","%")],
+                ["Urgent %",           sv(d_s,"urgent_pct","%"),   sv(w_s,"urgent_pct","%"),   sv(m_s,"urgent_pct","%"),   sv(all_s,"urgent_pct","%")],
+                ["Bills Received",     sv(d_s,"tbr"),              sv(w_s,"tbr"),              sv(m_s,"tbr"),              sv(all_s,"tbr")],
+                ["Pending Bills",      sv(d_s,"pending_bills"),    sv(w_s,"pending_bills"),    sv(m_s,"pending_bills"),    sv(all_s,"pending_bills")],
+                ["Clearance Rate %",   sv(d_s,"clearance_rate","%"),sv(w_s,"clearance_rate","%"),sv(m_s,"clearance_rate","%"),sv(all_s,"clearance_rate","%")],
+                ["Check Speed /hr",    sv(d_s,"check_speed"),      sv(w_s,"check_speed"),      sv(m_s,"check_speed"),      sv(all_s,"check_speed")],
+                ["Packing Done",       sv(d_s,"tpk"),              sv(w_s,"tpk"),              sv(m_s,"tpk"),              sv(all_s,"tpk")],
                 ["Throughput Score",   sv(d_s,"eff_score"),        sv(w_s,"eff_score"),        sv(m_s,"eff_score"),        sv(all_s,"eff_score")],
-                ["Error Rate",         sv(d_s,"error_rate","%"),   sv(w_s,"error_rate","%"),   sv(m_s,"error_rate","%"),   sv(all_s,"error_rate","%")],
-                ["Items Checked",      sv(d_s,"tck_total"),              sv(w_s,"tck_total"),              sv(m_s,"tck_total"),              sv(all_s,"tck_total")],
-                ["Errors Found",       sv(d_s,"ter"),              sv(w_s,"ter"),              sv(m_s,"ter"),              sv(all_s,"ter")],
-                ["Check Speed /hr",    sv(d_s,"ck_speed"),         sv(w_s,"ck_speed"),         sv(m_s,"ck_speed"),         sv(all_s,"ck_speed")],
-                ["Rack Organized",     sv(d_s,"tro"),              sv(w_s,"tro"),              sv(m_s,"tro"),              sv(all_s,"tro")],
-                ["Table Clean",        sv(d_s,"ttc"),              sv(w_s,"ttc"),              sv(m_s,"ttc"),              sv(all_s,"ttc")],
-                ["Total Time (hrs)",   sv(d_s,"ttt"),              sv(w_s,"ttt"),              sv(m_s,"ttt"),              sv(all_s,"ttt")],
-                ["Efficiency Score",   sv(d_s,"eff_score"),        sv(w_s,"eff_score"),        sv(m_s,"eff_score"),        sv(all_s,"eff_score")],
                 ["Consistency %",      sv(d_s,"consistency","%"),  sv(w_s,"consistency","%"),  sv(m_s,"consistency","%"),  sv(all_s,"consistency","%")],
                 ["Potential Items",    sv(d_s,"potential_items"),  sv(w_s,"potential_items"),  sv(m_s,"potential_items"),  sv(all_s,"potential_items")],
-                ["Potential Eff.",     sv(d_s,"potential_eff"),    sv(w_s,"potential_eff"),    sv(m_s,"potential_eff"),    sv(all_s,"potential_eff")],
                 ["Gap Items",          sv(d_s,"gap_items"),        sv(w_s,"gap_items"),        sv(m_s,"gap_items"),        sv(all_s,"gap_items")],
+            ]
+        else:  # purchaser
+            rows_data = [
+                ["Metric", "Today", "This Week", "This Month", "All-Time"],
+                ["PO Bills Received",  sv(d_s,"pur_bills_received"),sv(w_s,"pur_bills_received"),sv(m_s,"pur_bills_received"),sv(all_s,"pur_bills_received")],
+                ["PO Bills Checked",   sv(d_s,"pur_bills_checked"), sv(w_s,"pur_bills_checked"), sv(m_s,"pur_bills_checked"), sv(all_s,"pur_bills_checked")],
+                ["PO Bill Entry",      sv(d_s,"pur_bill_entry"),    sv(w_s,"pur_bill_entry"),    sv(m_s,"pur_bill_entry"),    sv(all_s,"pur_bill_entry")],
+                ["Number of Items",    sv(d_s,"pur_items"),         sv(w_s,"pur_items"),         sv(m_s,"pur_items"),         sv(all_s,"pur_items")],
+                ["CS in PO Open",      sv(d_s,"pur_cs_open"),       sv(w_s,"pur_cs_open"),       sv(m_s,"pur_cs_open"),       sv(all_s,"pur_cs_open")],
+                ["CS in PO Received",  sv(d_s,"pur_cs_received"),   sv(w_s,"pur_cs_received"),   sv(m_s,"pur_cs_received"),   sv(all_s,"pur_cs_received")],
+                ["Items Racked",       sv(d_s,"pur_items_racked"),  sv(w_s,"pur_items_racked"),  sv(m_s,"pur_items_racked"),  sv(all_s,"pur_items_racked")],
+                ["Bill Processing %",  sv(d_s,"pur_bill_rate","%"), sv(w_s,"pur_bill_rate","%"), sv(m_s,"pur_bill_rate","%"), sv(all_s,"pur_bill_rate","%")],
+                ["CS Fulfilment %",    sv(d_s,"pur_cs_fulfilment","%"),sv(w_s,"pur_cs_fulfilment","%"),sv(m_s,"pur_cs_fulfilment","%"),sv(all_s,"pur_cs_fulfilment","%")],
+                ["Racking Eff. %",     sv(d_s,"pur_racking_eff","%"),sv(w_s,"pur_racking_eff","%"),sv(m_s,"pur_racking_eff","%"),sv(all_s,"pur_racking_eff","%")],
+                ["Processing Speed",   sv(d_s,"pur_speed"),         sv(w_s,"pur_speed"),         sv(m_s,"pur_speed"),         sv(all_s,"pur_speed")],
+                ["Efficiency Score",   sv(d_s,"eff_score"),         sv(w_s,"eff_score"),         sv(m_s,"eff_score"),         sv(all_s,"eff_score")],
+                ["Consistency %",      sv(d_s,"consistency","%"),   sv(w_s,"consistency","%"),   sv(m_s,"consistency","%"),   sv(all_s,"consistency","%")],
             ]
 
         ct = Table(rows_data, colWidths=[3.8*cm, 2.8*cm, 2.8*cm, 2.8*cm, 2.8*cm])
@@ -257,9 +278,16 @@ def generate_visual_pdf(emp_name, payload):
         p2 = _make_pie(["Current", "Gap"], [cur_eff, max(100-cur_eff, 0)], [DARK, LGRAY],
                        "Eff. vs Potential")
         if stype == "checker":
-            tck = all_s.get("tck", 0); ter = all_s.get("ter", 0)
-            p3 = _make_pie(["Errors Found", "Clean"], [ter, max(tck-ter, 0)],
-                           [BLUE, "#bfdbfe"], "Error Detection")
+            tck_t = all_s.get("tck_total", 0) or all_s.get("tck", 0)
+            tck_n = all_s.get("tck_normal", 0)
+            tck_u = all_s.get("tck_urgent", 0)
+            p3 = _make_pie(["Normal Items", "Urgent Items"], [tck_n, tck_u],
+                           [BLUE, "#6d28d9"], "Normal vs Urgent")
+        elif stype == "purchaser":
+            pur_bc = all_s.get("pur_bills_checked", 0)
+            pur_br = all_s.get("pur_bills_received", 0)
+            p3 = _make_pie(["Bills Checked", "Pending"], [pur_bc, max(pur_br-pur_bc, 0)],
+                           [BLUE, "#bfdbfe"], "Bill Processing")
         else:
             tpd = all_s.get("tpd", 0); tsb = all_s.get("tsb", 0)
             p3 = _make_pie(["Packed", "Remaining"], [tpd, max(tsb-tpd, 0)],
