@@ -297,7 +297,16 @@ body{font-family:'DM Sans',sans-serif;background:var(--page-bg);min-height:100vh
   <div class="formula-box">
     <div class="formula-title">📐 Formula Reference — How scores are calculated</div>
     <div class="formula-grid">
-      {% if emp.staff_type == 'picker' %}
+      {% if emp.staff_type == 'purchaser' %}
+      <div class="formula-row"><b>Bill Processing Rate</b> = PO Bills Checked ÷ PO Bills Received × 100</div>
+      <div class="formula-row"><b>CS Fulfilment</b> = CS Received ÷ CS Open × 100</div>
+      <div class="formula-row"><b>Racking Efficiency</b> = Items Racked ÷ Number of Items × 100</div>
+      <div class="formula-row"><b>Processing Speed</b> = Number of Items ÷ (9 hrs × Days)</div>
+      <div class="formula-row"><b>Efficiency Score</b> = BillRate×40 + Speed×25 + CS×20 + Racking×15</div>
+      <div class="formula-row"><b>ELITE</b>: BillRate≥95% + CS≥90%</div>
+      <div class="formula-row"><b>PROFICIENT</b>: BillRate≥85% + CS≥75%</div>
+      <div class="formula-row"><b>SATISFACTORY</b>: BillRate≥70% · <b>RE-TRAINING</b>: &lt;70%</div>
+      {% elif emp.staff_type == 'picker' %}
       <div class="formula-row"><b>Pick Accuracy</b> = Items Picked ÷ (Picked + Missed) × 100</div>
       <div class="formula-row"><b>Pick Speed</b> = (Picked + Missed) ÷ (9 hrs × Days)</div>
       <div class="formula-row"><b>Bill Fulfilment</b> = Sales Bill Picked ÷ Total Bills Received × 100</div>
@@ -317,7 +326,7 @@ body{font-family:'DM Sans',sans-serif;background:var(--page-bg);min-height:100vh
       <div class="formula-row"><b>Check Speed</b> = Total Items Checked ÷ (9 hrs × Days)</div>
       <div class="formula-row"><b>Pending Bills</b> = Manually entered by checker</div>
       <div class="formula-row"><b>Clearance Rate</b> = SB Checked ÷ (SB Checked + Pending) × 100</div>
-      <div class="formula-row"><b>Efficiency Score</b> = Speed×70 + Clearance Rate×30</div>
+      <div class="formula-row"><b>Efficiency Score</b> = min(Speed÷25,1)×70 + Clearance Rate×30</div>
       <div class="formula-row"><b>Potential Items</b> = 25 items/hr × 9 hrs × Days</div>
       <div class="formula-row"><b>Consistency</b> = max(0, 100 − std_dev(daily_speed) × 2)</div>
       <div class="formula-row"><b>ELITE</b>: Speed≥28/hr + Clearance≥90%</div>
@@ -383,7 +392,22 @@ body{font-family:'DM Sans',sans-serif;background:var(--page-bg);min-height:100vh
     <div class="period-panel {% if pid == 'day' %}active{% endif %}" id="period-{{ pid }}">
       {% if pstats %}
       <div class="mini-grid">
-        {% if emp.staff_type == 'picker' %}
+        {% if emp.staff_type == 'purchaser' %}
+        <div class="mini-stat"><div class="mini-stat-label">PO Bills Received</div><div class="mini-stat-val">{{ pstats.pur_bills_received or 0 }}</div></div>
+        <div class="mini-stat"><div class="mini-stat-label">PO Bills Checked</div><div class="mini-stat-val">{{ pstats.pur_bills_checked or 0 }}</div></div>
+        <div class="mini-stat"><div class="mini-stat-label">PO Bill Entry</div><div class="mini-stat-val">{{ pstats.pur_bill_entry or 0 }}</div></div>
+        <div class="mini-stat"><div class="mini-stat-label">Number of Items</div><div class="mini-stat-val">{{ pstats.pur_items or 0 }}</div></div>
+        <div class="mini-stat"><div class="mini-stat-label">CS in PO Open</div><div class="mini-stat-val">{{ pstats.pur_cs_open or 0 }}</div></div>
+        <div class="mini-stat"><div class="mini-stat-label">CS in PO Received</div><div class="mini-stat-val">{{ pstats.pur_cs_received or 0 }}</div></div>
+        <div class="mini-stat"><div class="mini-stat-label">Items Racked</div><div class="mini-stat-val">{{ pstats.pur_items_racked or 0 }}</div></div>
+        <div class="mini-stat"><div class="mini-stat-label">Bill Processing Rate</div><div class="mini-stat-val">{{ pstats.pur_bill_rate or 0 }}<span class="suf">%</span></div></div>
+        <div class="mini-stat"><div class="mini-stat-label">CS Fulfilment</div><div class="mini-stat-val">{{ pstats.pur_cs_fulfilment or 0 }}<span class="suf">%</span></div></div>
+        <div class="mini-stat"><div class="mini-stat-label">Racking Efficiency</div><div class="mini-stat-val">{{ pstats.pur_racking_eff or 0 }}<span class="suf">%</span></div></div>
+        <div class="mini-stat"><div class="mini-stat-label">Processing Speed/hr</div><div class="mini-stat-val">{{ pstats.pur_speed or 0 }}</div></div>
+        <div class="mini-stat"><div class="mini-stat-label">Efficiency Score</div><div class="mini-stat-val">{{ pstats.eff_score }}<span class="suf">/100</span></div></div>
+        <div class="mini-stat"><div class="mini-stat-label">Consistency</div><div class="mini-stat-val">{{ pstats.consistency }}<span class="suf">%</span></div></div>
+        <div class="mini-stat"><div class="mini-stat-label">Grade</div><div class="mini-stat-val" style="font-size:13px">{{ pstats.grade }}</div></div>
+        {% elif emp.staff_type == 'picker' %}
         {# Picker parameters — in order #}
         <div class="mini-stat"><div class="mini-stat-label">Sales Bill Picked</div><div class="mini-stat-val">{{ pstats.tsb }}</div></div>
         <div class="mini-stat"><div class="mini-stat-label">Item Picked</div><div class="mini-stat-val">{{ pstats.tp }}</div></div>
@@ -450,7 +474,16 @@ body{font-family:'DM Sans',sans-serif;background:var(--page-bg);min-height:100vh
       <thead>
         <tr>
           <th>Date</th>
-          {% if emp.staff_type == 'checker' %}
+          {% if emp.staff_type == 'purchaser' %}
+          <th>PO Bills Rcvd</th>
+          <th>PO Bills Checked</th>
+          <th>PO Bill Entry</th>
+          <th>No. of Items</th>
+          <th>CS Open</th>
+          <th>CS Received</th>
+          <th>Items Racked</th>
+          <th>Bill Rate</th>
+          {% elif emp.staff_type == 'checker' %}
           <th>SB Checked</th>
           <th>SB Chkd Urgent</th>
           <th>Item Checked</th>
@@ -482,7 +515,17 @@ body{font-family:'DM Sans',sans-serif;background:var(--page-bg);min-height:100vh
         {% for e in entries %}
         <tr>
           <td style="font-weight:600;color:var(--navy);white-space:nowrap">{{ e.entry_date.strftime('%d %b %Y') }}</td>
-          {% if emp.staff_type == 'checker' %}
+          {% if emp.staff_type == 'purchaser' %}
+          <td>{{ e.sales_bills_open }}</td>
+          <td>{{ e.checked }}</td>
+          <td>{{ e.picked }}</td>
+          <td>{{ e.errors_found }}</td>
+          <td>{{ e.cs_sales_open }}</td>
+          <td>{{ e.packing_done }}</td>
+          <td>{{ e.rack_organized }}</td>
+          {% set pur_rate = ((e.checked or 0) / (e.sales_bills_open or 1) * 100)|round(1) if (e.sales_bills_open or 0) > 0 else 0 %}
+          <td><span class="acc-pill {% if pur_rate >= 95 %}acc-good{% elif pur_rate >= 85 %}acc-mid{% else %}acc-bad{% endif %}">{{ pur_rate }}%</span></td>
+          {% elif emp.staff_type == 'checker' %}
           <td>{{ e.sales_bills_open }}</td>
           <td>{{ e.cs_sales_open }}</td>
           <td>{{ e.checked }}</td>
