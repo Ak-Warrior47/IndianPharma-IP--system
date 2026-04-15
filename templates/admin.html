@@ -346,6 +346,7 @@ tbody tr:hover td { background: rgba(219,234,254,0.3); }
           <select name="staff_type" id="edit-type">
             <option value="picker">Picker</option>
             <option value="checker">Checker</option>
+            <option value="purchaser">Purchaser</option>
           </select>
         </div>
         <div class="field">
@@ -746,7 +747,7 @@ tbody tr:hover td { background: rgba(219,234,254,0.3); }
             <td><strong>{{ r.emp.name }}</strong></td>
             <td><span class="type-badge {% if r.emp.staff_type == 'picker' %}type-picker{% else %}type-checker{% endif %}">{{ r.emp.staff_type }}</span></td>
             {% if r.emp.staff_type == 'checker' %}
-            <td>{{ r.stats.check_acc }}%</td>
+            <td>{{ r.stats.eff_score }}/100</td>
             <td>{{ r.stats.ck_speed }}</td>
             <td>{{ "{:,}".format(r.stats.tck) }}</td>
             {% else %}
