@@ -370,6 +370,8 @@ tbody tr:hover td { background: rgba(219,234,254,0.3); }
   </div>
   <div class="nav-right">
     <a href="/admin/export_csv" class="btn-export">📥 Export CSV</a>
+    <a href="/admin/export_full" class="btn-export" style="background:#16a34a;color:#fff;">💾 Full Data Export (JSON)</a>
+    <a href="/admin/export_all_pdf" class="btn-export" style="background:linear-gradient(135deg,#6d28d9,#4c1d95);color:#fff;">📄 All Staff PDFs (ZIP)</a>
     <form method="POST" action="/logout">
       <button type="submit" class="btn-logout">🚪 Logout</button>
     </form>
@@ -813,3 +815,255 @@ tbody tr:hover td { background: rgba(219,234,254,0.3); }
   </div>
 
   <!-- ANALYTICS -->
+<!-- PERFORMANCE SUMMARY -->
+  {% if rows %}
+  <div class="card">
+    <div class="card-header">
+      <div class="card-title">📊 Performance Summary — All Time</div>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Name</th><th>Type</th>
+            <th>Accuracy</th><th>Speed /hr</th>
+            <th>Items Processed</th><th>Total Bills</th>
+            <th>Days Active</th><th>Eff. Score</th><th>Grade</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for r in rows %}{% if r.stats %}
+          <tr>
+            <td><strong>{{ r.emp.name }}</strong></td>
+            <td><span class="type-badge {% if r.emp.staff_type == 'picker' %}type-picker{% else %}type-checker{% endif %}">{{ r.emp.staff_type }}</span></td>
+            {% if r.emp.staff_type == 'checker' %}
+            <td>{{ r.stats.eff_score }}pts</td>
+            <td>{{ r.stats.ck_speed }}</td>
+            <td>{{ "{:,}".format(r.stats.tck) }}</td>
+            {% else %}
+            <td>{{ r.stats.pick_acc }}%</td>
+            <td>{{ r.stats.pick_speed }}</td>
+            <td>{{ "{:,}".format(r.stats.tp) }}</td>
+            {% endif %}
+            <td>{{ "{:,}".format(r.stats.tsb) }}</td>
+            <td>{{ r.stats.days }}</td>
+            <td class="score-cell">{{ r.stats.eff_score }}</td>
+            <td>
+              {% set g = r.stats.grade %}
+              <span class="tag {% if g in ['ELITE','EXCELLENT'] %}tag-ex{% elif g in ['GOOD','PROFICIENT'] %}tag-good{% elif g in ['AVERAGE','SATISFACTORY'] %}tag-avg{% else %}tag-poor{% endif %}">{{ g }}</span>
+            </td>
+          </tr>
+          {% endif %}{% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+  {% endif %}
+
+
+  <!-- TEAM ANALYTICS -->
+  {% if grade_counts %}
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:20px;">
+    <div class="card">
+      <div class="card-header"><div class="card-title">📊 Team Health</div></div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px;">
+        <div style="background:rgba(238,244,255,0.7);border:1px solid var(--border);border-radius:10px;padding:12px;text-align:center;">
+          <div style="font-size:10px;font-weight:800;color:var(--muted);text-transform:uppercase;margin-bottom:3px;">Avg Score</div>
+          <div style="font-size:26px;font-weight:800;color:var(--blue);">{{ team_avg_eff or 0 }}</div>
+          <div style="font-size:10px;color:var(--muted);">pts</div>
+        </div>
+        <div style="background:rgba(238,244,255,0.7);border:1px solid var(--border);border-radius:10px;padding:12px;text-align:center;">
+          <div style="font-size:10px;font-weight:800;color:var(--muted);text-transform:uppercase;margin-bottom:3px;">Active Today</div>
+          <div style="font-size:26px;font-weight:800;color:var(--blue);">{{ active_today }}</div>
+          <div style="font-size:10px;color:var(--muted);">staff</div>
+        </div>
+      </div>
+      <div style="font-size:10px;font-weight:800;color:var(--muted);text-transform:uppercase;margin-bottom:8px;">Grade Distribution</div>
+      {% set total_staff = grade_counts.ELITE + grade_counts.PROFICIENT + grade_counts.SATISFACTORY + grade_counts['RE-TRAINING'] %}
+      {% for grade, color in [('ELITE','#6d28d9'),('PROFICIENT','#16a34a'),('SATISFACTORY','#d97706'),('RE-TRAINING','#dc2626')] %}
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">
+        <span style="font-size:11px;width:90px;color:var(--text);font-weight:600;">{{ grade }}</span>
+        <div style="flex:1;background:var(--border);border-radius:4px;height:7px;">
+          <div style="background:{{ color }};height:7px;border-radius:4px;width:{% if total_staff > 0 %}{{ ((grade_counts[grade]/total_staff)*100)|int }}{% else %}0{% endif %}%;"></div>
+        </div>
+        <span style="font-size:12px;font-weight:800;color:{{ color }};width:16px;text-align:right;">{{ grade_counts[grade] }}</span>
+      </div>
+      {% endfor %}
+    </div>
+    <div class="card">
+      <div class="card-header"><div class="card-title">💡 Recommendations</div></div>
+      {% if needs_attention %}
+      <div style="margin-bottom:12px;">
+        <div style="font-size:10px;font-weight:800;color:#dc2626;text-transform:uppercase;margin-bottom:6px;">⚠️ Needs Attention</div>
+        {% for r in needs_attention %}
+        <div style="display:flex;align-items:center;justify-content:space-between;padding:7px 10px;background:#fef2f2;border:1px solid #fecaca;border-radius:8px;margin-bottom:4px;">
+          <div><div style="font-size:12px;font-weight:700;">{{ r.emp.name }}</div><div style="font-size:10px;color:var(--muted);">{{ r.emp.staff_type|title }} · {{ r.stats.eff_score }}pts</div></div>
+          <a href="/staff/{{ r.emp.id }}" style="font-size:11px;font-weight:700;color:#dc2626;background:#fee2e2;padding:3px 8px;border-radius:5px;text-decoration:none;">View →</a>
+        </div>
+        {% endfor %}
+      </div>
+      {% endif %}
+      {% if improving %}
+      <div style="font-size:10px;font-weight:800;color:#16a34a;text-transform:uppercase;margin-bottom:6px;">📈 Improving</div>
+      {% for r in improving %}
+      <div style="padding:7px 10px;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;margin-bottom:4px;">
+        <div style="font-size:12px;font-weight:700;">{{ r.emp.name }} ↑</div>
+      </div>
+      {% endfor %}
+      {% endif %}
+      {% if not needs_attention and not improving %}
+      <div style="text-align:center;padding:20px;color:var(--muted);font-size:12px;">✅ All staff performing well!</div>
+      {% endif %}
+      <div style="padding-top:10px;border-top:1px solid var(--border);display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;text-align:center;margin-top:10px;">
+        <div><div style="font-size:18px;font-weight:800;color:var(--blue);">{{ active_today }}</div><div style="font-size:9px;color:var(--muted);">Active Today</div></div>
+        <div><div style="font-size:18px;font-weight:800;color:#16a34a;">{{ improving|length }}</div><div style="font-size:9px;color:var(--muted);">Improving</div></div>
+        <div><div style="font-size:18px;font-weight:800;color:#dc2626;">{{ needs_attention|length }}</div><div style="font-size:9px;color:var(--muted);">Need Help</div></div>
+      </div>
+    </div>
+  </div>
+  {% endif %}
+
+</div><!-- /main -->
+
+<script>
+function capName(input) {
+  const pos = input.selectionStart;
+  input.value = input.value.replace(/\b\w/g, c => c.toUpperCase());
+  try { input.setSelectionRange(pos, pos); } catch(e){}
+  checkAddForm();
+}
+
+// Enable Save Details button only when required fields are filled
+function checkAddForm() {
+  const name  = document.getElementById('addName')?.value.trim();
+  const email = document.getElementById('addEmail')?.value.trim();
+  const pw    = document.querySelector('[name="password"]')?.value;
+  const btn   = document.getElementById('saveDetailsBtn');
+  if (!btn) return;
+  const filled = name && name.length > 0 && email && email.length > 0 && pw && pw.length >= 6;
+  btn.disabled = !filled;
+}
+
+document.addEventListener('DOMContentLoaded', function() {
+  // Wire up input listeners for add form fields
+  const fields = ['addName', 'addEmail'];
+  fields.forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.addEventListener('input', checkAddForm);
+  });
+  const pwField = document.querySelector('[name="password"]');
+  if (pwField) pwField.addEventListener('input', checkAddForm);
+  checkAddForm();
+});
+
+let addAcIdx = -1;
+function handleAddEmail(input) {
+  const val = input.value;
+  const list = document.getElementById('addAcList');
+  if (val.length > 0 && !val.includes('@')) {
+    const sug = val + '@pharmaip.com';
+    list.innerHTML = `<div class="ac-item" onclick="pickAddEmail('${escHtml(sug)}')" onmouseover="this.classList.add('sel')" onmouseout="this.classList.remove('sel')">📧 <span>${escHtml(val)}<span class="ac-domain">@pharmaip.com</span></span></div>`;
+    list.classList.add('show');
+    addAcIdx = -1;
+  } else {
+    list.classList.remove('show');
+  }
+  checkAddForm();
+}
+function handleAddEmailKey(e) {
+  const list = document.getElementById('addAcList');
+  if (!list.classList.contains('show')) return;
+  if (e.key === 'Enter' || e.key === 'Tab') {
+    e.preventDefault();
+    const item = list.querySelector('.ac-item');
+    if (item) item.click();
+  } else if (e.key === 'Escape') {
+    list.classList.remove('show');
+  }
+}
+function pickAddEmail(email) {
+  document.getElementById('addEmail').value = email;
+  document.getElementById('addAcList').classList.remove('show');
+  document.querySelector('[name="password"]').focus();
+  checkAddForm();
+}
+function escHtml(s) {
+  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+document.addEventListener('click', function(e) {
+  const wrap = document.querySelector('#addEmail')?.closest('.field-wrap');
+  if (wrap && !wrap.contains(e.target)) {
+    document.getElementById('addAcList')?.classList.remove('show');
+  }
+});
+
+function openEdit(id, name, email, stype) {
+  var f = document.getElementById('editForm');
+  if(!f){ console.error("editForm not found"); return; }
+  f.action = '/admin/edit_user/' + id;
+  document.getElementById('edit-name').value  = name;
+  document.getElementById('edit-email').value = email;
+  var sel = document.getElementById('edit-type');
+  if(sel) sel.value = stype;
+  var modal = document.getElementById('editModal');
+  if(modal) modal.classList.add('open');
+  console.log("openEdit called:", id, name, email, stype, "action:", f.action);
+}
+function closeEdit() {
+  var modal = document.getElementById('editModal');
+  if(modal) modal.classList.remove('open');
+}
+document.getElementById('editModal').addEventListener('click', function(e) {
+  if (e.target === this) closeEdit();
+});
+
+function filterTable() {
+  const q    = document.getElementById('searchBox').value.toLowerCase();
+  const rows = document.querySelectorAll('#staffTable tbody tr');
+  rows.forEach(row => {
+    const text = row.textContent.toLowerCase();
+    row.style.display = text.includes(q) ? '' : 'none';
+  });
+}
+
+if (typeof io !== 'undefined') {
+  const socket = io();
+  socket.on('admin_alert', function(msg) {
+    const el = document.createElement('div');
+    el.className = 'alert alert-warning';
+    el.style.cssText = 'position:fixed;top:70px;right:20px;z-index:999;max-width:340px;animation:slideIn 0.3s ease;';
+    el.textContent = '⚠️ ' + msg.name + ' — ' + msg.eff + '% accuracy';
+    document.body.appendChild(el);
+    setTimeout(() => el.remove(), 5000);
+  });
+}
+
+function switchLB(tab){
+  document.getElementById('lb-alltime-panel').style.display = tab==='alltime' ? '' : 'none';
+  document.getElementById('lb-week-panel').style.display    = tab==='week'    ? '' : 'none';
+  document.getElementById('lb-alltime').classList.toggle('active', tab==='alltime');
+  document.getElementById('lb-week').classList.toggle('active', tab==='week');
+}
+
+function openEdit(id, name, email, stype) {
+  document.getElementById('editForm').action = '/admin/edit_user/' + id;
+  document.getElementById('edit-name').value  = name;
+  document.getElementById('edit-email').value = email;
+  document.getElementById('edit-type').value  = stype;
+  document.getElementById('editModal').classList.add('open');
+}
+
+function closeEdit() {
+  var modal = document.getElementById('editModal');
+  if(modal) modal.classList.remove('open');
+}
+
+// Close modal on backdrop click
+document.addEventListener('DOMContentLoaded', function(){
+  document.getElementById('editModal').addEventListener('click', function(e){
+    if(e.target === this) closeEdit();
+  });
+});
+</script>
+</body>
+</html>
