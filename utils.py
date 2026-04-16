@@ -152,11 +152,11 @@ def generate_visual_pdf(emp_name, payload):
                 "Pick Speed (/hr)     = (Picked + Missed) / (9 hrs × Days)",
                 "Packing Efficiency   = Packing Done / Sales Bill Picked × 100",
                 "CS Fulfilment (%)    = min(Packing Done / CS Sales Open × 100, 100)",
-                "Efficiency Score     = Acc×45 + Speed×25 + BillFulfilment×20 + Workspace×5 + Packing×5",
+                "Points Score         = Acc×30 + BillFulfilment×25 + Speed×20 + Workspace×10 + Packing×10 + Consistency×5",
+                "Minus Marking        = Complaint deductions subtracted from final score",
                 "Potential Items      = 200 items/hr × 9 hrs × Days",
                 "Consistency (%)      = max(0, 100 − std_dev(daily_accuracy) × 2)",
-                "GRADE: ELITE=Acc≥98%+BillFulfilment≥95% | PROFICIENT=Acc≥95%+Fulfilment≥85%"
-                " | SATISFACTORY=Acc≥88%+Fulfilment≥70% | RE-TRAINING=below",
+                "GRADE: ELITE≥85pts | PROFICIENT≥65pts | SATISFACTORY≥45pts | RE-TRAINING<45pts",
             ]
         elif stype == "checker":
             formula_lines = [
@@ -165,11 +165,11 @@ def generate_visual_pdf(emp_name, payload):
                 "Pending Bills        = Manually entered by checker",
                 "Clearance Rate (%)   = SB Checked / (SB Checked + Pending) × 100",
                 "Check Speed (/hr)    = Total Items Checked / (9 hrs × Days)",
-                "Efficiency Score     = min(Speed/25,1)×70 + Clearance Rate×30",
+                "Points Score         = Speed/60×35 + Clearance×25 + Normal%×20 + Consistency×10 + PotEff×10",
+                "Minus Marking        = Complaint deductions subtracted from final score",
                 "Potential Items      = 25 items/hr × 9 hrs × Days",
                 "Consistency (%)      = max(0, 100 − std_dev(daily_speed) × 2)",
-                "GRADE: ELITE=Speed≥28/hr+Clearance≥90% | PROFICIENT=Speed≥22/hr+Clearance≥75%"
-                " | SATISFACTORY=Speed≥15/hr+Clearance≥50% | RE-TRAINING=below",
+                "GRADE: ELITE≥85pts | PROFICIENT≥65pts | SATISFACTORY≥45pts | RE-TRAINING<45pts",
             ]
         else:  # purchaser
             formula_lines = [
@@ -177,9 +177,9 @@ def generate_visual_pdf(emp_name, payload):
                 "CS Fulfilment (%)    = CS in PO Received / CS in PO Open × 100",
                 "Racking Efficiency   = Items Racked / Number of Items × 100",
                 "Processing Speed     = Number of Items / (9 hrs × Days)",
-                "Efficiency Score     = BillRate×40 + Speed×25 + CS×20 + Racking×15",
-                "GRADE: ELITE=BillRate≥95%+CS≥90% | PROFICIENT=BillRate≥85%+CS≥75%"
-                " | SATISFACTORY=BillRate≥70% | RE-TRAINING=below",
+                "Points Score         = BillRate×35 + CS×25 + Racking×20 + Speed×15 + BillEntry×5",
+                "Minus Marking        = Complaint deductions subtracted from final score",
+                "GRADE: ELITE≥85pts | PROFICIENT≥65pts | SATISFACTORY≥45pts | RE-TRAINING<45pts",
             ]
         for line in formula_lines:
             elems.append(Paragraph(line, formula_st))
