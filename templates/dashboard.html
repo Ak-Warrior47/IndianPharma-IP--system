@@ -292,7 +292,7 @@ table.htable tbody tr:hover td { background: var(--bg); }
     </div>
 
     {% else %}
-    <form method="POST" autocomplete="off">
+    <form method="POST" autocomplete="off" onsubmit="return validateAndSubmit(event)">
       <div class="form-grid">
         {% if staff_type == 'checker' %}
         <div class="field">
@@ -367,33 +367,40 @@ table.htable tbody tr:hover td { background: var(--bg); }
             <div style="font-size:11px;color:var(--muted);margin-top:2px;">CS Received ÷ Open</div>
           </div>
         </div>
+        <!-- PURCHASER PENDING BOX -->
+        <div style="grid-column:span 2;background:rgba(254,242,242,0.85);border:1.5px solid rgba(220,38,38,0.25);border-radius:13px;padding:14px 18px;text-align:center;margin-bottom:4px;">
+          <div style="font-size:10px;font-weight:800;color:#dc2626;text-transform:uppercase;letter-spacing:.7px;margin-bottom:4px;">Pending Purchase Bills (Auto)</div>
+          <div style="font-size:32px;font-weight:800;color:#991b1b;" id="pur_pending_live">0</div>
+          <div style="font-size:11px;color:var(--muted);">Bills Received − Bills Checked</div>
+        </div>
+        <!-- SEQUENCE: Received → Checked → Entry → Items → CS Open → CS Received → Racked -->
         <div class="field">
-          <label>Total Purchase Bills Received</label>
+          <label>1. Total PO Bills Received</label>
           <input type="number" name="sales_bills_open" id="pur_br" min="0" value="0" required oninput="updatePurchaserTotals()">
         </div>
         <div class="field">
-          <label>Purchase Bills Checked</label>
+          <label>2. PO Bills Checked</label>
           <input type="number" name="checked" id="pur_bc" min="0" value="0" required oninput="updatePurchaserTotals()">
         </div>
         <div class="field">
-          <label>Purchase Bill Entry</label>
+          <label>3. Purchase Bill Entry</label>
           <input type="number" name="picked" min="0" value="0" required>
         </div>
         <div class="field">
-          <label>Number of Items</label>
+          <label>4. Number of Items</label>
           <input type="number" name="errors_found" min="0" value="0" required>
         </div>
         <div class="field">
-          <label>CS in Purchase Open</label>
-          <input type="number" name="cs_sales_open" id="pur_cso" min="0" value="0" oninput="updatePurchaserTotals()">
+          <label>5. CS in Purchase Open</label>
+          <input type="number" name="cs_sales_open" id="pur_cso" min="0" value="0" required oninput="updatePurchaserTotals()">
         </div>
         <div class="field">
-          <label>CS in Purchase Received</label>
-          <input type="number" name="packing_done" id="pur_csr" min="0" value="0" oninput="updatePurchaserTotals()">
+          <label>6. CS in Purchase Received</label>
+          <input type="number" name="packing_done" id="pur_csr" min="0" value="0" required oninput="updatePurchaserTotals()">
         </div>
         <div class="field">
-          <label>Items Racked</label>
-          <input type="number" name="rack_organized" min="0" value="0">
+          <label>7. Items Racked</label>
+          <input type="number" name="rack_organized" min="0" value="0" required>
         </div>
         <div class="field" style="grid-column:span 2;background:rgba(238,244,255,0.5);border:1px solid var(--border);border-radius:10px;padding:12px;font-size:12px;color:var(--muted);">
           ⏱️ Working time is fixed at <strong>9 hours</strong> per day
@@ -426,20 +433,20 @@ table.htable tbody tr:hover td { background: var(--bg); }
         </div>
         {% if staff_type != 'checker' %}
         <div class="field">
-          <label>Rack Organised?</label>
-          <input type="hidden" name="rack_organized" id="rack_val" value="no">
-          <div class="yn-group"><button type="button" class="yn-btn yes" id="rack_yes" onclick="setYN('rack','yes')">✅ Yes</button><button type="button" class="yn-btn no active" id="rack_no" onclick="setYN('rack','no')">❌ No</button></div>
+          <label>Rack Organised (0-10)</label>
+          <input type="number" name="rack_organized" min="0" max="10" value="10" required>
+          <small>0 = poor, 10 = perfect</small>
         </div>
         <div class="field">
-          <label>Table Clean?</label>
-          <input type="hidden" name="table_clean" id="table_val" value="no">
-          <div class="yn-group"><button type="button" class="yn-btn yes" id="table_yes" onclick="setYN('table','yes')">✅ Yes</button><button type="button" class="yn-btn no active" id="table_no" onclick="setYN('table','no')">❌ No</button></div>
+          <label>Table Clean (0-10)</label>
+          <input type="number" name="table_clean" min="0" max="10" value="10" required>
+          <small>0 = poor, 10 = perfect</small>
         </div>
         {% endif %}
         {% endif %}
       </div>
       <p style="font-size:12px;color:var(--muted);margin-bottom:14px;padding:10px 14px;background:rgba(240,253,244,0.8);border-radius:9px;border:1px solid rgba(22,163,74,0.2);">⏱ Working time is fixed at <strong>9 hours</strong> per day for all speed calculations.</p>
-      <button type="submit" class="btn-submit">✅ Submit Today's Metrics</button>
+      <button type="submit" class="btn-submit" onclick="return validateAndSubmit(event)">✅ Submit Today's Metrics</button>
     </form>
     {% endif %}
   </div>
@@ -549,8 +556,8 @@ table.htable tbody tr:hover td { background: var(--bg); }
             <td><span class="tag {% if acc >= 95 %}tag-ex{% elif acc >= 85 %}tag-good{% elif acc >= 70 %}tag-avg{% else %}tag-poor{% endif %}">{{ acc }}%</span></td>
             <td>{{ e.sales_bills_open }}</td>
             <td>{{ e.packing_done }}</td>
-            <td>{% if e.rack_organized %}✅{% else %}—{% endif %}</td>
-            <td>{% if e.table_clean %}✅{% else %}—{% endif %}</td>
+            <td>{{ e.rack_organized or 0 }}/10</td>
+            <td>{{ e.table_clean or 0 }}/10</td>
             {% endif %}
             <td>{{ "%.1f" | format(e.total_time or 0) }}</td>
           </tr>
@@ -628,11 +635,14 @@ function updatePurchaserTotals(){
   var bc  = parseInt(document.getElementById('pur_bc')?.value||0)||0;
   var cso = parseInt(document.getElementById('pur_cso')?.value||0)||0;
   var csr = parseInt(document.getElementById('pur_csr')?.value||0)||0;
+  var pending = Math.max(br - bc, 0);
   var rate = br > 0 ? Math.round(bc/br*100) : 0;
   var cs   = cso > 0 ? Math.min(Math.round(csr/cso*100),100) : 100;
+  var el0  = document.getElementById('pur_pending_live');
   var el1  = document.getElementById('pur_bills_checked_live');
   var el2  = document.getElementById('pur_bill_rate_live');
   var el3  = document.getElementById('pur_cs_live');
+  if(el0){ el0.textContent = pending; el0.style.color = pending>0?'#dc2626':'#16a34a'; }
   if(el1) el1.textContent = bc;
   if(el2){ el2.textContent = rate+'%'; el2.style.color = rate>=95?'#16a34a':rate>=85?'#d97706':'#dc2626'; }
   if(el3){ el3.textContent = cs+'%';   el3.style.color = cs>=90?'#16a34a':cs>=75?'#d97706':'#dc2626'; }
@@ -667,6 +677,45 @@ function updateCheckerTotals(){
   if(tCL){ tCL.textContent = clearance + '%'; tCL.style.color = clearance >= 90 ? '#16a34a' : clearance >= 75 ? '#d97706' : '#dc2626'; }
 }
 function setYN(f,v){document.getElementById(f+'_val').value=v;document.getElementById(f+'_yes').classList.toggle('active',v==='yes');document.getElementById(f+'_no').classList.toggle('active',v==='no');}
+</script>
+
+<script>
+// Enter key moves to next field, never submits
+document.addEventListener('DOMContentLoaded', function(){
+  var form = document.querySelector('form[method="POST"]');
+  if(!form) return;
+  form.addEventListener('keydown', function(e){
+    if(e.key !== 'Enter') return;
+    var fields = Array.from(form.querySelectorAll('input:not([type="hidden"]):not([type="submit"]):not([disabled]), select, textarea'));
+    var idx = fields.indexOf(document.activeElement);
+    if(idx > -1 && idx < fields.length - 1){
+      e.preventDefault();
+      fields[idx + 1].focus();
+    } else if(idx === fields.length - 1){
+      e.preventDefault(); // don't submit on last field either — must click button
+    }
+  });
+});
+
+// Empty field warning before submit
+function validateAndSubmit(e){
+  var form = document.querySelector('form[method="POST"]');
+  var empty = [];
+  form.querySelectorAll('input[required]:not([type="hidden"])').forEach(function(inp){
+    if(!inp.value || inp.value === '0' || inp.value === ''){
+      var label = inp.closest('.field')?.querySelector('label')?.textContent || inp.name;
+      empty.push(label.trim());
+    }
+  });
+  if(empty.length > 0){
+    var msg = 'These fields are empty or 0:\n• ' + empty.join('\n• ') + '\n\nDo you want to continue anyway?';
+    if(!confirm(msg)){
+      e.preventDefault();
+      return false;
+    }
+  }
+  return true;
+}
 </script>
 </body>
 </html>
