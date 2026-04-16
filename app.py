@@ -151,6 +151,27 @@ class AuditLog(db.Model):
     timestamp = db.Column(db.DateTime, default=datetime.utcnow)
 
 
+
+class Complaint(db.Model):
+    """Admin-entered post-delivery complaints — minus marking system."""
+    __tablename__ = "complaints"
+    id            = db.Column(db.Integer, primary_key=True)
+    entry_date    = db.Column(db.Date, nullable=False, default=date.today, index=True)
+    reported_by   = db.Column(db.Integer, db.ForeignKey("employees.id"))  # admin
+    description   = db.Column(db.Text, nullable=False)
+    complaint_type= db.Column(db.String(50), default="delivery")  # delivery/quality/missing
+    # Suggested deductions per role (admin can override)
+    picker_deduct  = db.Column(db.Float, default=0.0)
+    checker_deduct = db.Column(db.Float, default=0.0)
+    purchaser_deduct = db.Column(db.Float, default=0.0)
+    # Final deductions entered by admin
+    picker_final   = db.Column(db.Float, default=0.0)
+    checker_final  = db.Column(db.Float, default=0.0)
+    purchaser_final= db.Column(db.Float, default=0.0)
+    # Status
+    is_resolved    = db.Column(db.Boolean, default=False)
+    created_at     = db.Column(db.DateTime, default=datetime.utcnow)
+
 class PastEntryWindow(db.Model):
     """Admin-opened windows that allow staff to submit data for a past date."""
     __tablename__ = "past_entry_windows"
@@ -174,6 +195,24 @@ def grade_from_score(score):
     elif score >= 60: return "AVERAGE"
     else:             return "NEEDS WORK"
 
+
+
+
+def get_complaint_deduction(staff_type: str) -> float:
+    """Get total pending complaint deductions for a staff type."""
+    try:
+        complaints = Complaint.query.filter_by(is_resolved=False).all()
+        total = 0.0
+        for c in complaints:
+            if staff_type == "picker":
+                total += c.picker_final or 0
+            elif staff_type == "checker":
+                total += c.checker_final or 0
+            elif staff_type == "purchaser":
+                total += c.purchaser_final or 0
+        return min(total, 30.0)  # cap total deduction at 30 pts
+    except:
+        return 0.0
 
 def build_analytics(entries: List[KPIEntry], staff_type: str = "picker") -> Optional[Dict[str, Any]]:
     try:
@@ -218,7 +257,7 @@ def build_analytics(entries: List[KPIEntry], staff_type: str = "picker") -> Opti
         pick_speed      = round(safe_div(ti, ts_total), 1)
         packing_eff     = round(safe_div(tpk, tsb_normal) * 100, 1) if tsb_normal > 0 else 0.0
         cs_fulfilment   = round(min(safe_div(tpk, tcs) * 100, 100.0), 1) if tcs > 0 else 0.0
-        workspace_score = round(safe_div(tro + ttc, 2 * days) * 100, 1) if days > 0 else 0.0
+        workspace_score = round(safe_div(tro + ttc, 2 * 10 * days) * 100, 1) if days > 0 else 0.0  # 0-10 scale per day
 
         check_speed = round(safe_div(tck_total, ts_total), 1)
         normal_pct  = round(safe_div(tck_normal, tck_total) * 100, 1) if tck_total > 0 else 0.0
@@ -281,51 +320,72 @@ def build_analytics(entries: List[KPIEntry], staff_type: str = "picker") -> Opti
             pur_items_racked   = tro                   # Items Racked
 
             pur_bill_rate      = round(safe_div(pur_bills_checked, pur_bills_received) * 100, 1) if pur_bills_received > 0 else 0.0
+            pur_pending_bills  = max(pur_bills_received - pur_bills_checked, 0)  # auto-calculated
             pur_cs_fulfilment  = round(min(safe_div(pur_cs_received, pur_cs_open) * 100, 100.0), 1) if pur_cs_open > 0 else 100.0
             pur_racking_eff    = round(safe_div(pur_items_racked, pur_items) * 100, 1) if pur_items > 0 else 0.0
             pur_speed          = round(safe_div(pur_items, ts_total), 1)
 
+            # ── PURCHASER POINT SYSTEM (100 pts total, medium-upper difficulty) ──
+            pur_entry_rate = round(min(safe_div(pur_bill_entry, max(pur_bills_received,1)), 1.0) * 100, 1)
             eff_score = round(
-                (pur_bill_rate     / 100) * 40 +
-                min(pur_speed      / 50,  1.0) * 25 +
-                (pur_cs_fulfilment / 100) * 20 +
-                (pur_racking_eff   / 100) * 15,
+                (pur_bill_rate     / 100) * 35 +
+                (pur_cs_fulfilment / 100) * 25 +
+                (pur_racking_eff   / 100) * 20 +
+                min(pur_speed      / 50,  1.0) * 15 +
+                (pur_entry_rate    / 100) * 5,
                 1)
 
         elif staff_type == "picker":
+            # ── PICKER POINT SYSTEM (100 pts total, medium-upper difficulty) ──
             eff_score = round(
-                (pick_acc        / 100) * 45 +
-                min(pick_speed   / 200, 1.0) * 25 +
-                (bill_fulfilment / 100) * 20 +
-                (workspace_score / 100) * 5 +
-                min(packing_eff  / 100, 1.0) * 5,
+                (pick_acc        / 100) * 30 +
+                (bill_fulfilment / 100) * 25 +
+                min(pick_speed   / 200, 1.0) * 20 +
+                (workspace_score / 100) * 10 +
+                min(packing_eff  / 100, 1.0) * 10 +
+                (consistency     / 100) * 5,
                 1)
         else:
-            # Speed 70% + Clearance Rate 30% (pending bills penalise score)
-            speed_score     = min(safe_div(check_speed, 25.0), 1.0) * 70
-            clearance_score = (clearance_rate / 100.0) * 30
-            eff_score = round(speed_score + clearance_score, 1)
-        eff_score = min(round(eff_score,1), 100.0)
+            # ── CHECKER POINT SYSTEM (100 pts total, medium-upper difficulty) ──
+            # Speed benchmark = 60/hr (realistic excellent), harder to max out
+            speed_score     = min(safe_div(check_speed, 60.0), 1.0) * 35
+            clearance_score = (clearance_rate / 100.0) * 25
+            accuracy_score  = (normal_pct / 100.0) * 20   # normal% penalises high urgent/error rate
+            consist_score   = (consistency / 100.0) * 10
+            poteff_score    = (potential_eff / 100.0) * 10
+            eff_score       = round(speed_score + clearance_score + accuracy_score + consist_score + poteff_score, 1)
+        # Apply complaint deductions (minus marking)
+        complaint_deduction = get_complaint_deduction(staff_type)
+        eff_score = max(round(eff_score - complaint_deduction, 1), 0.0)
+        eff_score = min(eff_score, 100.0)
 
         if staff_type == "picker":
-            if   pick_acc>=98 and bill_fulfilment>=95: grade="ELITE"
-            elif pick_acc>=95 and bill_fulfilment>=85: grade="PROFICIENT"
-            elif pick_acc>=88 and bill_fulfilment>=70: grade="SATISFACTORY"
-            else:                                      grade="RE-TRAINING"
+            # Point-based grade (medium-upper difficulty)
+            if   eff_score >= 85: grade="ELITE"
+            elif eff_score >= 65: grade="PROFICIENT"
+            elif eff_score >= 45: grade="SATISFACTORY"
+            else:                 grade="RE-TRAINING"
         elif staff_type == "purchaser":
-            # Purchaser grade based on Bill Processing Rate + CS Fulfilment
-            if   pur_bill_rate>=95 and pur_cs_fulfilment>=90: grade="ELITE"
-            elif pur_bill_rate>=85 and pur_cs_fulfilment>=75: grade="PROFICIENT"
-            elif pur_bill_rate>=70:                            grade="SATISFACTORY"
-            else:                                              grade="RE-TRAINING"
+            # Point-based grade (medium-upper difficulty)
+            if   eff_score >= 85: grade="ELITE"
+            elif eff_score >= 65: grade="PROFICIENT"
+            elif eff_score >= 45: grade="SATISFACTORY"
+            else:                 grade="RE-TRAINING"
         else:
-            # Grade: speed + clearance rate (pending bills drop grade)
-            if   check_speed>=28 and clearance_rate>=90: grade="ELITE"
-            elif check_speed>=22 and clearance_rate>=75: grade="PROFICIENT"
-            elif check_speed>=15 and clearance_rate>=50: grade="SATISFACTORY"
-            else:                                         grade="RE-TRAINING"
+            # Point-based grade (medium-upper difficulty)
+            if   eff_score >= 85: grade="ELITE"
+            elif eff_score >= 65: grade="PROFICIENT"
+            elif eff_score >= 45: grade="SATISFACTORY"
+            else:                 grade="RE-TRAINING"
 
-        if staff_type == "purchaser":
+        if staff_type == "checker":
+            feedback_map = {
+                "ELITE":        "Exceptional! High speed, clear bills, low error rate.",
+                "PROFICIENT":   "Good performance. Push speed higher and reduce urgent items.",
+                "SATISFACTORY": "Meets expectations. Focus on speed and error reduction.",
+                "RE-TRAINING":  "Performance needs attention. Please speak to your manager.",
+            }
+        elif staff_type == "purchaser":
             feedback_map = {
                 "ELITE":        "Outstanding procurement! All bills processed and CS fulfilled.",
                 "PROFICIENT":   "Good procurement performance. Push CS fulfilment higher.",
@@ -356,6 +416,8 @@ def build_analytics(entries: List[KPIEntry], staff_type: str = "picker") -> Opti
             tbr=tbr, pending_bills=pending_bills, clearance_rate=clearance_rate,
             tbr_picker=tbr_picker, bill_fulfilment=bill_fulfilment,
             pur_bills_received=pur_bills_received if staff_type=="purchaser" else 0,
+            pur_pending_bills=pur_pending_bills if staff_type=="purchaser" else 0,
+            pur_entry_rate=pur_entry_rate if staff_type=="purchaser" else 0,
             pur_bills_checked=pur_bills_checked if staff_type=="purchaser" else 0,
             pur_bill_entry=pur_bill_entry if staff_type=="purchaser" else 0,
             pur_items=pur_items if staff_type=="purchaser" else 0,
@@ -366,6 +428,7 @@ def build_analytics(entries: List[KPIEntry], staff_type: str = "picker") -> Opti
             pur_cs_fulfilment=pur_cs_fulfilment if staff_type=="purchaser" else 0,
             pur_racking_eff=pur_racking_eff if staff_type=="purchaser" else 0,
             pur_speed=pur_speed if staff_type=="purchaser" else 0,
+            complaint_deduction=complaint_deduction,
             eff_score=eff_score, grade=grade, days=days,
             consistency=consistency, trend=trend,
             feedback=feedback_map.get(grade,""),
@@ -447,6 +510,30 @@ def run_migrations():
                     db.session.rollback()
                     logger.warning(f"Column '{col}' migration skipped: {ce}")
             # Migrate kpi_entries table
+            # Create complaints table if not exists
+            try:
+                db.session.execute(db.text("""
+                    CREATE TABLE IF NOT EXISTS complaints (
+                        id SERIAL PRIMARY KEY,
+                        entry_date DATE NOT NULL DEFAULT CURRENT_DATE,
+                        reported_by INTEGER REFERENCES employees(id),
+                        description TEXT NOT NULL,
+                        complaint_type VARCHAR(50) DEFAULT 'delivery',
+                        picker_deduct FLOAT DEFAULT 0,
+                        checker_deduct FLOAT DEFAULT 0,
+                        purchaser_deduct FLOAT DEFAULT 0,
+                        picker_final FLOAT DEFAULT 0,
+                        checker_final FLOAT DEFAULT 0,
+                        purchaser_final FLOAT DEFAULT 0,
+                        is_resolved BOOLEAN DEFAULT FALSE,
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                    )
+                """))
+                db.session.commit()
+                logger.info("✅ Complaints table ensured")
+            except Exception as ce:
+                db.session.rollback()
+                logger.warning(f"Complaints table: {ce}")
             kpi_cols = [
                 ("bills_received",      "INTEGER DEFAULT 0"),
                 ("pending_bills_manual","INTEGER DEFAULT 0"),
@@ -741,6 +828,7 @@ def admin_dashboard():
         total_entries = len(all_ents)
         active_today = KPIEntry.query.filter_by(entry_date=today).count()
         open_windows = PastEntryWindow.query.filter_by(is_active=True).order_by(PastEntryWindow.past_date.desc()).all()
+        open_complaints = Complaint.query.filter_by(is_resolved=False).order_by(Complaint.created_at.desc()).all()
 
         rws = [r for r in rows if r['stats']]
         def srt(lst, wk=False):
@@ -767,6 +855,7 @@ def admin_dashboard():
             rows=rows, total_picked=total_picked, total_entries=total_entries,
             active_today=active_today, emp_count=len(employees), today=today,
             open_windows=open_windows,
+            open_complaints=open_complaints,
             picker_lb=picker_lb, checker_lb=checker_lb, mixed_lb=mixed_lb,
             picker_week_lb=picker_week_lb, checker_week_lb=checker_week_lb, mixed_week_lb=mixed_week_lb,
             team_avg_eff=team_avg_eff, team_avg_acc=team_avg_acc,
@@ -777,7 +866,7 @@ def admin_dashboard():
         flash("Error loading admin dashboard.", "danger")
         return render_template("admin.html", rows=[], total_picked=0,
                                total_entries=0, active_today=0, emp_count=0, today=date.today(),
-                               open_windows=[], picker_lb=[], checker_lb=[], mixed_lb=[],
+                               open_windows=[], open_complaints=[], picker_lb=[], checker_lb=[], mixed_lb=[],
                                picker_week_lb=[], checker_week_lb=[], mixed_week_lb=[],
                                team_avg_eff=0, team_avg_acc=0, improving=[],
                                grade_counts={"ELITE":0,"PROFICIENT":0,"SATISFACTORY":0,"RE-TRAINING":0},
@@ -1235,6 +1324,92 @@ def server_error(e):
 
 
 # ─── MAIN ────────────────────────────────────────────────────────────────────
+
+
+@app.route("/admin/complaint", methods=["POST"])
+@admin_required
+def admin_add_complaint():
+    """Admin enters a post-delivery complaint with suggested deductions."""
+    try:
+        description    = request.form.get("description", "").strip()
+        complaint_type = request.form.get("complaint_type", "delivery")
+        mistake_count  = max(1, int(request.form.get("mistake_count", 1) or 1))
+
+        if not description:
+            flash("Please describe the complaint.", "warning")
+            return redirect(url_for("admin_dashboard"))
+
+        # Auto-suggest deductions based on mistake count and type
+        # Medium-upper difficulty: each mistake costs meaningful points
+        BASE_DEDUCT = {"delivery": 3.0, "quality": 4.0, "missing": 5.0}
+        base = BASE_DEDUCT.get(complaint_type, 3.0)
+
+        # Deductions per role based on their responsibility in the error
+        # Picker most responsible for wrong/missing items
+        # Checker responsible for not catching errors
+        # Purchaser responsible for quality/sourcing issues
+        multiplier = min(mistake_count, 10)  # cap at 10 mistakes
+        if complaint_type == "delivery":
+            sug_picker    = round(base * multiplier * 1.0, 1)   # most responsible
+            sug_checker   = round(base * multiplier * 0.7, 1)   # should have caught it
+            sug_purchaser = round(base * multiplier * 0.3, 1)   # least responsible
+        elif complaint_type == "quality":
+            sug_picker    = round(base * multiplier * 0.4, 1)
+            sug_checker   = round(base * multiplier * 0.6, 1)
+            sug_purchaser = round(base * multiplier * 1.0, 1)   # most responsible for quality
+        else:  # missing
+            sug_picker    = round(base * multiplier * 1.0, 1)
+            sug_checker   = round(base * multiplier * 0.8, 1)
+            sug_purchaser = round(base * multiplier * 0.2, 1)
+
+        # Cap suggestions at reasonable max
+        sug_picker    = min(sug_picker,    25.0)
+        sug_checker   = min(sug_checker,   25.0)
+        sug_purchaser = min(sug_purchaser, 25.0)
+
+        # Use admin-entered finals if provided, else use suggestions
+        picker_final    = float(request.form.get("picker_final",    sug_picker)    or sug_picker)
+        checker_final   = float(request.form.get("checker_final",   sug_checker)   or sug_checker)
+        purchaser_final = float(request.form.get("purchaser_final", sug_purchaser) or sug_purchaser)
+
+        complaint = Complaint(
+            entry_date       = date.today(),
+            reported_by      = session.get("user_id"),
+            description      = description,
+            complaint_type   = complaint_type,
+            picker_deduct    = sug_picker,
+            checker_deduct   = sug_checker,
+            purchaser_deduct = sug_purchaser,
+            picker_final     = picker_final,
+            checker_final    = checker_final,
+            purchaser_final  = purchaser_final,
+        )
+        db.session.add(complaint)
+        db.session.commit()
+        log_audit("complaint_added", description[:50], f"type={complaint_type} mistakes={mistake_count}")
+        flash(f"✅ Complaint recorded. Deductions — Picker: {picker_final}pts, Checker: {checker_final}pts, Purchaser: {purchaser_final}pts", "warning")
+
+    except Exception as e:
+        db.session.rollback()
+        logger.error(f"complaint: {e}")
+        flash("Error recording complaint.", "danger")
+    return redirect(url_for("admin_dashboard"))
+
+
+@app.route("/admin/complaint/<int:cid>/resolve", methods=["POST"])
+@admin_required
+def admin_resolve_complaint(cid):
+    """Mark complaint as resolved."""
+    try:
+        c = db.session.get(Complaint, cid)
+        if c:
+            c.is_resolved = True
+            db.session.commit()
+            flash("✅ Complaint marked as resolved.", "success")
+    except Exception as e:
+        db.session.rollback()
+    return redirect(url_for("admin_dashboard"))
+
 
 @app.route("/admin/migrate_checker/<int:emp_id>")
 @admin_required
