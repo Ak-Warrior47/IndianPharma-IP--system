@@ -696,16 +696,16 @@ def dashboard():
                     total_mins       = min(gf("total_mins"), 480)
                     check_mins       = min(gf("check_mins"), 480)
 
-                    if staff_type == "purchaser":
-                        sales_bills_open = gi("sales_bills_open")   # PO Bills Received
-                        checked          = gi("checked")             # PO Bills Checked
-                        picked           = gi("picked")              # PO Bill Entry
-                        errors_found     = gi("errors_found")        # Number of Items
-                        cs_sales_open    = gi("cs_sales_open")       # CS in PO Open
-                        packing_done     = gi("packing_done")        # CS in PO Received
-                        rack_organized   = gi("rack_organized")      # Items Racked
-                        missed           = 0
-                        bills_received   = 0
+                   if staff_type == "purchaser":
+                        sales_bills_open     = gi("sales_bills_open")
+                        checked              = gi("checked")
+                        picked               = gi("picked")
+                        errors_found         = gi("errors_found")
+                        cs_sales_open        = gi("cs_sales_open")
+                        packing_done         = gi("packing_done")
+                        rack_organized       = gi("rack_organized")
+                        missed               = 0
+                        bills_received       = 0
                         pending_bills_manual = 0
                         total_bills_received = 0
                     elif staff_type == "checker":
@@ -715,11 +715,15 @@ def dashboard():
                         missed               = 0
                         bills_received       = gi("bills_received")
                         pending_bills_manual = gi("pending_bills_manual")
-                    else:
-                        picked       = gi("picked")
-                        missed       = gi("missed")
-                        checked      = 0
-                        errors_found = 0
+                        total_bills_received = 0
+                    else:  # picker
+                        picked               = gi("picked")
+                        missed               = gi("missed")
+                        checked              = 0
+                        errors_found         = 0
+                        bills_received       = 0
+                        pending_bills_manual = 0
+                        total_bills_received = gi("total_bills_received")
 
                     ne = KPIEntry(
                         emp_id=emp_id,
@@ -732,9 +736,9 @@ def dashboard():
                         checked=checked,
                         errors_found=errors_found,
                         check_time=round(check_mins / 60, 3),
-                        bills_received=bills_received if staff_type=="checker" else 0,
-                        pending_bills_manual=pending_bills_manual if staff_type=="checker" else 0,
-                        total_bills_received=total_bills_received if staff_type=="picker" else 0,
+                        bills_received=bills_received,
+                        pending_bills_manual=pending_bills_manual,
+                        total_bills_received=total_bills_received,
                         entry_date=today
                     )
                     db.session.add(ne)
@@ -1243,17 +1247,17 @@ def past_entry(date_str):
             packing_done     = gi("packing_done")
             total_mins       = min(gf("total_mins"), 480)
             check_mins       = min(gf("check_mins"), 480)
-
-            if staff_type == "purchaser":
-                sales_bills_open = gi("sales_bills_open")
-                checked          = gi("checked")
-                picked           = gi("picked")
-                errors_found     = gi("errors_found")
-                cs_sales_open    = gi("cs_sales_open")
-                packing_done     = gi("packing_done")
-                rack_organized   = gi("rack_organized")
-                missed           = 0
-                bills_received   = 0
+            
+    if staff_type == "purchaser":
+                sales_bills_open     = gi("sales_bills_open")
+                checked              = gi("checked")
+                picked               = gi("picked")
+                errors_found         = gi("errors_found")
+                cs_sales_open        = gi("cs_sales_open")
+                packing_done         = gi("packing_done")
+                rack_organized       = gi("rack_organized")
+                missed               = 0
+                bills_received       = 0
                 pending_bills_manual = 0
                 total_bills_received = 0
             elif staff_type == "checker":
@@ -1263,11 +1267,15 @@ def past_entry(date_str):
                 missed               = 0
                 bills_received       = gi("bills_received")
                 pending_bills_manual = gi("pending_bills_manual")
-            else:
-                picked       = gi("picked")
-                missed       = gi("missed")
-                checked      = 0
-                errors_found = 0
+                total_bills_received = 0
+            else:  # picker
+                picked               = gi("picked")
+                missed               = gi("missed")
+                checked              = 0
+                errors_found         = 0
+                bills_received       = 0
+                pending_bills_manual = 0
+                total_bills_received = gi("total_bills_received")
 
             ne = KPIEntry(
                 emp_id           = emp_id,
@@ -1280,10 +1288,10 @@ def past_entry(date_str):
                 checked          = checked,
                 errors_found     = errors_found,
                 check_time       = round(check_mins / 60, 3),
-                bills_received        = bills_received if staff_type=="checker" else 0,
-                pending_bills_manual  = pending_bills_manual if staff_type=="checker" else 0,
-                total_bills_received  = total_bills_received if staff_type=="picker" else 0,
-                entry_date            = past_date
+                bills_received       = bills_received,
+                pending_bills_manual = pending_bills_manual,
+                total_bills_received = total_bills_received,
+                entry_date           = past_date
             )
             db.session.add(ne)
             db.session.commit()
