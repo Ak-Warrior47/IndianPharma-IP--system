@@ -302,10 +302,10 @@ body{font-family:'DM Sans',sans-serif;background:var(--page-bg);min-height:100vh
       <div class="formula-row"><b>CS Fulfilment</b> = CS Received ÷ CS Open × 100</div>
       <div class="formula-row"><b>Racking Efficiency</b> = Items Racked ÷ Number of Items × 100</div>
       <div class="formula-row"><b>Processing Speed</b> = Number of Items ÷ (9 hrs × Days)</div>
-      <div class="formula-row"><b>Points</b> = BillRate×35 + CS×25 + Racking×20 + Speed×15 + BillEntry×5</div>
+      <div class="formula-row"><b>Points (HARD)</b> = BillRate×30 + CS×25 + Racking×20 + Speed÷60×12 + Entry×8 + Pending×5 [max 100]</div>
       <div class="formula-row"><b>Minus Marking</b> = Complaint deductions subtracted from points</div>
-      <div class="formula-row"><b>ELITE</b>: ≥85 pts · <b>PROFICIENT</b>: ≥65 pts</div>
-      <div class="formula-row"><b>SATISFACTORY</b>: ≥45 pts · <b>RE-TRAINING</b>: &lt;45 pts</div>
+      <div class="formula-row"><b>ELITE</b>: ≥88 pts · <b>PROFICIENT</b>: ≥72 pts</div>
+      <div class="formula-row"><b>SATISFACTORY</b>: ≥52 pts · <b>RE-TRAINING</b>: &lt;52 pts</div>
       {% elif emp.staff_type == 'picker' %}
       <div class="formula-row"><b>Pick Accuracy</b> = Items Picked ÷ (Picked + Missed) × 100</div>
       <div class="formula-row"><b>Pick Speed</b> = (Picked + Missed) ÷ (9 hrs × Days)</div>
@@ -313,12 +313,12 @@ body{font-family:'DM Sans',sans-serif;background:var(--page-bg);min-height:100vh
       <div class="formula-row"><b>Packing Eff.</b> = Packing Done ÷ Sales Bill Picked × 100</div>
       <div class="formula-row"><b>CS Fulfilment</b> = min(Packing Done ÷ CS Sales Open × 100, 100)</div>
       <div class="formula-row"><b>Workspace Score</b> = (Rack + Table Days) ÷ (2 × Days) × 100</div>
-      <div class="formula-row"><b>Points</b> = Acc×30 + BillFulfilment×25 + Speed×20 + Workspace×10 + Packing×10 + Consistency×5</div>
+      <div class="formula-row"><b>Points (HARD)</b> = Acc×28 + Fulfilment×22 + Speed÷250×18 + Packing×12 + Workspace×10 + CS×5 + Consistency×5 [max 100]</div>
       <div class="formula-row"><b>Minus Marking</b> = Complaint deductions subtracted from points</div>
       <div class="formula-row"><b>Potential Items</b> = 200 × 9 hrs × Days</div>
       <div class="formula-row"><b>Consistency</b> = max(0, 100 − std_dev(daily_accuracy) × 2)</div>
-      <div class="formula-row"><b>ELITE</b>: ≥85 pts · <b>PROFICIENT</b>: ≥65 pts</div>
-      <div class="formula-row"><b>SATISFACTORY</b>: ≥45 pts · <b>RE-TRAINING</b>: &lt;45 pts</div>
+      <div class="formula-row"><b>ELITE</b>: ≥88 pts · <b>PROFICIENT</b>: ≥72 pts</div>
+      <div class="formula-row"><b>SATISFACTORY</b>: ≥52 pts · <b>RE-TRAINING</b>: &lt;52 pts</div>
       {% else %}
       <div class="formula-row"><b>Total SB Checked</b> = SB Normal + SB Urgent (urgent done first)</div>
       <div class="formula-row"><b>Total Items Checked</b> = Items Normal + Urgent Items (both = good work)</div>
@@ -327,12 +327,12 @@ body{font-family:'DM Sans',sans-serif;background:var(--page-bg);min-height:100vh
       <div class="formula-row"><b>Check Speed</b> = Total Items Checked ÷ (9 hrs × Days)</div>
       <div class="formula-row"><b>Pending Bills</b> = Manually entered by checker</div>
       <div class="formula-row"><b>Clearance Rate</b> = SB Checked ÷ (SB Checked + Pending) × 100</div>
-      <div class="formula-row"><b>Points</b> = Speed÷60×35 + Clearance×25 + Normal%×20 + Consistency×10 + PotEff×10</div>
+      <div class="formula-row"><b>Points (HARD)</b> = Speed÷80×30 + Clearance×25 + Normal%×20 + Consistency×10 + PotEff×8 + Volume×7 [max 100]</div>
       <div class="formula-row"><b>Minus Marking</b> = Complaint deductions subtracted from points</div>
       <div class="formula-row"><b>Potential Items</b> = 25 items/hr × 9 hrs × Days</div>
       <div class="formula-row"><b>Consistency</b> = max(0, 100 − std_dev(daily_speed) × 2)</div>
-      <div class="formula-row"><b>ELITE</b>: ≥85 pts · <b>PROFICIENT</b>: ≥65 pts</div>
-      <div class="formula-row"><b>SATISFACTORY</b>: ≥45 pts · <b>RE-TRAINING</b>: &lt;45 pts</div>
+      <div class="formula-row"><b>ELITE</b>: ≥88 pts · <b>PROFICIENT</b>: ≥72 pts</div>
+      <div class="formula-row"><b>SATISFACTORY</b>: ≥52 pts · <b>RE-TRAINING</b>: &lt;52 pts</div>
       {% endif %}
     </div>
   </div>
