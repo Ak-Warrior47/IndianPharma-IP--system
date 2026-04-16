@@ -440,7 +440,9 @@ tbody tr:hover td { background: rgba(219,234,254,0.3); }
           </select>
         </div>
       </div>
-      <button type="submit" class="btn-add" id="saveDetailsBtn" disabled>💾 Save Details</button>
+      <div style="display:flex;justify-content:flex-end;margin-top:12px;">
+        <button type="submit" class="btn-add" id="saveDetailsBtn" disabled style="min-width:180px;padding:12px 24px;">💾 Save Details →</button>
+      </div>
     </form>
   </div>
 
@@ -573,6 +575,77 @@ tbody tr:hover td { background: rgba(219,234,254,0.3); }
   </div>
 
 
+
+  <!-- COMPLAINT / MINUS MARKING SECTION -->
+  <div class="card" style="margin-bottom:20px;border-left:4px solid #dc2626;">
+    <div class="card-header">
+      <div class="card-title">⚠️ Post-Delivery Complaint — Minus Marking</div>
+    </div>
+    <form method="POST" action="/admin/complaint" autocomplete="off">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px;">
+        <div class="field">
+          <label>Complaint Type</label>
+          <select name="complaint_type" required>
+            <option value="delivery">🚚 Wrong Delivery (Picker most liable)</option>
+            <option value="missing">📦 Missing Items (Picker + Checker)</option>
+            <option value="quality">⚕️ Quality Issue (Purchaser most liable)</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>Number of Mistakes</label>
+          <input type="number" name="mistake_count" min="1" max="50" value="1" required>
+          <small>System will suggest deductions based on count</small>
+        </div>
+      </div>
+      <div class="field" style="margin-bottom:12px;">
+        <label>Complaint Description</label>
+        <input type="text" name="description" placeholder="e.g. Wrong medicines sent to Retailer XYZ, Order #123" required style="width:100%;">
+      </div>
+      <div style="background:rgba(254,242,242,0.7);border:1px solid #fecaca;border-radius:10px;padding:12px;margin-bottom:12px;">
+        <div style="font-size:11px;font-weight:800;color:#dc2626;text-transform:uppercase;margin-bottom:8px;">Override Suggested Deductions (leave blank to use system suggestion)</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;">
+          <div class="field">
+            <label style="color:#1d4ed8;">📦 Picker Deduction (pts)</label>
+            <input type="number" name="picker_final" min="0" max="30" step="0.5" placeholder="Auto-suggested">
+          </div>
+          <div class="field">
+            <label style="color:#6d28d9;">🔍 Checker Deduction (pts)</label>
+            <input type="number" name="checker_final" min="0" max="30" step="0.5" placeholder="Auto-suggested">
+          </div>
+          <div class="field">
+            <label style="color:#16a34a;">🛒 Purchaser Deduction (pts)</label>
+            <input type="number" name="purchaser_final" min="0" max="30" step="0.5" placeholder="Auto-suggested">
+          </div>
+        </div>
+      </div>
+      <div style="display:flex;justify-content:flex-end;">
+        <button type="submit" style="background:#dc2626;color:#fff;border:none;padding:10px 24px;border-radius:10px;font-weight:700;cursor:pointer;font-size:13px;">⚠️ Record Complaint & Apply Minus</button>
+      </div>
+    </form>
+
+    {% if open_complaints %}
+    <div style="margin-top:16px;border-top:1px solid var(--border);padding-top:14px;">
+      <div style="font-size:11px;font-weight:800;color:#dc2626;text-transform:uppercase;margin-bottom:8px;">Active Complaints (affecting scores)</div>
+      {% for c in open_complaints %}
+      <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 14px;background:#fef2f2;border:1px solid #fecaca;border-radius:10px;margin-bottom:6px;">
+        <div>
+          <div style="font-size:13px;font-weight:700;color:#991b1b;">{{ c.complaint_type|title }}: {{ c.description[:60] }}{% if c.description|length > 60 %}...{% endif %}</div>
+          <div style="font-size:11px;color:var(--muted);margin-top:2px;">
+            {{ c.entry_date.strftime('%d %b') }} · 
+            Picker: <strong style="color:#1d4ed8;">-{{ c.picker_final }}pts</strong> · 
+            Checker: <strong style="color:#6d28d9;">-{{ c.checker_final }}pts</strong> · 
+            Purchaser: <strong style="color:#16a34a;">-{{ c.purchaser_final }}pts</strong>
+          </div>
+        </div>
+        <form method="POST" action="/admin/complaint/{{ c.id }}/resolve" style="margin:0;">
+          <button type="submit" style="background:#16a34a;color:#fff;border:none;padding:6px 12px;border-radius:7px;font-size:11px;font-weight:700;cursor:pointer;">✅ Resolve</button>
+        </form>
+      </div>
+      {% endfor %}
+    </div>
+    {% endif %}
+  </div>
+
   <!-- LEADERBOARD -->
   <div class="card" style="margin-bottom:20px;">
     <div class="card-header">
@@ -593,7 +666,7 @@ tbody tr:hover td { background: rgba(219,234,254,0.3); }
           <div style="display:flex;align-items:center;gap:10px;padding:9px 12px;background:{% if loop.index0==0 %}rgba(255,215,0,0.12){% elif loop.index0==1 %}rgba(192,192,192,0.12){% elif loop.index0==2 %}rgba(205,127,50,0.1){% else %}rgba(238,244,255,0.5){% endif %};border:1px solid {% if loop.index0==0 %}rgba(255,215,0,0.3){% elif loop.index0==1 %}rgba(192,192,192,0.3){% elif loop.index0==2 %}rgba(205,127,50,0.2){% else %}var(--border){% endif %};border-radius:11px;margin-bottom:6px;">
             <div style="font-size:18px;width:24px;text-align:center;">{% if loop.index0==0 %}🥇{% elif loop.index0==1 %}🥈{% elif loop.index0==2 %}🥉{% else %}{{ loop.index }}{% endif %}</div>
             <div style="flex:1;min-width:0;"><div style="font-size:13px;font-weight:700;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{{ r.emp.name }}</div><div style="font-size:11px;color:var(--muted);">{{ r.stats.pick_acc }}% acc · {{ r.stats.days }}d</div></div>
-            <div style="text-align:right;"><div style="font-size:16px;font-weight:800;color:var(--blue);">{{ r.stats.eff_score }}</div><div style="font-size:10px;color:var(--muted);">/100</div></div>
+            <div style="text-align:right;"><div style="font-size:16px;font-weight:800;color:var(--blue);">{{ r.stats.eff_score }}</div><div style="font-size:10px;color:var(--muted);">pts</div></div>
           </div>
           {% endfor %}{% else %}<div style="font-size:13px;color:var(--muted);padding:12px;">No picker data yet.</div>{% endif %}
         </div>
@@ -605,7 +678,7 @@ tbody tr:hover td { background: rgba(219,234,254,0.3); }
           <div style="display:flex;align-items:center;gap:10px;padding:9px 12px;background:{% if loop.index0==0 %}rgba(255,215,0,0.12){% elif loop.index0==1 %}rgba(192,192,192,0.12){% elif loop.index0==2 %}rgba(205,127,50,0.1){% else %}rgba(245,243,255,0.5){% endif %};border:1px solid {% if loop.index0==0 %}rgba(255,215,0,0.3){% elif loop.index0==1 %}rgba(192,192,192,0.3){% elif loop.index0==2 %}rgba(205,127,50,0.2){% else %}rgba(167,139,250,0.2){% endif %};border-radius:11px;margin-bottom:6px;">
             <div style="font-size:18px;width:24px;text-align:center;">{% if loop.index0==0 %}🥇{% elif loop.index0==1 %}🥈{% elif loop.index0==2 %}🥉{% else %}{{ loop.index }}{% endif %}</div>
             <div style="flex:1;min-width:0;"><div style="font-size:13px;font-weight:700;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{{ r.emp.name }}</div><div style="font-size:11px;color:var(--muted);">{{ r.stats.check_speed or r.stats.ck_speed or 0 }}/hr · {{ r.stats.days }}d</div></div>
-            <div style="text-align:right;"><div style="font-size:16px;font-weight:800;color:#6d28d9;">{{ r.stats.eff_score }}</div><div style="font-size:10px;color:var(--muted);">/100</div></div>
+            <div style="text-align:right;"><div style="font-size:16px;font-weight:800;color:#6d28d9;">{{ r.stats.eff_score }}</div><div style="font-size:10px;color:var(--muted);">pts</div></div>
           </div>
           {% endfor %}{% else %}<div style="font-size:13px;color:var(--muted);padding:12px;">No checker data yet.</div>{% endif %}
         </div>
@@ -617,7 +690,7 @@ tbody tr:hover td { background: rgba(219,234,254,0.3); }
           <div style="display:flex;align-items:center;gap:10px;padding:9px 12px;background:{% if loop.index0==0 %}rgba(255,215,0,0.12){% elif loop.index0==1 %}rgba(192,192,192,0.12){% elif loop.index0==2 %}rgba(205,127,50,0.1){% else %}rgba(240,253,244,0.5){% endif %};border:1px solid {% if loop.index0==0 %}rgba(255,215,0,0.3){% elif loop.index0==1 %}rgba(192,192,192,0.3){% elif loop.index0==2 %}rgba(205,127,50,0.2){% else %}rgba(22,163,74,0.15){% endif %};border-radius:11px;margin-bottom:6px;">
             <div style="font-size:18px;width:24px;text-align:center;">{% if loop.index0==0 %}🥇{% elif loop.index0==1 %}🥈{% elif loop.index0==2 %}🥉{% else %}{{ loop.index }}{% endif %}</div>
             <div style="flex:1;min-width:0;"><div style="font-size:13px;font-weight:700;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{{ r.emp.name }}</div><div style="font-size:11px;color:var(--muted);"><span style="background:{% if r.emp.staff_type=='picker' %}var(--blue-lite){% else %}#ede9fe{% endif %};color:{% if r.emp.staff_type=='picker' %}var(--blue){% else %}#6d28d9{% endif %};padding:1px 6px;border-radius:4px;font-weight:700;">{{ r.emp.staff_type }}</span> · {{ r.stats.days }}d</div></div>
-            <div style="text-align:right;"><div style="font-size:16px;font-weight:800;color:#16a34a;">{{ r.stats.eff_score }}</div><div style="font-size:10px;color:var(--muted);">/100</div></div>
+            <div style="text-align:right;"><div style="font-size:16px;font-weight:800;color:#16a34a;">{{ r.stats.eff_score }}</div><div style="font-size:10px;color:var(--muted);">pts</div></div>
           </div>
           {% endfor %}{% else %}<div style="font-size:13px;color:var(--muted);padding:12px;">No data yet.</div>{% endif %}
         </div>
