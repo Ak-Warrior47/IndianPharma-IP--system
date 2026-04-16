@@ -618,6 +618,12 @@ def health_check():
     return jsonify(status="ok", database="up" if db_ok else "down"), 200 if db_ok else 500
 
 
+@app.route("/favicon.ico")
+def favicon():
+    """Return empty favicon to stop session-killing redirect loop."""
+    return Response(b"", status=204, mimetype="image/x-icon")
+
+
 @app.route("/")
 def index():
     if not session.get("user_id"): return redirect(url_for("login"))
@@ -1416,6 +1422,108 @@ def admin_resolve_complaint(cid):
     except Exception as e:
         db.session.rollback()
     return redirect(url_for("admin_dashboard"))
+
+
+
+
+@app.route("/admin/export_full")
+@admin_required
+def admin_export_full():
+    """Export ALL data as JSON — for migration to Supabase."""
+    try:
+        import json
+        employees = Employee.query.filter_by(is_admin=False).all()
+        data = {"employees": [], "kpi_entries": [], "exported_at": str(date.today())}
+
+        for emp in employees:
+            data["employees"].append({
+                "name": emp.name,
+                "email": emp.email,
+                "staff_type": emp.staff_type,
+                "role": emp.role,
+                "password_hash": emp.password_hash,
+                "sunday_override": emp.sunday_override,
+            })
+            entries = KPIEntry.query.filter_by(emp_id=emp.id).all()
+            for e in entries:
+                data["kpi_entries"].append({
+                    "employee_email": emp.email,
+                    "entry_date": str(e.entry_date),
+                    "sales_bills_open": e.sales_bills_open or 0,
+                    "picked": e.picked or 0,
+                    "missed": e.missed or 0,
+                    "cs_sales_open": e.cs_sales_open or 0,
+                    "packing_done": e.packing_done or 0,
+                    "rack_organized": e.rack_organized or 0,
+                    "table_clean": e.table_clean or 0,
+                    "checked": e.checked or 0,
+                    "errors_found": e.errors_found or 0,
+                    "bills_received": e.bills_received or 0,
+                    "pending_bills_manual": e.pending_bills_manual or 0,
+                    "total_bills_received": e.total_bills_received or 0,
+                })
+
+        json_str = json.dumps(data, indent=2)
+        return Response(
+            json_str,
+            mimetype="application/json",
+            headers={"Content-Disposition": f"attachment; filename=pharmaip_full_export_{date.today()}.json"}
+        )
+    except Exception as e:
+        logger.error(f"export_full: {e}")
+        flash("Error exporting data.", "danger")
+        return redirect(url_for("admin_dashboard"))
+
+
+@app.route("/admin/export_all_pdf")
+@admin_required
+def admin_export_all_pdf():
+    """Generate PDF for every staff member and return as ZIP."""
+    try:
+        import zipfile
+        from utils import generate_visual_pdf
+
+        employees = Employee.query.filter_by(is_admin=False).all()
+        if not employees:
+            flash("No staff found.", "warning")
+            return redirect(url_for("admin_dashboard"))
+
+        zip_buf = io.BytesIO()
+        with zipfile.ZipFile(zip_buf, 'w', zipfile.ZIP_DEFLATED) as zf:
+            for emp in employees:
+                try:
+                    entries = KPIEntry.query.filter_by(emp_id=emp.id).all()
+                    all_stats   = build_analytics(entries, emp.staff_type)
+                    day_stats   = build_analytics(get_period_entries(emp.id, "day"),   emp.staff_type)
+                    week_stats  = build_analytics(get_period_entries(emp.id, "week"),  emp.staff_type)
+                    month_stats = build_analytics(get_period_entries(emp.id, "month"), emp.staff_type)
+
+                    payload = {
+                        "all_stats":   all_stats,
+                        "day_stats":   day_stats,
+                        "week_stats":  week_stats,
+                        "month_stats": month_stats,
+                        "staff_type":  emp.staff_type,
+                        "all_entries": entries[-30:],
+                    }
+                    pdf_buf = generate_visual_pdf(emp.name, payload)
+                    safe_name = emp.name.replace(" ", "_").replace("/", "-")
+                    zf.writestr(f"KRA_{safe_name}_{date.today()}.pdf", pdf_buf.getvalue())
+                except Exception as e:
+                    logger.error(f"PDF for {emp.name}: {e}")
+                    continue
+
+        zip_buf.seek(0)
+        log_audit("export_all_pdf", "all_staff", f"{len(employees)} PDFs generated")
+        return Response(
+            zip_buf.getvalue(),
+            mimetype="application/zip",
+            headers={"Content-Disposition": f"attachment; filename=AllStaff_KRA_{date.today()}.zip"}
+        )
+    except Exception as e:
+        logger.error(f"export_all_pdf: {e}")
+        flash("Error generating PDFs.", "danger")
+        return redirect(url_for("admin_dashboard"))
 
 
 @app.route("/admin/migrate_checker/<int:emp_id>")
