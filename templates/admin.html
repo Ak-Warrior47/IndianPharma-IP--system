@@ -646,55 +646,129 @@ tbody tr:hover td { background: rgba(219,234,254,0.3); }
     {% endif %}
   </div>
 
-  <!-- LEADERBOARD -->
+  <!-- SCORECARD & LEADERBOARD — POINT SYSTEM -->
   <div class="card" style="margin-bottom:20px;">
     <div class="card-header">
-      <div class="card-title">🏆 Leaderboard</div>
+      <div class="card-title">🏆 Scorecard & Leaderboard — Point System</div>
       <div style="display:flex;gap:8px;">
         <button onclick="switchLB('alltime')" id="lb-alltime" class="lb-tab active">All Time</button>
         <button onclick="switchLB('week')" id="lb-week" class="lb-tab">This Week</button>
       </div>
     </div>
+    <p style="font-size:11px;color:var(--muted);margin:0 0 14px 0;">
+      Hard difficulty scoring — ELITE≥88pts · PROFICIENT≥72pts · SATISFACTORY≥50pts · RE-TRAINING&lt;50pts<br>
+      <span style="color:#dc2626;font-weight:700;">⚠️ Minus marking active — complaints deducted from scores</span>
+    </p>
 
+    <!-- ALL TIME PANEL -->
     <div id="lb-alltime-panel">
       <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px;">
 
-        <!-- TOP PICKERS -->
+        <!-- PICKER SCORECARD -->
         <div>
-          <div style="font-size:11px;font-weight:800;color:var(--blue);text-transform:uppercase;letter-spacing:.7px;margin-bottom:10px;">📦 Top Pickers</div>
+          <div style="font-size:11px;font-weight:800;color:var(--blue);text-transform:uppercase;letter-spacing:.7px;margin-bottom:10px;">📦 Picker Scorecard</div>
+          <div style="font-size:9px;color:var(--muted);margin-bottom:8px;">Acc×28 + Fulfilment×22 + Speed×18 + Packing×12 + Workspace×10 + CS×5 + Consistency×5</div>
           {% if picker_lb %}{% for r in picker_lb %}
-          <div style="display:flex;align-items:center;gap:10px;padding:9px 12px;background:{% if loop.index0==0 %}rgba(255,215,0,0.12){% elif loop.index0==1 %}rgba(192,192,192,0.12){% elif loop.index0==2 %}rgba(205,127,50,0.1){% else %}rgba(238,244,255,0.5){% endif %};border:1px solid {% if loop.index0==0 %}rgba(255,215,0,0.3){% elif loop.index0==1 %}rgba(192,192,192,0.3){% elif loop.index0==2 %}rgba(205,127,50,0.2){% else %}var(--border){% endif %};border-radius:11px;margin-bottom:6px;">
-            <div style="font-size:18px;width:24px;text-align:center;">{% if loop.index0==0 %}🥇{% elif loop.index0==1 %}🥈{% elif loop.index0==2 %}🥉{% else %}{{ loop.index }}{% endif %}</div>
-            <div style="flex:1;min-width:0;"><div style="font-size:13px;font-weight:700;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{{ r.emp.name }}</div><div style="font-size:11px;color:var(--muted);">{{ r.stats.pick_acc }}% acc · {{ r.stats.days }}d</div></div>
-            <div style="text-align:right;"><div style="font-size:16px;font-weight:800;color:var(--blue);">{{ r.stats.eff_score }}</div><div style="font-size:10px;color:var(--muted);">pts</div></div>
+          <div style="background:{% if loop.index0==0 %}rgba(255,215,0,0.12){% elif loop.index0==1 %}rgba(192,192,192,0.12){% elif loop.index0==2 %}rgba(205,127,50,0.1){% else %}rgba(238,244,255,0.4){% endif %};border:1px solid {% if loop.index0==0 %}rgba(255,215,0,0.4){% elif loop.index0==1 %}rgba(192,192,192,0.4){% elif loop.index0==2 %}rgba(205,127,50,0.25){% else %}var(--border){% endif %};border-radius:12px;padding:10px 12px;margin-bottom:6px;">
+            <div style="display:flex;align-items:center;gap:8px;">
+              <div style="font-size:18px;width:24px;">{% if loop.index0==0 %}🥇{% elif loop.index0==1 %}🥈{% elif loop.index0==2 %}🥉{% else %}{{ loop.index }}{% endif %}</div>
+              <div style="flex:1;">
+                <div style="font-size:13px;font-weight:700;">{{ r.emp.name }}</div>
+                <div style="font-size:10px;color:var(--muted);">{{ r.stats.days }}d · Acc {{ r.stats.pick_acc }}% · Fulfilment {{ r.stats.bill_fulfilment or 0 }}%</div>
+              </div>
+              <div style="text-align:right;">
+                <div style="font-size:18px;font-weight:800;color:var(--blue);">{{ r.stats.eff_score }}</div>
+                <div style="font-size:9px;color:var(--muted);">pts</div>
+              </div>
+            </div>
+            <div style="margin-top:7px;display:grid;grid-template-columns:repeat(4,1fr);gap:3px;font-size:9px;text-align:center;">
+              <div style="background:rgba(29,78,216,0.07);border-radius:5px;padding:3px;"><div style="color:var(--muted);">Accuracy</div><div style="font-weight:700;">{{ r.stats.pick_acc }}%</div></div>
+              <div style="background:rgba(29,78,216,0.07);border-radius:5px;padding:3px;"><div style="color:var(--muted);">Speed/hr</div><div style="font-weight:700;">{{ r.stats.pick_speed }}</div></div>
+              <div style="background:rgba(29,78,216,0.07);border-radius:5px;padding:3px;"><div style="color:var(--muted);">Workspace</div><div style="font-weight:700;">{{ r.stats.workspace_score }}%</div></div>
+              <div style="background:rgba(29,78,216,0.07);border-radius:5px;padding:3px;"><div style="color:var(--muted);">Packing</div><div style="font-weight:700;">{{ r.stats.packing_eff }}%</div></div>
+            </div>
+            {% set g = r.stats.grade %}
+            <div style="margin-top:6px;text-align:right;"><span style="font-size:10px;font-weight:800;padding:2px 8px;border-radius:5px;background:{% if g=='ELITE' %}#ede9fe{% elif g=='PROFICIENT' %}#dcfce7{% elif g=='SATISFACTORY' %}#fef3c7{% else %}#fee2e2{% endif %};color:{% if g=='ELITE' %}#6d28d9{% elif g=='PROFICIENT' %}#16a34a{% elif g=='SATISFACTORY' %}#d97706{% else %}#dc2626{% endif %};">{{ g }}</span></div>
           </div>
-          {% endfor %}{% else %}<div style="font-size:13px;color:var(--muted);padding:12px;">No picker data yet.</div>{% endif %}
+          {% endfor %}{% else %}<div style="font-size:13px;color:var(--muted);padding:12px;">No picker data.</div>{% endif %}
         </div>
 
-        <!-- TOP CHECKERS -->
+        <!-- CHECKER SCORECARD -->
         <div>
-          <div style="font-size:11px;font-weight:800;color:#6d28d9;text-transform:uppercase;letter-spacing:.7px;margin-bottom:10px;">🔍 Top Checkers</div>
+          <div style="font-size:11px;font-weight:800;color:#6d28d9;text-transform:uppercase;letter-spacing:.7px;margin-bottom:10px;">🔍 Checker Scorecard</div>
+          <div style="font-size:9px;color:var(--muted);margin-bottom:8px;">Speed×30 + Clearance×25 + Normal%×20 + Consistency×10 + PotEff×8 + Volume×7</div>
           {% if checker_lb %}{% for r in checker_lb %}
-          <div style="display:flex;align-items:center;gap:10px;padding:9px 12px;background:{% if loop.index0==0 %}rgba(255,215,0,0.12){% elif loop.index0==1 %}rgba(192,192,192,0.12){% elif loop.index0==2 %}rgba(205,127,50,0.1){% else %}rgba(245,243,255,0.5){% endif %};border:1px solid {% if loop.index0==0 %}rgba(255,215,0,0.3){% elif loop.index0==1 %}rgba(192,192,192,0.3){% elif loop.index0==2 %}rgba(205,127,50,0.2){% else %}rgba(167,139,250,0.2){% endif %};border-radius:11px;margin-bottom:6px;">
-            <div style="font-size:18px;width:24px;text-align:center;">{% if loop.index0==0 %}🥇{% elif loop.index0==1 %}🥈{% elif loop.index0==2 %}🥉{% else %}{{ loop.index }}{% endif %}</div>
-            <div style="flex:1;min-width:0;"><div style="font-size:13px;font-weight:700;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{{ r.emp.name }}</div><div style="font-size:11px;color:var(--muted);">{{ r.stats.check_speed or r.stats.ck_speed or 0 }}/hr · {{ r.stats.days }}d</div></div>
-            <div style="text-align:right;"><div style="font-size:16px;font-weight:800;color:#6d28d9;">{{ r.stats.eff_score }}</div><div style="font-size:10px;color:var(--muted);">pts</div></div>
+          <div style="background:{% if loop.index0==0 %}rgba(255,215,0,0.12){% elif loop.index0==1 %}rgba(192,192,192,0.12){% elif loop.index0==2 %}rgba(205,127,50,0.1){% else %}rgba(245,243,255,0.4){% endif %};border:1px solid {% if loop.index0==0 %}rgba(255,215,0,0.4){% elif loop.index0==1 %}rgba(192,192,192,0.4){% elif loop.index0==2 %}rgba(205,127,50,0.25){% else %}rgba(167,139,250,0.2){% endif %};border-radius:12px;padding:10px 12px;margin-bottom:6px;">
+            <div style="display:flex;align-items:center;gap:8px;">
+              <div style="font-size:18px;width:24px;">{% if loop.index0==0 %}🥇{% elif loop.index0==1 %}🥈{% elif loop.index0==2 %}🥉{% else %}{{ loop.index }}{% endif %}</div>
+              <div style="flex:1;">
+                <div style="font-size:13px;font-weight:700;">{{ r.emp.name }}</div>
+                <div style="font-size:10px;color:var(--muted);">{{ r.stats.days }}d · {{ r.stats.check_speed or r.stats.ck_speed }}/hr · Clr {{ r.stats.clearance_rate or 100 }}%</div>
+              </div>
+              <div style="text-align:right;">
+                <div style="font-size:18px;font-weight:800;color:#6d28d9;">{{ r.stats.eff_score }}</div>
+                <div style="font-size:9px;color:var(--muted);">pts</div>
+              </div>
+            </div>
+            <div style="margin-top:7px;display:grid;grid-template-columns:repeat(4,1fr);gap:3px;font-size:9px;text-align:center;">
+              <div style="background:rgba(109,40,217,0.07);border-radius:5px;padding:3px;"><div style="color:var(--muted);">Speed/hr</div><div style="font-weight:700;">{{ r.stats.check_speed or r.stats.ck_speed or 0 }}</div></div>
+              <div style="background:rgba(109,40,217,0.07);border-radius:5px;padding:3px;"><div style="color:var(--muted);">Normal%</div><div style="font-weight:700;">{{ r.stats.normal_pct or 0 }}%</div></div>
+              <div style="background:rgba(109,40,217,0.07);border-radius:5px;padding:3px;"><div style="color:var(--muted);">Clearance</div><div style="font-weight:700;">{{ r.stats.clearance_rate or 100 }}%</div></div>
+              <div style="background:rgba(109,40,217,0.07);border-radius:5px;padding:3px;"><div style="color:var(--muted);">Pending</div><div style="font-weight:700;">{{ r.stats.pending_bills or 0 }}</div></div>
+            </div>
+            {% if r.stats.complaint_deduction and r.stats.complaint_deduction > 0 %}
+            <div style="margin-top:4px;font-size:9px;color:#dc2626;font-weight:700;">⚠️ -{{ r.stats.complaint_deduction }} pts minus marking</div>
+            {% endif %}
+            {% set g = r.stats.grade %}
+            <div style="margin-top:6px;text-align:right;"><span style="font-size:10px;font-weight:800;padding:2px 8px;border-radius:5px;background:{% if g=='ELITE' %}#ede9fe{% elif g=='PROFICIENT' %}#dcfce7{% elif g=='SATISFACTORY' %}#fef3c7{% else %}#fee2e2{% endif %};color:{% if g=='ELITE' %}#6d28d9{% elif g=='PROFICIENT' %}#16a34a{% elif g=='SATISFACTORY' %}#d97706{% else %}#dc2626{% endif %};">{{ g }}</span></div>
           </div>
-          {% endfor %}{% else %}<div style="font-size:13px;color:var(--muted);padding:12px;">No checker data yet.</div>{% endif %}
+          {% endfor %}{% else %}<div style="font-size:13px;color:var(--muted);padding:12px;">No checker data.</div>{% endif %}
         </div>
 
-        <!-- OVERALL TOP 5 -->
+        <!-- PURCHASER SCORECARD -->
         <div>
-          <div style="font-size:11px;font-weight:800;color:#16a34a;text-transform:uppercase;letter-spacing:.7px;margin-bottom:10px;">⭐ Overall Top 5</div>
-          {% if mixed_lb %}{% for r in mixed_lb %}
-          <div style="display:flex;align-items:center;gap:10px;padding:9px 12px;background:{% if loop.index0==0 %}rgba(255,215,0,0.12){% elif loop.index0==1 %}rgba(192,192,192,0.12){% elif loop.index0==2 %}rgba(205,127,50,0.1){% else %}rgba(240,253,244,0.5){% endif %};border:1px solid {% if loop.index0==0 %}rgba(255,215,0,0.3){% elif loop.index0==1 %}rgba(192,192,192,0.3){% elif loop.index0==2 %}rgba(205,127,50,0.2){% else %}rgba(22,163,74,0.15){% endif %};border-radius:11px;margin-bottom:6px;">
-            <div style="font-size:18px;width:24px;text-align:center;">{% if loop.index0==0 %}🥇{% elif loop.index0==1 %}🥈{% elif loop.index0==2 %}🥉{% else %}{{ loop.index }}{% endif %}</div>
-            <div style="flex:1;min-width:0;"><div style="font-size:13px;font-weight:700;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{{ r.emp.name }}</div><div style="font-size:11px;color:var(--muted);"><span style="background:{% if r.emp.staff_type=='picker' %}var(--blue-lite){% else %}#ede9fe{% endif %};color:{% if r.emp.staff_type=='picker' %}var(--blue){% else %}#6d28d9{% endif %};padding:1px 6px;border-radius:4px;font-weight:700;">{{ r.emp.staff_type }}</span> · {{ r.stats.days }}d</div></div>
-            <div style="text-align:right;"><div style="font-size:16px;font-weight:800;color:#16a34a;">{{ r.stats.eff_score }}</div><div style="font-size:10px;color:var(--muted);">pts</div></div>
+          <div style="font-size:11px;font-weight:800;color:#16a34a;text-transform:uppercase;letter-spacing:.7px;margin-bottom:10px;">🛒 Purchaser Scorecard</div>
+          <div style="font-size:9px;color:var(--muted);margin-bottom:8px;">BillRate×30 + CS×25 + Racking×20 + Speed×12 + Entry×8 + Pending×5</div>
+          {% if purchaser_lb is defined and purchaser_lb %}{% for r in purchaser_lb %}
+          <div style="background:{% if loop.index0==0 %}rgba(255,215,0,0.12){% else %}rgba(240,253,244,0.4){% endif %};border:1px solid {% if loop.index0==0 %}rgba(255,215,0,0.4){% else %}rgba(22,163,74,0.15){% endif %};border-radius:12px;padding:10px 12px;margin-bottom:6px;">
+            <div style="display:flex;align-items:center;gap:8px;">
+              <div style="font-size:18px;width:24px;">{% if loop.index0==0 %}🥇{% elif loop.index0==1 %}🥈{% elif loop.index0==2 %}🥉{% else %}{{ loop.index }}{% endif %}</div>
+              <div style="flex:1;">
+                <div style="font-size:13px;font-weight:700;">{{ r.emp.name }}</div>
+                <div style="font-size:10px;color:var(--muted);">{{ r.stats.days }}d · BillRate {{ r.stats.pur_bill_rate or 0 }}%</div>
+              </div>
+              <div style="text-align:right;">
+                <div style="font-size:18px;font-weight:800;color:#16a34a;">{{ r.stats.eff_score }}</div>
+                <div style="font-size:9px;color:var(--muted);">pts</div>
+              </div>
+            </div>
+            <div style="margin-top:7px;display:grid;grid-template-columns:repeat(3,1fr);gap:3px;font-size:9px;text-align:center;">
+              <div style="background:rgba(22,163,74,0.07);border-radius:5px;padding:3px;"><div style="color:var(--muted);">Bill Rate</div><div style="font-weight:700;">{{ r.stats.pur_bill_rate or 0 }}%</div></div>
+              <div style="background:rgba(22,163,74,0.07);border-radius:5px;padding:3px;"><div style="color:var(--muted);">CS Ful.</div><div style="font-weight:700;">{{ r.stats.pur_cs_fulfilment or 0 }}%</div></div>
+              <div style="background:rgba(22,163,74,0.07);border-radius:5px;padding:3px;"><div style="color:var(--muted);">Racking</div><div style="font-weight:700;">{{ r.stats.pur_racking_eff or 0 }}%</div></div>
+            </div>
+            {% set g = r.stats.grade %}
+            <div style="margin-top:6px;text-align:right;"><span style="font-size:10px;font-weight:800;padding:2px 8px;border-radius:5px;background:{% if g=='ELITE' %}#ede9fe{% elif g=='PROFICIENT' %}#dcfce7{% elif g=='SATISFACTORY' %}#fef3c7{% else %}#fee2e2{% endif %};color:{% if g=='ELITE' %}#6d28d9{% elif g=='PROFICIENT' %}#16a34a{% elif g=='SATISFACTORY' %}#d97706{% else %}#dc2626{% endif %};">{{ g }}</span></div>
           </div>
-          {% endfor %}{% else %}<div style="font-size:13px;color:var(--muted);padding:12px;">No data yet.</div>{% endif %}
+          {% endfor %}{% else %}<div style="font-size:13px;color:var(--muted);padding:12px;">No purchaser data.</div>{% endif %}
         </div>
 
+      </div>
+
+      <!-- OVERALL TOP 5 -->
+      <div style="margin-top:16px;border-top:1px solid var(--border);padding-top:14px;">
+        <div style="font-size:11px;font-weight:800;color:#374151;text-transform:uppercase;letter-spacing:.7px;margin-bottom:10px;">⭐ Overall Top 5 — All Roles</div>
+        <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:8px;">
+          {% for r in mixed_lb %}
+          <div style="background:{% if loop.index0==0 %}rgba(255,215,0,0.15){% else %}rgba(248,250,252,0.8){% endif %};border:1.5px solid {% if loop.index0==0 %}rgba(255,215,0,0.5){% else %}var(--border){% endif %};border-radius:12px;padding:10px;text-align:center;">
+            <div style="font-size:22px;">{% if loop.index0==0 %}🥇{% elif loop.index0==1 %}🥈{% elif loop.index0==2 %}🥉{% else %}{{ loop.index }}{% endif %}</div>
+            <div style="font-size:12px;font-weight:700;margin:4px 0;">{{ r.emp.name.split()[0] }}</div>
+            <div style="font-size:9px;background:{% if r.emp.staff_type=='picker' %}var(--blue-lite){% elif r.emp.staff_type=='checker' %}#ede9fe{% else %}#dcfce7{% endif %};color:{% if r.emp.staff_type=='picker' %}var(--blue){% elif r.emp.staff_type=='checker' %}#6d28d9{% else %}#16a34a{% endif %};padding:1px 5px;border-radius:4px;font-weight:700;display:inline-block;margin-bottom:4px;">{{ r.emp.staff_type }}</div>
+            <div style="font-size:20px;font-weight:800;color:{% if loop.index0==0 %}#b45309{% else %}var(--text){% endif %};">{{ r.stats.eff_score }}</div>
+            <div style="font-size:9px;color:var(--muted);">pts</div>
+          </div>
+          {% endfor %}
+        </div>
       </div>
     </div>
 
@@ -702,264 +776,40 @@ tbody tr:hover td { background: rgba(219,234,254,0.3); }
     <div id="lb-week-panel" style="display:none;">
       <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px;">
         <div>
-          <div style="font-size:11px;font-weight:800;color:var(--blue);text-transform:uppercase;letter-spacing:.7px;margin-bottom:10px;">📦 Top Pickers — This Week</div>
-          {% if picker_week_lb %}{% for r in picker_week_lb %}
-          <div style="display:flex;align-items:center;gap:10px;padding:9px 12px;background:{% if loop.index0==0 %}rgba(255,215,0,0.12){% else %}rgba(238,244,255,0.5){% endif %};border:1px solid {% if loop.index0==0 %}rgba(255,215,0,0.3){% else %}var(--border){% endif %};border-radius:11px;margin-bottom:6px;">
-            <div style="font-size:18px;width:24px;text-align:center;">{% if loop.index0==0 %}🥇{% elif loop.index0==1 %}🥈{% elif loop.index0==2 %}🥉{% else %}{{ loop.index }}{% endif %}</div>
-            <div style="flex:1;min-width:0;"><div style="font-size:13px;font-weight:700;">{{ r.emp.name }}</div><div style="font-size:11px;color:var(--muted);">{{ r.week_stats.pick_acc }}% acc</div></div>
-            <div style="font-size:16px;font-weight:800;color:var(--blue);">{{ r.week_stats.eff_score }}</div>
+          <div style="font-size:11px;font-weight:800;color:var(--blue);text-transform:uppercase;margin-bottom:10px;">📦 Pickers — This Week</div>
+          {% for r in picker_week_lb %}
+          <div style="display:flex;align-items:center;gap:8px;padding:8px 10px;background:rgba(238,244,255,0.5);border:1px solid var(--border);border-radius:10px;margin-bottom:5px;">
+            <div style="font-size:16px;">{% if loop.index0==0 %}🥇{% elif loop.index0==1 %}🥈{% elif loop.index0==2 %}🥉{% else %}{{ loop.index }}{% endif %}</div>
+            <div style="flex:1;font-size:12px;font-weight:700;">{{ r.emp.name }}</div>
+            <div style="font-size:15px;font-weight:800;color:var(--blue);">{{ r.week_stats.eff_score }}<span style="font-size:9px;color:var(--muted);">pts</span></div>
           </div>
-          {% endfor %}{% else %}<div style="font-size:13px;color:var(--muted);">No data this week.</div>{% endif %}
+          {% else %}<div style="font-size:12px;color:var(--muted);">No data this week.</div>{% endfor %}
         </div>
         <div>
-          <div style="font-size:11px;font-weight:800;color:#6d28d9;text-transform:uppercase;letter-spacing:.7px;margin-bottom:10px;">🔍 Top Checkers — This Week</div>
-          {% if checker_week_lb %}{% for r in checker_week_lb %}
-          <div style="display:flex;align-items:center;gap:10px;padding:9px 12px;background:{% if loop.index0==0 %}rgba(255,215,0,0.12){% else %}rgba(245,243,255,0.5){% endif %};border:1px solid {% if loop.index0==0 %}rgba(255,215,0,0.3){% else %}rgba(167,139,250,0.2){% endif %};border-radius:11px;margin-bottom:6px;">
-            <div style="font-size:18px;width:24px;text-align:center;">{% if loop.index0==0 %}🥇{% elif loop.index0==1 %}🥈{% elif loop.index0==2 %}🥉{% else %}{{ loop.index }}{% endif %}</div>
-            <div style="flex:1;min-width:0;"><div style="font-size:13px;font-weight:700;">{{ r.emp.name }}</div><div style="font-size:11px;color:var(--muted);">{{ r.week_stats.check_speed or r.week_stats.ck_speed or 0 }}/hr</div></div>
-            <div style="font-size:16px;font-weight:800;color:#6d28d9;">{{ r.week_stats.eff_score }}</div>
+          <div style="font-size:11px;font-weight:800;color:#6d28d9;text-transform:uppercase;margin-bottom:10px;">🔍 Checkers — This Week</div>
+          {% for r in checker_week_lb %}
+          <div style="display:flex;align-items:center;gap:8px;padding:8px 10px;background:rgba(245,243,255,0.5);border:1px solid rgba(167,139,250,0.2);border-radius:10px;margin-bottom:5px;">
+            <div style="font-size:16px;">{% if loop.index0==0 %}🥇{% elif loop.index0==1 %}🥈{% elif loop.index0==2 %}🥉{% else %}{{ loop.index }}{% endif %}</div>
+            <div style="flex:1;font-size:12px;font-weight:700;">{{ r.emp.name }}</div>
+            <div style="font-size:15px;font-weight:800;color:#6d28d9;">{{ r.week_stats.eff_score }}<span style="font-size:9px;color:var(--muted);">pts</span></div>
           </div>
-          {% endfor %}{% else %}<div style="font-size:13px;color:var(--muted);">No data this week.</div>{% endif %}
+          {% else %}<div style="font-size:12px;color:var(--muted);">No data this week.</div>{% endfor %}
         </div>
         <div>
-          <div style="font-size:11px;font-weight:800;color:#16a34a;text-transform:uppercase;letter-spacing:.7px;margin-bottom:10px;">⭐ Overall — This Week</div>
-          {% if mixed_week_lb %}{% for r in mixed_week_lb %}
-          <div style="display:flex;align-items:center;gap:10px;padding:9px 12px;background:{% if loop.index0==0 %}rgba(255,215,0,0.12){% else %}rgba(240,253,244,0.5){% endif %};border:1px solid {% if loop.index0==0 %}rgba(255,215,0,0.3){% else %}rgba(22,163,74,0.15){% endif %};border-radius:11px;margin-bottom:6px;">
-            <div style="font-size:18px;width:24px;text-align:center;">{% if loop.index0==0 %}🥇{% elif loop.index0==1 %}🥈{% elif loop.index0==2 %}🥉{% else %}{{ loop.index }}{% endif %}</div>
-            <div style="flex:1;min-width:0;"><div style="font-size:13px;font-weight:700;">{{ r.emp.name }}</div><div style="font-size:11px;color:var(--muted);"><span style="background:{% if r.emp.staff_type=='picker' %}var(--blue-lite){% else %}#ede9fe{% endif %};color:{% if r.emp.staff_type=='picker' %}var(--blue){% else %}#6d28d9{% endif %};padding:1px 6px;border-radius:4px;font-weight:700;">{{ r.emp.staff_type }}</span></div></div>
-            <div style="font-size:16px;font-weight:800;color:#16a34a;">{{ r.week_stats.eff_score }}</div>
+          <div style="font-size:11px;font-weight:800;color:#374151;text-transform:uppercase;margin-bottom:10px;">⭐ Overall — This Week</div>
+          {% for r in mixed_week_lb %}
+          <div style="display:flex;align-items:center;gap:8px;padding:8px 10px;background:rgba(248,250,252,0.8);border:1px solid var(--border);border-radius:10px;margin-bottom:5px;">
+            <div style="font-size:16px;">{% if loop.index0==0 %}🥇{% elif loop.index0==1 %}🥈{% elif loop.index0==2 %}🥉{% else %}{{ loop.index }}{% endif %}</div>
+            <div style="flex:1;">
+              <div style="font-size:12px;font-weight:700;">{{ r.emp.name }}</div>
+              <div style="font-size:9px;color:var(--muted);">{{ r.emp.staff_type }}</div>
+            </div>
+            <div style="font-size:15px;font-weight:800;">{{ r.week_stats.eff_score }}<span style="font-size:9px;color:var(--muted);">pts</span></div>
           </div>
-          {% endfor %}{% else %}<div style="font-size:13px;color:var(--muted);">No data this week.</div>{% endif %}
+          {% else %}<div style="font-size:12px;color:var(--muted);">No data this week.</div>{% endfor %}
         </div>
       </div>
     </div>
   </div>
 
   <!-- ANALYTICS -->
-  <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:20px;">
-    <div class="card">
-      <div class="card-header"><div class="card-title">📊 Team Health</div></div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:16px;">
-        <div style="background:rgba(238,244,255,0.7);border:1px solid var(--border);border-radius:12px;padding:14px;text-align:center;">
-          <div style="font-size:10px;font-weight:800;color:var(--muted);text-transform:uppercase;margin-bottom:4px;">Avg Efficiency</div>
-          <div style="font-size:28px;font-weight:800;color:var(--blue);">{{ team_avg_eff or 0 }}</div>
-          <div style="font-size:11px;color:var(--muted);">/100 team avg</div>
-        </div>
-        <div style="background:rgba(238,244,255,0.7);border:1px solid var(--border);border-radius:12px;padding:14px;text-align:center;">
-          <div style="font-size:10px;font-weight:800;color:var(--muted);text-transform:uppercase;margin-bottom:4px;">Avg Accuracy</div>
-          <div style="font-size:28px;font-weight:800;color:var(--blue);">{{ team_avg_acc or 0 }}%</div>
-          <div style="font-size:11px;color:var(--muted);">across all staff</div>
-        </div>
-      </div>
-      <div style="font-size:10px;font-weight:800;color:var(--muted);text-transform:uppercase;letter-spacing:.6px;margin-bottom:10px;">Grade Distribution</div>
-      {% set total_staff = (grade_counts.ELITE + grade_counts.PROFICIENT + grade_counts.SATISFACTORY + grade_counts['RE-TRAINING']) %}
-      {% for grade, color in [('ELITE','#6d28d9'),('PROFICIENT','#16a34a'),('SATISFACTORY','#d97706'),('RE-TRAINING','#dc2626')] %}
-      <div style="display:flex;align-items:center;gap:8px;margin-bottom:7px;">
-        <span style="font-size:11px;width:96px;color:var(--text);font-weight:600;">{{ grade }}</span>
-        <div style="flex:1;background:var(--border);border-radius:4px;height:8px;">
-          <div style="background:{{ color }};height:8px;border-radius:4px;width:{% if total_staff > 0 %}{{ ((grade_counts[grade] / total_staff)*100)|int }}{% else %}0{% endif %}%;"></div>
-        </div>
-        <span style="font-size:12px;font-weight:800;color:{{ color }};width:18px;text-align:right;">{{ grade_counts[grade] }}</span>
-      </div>
-      {% endfor %}
-    </div>
-
-    <div class="card">
-      <div class="card-header"><div class="card-title">💡 Recommendations</div></div>
-      {% if needs_attention %}
-      <div style="margin-bottom:14px;">
-        <div style="font-size:11px;font-weight:800;color:#dc2626;text-transform:uppercase;letter-spacing:.6px;margin-bottom:8px;">⚠️ Needs Attention</div>
-        {% for r in needs_attention %}
-        <div style="display:flex;align-items:center;justify-content:space-between;padding:8px 12px;background:#fef2f2;border:1px solid #fecaca;border-radius:9px;margin-bottom:5px;">
-          <div><div style="font-size:13px;font-weight:700;">{{ r.emp.name }}</div><div style="font-size:11px;color:var(--muted);">{{ r.emp.staff_type|title }} · Score {{ r.stats.eff_score }}</div></div>
-          <a href="/staff/{{ r.emp.id }}" style="font-size:11px;font-weight:700;color:#dc2626;text-decoration:none;background:#fee2e2;padding:4px 10px;border-radius:6px;">View →</a>
-        </div>
-        {% endfor %}
-      </div>
-      {% endif %}
-      {% if improving %}
-      <div style="margin-bottom:14px;">
-        <div style="font-size:11px;font-weight:800;color:#16a34a;text-transform:uppercase;letter-spacing:.6px;margin-bottom:8px;">📈 Improving This Week</div>
-        {% for r in improving %}
-        <div style="display:flex;align-items:center;justify-content:space-between;padding:8px 12px;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:9px;margin-bottom:5px;">
-          <div><div style="font-size:13px;font-weight:700;">{{ r.emp.name }}</div><div style="font-size:11px;color:var(--muted);">Week score: {{ r.week_stats.eff_score }} · {{ r.emp.staff_type|title }}</div></div>
-          <span style="font-size:11px;font-weight:700;color:#16a34a;background:#dcfce7;padding:4px 10px;border-radius:6px;">↑ Up</span>
-        </div>
-        {% endfor %}
-      </div>
-      {% endif %}
-      {% if not needs_attention and not improving %}
-      <div style="text-align:center;padding:28px 0;color:var(--muted);font-size:13px;">✅ All staff performing well!</div>
-      {% endif %}
-      <div style="padding-top:12px;border-top:1px solid var(--border);display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;text-align:center;">
-        <div><div style="font-size:20px;font-weight:800;color:var(--blue);">{{ active_today }}</div><div style="font-size:10px;color:var(--muted);">Active Today</div></div>
-        <div><div style="font-size:20px;font-weight:800;color:#16a34a;">{{ improving|length }}</div><div style="font-size:10px;color:var(--muted);">Improving</div></div>
-        <div><div style="font-size:20px;font-weight:800;color:#dc2626;">{{ needs_attention|length }}</div><div style="font-size:10px;color:var(--muted);">Need Help</div></div>
-      </div>
-    </div>
-  </div>
-
-  <!-- PERFORMANCE SUMMARY -->
-  {% if rows %}
-  <div class="card">
-    <div class="card-header">
-      <div class="card-title">📊 Performance Summary — All Time</div>
-    </div>
-    <div class="table-wrap">
-      <table>
-        <thead>
-          <tr>
-            <th>Name</th><th>Type</th>
-            <th>Accuracy</th><th>Speed /hr</th>
-            <th>Items Processed</th><th>Total Bills</th>
-            <th>Days Active</th><th>Eff. Score</th><th>Grade</th>
-          </tr>
-        </thead>
-        <tbody>
-          {% for r in rows %}{% if r.stats %}
-          <tr>
-            <td><strong>{{ r.emp.name }}</strong></td>
-            <td><span class="type-badge {% if r.emp.staff_type == 'picker' %}type-picker{% else %}type-checker{% endif %}">{{ r.emp.staff_type }}</span></td>
-            {% if r.emp.staff_type == 'checker' %}
-            <td>{{ r.stats.eff_score }}/100</td>
-            <td>{{ r.stats.ck_speed }}</td>
-            <td>{{ "{:,}".format(r.stats.tck) }}</td>
-            {% else %}
-            <td>{{ r.stats.pick_acc }}%</td>
-            <td>{{ r.stats.pick_speed }}</td>
-            <td>{{ "{:,}".format(r.stats.tp) }}</td>
-            {% endif %}
-            <td>{{ "{:,}".format(r.stats.tsb) }}</td>
-            <td>{{ r.stats.days }}</td>
-            <td class="score-cell">{{ r.stats.eff_score }}</td>
-            <td>
-              {% set g = r.stats.grade %}
-              <span class="tag {% if g in ['ELITE','EXCELLENT'] %}tag-ex{% elif g in ['GOOD','PROFICIENT'] %}tag-good{% elif g in ['AVERAGE','SATISFACTORY'] %}tag-avg{% else %}tag-poor{% endif %}">{{ g }}</span>
-            </td>
-          </tr>
-          {% endif %}{% endfor %}
-        </tbody>
-      </table>
-    </div>
-  </div>
-  {% endif %}
-
-</div><!-- /main -->
-
-<script>
-
-function switchLB(tab){
-  document.getElementById('lb-alltime-panel').style.display=tab==='alltime'?'':'none';
-  document.getElementById('lb-week-panel').style.display=tab==='week'?'':'none';
-  document.getElementById('lb-alltime').classList.toggle('active',tab==='alltime');
-  document.getElementById('lb-week').classList.toggle('active',tab==='week');
-}
-
-function capName(input) {
-  const pos = input.selectionStart;
-  input.value = input.value.replace(/\b\w/g, c => c.toUpperCase());
-  try { input.setSelectionRange(pos, pos); } catch(e){}
-  checkAddForm();
-}
-
-// Enable Save Details button only when required fields are filled
-function checkAddForm() {
-  const name  = document.getElementById('addName')?.value.trim();
-  const email = document.getElementById('addEmail')?.value.trim();
-  const pw    = document.querySelector('[name="password"]')?.value;
-  const btn   = document.getElementById('saveDetailsBtn');
-  if (!btn) return;
-  const filled = name && name.length > 0 && email && email.length > 0 && pw && pw.length >= 6;
-  btn.disabled = !filled;
-}
-
-document.addEventListener('DOMContentLoaded', function() {
-  // Wire up input listeners for add form fields
-  const fields = ['addName', 'addEmail'];
-  fields.forEach(id => {
-    const el = document.getElementById(id);
-    if (el) el.addEventListener('input', checkAddForm);
-  });
-  const pwField = document.querySelector('[name="password"]');
-  if (pwField) pwField.addEventListener('input', checkAddForm);
-  checkAddForm();
-});
-
-let addAcIdx = -1;
-function handleAddEmail(input) {
-  const val = input.value;
-  const list = document.getElementById('addAcList');
-  if (val.length > 0 && !val.includes('@')) {
-    const sug = val + '@pharmaip.com';
-    list.innerHTML = `<div class="ac-item" onclick="pickAddEmail('${escHtml(sug)}')" onmouseover="this.classList.add('sel')" onmouseout="this.classList.remove('sel')">📧 <span>${escHtml(val)}<span class="ac-domain">@pharmaip.com</span></span></div>`;
-    list.classList.add('show');
-    addAcIdx = -1;
-  } else {
-    list.classList.remove('show');
-  }
-  checkAddForm();
-}
-function handleAddEmailKey(e) {
-  const list = document.getElementById('addAcList');
-  if (!list.classList.contains('show')) return;
-  if (e.key === 'Enter' || e.key === 'Tab') {
-    e.preventDefault();
-    const item = list.querySelector('.ac-item');
-    if (item) item.click();
-  } else if (e.key === 'Escape') {
-    list.classList.remove('show');
-  }
-}
-function pickAddEmail(email) {
-  document.getElementById('addEmail').value = email;
-  document.getElementById('addAcList').classList.remove('show');
-  document.querySelector('[name="password"]').focus();
-  checkAddForm();
-}
-function escHtml(s) {
-  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
-}
-document.addEventListener('click', function(e) {
-  const wrap = document.querySelector('#addEmail')?.closest('.field-wrap');
-  if (wrap && !wrap.contains(e.target)) {
-    document.getElementById('addAcList')?.classList.remove('show');
-  }
-});
-
-function openEdit(id, name, email, type) {
-  document.getElementById('editForm').action = '/admin/edit_user/' + id;
-  document.getElementById('edit-name').value  = name;
-  document.getElementById('edit-email').value = email;
-  document.getElementById('edit-type').value  = type;
-  document.getElementById('editModal').classList.add('open');
-}
-function closeEdit() {
-  document.getElementById('editModal').classList.remove('open');
-}
-document.getElementById('editModal').addEventListener('click', function(e) {
-  if (e.target === this) closeEdit();
-});
-
-function filterTable() {
-  const q    = document.getElementById('searchBox').value.toLowerCase();
-  const rows = document.querySelectorAll('#staffTable tbody tr');
-  rows.forEach(row => {
-    const text = row.textContent.toLowerCase();
-    row.style.display = text.includes(q) ? '' : 'none';
-  });
-}
-
-if (typeof io !== 'undefined') {
-  const socket = io();
-  socket.on('admin_alert', function(msg) {
-    const el = document.createElement('div');
-    el.className = 'alert alert-warning';
-    el.style.cssText = 'position:fixed;top:70px;right:20px;z-index:999;max-width:340px;animation:slideIn 0.3s ease;';
-    el.textContent = '⚠️ ' + msg.name + ' — ' + msg.eff + '% accuracy';
-    document.body.appendChild(el);
-    setTimeout(() => el.remove(), 5000);
-  });
-}
-</script>
-</body>
-</html>
