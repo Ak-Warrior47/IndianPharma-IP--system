@@ -241,12 +241,18 @@ body {
             <div style="font-size:24px;font-weight:800;color:#14532d;" id="pe_pur_cs">100%</div>
           </div>
         </div>
+        <!-- PURCHASER PENDING BOX -->
+        <div style="grid-column:span 2;background:rgba(254,242,242,0.85);border:1.5px solid rgba(220,38,38,0.25);border-radius:13px;padding:12px;text-align:center;margin-bottom:8px;">
+          <div style="font-size:10px;font-weight:800;color:#dc2626;text-transform:uppercase;margin-bottom:3px;">Pending PO Bills (Auto)</div>
+          <div style="font-size:26px;font-weight:800;color:#991b1b;" id="pe_pur_pending">0</div>
+          <div style="font-size:11px;color:var(--muted);">Bills Received − Bills Checked</div>
+        </div>
         <div class="field">
-          <label>Total Purchase Bills Received</label>
+          <label>1. Total PO Bills Received</label>
           <input type="number" name="sales_bills_open" id="pe_pur_br" min="0" value="0" required oninput="updatePePurchaser()">
         </div>
         <div class="field">
-          <label>Purchase Bills Checked</label>
+          <label>2. PO Bills Checked</label>
           <input type="number" name="checked" id="pe_pur_bc" min="0" value="0" required oninput="updatePePurchaser()">
         </div>
         <div class="field">
@@ -295,6 +301,16 @@ body {
           <label>Packing Done</label>
           <input type="number" name="packing_done" min="0" value="0">
         </div>
+        <div class="field">
+          <label>Rack Organised (0-10)</label>
+          <input type="number" name="rack_organized" min="0" max="10" value="10" required>
+          <small>0 = poor, 10 = perfect</small>
+        </div>
+        <div class="field">
+          <label>Table Clean (0-10)</label>
+          <input type="number" name="table_clean" min="0" max="10" value="10" required>
+          <small>0 = poor, 10 = perfect</small>
+        </div>
         {% endif %}
       </div>
 
@@ -302,7 +318,7 @@ body {
         ⏱ Working time is automatically set to <strong>9 hours</strong> for all calculations.
       </div>
 
-      <button type="submit" class="btn-submit">✅ Submit Past Entry for {{ past_date.strftime('%d %b %Y') }}</button>
+      <button type="submit" class="btn-submit" onclick="return validatePeSubmit(event)">✅ Submit Past Entry for {{ past_date.strftime('%d %b %Y') }}</button>
     </form>
   </div>
 
@@ -314,10 +330,13 @@ function updatePePurchaser(){
   var bc=parseInt(document.getElementById('pe_pur_bc')?.value||0)||0;
   var cso=parseInt(document.getElementById('pe_pur_cso')?.value||0)||0;
   var csr=parseInt(document.getElementById('pe_pur_csr')?.value||0)||0;
+  var pending=Math.max(br-bc,0);
   var rate=br>0?Math.round(bc/br*100):0;
   var cs=cso>0?Math.min(Math.round(csr/cso*100),100):100;
+  var ep=document.getElementById('pe_pur_pending');
   var e1=document.getElementById('pe_pur_rate');
   var e2=document.getElementById('pe_pur_cs');
+  if(ep){ep.textContent=pending;ep.style.color=pending>0?'#dc2626':'#16a34a';}
   if(e1){e1.textContent=rate+'%';e1.style.color=rate>=95?'#16a34a':rate>=85?'#d97706':'#dc2626';}
   if(e2){e2.textContent=cs+'%';e2.style.color=cs>=90?'#16a34a':cs>=75?'#d97706':'#dc2626';}
 }
@@ -340,6 +359,48 @@ function updatePeTotals(){
   if(tPD){tPD.textContent=pd;tPD.style.color=pd>0?'#dc2626':'#16a34a';}
   if(tCL){tCL.textContent=clearance+'%';tCL.style.color=clearance>=90?'#16a34a':clearance>=75?'#d97706':'#dc2626';}
 }
+</script>
+
+<script>
+document.addEventListener('DOMContentLoaded', function(){
+  var form = document.querySelector('form[method="POST"]');
+  if(!form) return;
+  form.addEventListener('keydown', function(e){
+    if(e.key !== 'Enter') return;
+    var fields = Array.from(form.querySelectorAll('input:not([type="hidden"]):not([type="submit"]):not([disabled]), select'));
+    var idx = fields.indexOf(document.activeElement);
+    if(idx > -1 && idx < fields.length - 1){ e.preventDefault(); fields[idx+1].focus(); }
+    else if(idx === fields.length-1){ e.preventDefault(); }
+  });
+});
+function validatePeSubmit(e){
+  var form = document.querySelector('form[method="POST"]');
+  var empty = [];
+  form.querySelectorAll('input[required]:not([type="hidden"])').forEach(function(inp){
+    if(!inp.value || inp.value === ''){ 
+      var label = inp.closest('.field')?.querySelector('label')?.textContent || inp.name;
+      empty.push(label.trim());
+    }
+  });
+  if(empty.length > 0){
+    var msg = 'These fields are empty:\n• ' + empty.join('\n• ') + '\n\nContinue anyway?';
+    if(!confirm(msg)){ e.preventDefault(); return false; }
+  }
+  return true;
+}
+</script>
+<script>
+document.addEventListener('DOMContentLoaded', function(){
+  var form = document.querySelector('form[method="POST"]');
+  if(!form) return;
+  form.addEventListener('keydown', function(e){
+    if(e.key !== 'Enter') return;
+    var fields = Array.from(form.querySelectorAll('input:not([type="hidden"]):not([type="submit"]):not([disabled]), select'));
+    var idx = fields.indexOf(document.activeElement);
+    if(idx > -1 && idx < fields.length-1){ e.preventDefault(); fields[idx+1].focus(); }
+    else if(idx === fields.length-1){ e.preventDefault(); }
+  });
+});
 </script>
 </body>
 </html>
