@@ -325,35 +325,40 @@ def build_analytics(entries: List[KPIEntry], staff_type: str = "picker") -> Opti
             pur_racking_eff    = round(safe_div(pur_items_racked, pur_items) * 100, 1) if pur_items > 0 else 0.0
             pur_speed          = round(safe_div(pur_items, ts_total), 1)
 
-            # ── PURCHASER POINT SYSTEM (100 pts total, medium-upper difficulty) ──
-            pur_entry_rate = round(min(safe_div(pur_bill_entry, max(pur_bills_received,1)), 1.0) * 100, 1)
+            # ── PURCHASER POINT SYSTEM — HARD DIFFICULTY (100 pts) ──
+            pur_entry_rate  = round(min(safe_div(pur_bill_entry, max(pur_bills_received,1)), 1.0) * 100, 1)
+            pur_pending_pct = max(0.0, 1.0 - safe_div(pur_pending_bills, max(pur_bills_received,1)))
             eff_score = round(
-                (pur_bill_rate     / 100) * 35 +
+                (pur_bill_rate     / 100) * 30 +
                 (pur_cs_fulfilment / 100) * 25 +
                 (pur_racking_eff   / 100) * 20 +
-                min(pur_speed      / 50,  1.0) * 15 +
-                (pur_entry_rate    / 100) * 5,
+                min(pur_speed      / 60,  1.0) * 12 +   # benchmark 60/hr — HARD
+                (pur_entry_rate    / 100) * 8 +
+                pur_pending_pct              * 5,         # penalise pending bills
                 1)
 
         elif staff_type == "picker":
-            # ── PICKER POINT SYSTEM (100 pts total, medium-upper difficulty) ──
+            # ── PICKER POINT SYSTEM — HARD DIFFICULTY (100 pts) ──
             eff_score = round(
-                (pick_acc        / 100) * 30 +
-                (bill_fulfilment / 100) * 25 +
-                min(pick_speed   / 200, 1.0) * 20 +
+                (pick_acc        / 100) * 28 +
+                (bill_fulfilment / 100) * 22 +
+                min(pick_speed   / 250, 1.0) * 18 +   # benchmark 250/hr — HARD
+                min(packing_eff  / 100, 1.0) * 12 +
                 (workspace_score / 100) * 10 +
-                min(packing_eff  / 100, 1.0) * 10 +
+                min(cs_fulfilment/ 100, 1.0) * 5 +
                 (consistency     / 100) * 5,
                 1)
         else:
-            # ── CHECKER POINT SYSTEM (100 pts total, medium-upper difficulty) ──
-            # Speed benchmark = 60/hr (realistic excellent), harder to max out
-            speed_score     = min(safe_div(check_speed, 60.0), 1.0) * 35
+            # ── CHECKER POINT SYSTEM — HARD DIFFICULTY (100 pts) ──
+            # Benchmark 80/hr — truly hard to max out speed
+            speed_score     = min(safe_div(check_speed, 80.0), 1.0) * 30
             clearance_score = (clearance_rate / 100.0) * 25
-            accuracy_score  = (normal_pct / 100.0) * 20   # normal% penalises high urgent/error rate
+            accuracy_score  = (normal_pct / 100.0) * 20
             consist_score   = (consistency / 100.0) * 10
-            poteff_score    = (potential_eff / 100.0) * 10
-            eff_score       = round(speed_score + clearance_score + accuracy_score + consist_score + poteff_score, 1)
+            poteff_score    = (potential_eff / 100.0) * 8
+            volume_score    = min(safe_div(tck_total, 500.0), 1.0) * 7  # total items checked
+            eff_score       = round(speed_score + clearance_score + accuracy_score +
+                                    consist_score + poteff_score + volume_score, 1)
         # Apply complaint deductions (minus marking)
         complaint_deduction = get_complaint_deduction(staff_type)
         eff_score = max(round(eff_score - complaint_deduction, 1), 0.0)
@@ -361,21 +366,21 @@ def build_analytics(entries: List[KPIEntry], staff_type: str = "picker") -> Opti
 
         if staff_type == "picker":
             # Point-based grade (medium-upper difficulty)
-            if   eff_score >= 85: grade="ELITE"
-            elif eff_score >= 65: grade="PROFICIENT"
-            elif eff_score >= 45: grade="SATISFACTORY"
+            if   eff_score >= 88: grade="ELITE"
+            elif eff_score >= 72: grade="PROFICIENT"
+            elif eff_score >= 52: grade="SATISFACTORY"
             else:                 grade="RE-TRAINING"
         elif staff_type == "purchaser":
             # Point-based grade (medium-upper difficulty)
-            if   eff_score >= 85: grade="ELITE"
-            elif eff_score >= 65: grade="PROFICIENT"
-            elif eff_score >= 45: grade="SATISFACTORY"
+            if   eff_score >= 88: grade="ELITE"
+            elif eff_score >= 72: grade="PROFICIENT"
+            elif eff_score >= 52: grade="SATISFACTORY"
             else:                 grade="RE-TRAINING"
         else:
             # Point-based grade (medium-upper difficulty)
-            if   eff_score >= 85: grade="ELITE"
-            elif eff_score >= 65: grade="PROFICIENT"
-            elif eff_score >= 45: grade="SATISFACTORY"
+            if   eff_score >= 88: grade="ELITE"
+            elif eff_score >= 72: grade="PROFICIENT"
+            elif eff_score >= 52: grade="SATISFACTORY"
             else:                 grade="RE-TRAINING"
 
         if staff_type == "checker":
@@ -836,10 +841,12 @@ def admin_dashboard():
             return sorted([r for r in lst if r[k]], key=lambda r: r[k]['eff_score'], reverse=True)[:5]
         picker_lb       = srt([r for r in rws if r['emp'].staff_type=='picker'])
         checker_lb      = srt([r for r in rws if r['emp'].staff_type=='checker'])
+        purchaser_lb    = srt([r for r in rws if r['emp'].staff_type=='purchaser'])
         mixed_lb        = srt(rws)
         rw2             = [r for r in rows if r['week_stats']]
         picker_week_lb  = srt([r for r in rw2 if r['emp'].staff_type=='picker'], wk=True)
         checker_week_lb = srt([r for r in rw2 if r['emp'].staff_type=='checker'], wk=True)
+        purchaser_week_lb = srt([r for r in rw2 if r['emp'].staff_type=='purchaser'], wk=True)
         mixed_week_lb   = srt(rw2, wk=True)
         all_s = [r['stats'] for r in rws]
         team_avg_eff = round(sum(s['eff_score'] for s in all_s)/len(all_s),1) if all_s else 0
@@ -856,8 +863,8 @@ def admin_dashboard():
             active_today=active_today, emp_count=len(employees), today=today,
             open_windows=open_windows,
             open_complaints=open_complaints,
-            picker_lb=picker_lb, checker_lb=checker_lb, mixed_lb=mixed_lb,
-            picker_week_lb=picker_week_lb, checker_week_lb=checker_week_lb, mixed_week_lb=mixed_week_lb,
+            picker_lb=picker_lb, checker_lb=checker_lb, purchaser_lb=purchaser_lb, mixed_lb=mixed_lb,
+            picker_week_lb=picker_week_lb, checker_week_lb=checker_week_lb, purchaser_week_lb=purchaser_week_lb, mixed_week_lb=mixed_week_lb,
             team_avg_eff=team_avg_eff, team_avg_acc=team_avg_acc,
             grade_counts=grade_counts, needs_attention=needs_attention, improving=improving,
         )
@@ -866,8 +873,8 @@ def admin_dashboard():
         flash("Error loading admin dashboard.", "danger")
         return render_template("admin.html", rows=[], total_picked=0,
                                total_entries=0, active_today=0, emp_count=0, today=date.today(),
-                               open_windows=[], open_complaints=[], picker_lb=[], checker_lb=[], mixed_lb=[],
-                               picker_week_lb=[], checker_week_lb=[], mixed_week_lb=[],
+                               open_windows=[], open_complaints=[], picker_lb=[], checker_lb=[], purchaser_lb=[], mixed_lb=[],
+                               picker_week_lb=[], checker_week_lb=[], purchaser_week_lb=[], mixed_week_lb=[],
                                team_avg_eff=0, team_avg_acc=0, improving=[],
                                grade_counts={"ELITE":0,"PROFICIENT":0,"SATISFACTORY":0,"RE-TRAINING":0},
                                needs_attention=[])
