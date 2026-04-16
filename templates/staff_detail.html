@@ -302,10 +302,10 @@ body{font-family:'DM Sans',sans-serif;background:var(--page-bg);min-height:100vh
       <div class="formula-row"><b>CS Fulfilment</b> = CS Received ÷ CS Open × 100</div>
       <div class="formula-row"><b>Racking Efficiency</b> = Items Racked ÷ Number of Items × 100</div>
       <div class="formula-row"><b>Processing Speed</b> = Number of Items ÷ (9 hrs × Days)</div>
-      <div class="formula-row"><b>Efficiency Score</b> = BillRate×40 + Speed×25 + CS×20 + Racking×15</div>
-      <div class="formula-row"><b>ELITE</b>: BillRate≥95% + CS≥90%</div>
-      <div class="formula-row"><b>PROFICIENT</b>: BillRate≥85% + CS≥75%</div>
-      <div class="formula-row"><b>SATISFACTORY</b>: BillRate≥70% · <b>RE-TRAINING</b>: &lt;70%</div>
+      <div class="formula-row"><b>Points</b> = BillRate×35 + CS×25 + Racking×20 + Speed×15 + BillEntry×5</div>
+      <div class="formula-row"><b>Minus Marking</b> = Complaint deductions subtracted from points</div>
+      <div class="formula-row"><b>ELITE</b>: ≥85 pts · <b>PROFICIENT</b>: ≥65 pts</div>
+      <div class="formula-row"><b>SATISFACTORY</b>: ≥45 pts · <b>RE-TRAINING</b>: &lt;45 pts</div>
       {% elif emp.staff_type == 'picker' %}
       <div class="formula-row"><b>Pick Accuracy</b> = Items Picked ÷ (Picked + Missed) × 100</div>
       <div class="formula-row"><b>Pick Speed</b> = (Picked + Missed) ÷ (9 hrs × Days)</div>
@@ -313,11 +313,12 @@ body{font-family:'DM Sans',sans-serif;background:var(--page-bg);min-height:100vh
       <div class="formula-row"><b>Packing Eff.</b> = Packing Done ÷ Sales Bill Picked × 100</div>
       <div class="formula-row"><b>CS Fulfilment</b> = min(Packing Done ÷ CS Sales Open × 100, 100)</div>
       <div class="formula-row"><b>Workspace Score</b> = (Rack + Table Days) ÷ (2 × Days) × 100</div>
-      <div class="formula-row"><b>Efficiency Score</b> = Acc×45 + Speed×25 + BillFulfilment×20 + Workspace×5 + Packing×5</div>
+      <div class="formula-row"><b>Points</b> = Acc×30 + BillFulfilment×25 + Speed×20 + Workspace×10 + Packing×10 + Consistency×5</div>
+      <div class="formula-row"><b>Minus Marking</b> = Complaint deductions subtracted from points</div>
       <div class="formula-row"><b>Potential Items</b> = 200 × 9 hrs × Days</div>
       <div class="formula-row"><b>Consistency</b> = max(0, 100 − std_dev(daily_accuracy) × 2)</div>
-      <div class="formula-row"><b>ELITE</b>: Acc≥98% + BillFulfilment≥95%</div>
-      <div class="formula-row"><b>PROFICIENT</b>: Acc≥95%+Fulfilment≥85% · <b>SATISFACTORY</b>: Acc≥88%+Fulfilment≥70%</div>
+      <div class="formula-row"><b>ELITE</b>: ≥85 pts · <b>PROFICIENT</b>: ≥65 pts</div>
+      <div class="formula-row"><b>SATISFACTORY</b>: ≥45 pts · <b>RE-TRAINING</b>: &lt;45 pts</div>
       {% else %}
       <div class="formula-row"><b>Total SB Checked</b> = SB Normal + SB Urgent (urgent done first)</div>
       <div class="formula-row"><b>Total Items Checked</b> = Items Normal + Urgent Items (both = good work)</div>
@@ -326,13 +327,12 @@ body{font-family:'DM Sans',sans-serif;background:var(--page-bg);min-height:100vh
       <div class="formula-row"><b>Check Speed</b> = Total Items Checked ÷ (9 hrs × Days)</div>
       <div class="formula-row"><b>Pending Bills</b> = Manually entered by checker</div>
       <div class="formula-row"><b>Clearance Rate</b> = SB Checked ÷ (SB Checked + Pending) × 100</div>
-      <div class="formula-row"><b>Efficiency Score</b> = min(Speed÷25,1)×70 + Clearance Rate×30</div>
+      <div class="formula-row"><b>Points</b> = Speed÷60×35 + Clearance×25 + Normal%×20 + Consistency×10 + PotEff×10</div>
+      <div class="formula-row"><b>Minus Marking</b> = Complaint deductions subtracted from points</div>
       <div class="formula-row"><b>Potential Items</b> = 25 items/hr × 9 hrs × Days</div>
       <div class="formula-row"><b>Consistency</b> = max(0, 100 − std_dev(daily_speed) × 2)</div>
-      <div class="formula-row"><b>ELITE</b>: Speed≥28/hr + Clearance≥90%</div>
-      <div class="formula-row"><b>PROFICIENT</b>: Speed≥22/hr + Clearance≥75%</div>
-      <div class="formula-row"><b>SATISFACTORY</b>: Speed≥15/hr + Clearance≥50%</div>
-      <div class="formula-row"><b>RE-TRAINING</b>: Below Satisfactory</div>
+      <div class="formula-row"><b>ELITE</b>: ≥85 pts · <b>PROFICIENT</b>: ≥65 pts</div>
+      <div class="formula-row"><b>SATISFACTORY</b>: ≥45 pts · <b>RE-TRAINING</b>: &lt;45 pts</div>
       {% endif %}
     </div>
   </div>
@@ -404,7 +404,10 @@ body{font-family:'DM Sans',sans-serif;background:var(--page-bg);min-height:100vh
         <div class="mini-stat"><div class="mini-stat-label">CS Fulfilment</div><div class="mini-stat-val">{{ pstats.pur_cs_fulfilment or 0 }}<span class="suf">%</span></div></div>
         <div class="mini-stat"><div class="mini-stat-label">Racking Efficiency</div><div class="mini-stat-val">{{ pstats.pur_racking_eff or 0 }}<span class="suf">%</span></div></div>
         <div class="mini-stat"><div class="mini-stat-label">Processing Speed/hr</div><div class="mini-stat-val">{{ pstats.pur_speed or 0 }}</div></div>
-        <div class="mini-stat"><div class="mini-stat-label">Efficiency Score</div><div class="mini-stat-val">{{ pstats.eff_score }}<span class="suf">/100</span></div></div>
+        <div class="mini-stat"><div class="mini-stat-label">Points Score</div><div class="mini-stat-val">{{ pstats.eff_score }}<span class="suf">/100</span></div></div>
+        {% if pstats.complaint_deduction and pstats.complaint_deduction > 0 %}
+        <div class="mini-stat"><div class="mini-stat-label" style="color:#dc2626;">Minus Marking</div><div class="mini-stat-val" style="color:#dc2626;">-{{ pstats.complaint_deduction }}</div></div>
+        {% endif %}
         <div class="mini-stat"><div class="mini-stat-label">Consistency</div><div class="mini-stat-val">{{ pstats.consistency }}<span class="suf">%</span></div></div>
         <div class="mini-stat"><div class="mini-stat-label">Grade</div><div class="mini-stat-val" style="font-size:13px">{{ pstats.grade }}</div></div>
         {% elif emp.staff_type == 'picker' %}
