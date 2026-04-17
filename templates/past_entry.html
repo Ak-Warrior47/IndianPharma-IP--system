@@ -275,6 +275,22 @@ body {
           <label>Items Racked</label>
           <input type="number" name="rack_organized" min="0" value="0">
         </div>
+        <div class="field">
+          <label>Table Clean</label>
+          <input type="hidden" name="table_clean" id="pe_ck_table_val" value="1">
+          <div class="yn-group">
+            <button type="button" class="yn-btn yes active" id="pe_ck_table_yes" onclick="document.getElementById('pe_ck_table_val').value='1';this.classList.add('active');document.getElementById('pe_ck_table_no').classList.remove('active')">✅ Yes</button>
+            <button type="button" class="yn-btn no" id="pe_ck_table_no" onclick="document.getElementById('pe_ck_table_val').value='0';this.classList.add('active');document.getElementById('pe_ck_table_yes').classList.remove('active')">❌ No</button>
+          </div>
+        </div>
+        <div class="field">
+          <label>Sweeping Done</label>
+          <input type="hidden" name="sweep_done" id="pe_ck_sweep_val" value="1">
+          <div class="yn-group">
+            <button type="button" class="yn-btn yes active" id="pe_ck_sweep_yes" onclick="document.getElementById('pe_ck_sweep_val').value='1';this.classList.add('active');document.getElementById('pe_ck_sweep_no').classList.remove('active')">✅ Yes</button>
+            <button type="button" class="yn-btn no" id="pe_ck_sweep_no" onclick="document.getElementById('pe_ck_sweep_val').value='0';this.classList.add('active');document.getElementById('pe_ck_sweep_yes').classList.remove('active')">❌ No</button>
+          </div>
+        </div>
         {% else %}
         <div class="field">
           <label>★ Total Bills Received to Pick</label>
@@ -304,12 +320,22 @@ body {
         <div class="field">
           <label>Rack Organised (0-10)</label>
           <input type="number" name="rack_organized" min="0" max="10" value="10">
-          <small>0 = poor, 10 = perfect</small>
         </div>
         <div class="field">
-          <label>Table Clean (0-10)</label>
-          <input type="number" name="table_clean" min="0" max="10" value="10">
-          <small>0 = poor, 10 = perfect</small>
+          <label>Table Clean</label>
+          <input type="hidden" name="table_clean" id="pe_table_val" value="1">
+          <div class="yn-group">
+            <button type="button" class="yn-btn yes active" id="pe_table_yes" onclick="setPeYN('table','1')">✅ Yes</button>
+            <button type="button" class="yn-btn no" id="pe_table_no" onclick="setPeYN('table','0')">❌ No</button>
+          </div>
+        </div>
+        <div class="field">
+          <label>Sweeping Done</label>
+          <input type="hidden" name="sweep_done" id="pe_sweep_val" value="1">
+          <div class="yn-group">
+            <button type="button" class="yn-btn yes active" id="pe_sweep_yes" onclick="setPeYN('sweep','1')">✅ Yes</button>
+            <button type="button" class="yn-btn no" id="pe_sweep_no" onclick="setPeYN('sweep','0')">❌ No</button>
+          </div>
         </div>
         {% endif %}
       </div>
@@ -324,6 +350,13 @@ body {
 
 </div>
 <script>
+
+
+function setPeYN(field, val){
+  document.getElementById('pe_'+field+'_val').value = val;
+  document.getElementById('pe_'+field+'_yes').classList.toggle('active', val==='1');
+  document.getElementById('pe_'+field+'_no').classList.toggle('active', val==='0');
+}
 
 function updatePePurchaser(){
   var br=parseInt(document.getElementById('pe_pur_br')?.value||0)||0;
@@ -375,24 +408,8 @@ document.addEventListener('DOMContentLoaded', function(){
 });
 function validatePeSubmit(e){
   // 0 is a valid value for all number fields — only block truly blank strings
-  // Don't block submission — just submit
   return true;
 }
-</script>
-<script>
-document.addEventListener('DOMContentLoaded', function(){
-  var form = document.querySelector('form[method="POST"]');
-  if(!form) return;
-  form.addEventListener('keydown', function(e){
-    if(e.key !== 'Enter') return;
-    // If focused on submit button — allow submit
-    if(document.activeElement && document.activeElement.type === 'submit') return;
-    var fields = Array.from(form.querySelectorAll('input:not([type="hidden"]):not([type="submit"]):not([disabled]), select'));
-    var idx = fields.indexOf(document.activeElement);
-    if(idx > -1 && idx < fields.length-1){ e.preventDefault(); fields[idx+1].focus(); }
-    else if(idx === fields.length-1){ e.preventDefault(); fields[0].focus(); }
-  });
-});
 </script>
 </body>
 </html>
