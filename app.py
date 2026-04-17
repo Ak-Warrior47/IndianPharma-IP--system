@@ -24,7 +24,7 @@ IS_PRODUCTION = os.environ.get("RENDER") or os.environ.get("DATABASE_URL")
 
 app.config.update(
     SECRET_KEY=os.environ.get("SECRET_KEY", "pharma_secure_key_2024"),
-    SESSION_COOKIE_SECURE=False,
+    SESSION_COOKIE_SECURE=bool(IS_PRODUCTION),
     SESSION_COOKIE_HTTPONLY=True,
     SESSION_COOKIE_SAMESITE='Lax',
     PERMANENT_SESSION_LIFETIME=timedelta(hours=8),
@@ -78,8 +78,9 @@ class KPIEntry(db.Model):
     missed           = db.Column(db.Integer, default=0)
     cs_sales_open    = db.Column(db.Integer, default=0)
     packing_done     = db.Column(db.Integer, default=0)
-    rack_organized   = db.Column(db.Integer, default=0)
-    table_clean      = db.Column(db.Integer, default=0)
+    rack_organized   = db.Column(db.Integer, default=0)   # 0-10 score
+    table_clean      = db.Column(db.Integer, default=0)   # 0=No 1=Yes
+    sweep_done       = db.Column(db.Integer, default=0)   # 0=No 1=Yes
     total_time       = db.Column(db.Float, default=0.0)
     checked          = db.Column(db.Integer, default=0)
     errors_found     = db.Column(db.Integer, default=0)
@@ -158,8 +159,10 @@ class Complaint(db.Model):
     id            = db.Column(db.Integer, primary_key=True)
     entry_date    = db.Column(db.Date, nullable=False, default=date.today, index=True)
     reported_by   = db.Column(db.Integer, db.ForeignKey("employees.id"))  # admin
+    # Optional: specific staff this complaint is pinned to. If NULL, applies to whole role.
+    target_emp_id = db.Column(db.Integer, db.ForeignKey("employees.id"), nullable=True, index=True)
     description   = db.Column(db.Text, nullable=False)
-    complaint_type= db.Column(db.String(50), default="delivery")  # delivery/quality/missing
+    complaint_type= db.Column(db.String(50), default="delivery")  # delivery/quality/missing/damage
     # Suggested deductions per role (admin can override)
     picker_deduct  = db.Column(db.Float, default=0.0)
     checker_deduct = db.Column(db.Float, default=0.0)
@@ -198,12 +201,20 @@ def grade_from_score(score):
 
 
 
-def get_complaint_deduction(staff_type: str) -> float:
-    """Get total pending complaint deductions for a staff type."""
+def get_complaint_deduction(staff_type: str, emp_id: int = None) -> float:
+    """Get total pending complaint deductions for a staff member.
+
+    - Complaints with target_emp_id = this employee -> always apply.
+    - Complaints with target_emp_id = NULL (unpinned) -> apply to whole role (legacy).
+    """
     try:
-        complaints = Complaint.query.filter_by(is_resolved=False).all()
+        q = Complaint.query.filter_by(is_resolved=False)
+        complaints = q.all()
         total = 0.0
         for c in complaints:
+            # Skip if pinned to someone else
+            if c.target_emp_id is not None and emp_id is not None and c.target_emp_id != emp_id:
+                continue
             if staff_type == "picker":
                 total += c.picker_final or 0
             elif staff_type == "checker":
@@ -211,10 +222,10 @@ def get_complaint_deduction(staff_type: str) -> float:
             elif staff_type == "purchaser":
                 total += c.purchaser_final or 0
         return min(total, 30.0)  # cap total deduction at 30 pts
-    except:
+    except Exception:
         return 0.0
 
-def build_analytics(entries: List[KPIEntry], staff_type: str = "picker") -> Optional[Dict[str, Any]]:
+def build_analytics(entries: List[KPIEntry], staff_type: str = "picker", emp_id: int = None) -> Optional[Dict[str, Any]]:
     try:
         if not entries: return None
         tp   = sum(int(e.picked or 0) for e in entries)
@@ -257,7 +268,12 @@ def build_analytics(entries: List[KPIEntry], staff_type: str = "picker") -> Opti
         pick_speed      = round(safe_div(ti, ts_total), 1)
         packing_eff     = round(safe_div(tpk, tsb_normal) * 100, 1) if tsb_normal > 0 else 0.0
         cs_fulfilment   = round(min(safe_div(tpk, tcs) * 100, 100.0), 1) if tcs > 0 else 0.0
-        workspace_score = round(safe_div(tro + ttc, 2 * 10 * days) * 100, 1) if days > 0 else 0.0  # 0-10 scale per day
+        # Workspace: rack(0-10)×5pts + table_clean(0/1)×3pts + sweep(0/1)×2pts = 10pts max/day
+        tsd             = sum(int(e.sweep_done or 0) for e in entries)  # total sweep days
+        rack_ws         = safe_div(tro, 10.0 * days) * 5   # rack score 0-5
+        table_ws        = safe_div(ttc, days) * 3           # table yes/no 0-3
+        sweep_ws        = safe_div(tsd, days) * 2           # sweep yes/no 0-2
+        workspace_score = round((rack_ws + table_ws + sweep_ws) / 10 * 100, 1) if days > 0 else 0.0
 
         check_speed = round(safe_div(tck_total, ts_total), 1)
         normal_pct  = round(safe_div(tck_normal, tck_total) * 100, 1) if tck_total > 0 else 0.0
@@ -328,39 +344,43 @@ def build_analytics(entries: List[KPIEntry], staff_type: str = "picker") -> Opti
             # ── PURCHASER POINT SYSTEM — HARD DIFFICULTY (100 pts) ──
             pur_entry_rate  = round(min(safe_div(pur_bill_entry, max(pur_bills_received,1)), 1.0) * 100, 1)
             pur_pending_pct = max(0.0, 1.0 - safe_div(pur_pending_bills, max(pur_bills_received,1)))
+            pur_sweep_score = safe_div(tsd, days) * 2
             eff_score = round(
-                (pur_bill_rate     / 100) * 30 +
-                (pur_cs_fulfilment / 100) * 25 +
-                (pur_racking_eff   / 100) * 20 +
-                min(pur_speed      / 60,  1.0) * 12 +   # benchmark 60/hr — HARD
+                (pur_bill_rate     / 100) * 28 +
+                (pur_cs_fulfilment / 100) * 23 +
+                (pur_racking_eff   / 100) * 18 +
+                min(pur_speed      / 60,  1.0) * 12 +
                 (pur_entry_rate    / 100) * 8 +
-                pur_pending_pct              * 5,         # penalise pending bills
+                pur_pending_pct              * 5 +
+                pur_sweep_score              * 2 + # sweep bonus
+                (workspace_score   / 100) * 4,    # rack+table
                 1)
 
         elif staff_type == "picker":
             # ── PICKER POINT SYSTEM — HARD DIFFICULTY (100 pts) ──
+            # workspace_score already includes rack(5) + table(3) + sweep(2)
             eff_score = round(
-                (pick_acc        / 100) * 28 +
-                (bill_fulfilment / 100) * 22 +
-                min(pick_speed   / 250, 1.0) * 18 +   # benchmark 250/hr — HARD
+                (pick_acc        / 100) * 25 +
+                (bill_fulfilment / 100) * 20 +
+                min(pick_speed   / 250, 1.0) * 18 +
                 min(packing_eff  / 100, 1.0) * 12 +
-                (workspace_score / 100) * 10 +
-                min(cs_fulfilment/ 100, 1.0) * 5 +
-                (consistency     / 100) * 5,
+                (workspace_score / 100) * 10 +   # rack+table+sweep all here
+                min(cs_fulfilment/ 100, 1.0) * 8 +
+                (consistency     / 100) * 7,
                 1)
         else:
             # ── CHECKER POINT SYSTEM — HARD DIFFICULTY (100 pts) ──
-            # Benchmark 80/hr — truly hard to max out speed
             speed_score     = min(safe_div(check_speed, 80.0), 1.0) * 30
             clearance_score = (clearance_rate / 100.0) * 25
             accuracy_score  = (normal_pct / 100.0) * 20
             consist_score   = (consistency / 100.0) * 10
             poteff_score    = (potential_eff / 100.0) * 8
-            volume_score    = min(safe_div(tck_total, 500.0), 1.0) * 7  # total items checked
+            volume_score    = min(safe_div(tck_total, 500.0), 1.0) * 5
+            sweep_score     = safe_div(tsd, days) * 2  # sweep done yes/no
             eff_score       = round(speed_score + clearance_score + accuracy_score +
-                                    consist_score + poteff_score + volume_score, 1)
-        # Apply complaint deductions (minus marking)
-        complaint_deduction = get_complaint_deduction(staff_type)
+                                    consist_score + poteff_score + volume_score + sweep_score, 1)
+        # Apply complaint deductions (minus marking) — now per-employee when target_emp_id is set
+        complaint_deduction = get_complaint_deduction(staff_type, emp_id=emp_id)
         eff_score = max(round(eff_score - complaint_deduction, 1), 0.0)
         eff_score = min(eff_score, 100.0)
 
@@ -434,6 +454,7 @@ def build_analytics(entries: List[KPIEntry], staff_type: str = "picker") -> Opti
             pur_racking_eff=pur_racking_eff if staff_type=="purchaser" else 0,
             pur_speed=pur_speed if staff_type=="purchaser" else 0,
             complaint_deduction=complaint_deduction,
+            tsd=tsd,
             eff_score=eff_score, grade=grade, days=days,
             consistency=consistency, trend=trend,
             feedback=feedback_map.get(grade,""),
@@ -541,6 +562,7 @@ def run_migrations():
                 logger.warning(f"Complaints table: {ce}")
             kpi_cols = [
                 ("bills_received",      "INTEGER DEFAULT 0"),
+                ("sweep_done",          "INTEGER DEFAULT 0"),
                 ("pending_bills_manual","INTEGER DEFAULT 0"),
                 ("total_bills_received","INTEGER DEFAULT 0"),
             ]
@@ -554,6 +576,16 @@ def run_migrations():
                 except Exception as ce:
                     db.session.rollback()
                     logger.warning(f"kpi_entries column '{col}' migration skipped: {ce}")
+            # Add target_emp_id to complaints (targeted minus-marking)
+            try:
+                db.session.execute(db.text(
+                    "ALTER TABLE complaints ADD COLUMN IF NOT EXISTS target_emp_id INTEGER REFERENCES employees(id)"
+                ))
+                db.session.commit()
+                logger.info("✅ complaints.target_emp_id ensured")
+            except Exception as ce:
+                db.session.rollback()
+                logger.warning(f"complaints.target_emp_id migration skipped: {ce}")
         else:
             # SQLite doesn't support IF NOT EXISTS on ALTER TABLE
             import sqlite3
@@ -571,6 +603,15 @@ def run_migrations():
                 if col not in existing:
                     cursor.execute(f"ALTER TABLE employees ADD COLUMN {col} {col_type}")
                     logger.info(f"✅ SQLite column '{col}' added")
+            # complaints.target_emp_id
+            try:
+                cursor.execute("PRAGMA table_info(complaints)")
+                cmp_cols = [row[1] for row in cursor.fetchall()]
+                if cmp_cols and "target_emp_id" not in cmp_cols:
+                    cursor.execute("ALTER TABLE complaints ADD COLUMN target_emp_id INTEGER")
+                    logger.info("✅ SQLite complaints.target_emp_id added")
+            except Exception as sce:
+                logger.warning(f"SQLite complaints migration: {sce}")
             conn.commit()
             conn.close()
     except Exception as e:
@@ -638,16 +679,14 @@ def login():
         try:
             email = request.form.get("email", "").lower().strip()
             password = request.form.get("password", "")
-            role_choice = request.form.get("staff_type", "").strip()
             user = Employee.query.filter_by(email=email).first()
 
             if not user or not user.check_password(password):
                 flash("Invalid Pharma ID or Password.", "danger")
                 return render_template("login.html")
 
-            if not user.is_admin and role_choice in ("picker", "checker", "purchaser"):
-                user.staff_type = role_choice
-                db.session.commit()
+            # NOTE: staff_type is NEVER read from login form.
+            # Role is set by admin only. Prevents staff gaming the leaderboard.
 
             session.clear()
             session.permanent = True
@@ -696,6 +735,15 @@ def dashboard():
                     total_mins       = min(gf("total_mins"), 480)
                     check_mins       = min(gf("check_mins"), 480)
 
+                    # Defaults — always defined so later code never NameErrors
+                    picked               = 0
+                    missed               = 0
+                    checked              = 0
+                    errors_found         = 0
+                    bills_received       = 0
+                    pending_bills_manual = 0
+                    total_bills_received = 0
+
                     if staff_type == "purchaser":
                         sales_bills_open = gi("sales_bills_open")   # PO Bills Received
                         checked          = gi("checked")             # PO Bills Checked
@@ -703,23 +751,16 @@ def dashboard():
                         errors_found     = gi("errors_found")        # Number of Items
                         cs_sales_open    = gi("cs_sales_open")       # CS in PO Open
                         packing_done     = gi("packing_done")        # CS in PO Received
-                        rack_organized   = gi("rack_organized")      # Items Racked
-                        missed           = 0
-                        bills_received   = 0
-                        pending_bills_manual = 0
-                        total_bills_received = 0
                     elif staff_type == "checker":
                         checked              = gi("checked")
                         errors_found         = gi("errors_found")
                         picked               = gi("picked")
-                        missed               = 0
                         bills_received       = gi("bills_received")
                         pending_bills_manual = gi("pending_bills_manual")
-                    else:
-                        picked       = gi("picked")
-                        missed       = gi("missed")
-                        checked      = 0
-                        errors_found = 0
+                    else:  # picker
+                        picked               = gi("picked")
+                        missed               = gi("missed")
+                        total_bills_received = gi("total_bills_received")
 
                     ne = KPIEntry(
                         emp_id               = emp_id,
@@ -729,7 +770,8 @@ def dashboard():
                         cs_sales_open        = cs_sales_open,
                         packing_done         = packing_done,
                         rack_organized       = gi("rack_organized") if staff_type in ("picker","purchaser") else 0,
-                        table_clean          = gi("table_clean")    if staff_type == "picker" else 0,
+                        table_clean          = gi("table_clean"),
+                        sweep_done           = gi("sweep_done"),
                         total_time           = 9.0,
                         checked              = checked,
                         errors_found         = errors_found,
@@ -743,7 +785,7 @@ def dashboard():
                     db.session.commit()
 
                     all_entries = KPIEntry.query.filter_by(emp_id=emp_id).all()
-                    all_stats = build_analytics(all_entries, staff_type)
+                    all_stats = build_analytics(all_entries, staff_type, emp_id=emp_id)
                     if all_stats:
                         prev_best = session.get(f"pb_{emp_id}", 0)
                         if all_stats['eff_score'] > prev_best:
@@ -760,9 +802,9 @@ def dashboard():
                     flash("Error saving metrics.", "danger")
 
         all_entries = KPIEntry.query.filter_by(emp_id=emp_id).order_by(KPIEntry.entry_date.desc()).all()
-        d_stats = build_analytics(get_period_entries(emp_id, "day"), staff_type)
-        w_stats = build_analytics(get_period_entries(emp_id, "week"), staff_type)
-        m_stats = build_analytics(get_period_entries(emp_id, "month"), staff_type)
+        d_stats = build_analytics(get_period_entries(emp_id, "day"), staff_type, emp_id=emp_id)
+        w_stats = build_analytics(get_period_entries(emp_id, "week"), staff_type, emp_id=emp_id)
+        m_stats = build_analytics(get_period_entries(emp_id, "month"), staff_type, emp_id=emp_id)
 
         trend_labels = []
         trend_accuracy = []
@@ -825,9 +867,9 @@ def admin_dashboard():
         today = date.today()
         for emp in employees:
             ents = emp.entries
-            stats = build_analytics(ents, emp.staff_type)
+            stats = build_analytics(ents, emp.staff_type, emp_id=emp.id)
             week_ents = [e for e in ents if e.entry_date >= today - timedelta(days=6)]
-            week_stats = build_analytics(week_ents, emp.staff_type)
+            week_stats = build_analytics(week_ents, emp.staff_type, emp_id=emp.id)
             rows.append({
                 'emp': emp,
                 'stats': stats,
@@ -871,6 +913,7 @@ def admin_dashboard():
             active_today=active_today, emp_count=len(employees), today=today,
             open_windows=open_windows,
             open_complaints=open_complaints,
+            all_staff=employees,
             picker_lb=picker_lb, checker_lb=checker_lb, purchaser_lb=purchaser_lb, mixed_lb=mixed_lb,
             picker_week_lb=picker_week_lb, checker_week_lb=checker_week_lb, purchaser_week_lb=purchaser_week_lb, mixed_week_lb=mixed_week_lb,
             team_avg_eff=team_avg_eff, team_avg_acc=team_avg_acc,
@@ -903,10 +946,10 @@ def staff_detail(emp_id):
         entries = KPIEntry.query.filter_by(emp_id=emp_id).order_by(KPIEntry.entry_date.desc()).all()
         today = date.today()
 
-        a_stats = build_analytics(entries, emp.staff_type)
-        d_stats = build_analytics(get_period_entries(emp_id, "day"), emp.staff_type)
-        w_stats = build_analytics(get_period_entries(emp_id, "week"), emp.staff_type)
-        m_stats = build_analytics(get_period_entries(emp_id, "month"), emp.staff_type)
+        a_stats = build_analytics(entries, emp.staff_type, emp_id=emp.id)
+        d_stats = build_analytics(get_period_entries(emp_id, "day"), emp.staff_type, emp_id=emp.id)
+        w_stats = build_analytics(get_period_entries(emp_id, "week"), emp.staff_type, emp_id=emp.id)
+        m_stats = build_analytics(get_period_entries(emp_id, "month"), emp.staff_type, emp_id=emp.id)
 
         # Heatmap: last 30 days — use accuracy for pickers, check_rate for checkers
         heatmap = {}
@@ -920,8 +963,27 @@ def staff_detail(emp_id):
                 else:
                     heatmap[str(e.entry_date)] = e.accuracy
 
+        # Compute ranking
+        try:
+            all_staff   = Employee.query.filter_by(is_admin=False).all()
+            all_sc, role_sc = [], []
+            for s in all_staff:
+                s_stats = build_analytics(KPIEntry.query.filter_by(emp_id=s.id).all(), s.staff_type, emp_id=s.id)
+                if s_stats:
+                    all_sc.append((s.id, s_stats['eff_score']))
+                    if s.staff_type == emp.staff_type:
+                        role_sc.append((s.id, s_stats['eff_score']))
+            all_sc.sort(key=lambda x: x[1], reverse=True)
+            role_sc.sort(key=lambda x: x[1], reverse=True)
+            emp_overall_rank = next((i+1 for i,(sid,_) in enumerate(all_sc)  if sid==emp.id), None)
+            emp_role_rank    = next((i+1 for i,(sid,_) in enumerate(role_sc) if sid==emp.id), None)
+        except Exception as re_err:
+            emp_overall_rank = emp_role_rank = None
+
         return render_template("staff_detail.html",
             emp=emp,
+            emp_overall_rank=emp_overall_rank,
+            emp_role_rank=emp_role_rank,
             entries=entries,
             a_stats=a_stats,
             d_stats=d_stats,
@@ -1050,6 +1112,15 @@ def admin_delete_user(emp_id):
 @admin_required
 def admin_export_csv():
     try:
+        # Guard against CSV injection — strip leading =, +, -, @, tab, CR from cells
+        def _csv_safe(v):
+            if v is None:
+                return ""
+            s = str(v)
+            if s and s[0] in ("=", "+", "-", "@", "\t", "\r"):
+                return "'" + s
+            return s
+
         output = io.StringIO()
         writer = csv.writer(output)
         writer.writerow(["Employee", "Email", "Type", "Date", "Picked", "Missed",
@@ -1062,7 +1133,8 @@ def admin_export_csv():
                 t = (e.picked or 0) + (e.missed or 0)
                 acc = round((e.picked or 0) / t * 100, 1) if t > 0 else 0
                 writer.writerow([
-                    emp.name, emp.email, emp.staff_type, e.entry_date,
+                    _csv_safe(emp.name), _csv_safe(emp.email), _csv_safe(emp.staff_type),
+                    e.entry_date,
                     e.picked, e.missed, acc,
                     e.sales_bills_open, e.packing_done,
                     e.checked, e.errors_found,
@@ -1097,10 +1169,10 @@ def export_pdf():
         all_entries = KPIEntry.query.filter_by(emp_id=emp_id).all()
 
         payload = {
-            "all_stats": build_analytics(all_entries, emp.staff_type),
-            "day_stats": build_analytics(get_period_entries(emp_id, "day"), emp.staff_type),
-            "week_stats": build_analytics(get_period_entries(emp_id, "week"), emp.staff_type),
-            "month_stats": build_analytics(get_period_entries(emp_id, "month"), emp.staff_type),
+            "all_stats": build_analytics(all_entries, emp.staff_type, emp_id=emp.id),
+            "day_stats": build_analytics(get_period_entries(emp_id, "day"), emp.staff_type, emp_id=emp.id),
+            "week_stats": build_analytics(get_period_entries(emp_id, "week"), emp.staff_type, emp_id=emp.id),
+            "month_stats": build_analytics(get_period_entries(emp_id, "month"), emp.staff_type, emp_id=emp.id),
             "staff_type": emp.staff_type,
             "all_entries": all_entries[-30:],
         }
@@ -1131,10 +1203,10 @@ def download_pdf(emp_id):
         all_entries = KPIEntry.query.filter_by(emp_id=emp_id).all()
 
         payload = {
-            "all_stats": build_analytics(all_entries, emp.staff_type),
-            "day_stats": build_analytics(get_period_entries(emp_id, "day"), emp.staff_type),
-            "week_stats": build_analytics(get_period_entries(emp_id, "week"), emp.staff_type),
-            "month_stats": build_analytics(get_period_entries(emp_id, "month"), emp.staff_type),
+            "all_stats": build_analytics(all_entries, emp.staff_type, emp_id=emp.id),
+            "day_stats": build_analytics(get_period_entries(emp_id, "day"), emp.staff_type, emp_id=emp.id),
+            "week_stats": build_analytics(get_period_entries(emp_id, "week"), emp.staff_type, emp_id=emp.id),
+            "month_stats": build_analytics(get_period_entries(emp_id, "month"), emp.staff_type, emp_id=emp.id),
             "staff_type": emp.staff_type,
             "all_entries": all_entries[-30:],
         }
@@ -1299,7 +1371,8 @@ def past_entry(date_str):
                 bills_received       = bills_received,
                 pending_bills_manual = pending_bills_manual,
                 total_bills_received = total_bills_received,
-                entry_date           = past_date
+                sweep_done           = gi("sweep_done"),
+                entry_date           = past_date,
             )
             db.session.add(ne)
             db.session.commit()
@@ -1328,7 +1401,7 @@ def api_stats(emp_id):
         if not emp:
             return jsonify(error="Not found"), 404
         entries = KPIEntry.query.filter_by(emp_id=emp_id).all()
-        stats = build_analytics(entries, emp.staff_type)
+        stats = build_analytics(entries, emp.staff_type, emp_id=emp.id)
         return jsonify(stats=stats, name=emp.name, staff_type=emp.staff_type)
     except Exception as e:
         logger.error(f"api_stats: {e}")
@@ -1363,47 +1436,58 @@ def admin_add_complaint():
         description    = request.form.get("description", "").strip()
         complaint_type = request.form.get("complaint_type", "delivery")
         mistake_count  = max(1, int(request.form.get("mistake_count", 1) or 1))
+        target_emp_id  = request.form.get("target_emp_id", "").strip()
+
+        # Validate target_emp_id (optional; empty = applies to whole role)
+        target_id = None
+        if target_emp_id:
+            try:
+                target_id = int(target_emp_id)
+                if not db.session.get(Employee, target_id):
+                    target_id = None
+            except (ValueError, TypeError):
+                target_id = None
 
         if not description:
             flash("Please describe the complaint.", "warning")
             return redirect(url_for("admin_dashboard"))
 
-        # Auto-suggest deductions based on mistake count and type
-        # Medium-upper difficulty: each mistake costs meaningful points
-        BASE_DEDUCT = {"delivery": 3.0, "quality": 4.0, "missing": 5.0}
-        base = BASE_DEDUCT.get(complaint_type, 3.0)
+        # ── Role-based auto-suggestion system ──────────────────
+        # Each mistake type has base penalty; multiplied by count; capped
+        # Difficulty: HARD — meaningful deductions that affect rankings
+        BASE = {"delivery": 4.0, "quality": 5.0, "missing": 6.0, "damage": 5.0}
+        base = BASE.get(complaint_type, 4.0)
+        multiplier = min(mistake_count, 8)  # cap at 8x
 
-        # Deductions per role based on their responsibility in the error
-        # Picker most responsible for wrong/missing items
-        # Checker responsible for not catching errors
-        # Purchaser responsible for quality/sourcing issues
-        multiplier = min(mistake_count, 10)  # cap at 10 mistakes
-        if complaint_type == "delivery":
-            sug_picker    = round(base * multiplier * 1.0, 1)   # most responsible
-            sug_checker   = round(base * multiplier * 0.7, 1)   # should have caught it
-            sug_purchaser = round(base * multiplier * 0.3, 1)   # least responsible
-        elif complaint_type == "quality":
-            sug_picker    = round(base * multiplier * 0.4, 1)
-            sug_checker   = round(base * multiplier * 0.6, 1)
-            sug_purchaser = round(base * multiplier * 1.0, 1)   # most responsible for quality
-        else:  # missing
-            sug_picker    = round(base * multiplier * 1.0, 1)
-            sug_checker   = round(base * multiplier * 0.8, 1)
-            sug_purchaser = round(base * multiplier * 0.2, 1)
+        # Responsibility weights per complaint type (must sum to ~2.0)
+        WEIGHTS = {
+            "delivery": {"picker": 1.0, "checker": 0.6, "purchaser": 0.2},  # picker packed wrong
+            "quality":  {"picker": 0.2, "checker": 0.5, "purchaser": 1.0},  # purchaser sourced bad
+            "missing":  {"picker": 1.0, "checker": 0.7, "purchaser": 0.1},  # picker missed item
+            "damage":   {"picker": 0.5, "checker": 0.3, "purchaser": 0.8},  # purchaser/storage
+        }
+        w = WEIGHTS.get(complaint_type, WEIGHTS["delivery"])
+        sug_picker    = min(round(base * multiplier * w["picker"],    1), 25.0)
+        sug_checker   = min(round(base * multiplier * w["checker"],   1), 25.0)
+        sug_purchaser = min(round(base * multiplier * w["purchaser"], 1), 25.0)
 
-        # Cap suggestions at reasonable max
-        sug_picker    = min(sug_picker,    25.0)
-        sug_checker   = min(sug_checker,   25.0)
-        sug_purchaser = min(sug_purchaser, 25.0)
-
-        # Use admin-entered finals if provided, else use suggestions
-        picker_final    = float(request.form.get("picker_final",    sug_picker)    or sug_picker)
-        checker_final   = float(request.form.get("checker_final",   sug_checker)   or sug_checker)
-        purchaser_final = float(request.form.get("purchaser_final", sug_purchaser) or sug_purchaser)
+        # Use admin-entered finals if provided, else use suggestions (handle empty string)
+        def _pf(key, default):
+            v = request.form.get(key, "").strip()
+            if not v:
+                return default
+            try:
+                return float(v)
+            except (ValueError, TypeError):
+                return default
+        picker_final    = _pf("picker_final",    sug_picker)
+        checker_final   = _pf("checker_final",   sug_checker)
+        purchaser_final = _pf("purchaser_final", sug_purchaser)
 
         complaint = Complaint(
             entry_date       = date.today(),
             reported_by      = session.get("user_id"),
+            target_emp_id    = target_id,
             description      = description,
             complaint_type   = complaint_type,
             picker_deduct    = sug_picker,
@@ -1415,8 +1499,9 @@ def admin_add_complaint():
         )
         db.session.add(complaint)
         db.session.commit()
-        log_audit("complaint_added", description[:50], f"type={complaint_type} mistakes={mistake_count}")
-        flash(f"✅ Complaint recorded. Deductions — Picker: {picker_final}pts, Checker: {checker_final}pts, Purchaser: {purchaser_final}pts", "warning")
+        tgt_note = f" → {db.session.get(Employee, target_id).name}" if target_id else " (applied to role)"
+        log_audit("complaint_added", description[:50], f"type={complaint_type} mistakes={mistake_count}{tgt_note}")
+        flash(f"✅ Complaint recorded{tgt_note}. Deductions — Picker: {picker_final}pts, Checker: {checker_final}pts, Purchaser: {purchaser_final}pts", "warning")
 
     except Exception as e:
         db.session.rollback()
@@ -1457,7 +1542,7 @@ def admin_export_full():
                 "email": emp.email,
                 "staff_type": emp.staff_type,
                 "role": emp.role,
-                "password_hash": emp.password_hash,
+                # password_hash intentionally excluded — do not leak credentials in exports
                 "sunday_override": emp.sunday_override,
             })
             entries = KPIEntry.query.filter_by(emp_id=emp.id).all()
@@ -1509,10 +1594,10 @@ def admin_export_all_pdf():
             for emp in employees:
                 try:
                     entries = KPIEntry.query.filter_by(emp_id=emp.id).all()
-                    all_stats   = build_analytics(entries, emp.staff_type)
-                    day_stats   = build_analytics(get_period_entries(emp.id, "day"),   emp.staff_type)
-                    week_stats  = build_analytics(get_period_entries(emp.id, "week"),  emp.staff_type)
-                    month_stats = build_analytics(get_period_entries(emp.id, "month"), emp.staff_type)
+                    all_stats   = build_analytics(entries, emp.staff_type, emp_id=emp.id)
+                    day_stats   = build_analytics(get_period_entries(emp.id, "day"), emp.staff_type, emp_id=emp.id)
+                    week_stats  = build_analytics(get_period_entries(emp.id, "week"), emp.staff_type, emp_id=emp.id)
+                    month_stats = build_analytics(get_period_entries(emp.id, "month"), emp.staff_type, emp_id=emp.id)
 
                     payload = {
                         "all_stats":   all_stats,
@@ -1542,7 +1627,7 @@ def admin_export_all_pdf():
         return redirect(url_for("admin_dashboard"))
 
 
-@app.route("/admin/migrate_checker/<int:emp_id>")
+@app.route("/admin/migrate_checker/<int:emp_id>", methods=["POST"])
 @admin_required
 def migrate_checker_data(emp_id):
     try:
@@ -1556,9 +1641,11 @@ def migrate_checker_data(emp_id):
                 migrated += 1
         emp.staff_type = "checker"
         db.session.commit()
+        log_audit("migrate_checker", emp.name, f"Converted {migrated} entries picker->checker")
         return jsonify(success=True, employee=emp.name, entries_migrated=migrated)
     except Exception as ex:
         db.session.rollback()
+        logger.error(f"migrate_checker: {ex}")
         return jsonify(error=str(ex)), 500
 
 
