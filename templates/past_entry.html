@@ -178,7 +178,7 @@ body {
         {% if staff_type == 'checker' %}
         <div class="field">
           <label>★ Total Bills Received That Day</label>
-          <input type="number" name="bills_received" id="pe_bills_received" min="0" value="0" required oninput="updatePeTotals()">
+          <input type="number" name="bills_received" id="pe_bills_received" min="0" value="0" oninput="updatePeTotals()">
           <small>All bills given to you that day</small>
         </div>
         <div class="field">
@@ -211,7 +211,7 @@ body {
         </div>
         <div class="field">
           <label>Sales Bill Checked (Normal)</label>
-          <input type="number" name="sales_bills_open" id="pe_sb_normal" min="0" value="0" required oninput="updatePeTotals()">
+          <input type="number" name="sales_bills_open" id="pe_sb_normal" min="0" value="0" oninput="updatePeTotals()">
         </div>
         <div class="field">
           <label>SB Checked Urgent</label>
@@ -219,7 +219,7 @@ body {
         </div>
         <div class="field">
           <label>Item Checked (Normal)</label>
-          <input type="number" name="checked" id="pe_item_normal" min="0" value="0" required oninput="updatePeTotals()">
+          <input type="number" name="checked" id="pe_item_normal" min="0" value="0" oninput="updatePeTotals()">
         </div>
         <div class="field">
           <label>Urgent Item Checked</label>
@@ -249,19 +249,19 @@ body {
         </div>
         <div class="field">
           <label>1. Total PO Bills Received</label>
-          <input type="number" name="sales_bills_open" id="pe_pur_br" min="0" value="0" required oninput="updatePePurchaser()">
+          <input type="number" name="sales_bills_open" id="pe_pur_br" min="0" value="0" oninput="updatePePurchaser()">
         </div>
         <div class="field">
           <label>2. PO Bills Checked</label>
-          <input type="number" name="checked" id="pe_pur_bc" min="0" value="0" required oninput="updatePePurchaser()">
+          <input type="number" name="checked" id="pe_pur_bc" min="0" value="0" oninput="updatePePurchaser()">
         </div>
         <div class="field">
           <label>Purchase Bill Entry</label>
-          <input type="number" name="picked" min="0" value="0" required>
+          <input type="number" name="picked" min="0" value="0">
         </div>
         <div class="field">
           <label>Number of Items</label>
-          <input type="number" name="errors_found" min="0" value="0" required>
+          <input type="number" name="errors_found" min="0" value="0">
         </div>
         <div class="field">
           <label>CS in Purchase Open</label>
@@ -278,20 +278,20 @@ body {
         {% else %}
         <div class="field">
           <label>★ Total Bills Received to Pick</label>
-          <input type="number" name="total_bills_received" min="0" value="0" required>
+          <input type="number" name="total_bills_received" min="0" value="0">
           <small>Total bills given to you that day</small>
         </div>
         <div class="field">
           <label>Sales Bill Picked</label>
-          <input type="number" name="sales_bills_open" min="0" value="0" required class="urgent">
+          <input type="number" name="sales_bills_open" min="0" value="0" class="urgent">
         </div>
         <div class="field">
           <label>Items Picked</label>
-          <input type="number" name="picked" min="0" value="0" required>
+          <input type="number" name="picked" min="0" value="0">
         </div>
         <div class="field">
           <label>Items Missed</label>
-          <input type="number" name="missed" min="0" value="0" required>
+          <input type="number" name="missed" min="0" value="0">
         </div>
         <div class="field">
           <label>CS Sales Open</label>
@@ -303,12 +303,12 @@ body {
         </div>
         <div class="field">
           <label>Rack Organised (0-10)</label>
-          <input type="number" name="rack_organized" min="0" max="10" value="10" required>
+          <input type="number" name="rack_organized" min="0" max="10" value="10">
           <small>0 = poor, 10 = perfect</small>
         </div>
         <div class="field">
           <label>Table Clean (0-10)</label>
-          <input type="number" name="table_clean" min="0" max="10" value="10" required>
+          <input type="number" name="table_clean" min="0" max="10" value="10">
           <small>0 = poor, 10 = perfect</small>
         </div>
         {% endif %}
@@ -374,18 +374,8 @@ document.addEventListener('DOMContentLoaded', function(){
   });
 });
 function validatePeSubmit(e){
-  var form = document.querySelector('form[method="POST"]');
-  var empty = [];
-  form.querySelectorAll('input[required]:not([type="hidden"])').forEach(function(inp){
-    if(!inp.value || inp.value === ''){ 
-      var label = inp.closest('.field')?.querySelector('label')?.textContent || inp.name;
-      empty.push(label.trim());
-    }
-  });
-  if(empty.length > 0){
-    var msg = 'These fields are empty:\n• ' + empty.join('\n• ') + '\n\nContinue anyway?';
-    if(!confirm(msg)){ e.preventDefault(); return false; }
-  }
+  // 0 is a valid value for all number fields — only block truly blank strings
+  // Don't block submission — just submit
   return true;
 }
 </script>
@@ -395,10 +385,12 @@ document.addEventListener('DOMContentLoaded', function(){
   if(!form) return;
   form.addEventListener('keydown', function(e){
     if(e.key !== 'Enter') return;
+    // If focused on submit button — allow submit
+    if(document.activeElement && document.activeElement.type === 'submit') return;
     var fields = Array.from(form.querySelectorAll('input:not([type="hidden"]):not([type="submit"]):not([disabled]), select'));
     var idx = fields.indexOf(document.activeElement);
     if(idx > -1 && idx < fields.length-1){ e.preventDefault(); fields[idx+1].focus(); }
-    else if(idx === fields.length-1){ e.preventDefault(); }
+    else if(idx === fields.length-1){ e.preventDefault(); fields[0].focus(); }
   });
 });
 </script>
