@@ -246,9 +246,13 @@ body{font-family:'DM Sans',sans-serif;background:var(--page-bg);min-height:100vh
     {% if a_stats %}
     <div class="kpi-grid">
       {% if emp.staff_type == 'checker' %}
-      <div class="kpi-card">
-        <div class="kpi-label">Efficiency Score</div>
+      <div class="kpi-card" style="background:linear-gradient(135deg,rgba(29,78,216,0.08),rgba(109,40,217,0.06));border-color:rgba(29,78,216,0.2);">
+        <div class="kpi-label">🏆 Points Score</div>
         <div class="kpi-val">{{ a_stats.eff_score }}<span class="suf">/100</span></div>
+        <div style="font-size:10px;margin-top:4px;">
+          {% set g = a_stats.grade %}
+          <span style="font-weight:800;padding:2px 8px;border-radius:5px;background:{% if g=='ELITE' %}#ede9fe{% elif g=='PROFICIENT' %}#dcfce7{% elif g=='SATISFACTORY' %}#fef3c7{% else %}#fee2e2{% endif %};color:{% if g=='ELITE' %}#6d28d9{% elif g=='PROFICIENT' %}#16a34a{% elif g=='SATISFACTORY' %}#d97706{% else %}#dc2626{% endif %};">{{ g }}</span>
+        </div>
       </div>
       <div class="kpi-card">
         <div class="kpi-label">Check Speed</div>
@@ -297,6 +301,21 @@ body{font-family:'DM Sans',sans-serif;background:var(--page-bg);min-height:100vh
   <div class="formula-box">
     <div class="formula-title">📐 Formula Reference — How scores are calculated</div>
     <div class="formula-grid">
+      <!-- RANKING CARD -->
+      <div class="kpi-card" style="background:linear-gradient(135deg,rgba(255,215,0,0.1),rgba(255,165,0,0.05));border-color:rgba(255,165,0,0.3);">
+        <div class="kpi-label">📊 Your Ranking</div>
+        <div style="display:flex;flex-direction:column;gap:6px;margin-top:6px;">
+          <div style="display:flex;justify-content:space-between;align-items:center;">
+            <span style="font-size:11px;color:var(--muted);">{{ emp.staff_type|title }} Rank</span>
+            <span style="font-size:16px;font-weight:800;color:#b45309;">{{ emp_role_rank or '—' }}</span>
+          </div>
+          <div style="display:flex;justify-content:space-between;align-items:center;">
+            <span style="font-size:11px;color:var(--muted);">Overall Rank</span>
+            <span style="font-size:16px;font-weight:800;color:#6d28d9;">{{ emp_overall_rank or '—' }}</span>
+          </div>
+        </div>
+      </div>
+
       {% if emp.staff_type == 'purchaser' %}
       <div class="formula-row"><b>Bill Processing Rate</b> = PO Bills Checked ÷ PO Bills Received × 100</div>
       <div class="formula-row"><b>CS Fulfilment</b> = CS Received ÷ CS Open × 100</div>
@@ -327,7 +346,8 @@ body{font-family:'DM Sans',sans-serif;background:var(--page-bg);min-height:100vh
       <div class="formula-row"><b>Check Speed</b> = Total Items Checked ÷ (9 hrs × Days)</div>
       <div class="formula-row"><b>Pending Bills</b> = Manually entered by checker</div>
       <div class="formula-row"><b>Clearance Rate</b> = SB Checked ÷ (SB Checked + Pending) × 100</div>
-      <div class="formula-row"><b>Points (HARD)</b> = Speed÷80×30 + Clearance×25 + Normal%×20 + Consistency×10 + PotEff×8 + Volume×7 [max 100]</div>
+      <div class="formula-row"><b>Points</b> = Speed÷80×30 + Clearance×25 + Normal%×20 + Consistency×10 + PotEff×8 + Volume×5 + Sweep×2 [max 100]</div>
+      <div class="discardy×10 + PotEff×8 + Volume×7 [max 100]</div>
       <div class="formula-row"><b>Minus Marking</b> = Complaint deductions subtracted from points</div>
       <div class="formula-row"><b>Potential Items</b> = 25 items/hr × 9 hrs × Days</div>
       <div class="formula-row"><b>Consistency</b> = max(0, 100 − std_dev(daily_speed) × 2)</div>
@@ -392,7 +412,22 @@ body{font-family:'DM Sans',sans-serif;background:var(--page-bg);min-height:100vh
     <div class="period-panel {% if pid == 'day' %}active{% endif %}" id="period-{{ pid }}">
       {% if pstats %}
       <div class="mini-grid">
-        {% if emp.staff_type == 'purchaser' %}
+        <!-- RANKING CARD -->
+      <div class="kpi-card" style="background:linear-gradient(135deg,rgba(255,215,0,0.1),rgba(255,165,0,0.05));border-color:rgba(255,165,0,0.3);">
+        <div class="kpi-label">📊 Your Ranking</div>
+        <div style="display:flex;flex-direction:column;gap:6px;margin-top:6px;">
+          <div style="display:flex;justify-content:space-between;align-items:center;">
+            <span style="font-size:11px;color:var(--muted);">{{ emp.staff_type|title }} Rank</span>
+            <span style="font-size:16px;font-weight:800;color:#b45309;">{{ emp_role_rank or '—' }}</span>
+          </div>
+          <div style="display:flex;justify-content:space-between;align-items:center;">
+            <span style="font-size:11px;color:var(--muted);">Overall Rank</span>
+            <span style="font-size:16px;font-weight:800;color:#6d28d9;">{{ emp_overall_rank or '—' }}</span>
+          </div>
+        </div>
+      </div>
+
+      {% if emp.staff_type == 'purchaser' %}
         <div class="mini-stat"><div class="mini-stat-label">PO Bills Received</div><div class="mini-stat-val">{{ pstats.pur_bills_received or 0 }}</div></div>
         <div class="mini-stat"><div class="mini-stat-label">PO Bills Checked</div><div class="mini-stat-val">{{ pstats.pur_bills_checked or 0 }}</div></div>
         <div class="mini-stat"><div class="mini-stat-label">PO Bill Entry</div><div class="mini-stat-val">{{ pstats.pur_bill_entry or 0 }}</div></div>
@@ -416,7 +451,8 @@ body{font-family:'DM Sans',sans-serif;background:var(--page-bg);min-height:100vh
         <div class="mini-stat"><div class="mini-stat-label">Item Picked</div><div class="mini-stat-val">{{ pstats.tp }}</div></div>
         <div class="mini-stat"><div class="mini-stat-label">Item Missed</div><div class="mini-stat-val">{{ pstats.tm }}</div></div>
         <div class="mini-stat"><div class="mini-stat-label">CS in Sale Open</div><div class="mini-stat-val">{{ pstats.tcs }}</div></div>
-        <div class="mini-stat"><div class="mini-stat-label">Table Clean ✓</div><div class="mini-stat-val">{{ pstats.ttc }}</div></div>
+        <div class="mini-stat"><div class="mini-stat-label">Table Clean</div><div class="mini-stat-val">{% if pstats.ttc %}✅ {{ pstats.ttc }}d{% else %}—{% endif %}</div></div>
+        <div class="mini-stat"><div class="mini-stat-label">Sweeping Done</div><div class="mini-stat-val">{% if pstats.tsd %}✅ {{ pstats.tsd }}d{% else %}—{% endif %}</div></div>
         <div class="mini-stat"><div class="mini-stat-label">Rack Organised ✓</div><div class="mini-stat-val">{{ pstats.tro }}</div></div>
         <div class="mini-stat"><div class="mini-stat-label">Packing Done</div><div class="mini-stat-val">{{ pstats.tpd }}</div></div>
         {# Calculated metrics #}
@@ -428,7 +464,7 @@ body{font-family:'DM Sans',sans-serif;background:var(--page-bg);min-height:100vh
         <div class="mini-stat"><div class="mini-stat-label">CS Fulfilment</div><div class="mini-stat-val">{{ pstats.cs_fulfilment }}<span class="suf">%</span></div></div>
         <div class="mini-stat"><div class="mini-stat-label">Workspace Score</div><div class="mini-stat-val">{{ pstats.workspace_score }}<span class="suf">%</span></div></div>
         <div class="mini-stat"><div class="mini-stat-label">Consistency</div><div class="mini-stat-val">{{ pstats.consistency }}<span class="suf">%</span></div></div>
-        <div class="mini-stat"><div class="mini-stat-label">Efficiency Score</div><div class="mini-stat-val">{{ pstats.eff_score }}<span class="suf">/100</span></div></div>
+        <div class="mini-stat"><div class="mini-stat-label">Points Score</div><div class="mini-stat-val">{{ pstats.eff_score }}<span class="suf"> pts</span></div></div>
         <div class="mini-stat"><div class="mini-stat-label">Potential Items</div><div class="mini-stat-val">{{ pstats.potential_items }}</div></div>
         <div class="mini-stat"><div class="mini-stat-label">Potential Eff.</div><div class="mini-stat-val">{{ pstats.potential_eff }}<span class="suf">%</span></div></div>
         <div class="mini-stat"><div class="mini-stat-label">Gap Items</div><div class="mini-stat-val">{{ pstats.gap_items }}</div></div>
@@ -443,17 +479,18 @@ body{font-family:'DM Sans',sans-serif;background:var(--page-bg);min-height:100vh
         <div class="mini-stat"><div class="mini-stat-label">Urgent Item Checked</div><div class="mini-stat-val">{{ pstats.ter }}</div></div>
         <div class="mini-stat"><div class="mini-stat-label">SB Open (assist)</div><div class="mini-stat-val">{{ pstats.tp }}</div></div>
         <div class="mini-stat"><div class="mini-stat-label">Packing Done</div><div class="mini-stat-val">{{ pstats.tpk }}</div></div>
+        <div class="mini-stat"><div class="mini-stat-label">Sweeping Done</div><div class="mini-stat-val">{% if pstats.tsd %}✅ {{ pstats.tsd }}d{% else %}—{% endif %}</div></div>
         <div class="mini-stat"><div class="mini-stat-label">Bills Received</div><div class="mini-stat-val">{{ pstats.tbr or 0 }}</div></div>
         <div class="mini-stat"><div class="mini-stat-label" style="color:#dc2626">Pending Bills</div><div class="mini-stat-val" style="color:{{ '#dc2626' if (pstats.pending_bills or 0) > 0 else '#16a34a' }}">{{ pstats.pending_bills or 0 }} <span style="font-size:10px;color:var(--muted);">(manual)</span></div></div>
         <div class="mini-stat"><div class="mini-stat-label">Clearance Rate</div><div class="mini-stat-val">{{ pstats.clearance_rate or 100 }}<span class="suf">%</span></div></div>
         {# Calculated metrics #}
         <div class="mini-stat"><div class="mini-stat-label">Total SB Checked</div><div class="mini-stat-val">{{ (pstats.tsb or 0) + (pstats.tcs or 0) }}</div></div>
         <div class="mini-stat"><div class="mini-stat-label">Total Items Checked</div><div class="mini-stat-val">{{ pstats.tck_total or pstats.tck or 0 }}</div></div>
-        <div class="mini-stat"><div class="mini-stat-label">Clean Check Rate</div><div class="mini-stat-val">{{ pstats.check_acc }}<span class="suf">%</span></div></div>
+        <div class="mini-stat"><div class="mini-stat-label">Normal %</div><div class="mini-stat-val">{{ pstats.normal_pct or 0 }}<span class="suf">%</span></div></div>
         <div class="mini-stat"><div class="mini-stat-label">Error Rate</div><div class="mini-stat-val">{{ pstats.error_rate }}<span class="suf">%</span></div></div>
         <div class="mini-stat"><div class="mini-stat-label">Check Speed/hr</div><div class="mini-stat-val">{{ pstats.check_speed or pstats.ck_speed or 0 }}</div></div>
         <div class="mini-stat"><div class="mini-stat-label">Consistency</div><div class="mini-stat-val">{{ pstats.consistency }}<span class="suf">%</span></div></div>
-        <div class="mini-stat"><div class="mini-stat-label">Efficiency Score</div><div class="mini-stat-val">{{ pstats.eff_score }}<span class="suf">/100</span></div></div>
+        <div class="mini-stat"><div class="mini-stat-label">Points Score</div><div class="mini-stat-val">{{ pstats.eff_score }}<span class="suf"> pts</span></div></div>
         <div class="mini-stat"><div class="mini-stat-label">Potential Items</div><div class="mini-stat-val">{{ pstats.potential_items }}</div></div>
         <div class="mini-stat"><div class="mini-stat-label">Potential Eff.</div><div class="mini-stat-val">{{ pstats.potential_eff }}<span class="suf">%</span></div></div>
         <div class="mini-stat"><div class="mini-stat-label">Gap Items</div><div class="mini-stat-val">{{ pstats.gap_items }}</div></div>
@@ -477,7 +514,22 @@ body{font-family:'DM Sans',sans-serif;background:var(--page-bg);min-height:100vh
       <thead>
         <tr>
           <th>Date</th>
-          {% if emp.staff_type == 'purchaser' %}
+          <!-- RANKING CARD -->
+      <div class="kpi-card" style="background:linear-gradient(135deg,rgba(255,215,0,0.1),rgba(255,165,0,0.05));border-color:rgba(255,165,0,0.3);">
+        <div class="kpi-label">📊 Your Ranking</div>
+        <div style="display:flex;flex-direction:column;gap:6px;margin-top:6px;">
+          <div style="display:flex;justify-content:space-between;align-items:center;">
+            <span style="font-size:11px;color:var(--muted);">{{ emp.staff_type|title }} Rank</span>
+            <span style="font-size:16px;font-weight:800;color:#b45309;">{{ emp_role_rank or '—' }}</span>
+          </div>
+          <div style="display:flex;justify-content:space-between;align-items:center;">
+            <span style="font-size:11px;color:var(--muted);">Overall Rank</span>
+            <span style="font-size:16px;font-weight:800;color:#6d28d9;">{{ emp_overall_rank or '—' }}</span>
+          </div>
+        </div>
+      </div>
+
+      {% if emp.staff_type == 'purchaser' %}
           <th>PO Bills Rcvd</th>
           <th>PO Bills Checked</th>
           <th>PO Bill Entry</th>
@@ -518,7 +570,22 @@ body{font-family:'DM Sans',sans-serif;background:var(--page-bg);min-height:100vh
         {% for e in entries %}
         <tr>
           <td style="font-weight:600;color:var(--navy);white-space:nowrap">{{ e.entry_date.strftime('%d %b %Y') }}</td>
-          {% if emp.staff_type == 'purchaser' %}
+          <!-- RANKING CARD -->
+      <div class="kpi-card" style="background:linear-gradient(135deg,rgba(255,215,0,0.1),rgba(255,165,0,0.05));border-color:rgba(255,165,0,0.3);">
+        <div class="kpi-label">📊 Your Ranking</div>
+        <div style="display:flex;flex-direction:column;gap:6px;margin-top:6px;">
+          <div style="display:flex;justify-content:space-between;align-items:center;">
+            <span style="font-size:11px;color:var(--muted);">{{ emp.staff_type|title }} Rank</span>
+            <span style="font-size:16px;font-weight:800;color:#b45309;">{{ emp_role_rank or '—' }}</span>
+          </div>
+          <div style="display:flex;justify-content:space-between;align-items:center;">
+            <span style="font-size:11px;color:var(--muted);">Overall Rank</span>
+            <span style="font-size:16px;font-weight:800;color:#6d28d9;">{{ emp_overall_rank or '—' }}</span>
+          </div>
+        </div>
+      </div>
+
+      {% if emp.staff_type == 'purchaser' %}
           <td>{{ e.sales_bills_open }}</td>
           <td>{{ e.checked }}</td>
           <td>{{ e.picked }}</td>
