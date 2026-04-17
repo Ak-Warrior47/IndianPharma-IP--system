@@ -549,12 +549,12 @@ tbody tr:hover td { background: rgba(219,234,254,0.3); }
               <div class="actions">
                 <a href="/staff/{{ r.emp.id }}" class="btn-sm btn-view">👤 View</a>
                 <button class="btn-sm btn-edit"
-                  onclick="openEdit({{ r.emp.id }}, '{{ r.emp.name|e }}', '{{ r.emp.email|e }}', '{{ r.emp.staff_type }}')">
+                  onclick="openEdit({{ r.emp.id }}, {{ r.emp.name|tojson }}, {{ r.emp.email|tojson }}, {{ r.emp.staff_type|tojson }})">
                   ✏️ Edit
                 </button>
                 <form method="POST" action="/admin/delete_user/{{ r.emp.id }}" style="display:inline;">
                   <button type="submit" class="btn-sm btn-delete"
-                    onclick="return confirm('Delete {{ r.emp.name|e }}? This removes all their KPI data.')">
+                    onclick="return confirmDelete({{ r.emp.name|tojson }})">
                     🗑️
                   </button>
                 </form>
@@ -583,47 +583,122 @@ tbody tr:hover td { background: rgba(219,234,254,0.3); }
     <div class="card-header">
       <div class="card-title">⚠️ Post-Delivery Complaint — Minus Marking</div>
     </div>
-    <form method="POST" action="/admin/complaint" autocomplete="off">
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px;">
+    <form method="POST" action="/admin/complaint" autocomplete="off" id="complaintForm">
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-bottom:12px;">
         <div class="field">
           <label>Complaint Type</label>
-          <select name="complaint_type" required>
-            <option value="delivery">🚚 Wrong Delivery (Picker most liable)</option>
-            <option value="missing">📦 Missing Items (Picker + Checker)</option>
-            <option value="quality">⚕️ Quality Issue (Purchaser most liable)</option>
+          <select name="complaint_type" id="cmp_type" required onchange="calcSuggestions()">
+            <option value="delivery">🚚 Wrong Delivery</option>
+            <option value="missing">📦 Missing Items</option>
+            <option value="quality">⚕️ Quality Issue</option>
+            <option value="damage">💥 Damage</option>
           </select>
         </div>
         <div class="field">
+          <label>Target Staff (optional)</label>
+          <select name="target_emp_id" id="cmp_target" style="width:100%;padding:10px 13px;border:1.5px solid var(--border);border-radius:9px;background:rgba(255,255,255,0.8);font-size:14px;font-family:inherit;color:var(--text);">
+            <option value="">— Apply to whole role —</option>
+            {% if all_staff %}
+              {% for s in all_staff %}
+              <option value="{{ s.id }}" data-type="{{ s.staff_type }}">{{ s.name }} ({{ s.staff_type|title }})</option>
+              {% endfor %}
+            {% endif %}
+          </select>
+          <small style="font-size:11px;color:var(--muted);margin-top:4px;display:block;">Leave blank to apply to whole role. Select a person to pin the deduction only to them.</small>
+        </div>
+        <div class="field">
           <label>Number of Mistakes</label>
-          <input type="number" name="mistake_count" min="1" max="50" value="1" required>
-          <small>System will suggest deductions based on count</small>
+          <input type="number" name="mistake_count" id="cmp_count" min="1" max="50" value="1" required oninput="calcSuggestions()">
         </div>
       </div>
       <div class="field" style="margin-bottom:12px;">
         <label>Complaint Description</label>
         <input type="text" name="description" placeholder="e.g. Wrong medicines sent to Retailer XYZ, Order #123" required style="width:100%;">
       </div>
-      <div style="background:rgba(254,242,242,0.7);border:1px solid #fecaca;border-radius:10px;padding:12px;margin-bottom:12px;">
-        <div style="font-size:11px;font-weight:800;color:#dc2626;text-transform:uppercase;margin-bottom:8px;">Override Suggested Deductions (leave blank to use system suggestion)</div>
+
+      <!-- AUTO-SUGGESTION BOX -->
+      <div style="background:rgba(254,242,242,0.7);border:1.5px solid #fecaca;border-radius:12px;padding:14px;margin-bottom:12px;">
+        <div style="font-size:11px;font-weight:800;color:#dc2626;text-transform:uppercase;margin-bottom:10px;">
+          ⚡ System Suggested Deductions (based on mistake type & count)
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:12px;">
+          <div style="background:#fff;border:1px solid #fecaca;border-radius:10px;padding:10px;text-align:center;">
+            <div style="font-size:10px;font-weight:800;color:#1d4ed8;margin-bottom:4px;">📦 PICKER</div>
+            <div style="font-size:24px;font-weight:900;color:#dc2626;" id="sug_picker">0</div>
+            <div style="font-size:9px;color:var(--muted);">suggested pts</div>
+            <div style="font-size:9px;color:#6b7280;margin-top:4px;" id="sug_picker_reason">—</div>
+          </div>
+          <div style="background:#fff;border:1px solid #fecaca;border-radius:10px;padding:10px;text-align:center;">
+            <div style="font-size:10px;font-weight:800;color:#6d28d9;margin-bottom:4px;">🔍 CHECKER</div>
+            <div style="font-size:24px;font-weight:900;color:#dc2626;" id="sug_checker">0</div>
+            <div style="font-size:9px;color:var(--muted);">suggested pts</div>
+            <div style="font-size:9px;color:#6b7280;margin-top:4px;" id="sug_checker_reason">—</div>
+          </div>
+          <div style="background:#fff;border:1px solid #fecaca;border-radius:10px;padding:10px;text-align:center;">
+            <div style="font-size:10px;font-weight:800;color:#16a34a;margin-bottom:4px;">🛒 PURCHASER</div>
+            <div style="font-size:24px;font-weight:900;color:#dc2626;" id="sug_purchaser">0</div>
+            <div style="font-size:9px;color:var(--muted);">suggested pts</div>
+            <div style="font-size:9px;color:#6b7280;margin-top:4px;" id="sug_purchaser_reason">—</div>
+          </div>
+        </div>
+        <div style="font-size:10px;font-weight:800;color:#374151;margin-bottom:8px;">Admin Final Deductions (override if needed):</div>
         <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;">
           <div class="field">
-            <label style="color:#1d4ed8;">📦 Picker Deduction (pts)</label>
-            <input type="number" name="picker_final" min="0" max="30" step="0.5" placeholder="Auto-suggested">
+            <label style="color:#1d4ed8;font-size:11px;">📦 Picker (pts)</label>
+            <input type="number" name="picker_final" id="inp_picker" min="0" max="30" step="0.5" placeholder="Use suggestion">
           </div>
           <div class="field">
-            <label style="color:#6d28d9;">🔍 Checker Deduction (pts)</label>
-            <input type="number" name="checker_final" min="0" max="30" step="0.5" placeholder="Auto-suggested">
+            <label style="color:#6d28d9;font-size:11px;">🔍 Checker (pts)</label>
+            <input type="number" name="checker_final" id="inp_checker" min="0" max="30" step="0.5" placeholder="Use suggestion">
           </div>
           <div class="field">
-            <label style="color:#16a34a;">🛒 Purchaser Deduction (pts)</label>
-            <input type="number" name="purchaser_final" min="0" max="30" step="0.5" placeholder="Auto-suggested">
+            <label style="color:#16a34a;font-size:11px;">🛒 Purchaser (pts)</label>
+            <input type="number" name="purchaser_final" id="inp_purchaser" min="0" max="30" step="0.5" placeholder="Use suggestion">
           </div>
         </div>
       </div>
       <div style="display:flex;justify-content:flex-end;">
-        <button type="submit" style="background:#dc2626;color:#fff;border:none;padding:10px 24px;border-radius:10px;font-weight:700;cursor:pointer;font-size:13px;">⚠️ Record Complaint & Apply Minus</button>
+        <button type="submit" style="background:#dc2626;color:#fff;border:none;padding:10px 28px;border-radius:10px;font-weight:700;cursor:pointer;font-size:13px;">⚠️ Record Complaint & Apply Minus Points</button>
       </div>
     </form>
+
+    <script>
+    // Auto-suggestion calculator matching backend WEIGHTS
+    var WEIGHTS = {
+      delivery: {picker:1.0, checker:0.6, purchaser:0.2},
+      missing:  {picker:1.0, checker:0.7, purchaser:0.1},
+      quality:  {picker:0.2, checker:0.5, purchaser:1.0},
+      damage:   {picker:0.5, checker:0.3, purchaser:0.8}
+    };
+    var BASE = {delivery:4.0, missing:6.0, quality:5.0, damage:5.0};
+    var REASONS = {
+      delivery: {picker:"packed wrong item", checker:"missed during check", purchaser:"not responsible"},
+      missing:  {picker:"missed item in pick", checker:"should have caught", purchaser:"minimal liability"},
+      quality:  {picker:"not responsible", checker:"partial liability", purchaser:"sourced bad stock"},
+      damage:   {picker:"handling damage", checker:"partial liability", purchaser:"storage/sourcing"}
+    };
+    function calcSuggestions(){
+      var type  = document.getElementById('cmp_type').value;
+      var count = Math.min(parseInt(document.getElementById('cmp_count').value)||1, 8);
+      var base  = BASE[type]||4;
+      var w     = WEIGHTS[type]||WEIGHTS.delivery;
+      var r     = REASONS[type]||REASONS.delivery;
+      var sp = Math.min(Math.round(base*count*w.picker*10)/10, 25);
+      var sc = Math.min(Math.round(base*count*w.checker*10)/10, 25);
+      var su = Math.min(Math.round(base*count*w.purchaser*10)/10, 25);
+      document.getElementById('sug_picker').textContent    = sp;
+      document.getElementById('sug_checker').textContent   = sc;
+      document.getElementById('sug_purchaser').textContent = su;
+      document.getElementById('sug_picker_reason').textContent    = r.picker;
+      document.getElementById('sug_checker_reason').textContent   = r.checker;
+      document.getElementById('sug_purchaser_reason').textContent = r.purchaser;
+      // Auto-fill admin inputs with suggestions if empty
+      if(!document.getElementById('inp_picker').value)    document.getElementById('inp_picker').placeholder    = 'Suggested: '+sp;
+      if(!document.getElementById('inp_checker').value)   document.getElementById('inp_checker').placeholder   = 'Suggested: '+sc;
+      if(!document.getElementById('inp_purchaser').value) document.getElementById('inp_purchaser').placeholder = 'Suggested: '+su;
+    }
+    document.addEventListener('DOMContentLoaded', calcSuggestions);
+    </script>
 
     {% if open_complaints %}
     <div style="margin-top:16px;border-top:1px solid var(--border);padding-top:14px;">
@@ -1007,7 +1082,16 @@ function openEdit(id, name, email, stype) {
   if(sel) sel.value = stype;
   var modal = document.getElementById('editModal');
   if(modal) modal.classList.add('open');
-  console.log("openEdit called:", id, name, email, stype, "action:", f.action);
+}
+
+function confirmDelete(name){
+  var typed = prompt('This will PERMANENTLY delete ' + name + ' and all their KPI data.\n\nType the name "' + name + '" to confirm:');
+  if(typed === null) return false;
+  if(typed.trim().toLowerCase() !== name.trim().toLowerCase()){
+    alert('Name did not match. Delete cancelled.');
+    return false;
+  }
+  return true;
 }
 function closeEdit() {
   var modal = document.getElementById('editModal');
@@ -1044,26 +1128,6 @@ function switchLB(tab){
   document.getElementById('lb-alltime').classList.toggle('active', tab==='alltime');
   document.getElementById('lb-week').classList.toggle('active', tab==='week');
 }
-
-function openEdit(id, name, email, stype) {
-  document.getElementById('editForm').action = '/admin/edit_user/' + id;
-  document.getElementById('edit-name').value  = name;
-  document.getElementById('edit-email').value = email;
-  document.getElementById('edit-type').value  = stype;
-  document.getElementById('editModal').classList.add('open');
-}
-
-function closeEdit() {
-  var modal = document.getElementById('editModal');
-  if(modal) modal.classList.remove('open');
-}
-
-// Close modal on backdrop click
-document.addEventListener('DOMContentLoaded', function(){
-  document.getElementById('editModal').addEventListener('click', function(e){
-    if(e.target === this) closeEdit();
-  });
-});
 </script>
 </body>
 </html>
