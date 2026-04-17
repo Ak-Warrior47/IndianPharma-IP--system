@@ -348,6 +348,22 @@ table.htable tbody tr:hover td { background: var(--bg); }
           <label>Packing Done</label>
           <input type="number" name="packing_done" min="0" value="0">
         </div>
+        <div class="field">
+          <label>Table Clean</label>
+          <input type="hidden" name="table_clean" id="ck_table_clean_val" value="1">
+          <div class="yn-group">
+            <button type="button" class="yn-btn yes active" id="ck_tc_yes" onclick="document.getElementById('ck_table_clean_val').value='1';this.classList.add('active');document.getElementById('ck_tc_no').classList.remove('active')">✅ Yes</button>
+            <button type="button" class="yn-btn no" id="ck_tc_no" onclick="document.getElementById('ck_table_clean_val').value='0';this.classList.add('active');document.getElementById('ck_tc_yes').classList.remove('active')">❌ No</button>
+          </div>
+        </div>
+        <div class="field">
+          <label>Sweeping Done</label>
+          <input type="hidden" name="sweep_done" id="ck_sweep_done_val" value="1">
+          <div class="yn-group">
+            <button type="button" class="yn-btn yes active" id="ck_sd_yes" onclick="document.getElementById('ck_sweep_done_val').value='1';this.classList.add('active');document.getElementById('ck_sd_no').classList.remove('active')">✅ Yes</button>
+            <button type="button" class="yn-btn no" id="ck_sd_no" onclick="document.getElementById('ck_sweep_done_val').value='0';this.classList.add('active');document.getElementById('ck_sd_yes').classList.remove('active')">❌ No</button>
+          </div>
+        </div>
         {% elif staff_type == 'purchaser' %}
         <!-- PURCHASER LIVE BANNER -->
         <div style="grid-column:span 2;display:flex;gap:10px;margin-bottom:4px;">
@@ -402,10 +418,39 @@ table.htable tbody tr:hover td { background: var(--bg); }
           <label>7. Items Racked</label>
           <input type="number" name="rack_organized" min="0" value="0" required>
         </div>
+        <div class="field">
+          <label>Table Clean</label>
+          <input type="hidden" name="table_clean" id="pur_table_val" value="1">
+          <div class="yn-group">
+            <button type="button" class="yn-btn yes active" id="pur_table_yes" onclick="setYN('pur_table','1')">✅ Yes</button>
+            <button type="button" class="yn-btn no" id="pur_table_no" onclick="setYN('pur_table','0')">❌ No</button>
+          </div>
+        </div>
+        <div class="field">
+          <label>Sweeping Done</label>
+          <input type="hidden" name="sweep_done" id="pur_sweep_val" value="1">
+          <div class="yn-group">
+            <button type="button" class="yn-btn yes active" id="pur_sweep_yes" onclick="setYN('pur_sweep','1')">✅ Yes</button>
+            <button type="button" class="yn-btn no" id="pur_sweep_no" onclick="setYN('pur_sweep','0')">❌ No</button>
+          </div>
+        </div>
         <div class="field" style="grid-column:span 2;background:rgba(238,244,255,0.5);border:1px solid var(--border);border-radius:10px;padding:12px;font-size:12px;color:var(--muted);">
           ⏱️ Working time is fixed at <strong>9 hours</strong> per day
         </div>
         {% else %}
+        <!-- PICKER LIVE BANNER -->
+        <div style="grid-column:span 2;display:flex;gap:10px;margin-bottom:4px;flex-wrap:wrap;">
+          <div style="flex:1;min-width:160px;background:rgba(238,244,255,0.85);border:1.5px solid rgba(29,78,216,0.25);border-radius:13px;padding:14px 18px;text-align:center;">
+            <div style="font-size:10px;font-weight:800;color:var(--blue);text-transform:uppercase;letter-spacing:.7px;margin-bottom:4px;">Bill Fulfilment</div>
+            <div style="font-size:30px;font-weight:800;color:#1e3a8a;" id="live_bill_fulfilment">0%</div>
+            <div style="font-size:11px;color:var(--muted);margin-top:2px;">Picked ÷ Received</div>
+          </div>
+          <div style="flex:1;min-width:160px;background:rgba(240,253,244,0.85);border:1.5px solid rgba(22,163,74,0.25);border-radius:13px;padding:14px 18px;text-align:center;">
+            <div style="font-size:10px;font-weight:800;color:#16a34a;text-transform:uppercase;letter-spacing:.7px;margin-bottom:4px;">Accuracy</div>
+            <div style="font-size:30px;font-weight:800;color:#14532d;" id="live_picker_acc">—</div>
+            <div style="font-size:11px;color:var(--muted);margin-top:2px;">Picked ÷ (Picked+Missed)</div>
+          </div>
+        </div>
         <div class="field">
           <label>★ Total Bills Received to Pick</label>
           <input type="number" name="total_bills_received" id="f_total_bills" min="0" value="0" required oninput="updatePickerFulfilment()">
@@ -413,15 +458,15 @@ table.htable tbody tr:hover td { background: var(--bg); }
         </div>
         <div class="field">
           <label>Sales Bill Picked</label>
-          <input type="number" name="sales_bills_open" min="0" value="0" required>
+          <input type="number" name="sales_bills_open" id="f_sb_picked" min="0" value="0" required oninput="updatePickerFulfilment()">
         </div>
         <div class="field">
           <label>Items Picked</label>
-          <input type="number" name="picked" min="0" value="0" required>
+          <input type="number" name="picked" id="f_picked" min="0" value="0" required oninput="updatePickerFulfilment()">
         </div>
         <div class="field">
           <label>Items Missed</label>
-          <input type="number" name="missed" min="0" value="0" required>
+          <input type="number" name="missed" id="f_missed" min="0" value="0" required oninput="updatePickerFulfilment()">
         </div>
         <div class="field">
           <label>CS Sales Open</label>
@@ -438,15 +483,26 @@ table.htable tbody tr:hover td { background: var(--bg); }
           <small>0 = poor, 10 = perfect</small>
         </div>
         <div class="field">
-          <label>Table Clean (0-10)</label>
-          <input type="number" name="table_clean" min="0" max="10" value="10" required>
-          <small>0 = poor, 10 = perfect</small>
+          <label>Table Clean</label>
+          <input type="hidden" name="table_clean" id="table_clean_val" value="1">
+          <div class="yn-group">
+            <button type="button" class="yn-btn yes active" id="table_clean_yes" onclick="setYN('table_clean','1')">✅ Yes</button>
+            <button type="button" class="yn-btn no" id="table_clean_no" onclick="setYN('table_clean','0')">❌ No</button>
+          </div>
+        </div>
+        <div class="field">
+          <label>Sweeping Done</label>
+          <input type="hidden" name="sweep_done" id="sweep_done_val" value="1">
+          <div class="yn-group">
+            <button type="button" class="yn-btn yes active" id="sweep_done_yes" onclick="setYN('sweep_done','1')">✅ Yes</button>
+            <button type="button" class="yn-btn no" id="sweep_done_no" onclick="setYN('sweep_done','0')">❌ No</button>
+          </div>
         </div>
         {% endif %}
         {% endif %}
       </div>
       <p style="font-size:12px;color:var(--muted);margin-bottom:14px;padding:10px 14px;background:rgba(240,253,244,0.8);border-radius:9px;border:1px solid rgba(22,163,74,0.2);">⏱ Working time is fixed at <strong>9 hours</strong> per day for all speed calculations.</p>
-      <button type="submit" class="btn-submit" onclick="return validateAndSubmit(event)">✅ Submit Today's Metrics</button>
+      <button type="submit" class="btn-submit">✅ Submit Today's Metrics</button>
     </form>
     {% endif %}
   </div>
@@ -458,7 +514,6 @@ table.htable tbody tr:hover td { background: var(--bg); }
       <div class="section-label">7-Day Accuracy Trend</div>
       <div class="chart-wrap">
         <canvas id="trendChart" role="img" aria-label="7-day performance trend chart">Performance trend over 7 days.</canvas>
-        <canvas id="trendChart" style="display:none"></canvas>
       </div>
     </div>
     <div class="card">
@@ -557,7 +612,7 @@ table.htable tbody tr:hover td { background: var(--bg); }
             <td>{{ e.sales_bills_open }}</td>
             <td>{{ e.packing_done }}</td>
             <td>{{ e.rack_organized or 0 }}/10</td>
-            <td>{{ e.table_clean or 0 }}/10</td>
+            <td>{% if e.table_clean %}✅{% else %}❌{% endif %}</td>
             {% endif %}
             <td>{{ "%.1f" | format(e.total_time or 0) }}</td>
           </tr>
@@ -630,6 +685,17 @@ table.htable tbody tr:hover td { background: var(--bg); }
   });
 })();
 
+
+function setYN(field, val){
+  // defined below in consolidated form — kept here as a forward declaration placeholder
+  var valEl = document.getElementById(field+'_val');
+  var yesEl = document.getElementById(field+'_yes');
+  var noEl  = document.getElementById(field+'_no');
+  if(valEl) valEl.value = val;
+  if(yesEl) yesEl.classList.toggle('active', val==='1');
+  if(noEl)  noEl.classList.toggle('active', val==='0');
+}
+
 function updatePurchaserTotals(){
   var br  = parseInt(document.getElementById('pur_br')?.value||0)||0;
   var bc  = parseInt(document.getElementById('pur_bc')?.value||0)||0;
@@ -650,12 +716,26 @@ function updatePurchaserTotals(){
 
 function updatePickerFulfilment(){
   var tb = parseInt(document.getElementById('f_total_bills')?.value||0)||0;
-  var sb = parseInt(document.querySelector('[name="sales_bills_open"]')?.value||0)||0;
-  var el = document.getElementById('live_bill_fulfilment');
-  if(el){
+  var sb = parseInt(document.getElementById('f_sb_picked')?.value||0)||0;
+  var p  = parseInt(document.getElementById('f_picked')?.value||0)||0;
+  var m  = parseInt(document.getElementById('f_missed')?.value||0)||0;
+
+  var bf = document.getElementById('live_bill_fulfilment');
+  if(bf){
     var pct = tb > 0 ? Math.min(Math.round(sb/tb*100),100) : 0;
-    el.textContent = pct + '%';
-    el.style.color = pct >= 95 ? '#16a34a' : pct >= 85 ? '#d97706' : '#dc2626';
+    bf.textContent = pct + '%';
+    bf.style.color = pct >= 95 ? '#16a34a' : pct >= 85 ? '#d97706' : '#dc2626';
+  }
+
+  var ac = document.getElementById('live_picker_acc');
+  if(ac){
+    var t = p + m;
+    if(t === 0){ ac.textContent = '—'; ac.style.color = '#64748b'; }
+    else {
+      var a = Math.round(p/t*1000)/10;
+      ac.textContent = a + '%';
+      ac.style.color = a >= 95 ? '#16a34a' : a >= 85 ? '#d97706' : '#dc2626';
+    }
   }
 }
 function updateCheckerTotals(){
@@ -676,7 +756,15 @@ function updateCheckerTotals(){
   if(tPD){ tPD.textContent = pd; tPD.style.color = pd > 0 ? '#dc2626' : '#16a34a'; }
   if(tCL){ tCL.textContent = clearance + '%'; tCL.style.color = clearance >= 90 ? '#16a34a' : clearance >= 75 ? '#d97706' : '#dc2626'; }
 }
-function setYN(f,v){document.getElementById(f+'_val').value=v;document.getElementById(f+'_yes').classList.toggle('active',v==='yes');document.getElementById(f+'_no').classList.toggle('active',v==='no');}
+function setYN(f,v){
+  // alias for consistency — same behaviour as setYN above
+  var valEl = document.getElementById(f+'_val');
+  var yesEl = document.getElementById(f+'_yes');
+  var noEl  = document.getElementById(f+'_no');
+  if(valEl) valEl.value = v;
+  if(yesEl) yesEl.classList.toggle('active', v==='1');
+  if(noEl)  noEl.classList.toggle('active', v==='0');
+}
 </script>
 
 <script>
@@ -697,22 +785,41 @@ document.addEventListener('DOMContentLoaded', function(){
   });
 });
 
-// Empty field warning before submit
+// Empty field warning before submit + disable button to prevent double-submit
 function validateAndSubmit(e){
-  var form = document.querySelector('form[method="POST"]');
+  var form = e.target.tagName === 'FORM' ? e.target : document.querySelector('form[method="POST"]');
+  if(!form) return true;
+
+  // Collect fields that are empty (not just zero — zero is a valid value)
   var empty = [];
   form.querySelectorAll('input[required]:not([type="hidden"])').forEach(function(inp){
-    if(!inp.value || inp.value === '0' || inp.value === ''){
+    if(inp.value === '' || inp.value === null){
       var label = inp.closest('.field')?.querySelector('label')?.textContent || inp.name;
-      empty.push(label.trim());
+      empty.push(label.trim().replace(/^★\s*/, ''));
     }
   });
+
   if(empty.length > 0){
-    var msg = 'These fields are empty or 0:\n• ' + empty.join('\n• ') + '\n\nDo you want to continue anyway?';
+    var msg = 'These required fields are empty:\n• ' + empty.join('\n• ') + '\n\nContinue anyway?';
     if(!confirm(msg)){
       e.preventDefault();
       return false;
     }
+  }
+
+  // Disable submit button to block double-submission
+  var btn = form.querySelector('button[type="submit"]');
+  if(btn){
+    btn.disabled = true;
+    btn.dataset.origText = btn.innerHTML;
+    btn.innerHTML = '⏳ Submitting...';
+    // Re-enable after 10s in case of network failure
+    setTimeout(function(){
+      if(btn.disabled){
+        btn.disabled = false;
+        if(btn.dataset.origText) btn.innerHTML = btn.dataset.origText;
+      }
+    }, 10000);
   }
   return true;
 }
