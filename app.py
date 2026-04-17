@@ -696,16 +696,16 @@ def dashboard():
                     total_mins       = min(gf("total_mins"), 480)
                     check_mins       = min(gf("check_mins"), 480)
 
-                   if staff_type == "purchaser":
-                        sales_bills_open     = gi("sales_bills_open")
-                        checked              = gi("checked")
-                        picked               = gi("picked")
-                        errors_found         = gi("errors_found")
-                        cs_sales_open        = gi("cs_sales_open")
-                        packing_done         = gi("packing_done")
-                        rack_organized       = gi("rack_organized")
-                        missed               = 0
-                        bills_received       = 0
+                    if staff_type == "purchaser":
+                        sales_bills_open = gi("sales_bills_open")   # PO Bills Received
+                        checked          = gi("checked")             # PO Bills Checked
+                        picked           = gi("picked")              # PO Bill Entry
+                        errors_found     = gi("errors_found")        # Number of Items
+                        cs_sales_open    = gi("cs_sales_open")       # CS in PO Open
+                        packing_done     = gi("packing_done")        # CS in PO Received
+                        rack_organized   = gi("rack_organized")      # Items Racked
+                        missed           = 0
+                        bills_received   = 0
                         pending_bills_manual = 0
                         total_bills_received = 0
                     elif staff_type == "checker":
@@ -715,30 +715,28 @@ def dashboard():
                         missed               = 0
                         bills_received       = gi("bills_received")
                         pending_bills_manual = gi("pending_bills_manual")
-                        total_bills_received = 0
-                    else:  # picker
-                        picked               = gi("picked")
-                        missed               = gi("missed")
-                        checked              = 0
-                        errors_found         = 0
-                        bills_received       = 0
-                        pending_bills_manual = 0
-                        total_bills_received = gi("total_bills_received")
+                    else:
+                        picked       = gi("picked")
+                        missed       = gi("missed")
+                        checked      = 0
+                        errors_found = 0
 
                     ne = KPIEntry(
-                        emp_id=emp_id,
-                        sales_bills_open=sales_bills_open,
-                        picked=picked,
-                        missed=missed,
-                        cs_sales_open=cs_sales_open,
-                        packing_done=packing_done,
-                        total_time=round(total_mins / 60, 3),
-                        checked=checked,
-                        errors_found=errors_found,
-                        check_time=round(check_mins / 60, 3),
-                        bills_received=bills_received,
-                        pending_bills_manual=pending_bills_manual,
-                        total_bills_received=total_bills_received,
+                        emp_id               = emp_id,
+                        sales_bills_open     = sales_bills_open,
+                        picked               = picked,
+                        missed               = missed,
+                        cs_sales_open        = cs_sales_open,
+                        packing_done         = packing_done,
+                        rack_organized       = gi("rack_organized") if staff_type in ("picker","purchaser") else 0,
+                        table_clean          = gi("table_clean")    if staff_type == "picker" else 0,
+                        total_time           = 9.0,
+                        checked              = checked,
+                        errors_found         = errors_found,
+                        check_time           = 9.0,
+                        bills_received       = bills_received       if staff_type == "checker" else 0,
+                        pending_bills_manual = pending_bills_manual if staff_type == "checker" else 0,
+                        total_bills_received = total_bills_received if staff_type == "picker"  else 0,
                         entry_date=today
                     )
                     db.session.add(ne)
@@ -1240,15 +1238,12 @@ def past_entry(date_str):
     if request.method == "POST":
         try:
             def gi(k): return max(0, int(request.form.get(k, 0) or 0))
-            def gf(k): return max(0, float(request.form.get(k, 0) or 0))
 
-            sales_bills_open = gi("sales_bills_open")
-            cs_sales_open    = gi("cs_sales_open")
-            packing_done     = gi("packing_done")
-            total_mins       = min(gf("total_mins"), 480)
-            check_mins       = min(gf("check_mins"), 480)
-            
-    if staff_type == "purchaser":
+            # 9hr constant — no time input field
+            FIXED_TIME = 9.0
+
+            # Role-specific field extraction
+            if staff_type == "purchaser":
                 sales_bills_open     = gi("sales_bills_open")
                 checked              = gi("checked")
                 picked               = gi("picked")
@@ -1256,21 +1251,32 @@ def past_entry(date_str):
                 cs_sales_open        = gi("cs_sales_open")
                 packing_done         = gi("packing_done")
                 rack_organized       = gi("rack_organized")
+                table_clean          = 0
                 missed               = 0
                 bills_received       = 0
                 pending_bills_manual = 0
                 total_bills_received = 0
             elif staff_type == "checker":
+                sales_bills_open     = gi("sales_bills_open")
                 checked              = gi("checked")
                 errors_found         = gi("errors_found")
                 picked               = gi("picked")
                 missed               = 0
+                cs_sales_open        = gi("cs_sales_open")
+                packing_done         = gi("packing_done")
+                rack_organized       = 0
+                table_clean          = 0
                 bills_received       = gi("bills_received")
                 pending_bills_manual = gi("pending_bills_manual")
                 total_bills_received = 0
             else:  # picker
+                sales_bills_open     = gi("sales_bills_open")
                 picked               = gi("picked")
                 missed               = gi("missed")
+                cs_sales_open        = gi("cs_sales_open")
+                packing_done         = gi("packing_done")
+                rack_organized       = gi("rack_organized")
+                table_clean          = gi("table_clean")
                 checked              = 0
                 errors_found         = 0
                 bills_received       = 0
@@ -1278,16 +1284,18 @@ def past_entry(date_str):
                 total_bills_received = gi("total_bills_received")
 
             ne = KPIEntry(
-                emp_id           = emp_id,
-                sales_bills_open = sales_bills_open,
-                picked           = picked,
-                missed           = missed,
-                cs_sales_open    = cs_sales_open,
-                packing_done     = packing_done,
-                total_time       = round(total_mins / 60, 3),
-                checked          = checked,
-                errors_found     = errors_found,
-                check_time       = round(check_mins / 60, 3),
+                emp_id               = emp_id,
+                sales_bills_open     = sales_bills_open,
+                picked               = picked,
+                missed               = missed,
+                cs_sales_open        = cs_sales_open,
+                packing_done         = packing_done,
+                rack_organized       = rack_organized,
+                table_clean          = table_clean,
+                total_time           = FIXED_TIME,
+                checked              = checked,
+                errors_found         = errors_found,
+                check_time           = FIXED_TIME,
                 bills_received       = bills_received,
                 pending_bills_manual = pending_bills_manual,
                 total_bills_received = total_bills_received,
