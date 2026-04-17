@@ -963,13 +963,20 @@ def staff_detail(emp_id):
                 else:
                     heatmap[str(e.entry_date)] = e.accuracy
 
-        # Compute ranking
+        # Compute ranking and build leaderboards (role + overall)
+        role_leaderboard = []
+        overall_leaderboard = []
+        emp_overall_rank = None
+        emp_role_rank = None
         try:
             all_staff   = Employee.query.filter_by(is_admin=False).all()
             all_sc, role_sc = [], []
+            _stats_by_id = {}
+            _name_by_id  = {s.id: (s.name, s.staff_type) for s in all_staff}
             for s in all_staff:
                 s_stats = build_analytics(KPIEntry.query.filter_by(emp_id=s.id).all(), s.staff_type, emp_id=s.id)
                 if s_stats:
+                    _stats_by_id[s.id] = s_stats
                     all_sc.append((s.id, s_stats['eff_score']))
                     if s.staff_type == emp.staff_type:
                         role_sc.append((s.id, s_stats['eff_score']))
@@ -977,13 +984,51 @@ def staff_detail(emp_id):
             role_sc.sort(key=lambda x: x[1], reverse=True)
             emp_overall_rank = next((i+1 for i,(sid,_) in enumerate(all_sc)  if sid==emp.id), None)
             emp_role_rank    = next((i+1 for i,(sid,_) in enumerate(role_sc) if sid==emp.id), None)
+
+            # Top 5 leaderboards (and always include this staff member's position)
+            def _build_lb(sorted_list, limit=5):
+                out = []
+                for rank, (sid, score) in enumerate(sorted_list[:limit], start=1):
+                    nm, st = _name_by_id.get(sid, ("—", ""))
+                    st_stats = _stats_by_id.get(sid, {})
+                    out.append({
+                        "rank": rank,
+                        "id": sid,
+                        "name": nm,
+                        "staff_type": st,
+                        "score": score,
+                        "grade": st_stats.get("grade", "—"),
+                        "is_self": sid == emp.id,
+                    })
+                # Ensure this employee shown even if outside top 5
+                if not any(r["is_self"] for r in out):
+                    for rank, (sid, score) in enumerate(sorted_list, start=1):
+                        if sid == emp.id:
+                            nm, st = _name_by_id.get(sid, ("—", ""))
+                            st_stats = _stats_by_id.get(sid, {})
+                            out.append({
+                                "rank": rank,
+                                "id": sid,
+                                "name": nm,
+                                "staff_type": st,
+                                "score": score,
+                                "grade": st_stats.get("grade", "—"),
+                                "is_self": True,
+                            })
+                            break
+                return out
+
+            role_leaderboard    = _build_lb(role_sc)
+            overall_leaderboard = _build_lb(all_sc)
         except Exception as re_err:
-            emp_overall_rank = emp_role_rank = None
+            logger.error(f"staff_detail ranking: {re_err}")
 
         return render_template("staff_detail.html",
             emp=emp,
             emp_overall_rank=emp_overall_rank,
             emp_role_rank=emp_role_rank,
+            role_leaderboard=role_leaderboard,
+            overall_leaderboard=overall_leaderboard,
             entries=entries,
             a_stats=a_stats,
             d_stats=d_stats,
