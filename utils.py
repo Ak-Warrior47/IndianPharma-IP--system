@@ -289,6 +289,12 @@ def generate_visual_pdf(emp_name, payload):
         )
         if deduction > 0:
             meta_line += f"  &nbsp;&nbsp; <b><font color='{ROSE}'>Minus Marking: −{deduction} pts</font></b>"
+        # Admin adjustment
+        admin_adj = all_s.get("admin_adjustment", 0) or 0
+        if admin_adj and admin_adj != 0:
+            adj_clr = EMERALD if admin_adj > 0 else ROSE
+            adj_sign = "+" if admin_adj > 0 else ""
+            meta_line += f"  &nbsp;&nbsp; <b><font color='{adj_clr}'>Admin Adj: {adj_sign}{admin_adj} pts</font></b>"
 
         elems += [
             Paragraph("PHARMA IP SYSTEM", title_st),
@@ -321,33 +327,39 @@ def generate_visual_pdf(emp_name, payload):
 
         if stype == "checker":
             pts_def = [
-                ("Check Speed",          _gv(all_s, "check_speed"),            80.0, 30),
-                ("Clearance Rate",       _gv(all_s, "clearance_rate", 100),    100.0, 25),
-                ("Clean Check %",        _gv(all_s, "normal_pct"),             100.0, 20),
-                ("Consistency",          _gv(all_s, "consistency"),            100.0, 10),
-                ("Potential Efficiency", _gv(all_s, "potential_eff"),          100.0, 8),
-                ("Volume",               _gv(all_s, "tck_total"),              500.0, 5),
-                ("Sweep Bonus",          _gv(all_s, "tsd"),                    max(days, 1), 2),
+                ("Check Speed",          _gv(all_s, "check_speed"),                 80.0, 22),
+                ("Clearance Rate",       _gv(all_s, "clearance_rate", 100),        100.0, 22),
+                ("VWCR",                 _gv(all_s, "vwcr"),                       120.0, 20),
+                ("Cleaner Rate",         _gv(all_s, "cleaner_rate"),               100.0, 8),
+                ("Efficiency Ratio",     _gv(all_s, "efficiency_ratio") * 100,     100.0, 8),
+                ("Log Consistency",      _gv(all_s, "consistency"),                100.0, 8),
+                ("Potential Efficiency", _gv(all_s, "potential_eff"),              100.0, 5),
+                ("Workspace",            _gv(all_s, "workspace_score"),            100.0, 4),
+                ("Sweep Bonus",          _gv(all_s, "tsd"),                        max(days, 1), 3),
             ]
         elif stype == "purchaser":
             pts_def = [
-                ("Bill Processing Rate", _gv(all_s, "pur_bill_rate"),          100.0, 28),
-                ("CS Fulfilment",        _gv(all_s, "pur_cs_fulfilment"),      100.0, 23),
-                ("Racking Efficiency",   _gv(all_s, "pur_racking_eff"),        100.0, 18),
-                ("Processing Speed",     _gv(all_s, "pur_speed"),              60.0, 12),
-                ("Bill Entry Rate",      _gv(all_s, "pur_entry_rate"),         100.0, 8),
-                ("Workspace",            _gv(all_s, "workspace_score"),        100.0, 4),
-                ("Sweep Bonus",          _gv(all_s, "tsd"),                    max(days, 1), 2),
+                ("Bill Processing Rate", _gv(all_s, "pur_bill_rate"),              100.0, 25),
+                ("CS Fulfilment",        _gv(all_s, "pur_cs_fulfilment"),          100.0, 20),
+                ("Racking Efficiency",   _gv(all_s, "pur_racking_eff"),            100.0, 15),
+                ("Processing Speed",     _gv(all_s, "pur_speed"),                   60.0, 10),
+                ("Bill Entry Rate",      _gv(all_s, "pur_entry_rate"),             100.0, 8),
+                ("VWCR",                 _gv(all_s, "vwcr"),                       120.0, 8),
+                ("Pending Control",      max(0, 100 - (_gv(all_s, "pur_pending_bills") / max(_gv(all_s, "pur_bills_received", 1), 1) * 100)), 100.0, 5),
+                ("Efficiency Ratio",     _gv(all_s, "efficiency_ratio") * 100,     100.0, 4),
+                ("Workspace",            _gv(all_s, "workspace_score"),            100.0, 3),
+                ("Log Consistency",      _gv(all_s, "consistency"),                100.0, 2),
             ]
         else:  # picker
             pts_def = [
-                ("Pick Accuracy",        _gv(all_s, "pick_acc"),               100.0, 25),
-                ("Bill Fulfilment",      _gv(all_s, "bill_fulfilment"),        100.0, 20),
-                ("Pick Speed",           _gv(all_s, "pick_speed"),             250.0, 18),
-                ("Packing Efficiency",   _gv(all_s, "packing_eff"),            100.0, 12),
-                ("Workspace",            _gv(all_s, "workspace_score"),        100.0, 10),
-                ("CS Fulfilment",        _gv(all_s, "cs_fulfilment"),          100.0, 8),
-                ("Consistency",          _gv(all_s, "consistency"),            100.0, 7),
+                ("VWCR",                 _gv(all_s, "vwcr"),                       120.0, 25),
+                ("Bill Fulfilment",      _gv(all_s, "bill_fulfilment"),            100.0, 18),
+                ("Pick Speed",           _gv(all_s, "pick_speed"),                 250.0, 15),
+                ("Efficiency Ratio",     _gv(all_s, "efficiency_ratio") * 100,     100.0, 10),
+                ("Workspace",            _gv(all_s, "workspace_score"),            100.0, 10),
+                ("CS Fulfilment",        _gv(all_s, "cs_fulfilment"),              100.0, 8),
+                ("Cleaner Rate",         _gv(all_s, "cleaner_rate"),               100.0, 7),
+                ("Log Consistency",      _gv(all_s, "consistency"),                100.0, 7),
             ]
 
         # Render each component as one row: [label, bar, earned/cap]
@@ -403,43 +415,44 @@ def generate_visual_pdf(emp_name, payload):
         elems.append(Paragraph("CALCULATION METHODOLOGY", h2_st))
         if stype == "picker":
             formula_lines = [
-                "Pick Accuracy (%)     = Picked ÷ (Picked + Missed) × 100",
-                "Bill Fulfilment (%)   = Sales Bill Picked ÷ Total Bills Received × 100",
-                "Pick Speed (/hr)      = (Picked + Missed) ÷ (9 hrs × Days)",
-                "Packing Efficiency    = Packing Done ÷ Sales Bill Picked × 100",
-                "CS Fulfilment (%)     = min(Packing Done ÷ CS Sales Open × 100, 100)",
-                "Workspace Score       = Rack×50% + Table×30% + Sweep×20%",
-                "Points (max 100)      = Acc×25 + Fulfilment×20 + Speed÷250×18 + Packing×12 + Workspace×10 + CS×8 + Consistency×7",
-                "Minus Marking         = Sum of pending complaint deductions (capped at 30 pts)",
-                "Potential Items       = 200 items/hr × 9 hrs × Days",
-                "Consistency (%)       = max(0, 100 − std_dev(daily_accuracy) × 2)",
-                "Grade                 = ELITE ≥ 88 | PROFICIENT ≥ 72 | SATISFACTORY ≥ 52 | RE-TRAINING < 52",
+                "VWCR (Volume-Weighted) = (Picked ÷ Total) × (Items/hr ÷ 50 target) × 100, capped at 120",
+                "Bill Fulfilment (%)    = Sales Bill Picked ÷ Total Bills Received × 100",
+                "Pick Speed (/hr)       = (Picked + Missed) ÷ (9 hrs × Days)",
+                "Cleaner Rate           = (Normal×100 + Sweep/Rack×10) ÷ Total Items Volume",
+                "CS Fulfilment (%)      = min(Packing Done ÷ CS Sales Open × 100, 100)",
+                "Workspace Score        = Rack×50% + Table×30% + Sweep×20%",
+                "Efficiency Ratio       = min(items÷200, bills÷50) — Efficient only when BOTH = 1.0",
+                "Points (max 100)       = VWCR×25 + Fulfilment×18 + Speed÷250×15 + EffRatio×10 + Workspace×10 + CS×8 + Cleaner×7 + LogCons×7",
+                "Minus Marking          = Complaint deductions (capped 30 pts) − admin adjustment",
+                "Log Consistency (%)    = max(0, 100 − std_dev(daily_accuracy) × 2)",
+                "Grade                  = ELITE ≥ 88 | PROFICIENT ≥ 72 | SATISFACTORY ≥ 52 | RE-TRAINING < 52",
             ]
         elif stype == "checker":
             formula_lines = [
-                "Total SB Checked      = SB Normal + SB Urgent (urgent done first)",
-                "Total Items Checked   = Items Normal + Urgent Items",
-                "Clean Check %         = Normal Items ÷ Total Items × 100",
-                "Pending Bills         = Manually entered by checker",
-                "Clearance Rate (%)    = SB Checked ÷ (SB Checked + Pending) × 100",
-                "Check Speed (/hr)     = Total Items Checked ÷ (9 hrs × Days)",
-                "Points (max 100)      = Speed÷80×30 + Clearance×25 + CleanCheck×20 + Consistency×10 + PotEff×8 + Volume×5 + Sweep×2",
-                "Minus Marking         = Sum of pending complaint deductions (capped at 30 pts)",
-                "Potential Items       = 25 items/hr × 9 hrs × Days",
-                "Consistency (%)       = max(0, 100 − std_dev(daily_speed) × 2)",
-                "Grade                 = ELITE ≥ 88 | PROFICIENT ≥ 72 | SATISFACTORY ≥ 52 | RE-TRAINING < 52",
+                "VWCR (Volume-Weighted) = (Normal ÷ Total) × (Items/hr ÷ 70 target) × 100, capped at 120",
+                "Total SB Checked       = SB Normal + SB Urgent",
+                "Clearance Rate (%)     = SB Checked ÷ (SB Checked + Pending) × 100",
+                "Check Speed (/hr)      = Total Items Checked ÷ (9 hrs × Days)",
+                "Cleaner Rate           = (Normal×100 + Sweep/Rack×10) ÷ Total Items Volume",
+                "Efficiency Ratio       = min(items÷200, bills÷50)",
+                "Workspace Score        = Table×60% + Sweep×40% (checkers don't arrange racks)",
+                "Points (max 100)       = Speed÷80×22 + Clearance×22 + VWCR×20 + Cleaner×8 + EffRatio×8 + LogCons×8 + PotEff×5 + Workspace×4 + Sweep×3",
+                "Minus Marking          = Complaint deductions (capped 30 pts) − admin adjustment",
+                "Log Consistency (%)    = max(0, 100 − std_dev(daily_speed) × 2)",
+                "Grade                  = ELITE ≥ 88 | PROFICIENT ≥ 72 | SATISFACTORY ≥ 52 | RE-TRAINING < 52",
             ]
         else:  # purchaser
             formula_lines = [
-                "Bill Processing Rate  = PO Bills Checked ÷ PO Bills Received × 100",
-                "CS Fulfilment (%)     = CS in PO Received ÷ CS in PO Open × 100",
-                "Racking Efficiency    = Items Racked ÷ Number of Items × 100",
-                "Processing Speed      = Number of Items ÷ (9 hrs × Days)",
-                "Bill Entry Rate       = PO Bill Entry ÷ PO Bills Received × 100",
-                "Pending PO Bills      = max(PO Bills Received − PO Bills Checked, 0)",
-                "Points (max 100)      = BillRate×28 + CS×23 + Racking×18 + Speed÷60×12 + Entry×8 + Pending×5 + Workspace×4 + Sweep×2",
-                "Minus Marking         = Sum of pending complaint deductions (capped at 30 pts)",
-                "Grade                 = ELITE ≥ 88 | PROFICIENT ≥ 72 | SATISFACTORY ≥ 52 | RE-TRAINING < 52",
+                "Bill Processing Rate   = PO Bills Checked ÷ PO Bills Received × 100",
+                "CS Fulfilment (%)      = CS in PO Received ÷ CS in PO Open × 100",
+                "Racking Efficiency     = Items Racked ÷ Number of Items × 100",
+                "Processing Speed       = Number of Items ÷ (9 hrs × Days)",
+                "Bill Entry Rate        = PO Bill Entry ÷ PO Bills Received × 100",
+                "VWCR                   = (Racked ÷ Items) × (Items/hr ÷ 30 target) × 100, capped at 120",
+                "Efficiency Ratio       = min(items÷200, bills÷50)",
+                "Points (max 100)       = BillRate×25 + CS×20 + Racking×15 + Speed÷60×10 + Entry×8 + VWCR×8 + Pending×5 + EffRatio×4 + Workspace×3 + LogCons×2",
+                "Minus Marking          = Complaint deductions (capped 30 pts) − admin adjustment",
+                "Grade                  = ELITE ≥ 88 | PROFICIENT ≥ 72 | SATISFACTORY ≥ 52 | RE-TRAINING < 52",
             ]
         for line in formula_lines:
             elems.append(Paragraph(line, formula_st))
@@ -711,6 +724,256 @@ def generate_visual_pdf(emp_name, payload):
                 ("BOTTOMPADDING",  (0, 0), (-1, -1), 4),
             ]))
             elems += [lt, Spacer(1, 0.3 * cm)]
+
+        # ── POINT DETECTION TABLE (Phase 3) ───────────────────────────
+        # Detailed ledger of where each point came from or was lost
+        elems += [PageBreak(), Paragraph("POINT DETECTION LEDGER", h2_st),
+                  Paragraph("Every point earned or deducted, with the reason.",
+                            p("PDL", fontSize=8, textColor=colors.HexColor(GRAY), spaceAfter=6))]
+
+        pdl_rows = [["Category", "Component", "Earned", "Out of", "Status", "Note"]]
+
+        # Build the ledger from the points breakdown data used above
+        if stype == "checker":
+            pdl_def = [
+                ("Performance", "Check Speed",          _gv(all_s, "check_speed"),       80.0, 22, "Items/hr vs 80 target"),
+                ("Performance", "Clearance Rate",       _gv(all_s, "clearance_rate", 100), 100.0, 22, "SB cleared ÷ assigned"),
+                ("Quality",     "VWCR",                 _gv(all_s, "vwcr"),              120.0, 20, "Volume-weighted clean rate"),
+                ("Quality",     "Cleaner Rate",         _gv(all_s, "cleaner_rate"),      100.0, 8,  "Normal×100 + Sweep/Rack×10 ÷ volume"),
+                ("Workload",    "Efficiency Ratio",     _gv(all_s, "efficiency_ratio")*100, 100.0, 8, "Hard level = 200 items/50 bills"),
+                ("Reliability", "Log Consistency",      _gv(all_s, "consistency"),       100.0, 8, "Daily logging stability"),
+                ("Performance", "Potential Efficiency", _gv(all_s, "potential_eff"),     100.0, 5, "Actual ÷ maximum possible"),
+                ("Workspace",   "Workspace Score",      _gv(all_s, "workspace_score"),   100.0, 4, "Table + Sweep"),
+                ("Workspace",   "Sweep Bonus",          _gv(all_s, "tsd"),               max(days,1), 3, "Days with sweeping done"),
+            ]
+        elif stype == "purchaser":
+            pdl_def = [
+                ("Performance", "Bill Processing Rate", _gv(all_s, "pur_bill_rate"),     100.0, 25, "PO checked ÷ received"),
+                ("Performance", "CS Fulfilment",        _gv(all_s, "pur_cs_fulfilment"), 100.0, 20, "CS received ÷ CS open"),
+                ("Performance", "Racking Efficiency",   _gv(all_s, "pur_racking_eff"),   100.0, 15, "Racked ÷ items"),
+                ("Performance", "Processing Speed",     _gv(all_s, "pur_speed"),         60.0,  10, "Items/hr vs 60 target"),
+                ("Performance", "Bill Entry Rate",      _gv(all_s, "pur_entry_rate"),    100.0, 8,  "Entries ÷ received"),
+                ("Quality",     "VWCR",                 _gv(all_s, "vwcr"),              120.0, 8,  "Volume-weighted clean rate"),
+                ("Workload",    "Pending Control",      max(0,100-(_gv(all_s, "pur_pending_bills")/max(_gv(all_s, "pur_bills_received",1),1)*100)), 100.0, 5, "Fewer pending = more points"),
+                ("Workload",    "Efficiency Ratio",     _gv(all_s, "efficiency_ratio")*100, 100.0, 4, "Hard level = 200 items/50 bills"),
+                ("Workspace",   "Workspace Score",      _gv(all_s, "workspace_score"),   100.0, 3, "Rack + Table + Sweep"),
+                ("Reliability", "Log Consistency",      _gv(all_s, "consistency"),       100.0, 2, "Daily logging stability"),
+            ]
+        else:  # picker
+            pdl_def = [
+                ("Quality",     "VWCR",                 _gv(all_s, "vwcr"),              120.0, 25, "Volume-weighted clean rate vs 50/hr target"),
+                ("Performance", "Bill Fulfilment",      _gv(all_s, "bill_fulfilment"),   100.0, 18, "SB picked ÷ bills received"),
+                ("Performance", "Pick Speed",           _gv(all_s, "pick_speed"),        250.0, 15, "Items/hr vs 250 target"),
+                ("Workload",    "Efficiency Ratio",     _gv(all_s, "efficiency_ratio")*100, 100.0, 10, "Hard level = 200 items/50 bills"),
+                ("Workspace",   "Workspace Score",      _gv(all_s, "workspace_score"),   100.0, 10, "Rack + Table + Sweep"),
+                ("Performance", "CS Fulfilment",        _gv(all_s, "cs_fulfilment"),     100.0, 8,  "CS demands fulfilled"),
+                ("Quality",     "Cleaner Rate",         _gv(all_s, "cleaner_rate"),      100.0, 7,  "Normal×100 + Sweep/Rack×10 ÷ volume"),
+                ("Reliability", "Log Consistency",      _gv(all_s, "consistency"),       100.0, 7,  "Daily logging stability"),
+            ]
+
+        total_earned = 0.0
+        for cat, name, val, denom, cap, note in pdl_def:
+            pct = (val / denom) if denom > 0 else 0
+            if pct > 1: pct = 1
+            earned = round(pct * cap, 1)
+            total_earned += earned
+            # Status icon based on % of cap earned
+            if pct >= 0.85:
+                status_txt = "● Earned"; status_clr = EMERALD
+            elif pct >= 0.50:
+                status_txt = "● Partial"; status_clr = AMBER
+            else:
+                status_txt = "● Lost"; status_clr = ROSE
+            pdl_rows.append([
+                cat, name,
+                Paragraph(f"<b>{earned}</b>", p("PDE", fontSize=8, alignment=TA_CENTER, textColor=colors.HexColor(NAVY))),
+                f"{cap}",
+                Paragraph(f"<font color='{status_clr}'>{status_txt}</font>", p("PDS", fontSize=7.5, alignment=TA_LEFT)),
+                Paragraph(note, p("PDN", fontSize=7.5, textColor=colors.HexColor(GRAY), leading=10)),
+            ])
+
+        # Totals row
+        pdl_rows.append([
+            "TOTAL", "Points earned from KPIs",
+            Paragraph(f"<b>{round(total_earned,1)}</b>", p("PDT", fontSize=9, alignment=TA_CENTER, fontName="Helvetica-Bold", textColor=colors.HexColor(NAVY))),
+            "100", "", ""
+        ])
+        # Deductions / adjustments
+        if deduction and deduction > 0:
+            pdl_rows.append([
+                "Deduction", "Complaint Minus Marking",
+                Paragraph(f"<b><font color='{ROSE}'>−{deduction}</font></b>", p("PDM", fontSize=9, alignment=TA_CENTER)),
+                "", Paragraph(f"<font color='{ROSE}'>Penalty</font>", p("PDMS", fontSize=7.5)),
+                Paragraph("Complaint deductions (capped 30)", p("PDMN", fontSize=7.5, textColor=colors.HexColor(GRAY))),
+            ])
+        if admin_adj and admin_adj != 0:
+            sign = "+" if admin_adj > 0 else ""
+            clr = EMERALD if admin_adj > 0 else ROSE
+            label = "Bonus" if admin_adj > 0 else "Penalty"
+            pdl_rows.append([
+                "Adjustment", "Admin Adjustment",
+                Paragraph(f"<b><font color='{clr}'>{sign}{admin_adj}</font></b>", p("PDA", fontSize=9, alignment=TA_CENTER)),
+                "", Paragraph(f"<font color='{clr}'>{label}</font>", p("PDAS", fontSize=7.5)),
+                Paragraph("Manual ± override by admin", p("PDAN", fontSize=7.5, textColor=colors.HexColor(GRAY))),
+            ])
+        # Final row
+        pdl_rows.append([
+            "FINAL", "Points Score",
+            Paragraph(f"<b>{score}</b>", p("PDF_", fontSize=11, alignment=TA_CENTER, fontName="Helvetica-Bold", textColor=colors.HexColor(grade_clr))),
+            "100",
+            Paragraph(f"<b><font color='{grade_clr}'>{grade}</font></b>", p("PDFS", fontSize=8, alignment=TA_LEFT, fontName="Helvetica-Bold")),
+            "",
+        ])
+
+        pdl_table = Table(pdl_rows, colWidths=[2.5*cm, 4.5*cm, 1.8*cm, 1.2*cm, 2.0*cm, 5.5*cm], repeatRows=1)
+        # Style: header row navy, totals highlighted
+        final_row_idx = len(pdl_rows) - 1
+        total_row_idx = final_row_idx - (1 if deduction > 0 else 0) - (1 if admin_adj else 0) - 1
+        pdl_style = [
+            ("BACKGROUND",     (0, 0), (-1, 0),  colors.HexColor(NAVY)),
+            ("TEXTCOLOR",      (0, 0), (-1, 0),  colors.white),
+            ("FONTNAME",       (0, 0), (-1, 0),  "Helvetica-Bold"),
+            ("FONTSIZE",       (0, 0), (-1, 0),  8),
+            ("FONTSIZE",       (0, 1), (-1, -1), 8),
+            ("VALIGN",         (0, 0), (-1, -1), "MIDDLE"),
+            ("ALIGN",          (0, 0), (-1, -1), "LEFT"),
+            ("ALIGN",          (2, 1), (3, -1),  "CENTER"),
+            ("ROWBACKGROUNDS", (0, 1), (-1, total_row_idx-1), [colors.HexColor(SURFACE), colors.white]),
+            ("GRID",           (0, 0), (-1, -1), 0.3, colors.HexColor(LGRAY)),
+            ("TOPPADDING",     (0, 0), (-1, -1), 5),
+            ("BOTTOMPADDING",  (0, 0), (-1, -1), 5),
+            ("BACKGROUND",     (0, total_row_idx), (-1, total_row_idx), colors.HexColor(BRAND_LT)),
+            ("FONTNAME",       (0, total_row_idx), (1, total_row_idx), "Helvetica-Bold"),
+            ("BACKGROUND",     (0, final_row_idx), (-1, final_row_idx), colors.HexColor("#fef3c7")),
+            ("FONTNAME",       (0, final_row_idx), (1, final_row_idx), "Helvetica-Bold"),
+            ("LINEABOVE",      (0, final_row_idx), (-1, final_row_idx), 1.5, colors.HexColor(BRAND)),
+        ]
+        pdl_table.setStyle(TableStyle(pdl_style))
+        elems += [pdl_table, Spacer(1, 0.35 * cm)]
+
+        # ── HEAT MAP — errors × volume (Phase 3) ──────────────────────
+        heatmap_errors = payload.get("heatmap_errors", {}) or {}
+        heatmap_volume = payload.get("heatmap_volume", {}) or {}
+        if heatmap_errors or heatmap_volume:
+            elems += [Spacer(1, 0.15 * cm), Paragraph("ERROR × VOLUME HEAT MAP (LAST 30 DAYS)", h2_st),
+                      Paragraph("Darker red = more errors. Darker blue = higher volume. Blank = no entry.",
+                                p("HM", fontSize=8, textColor=colors.HexColor(GRAY), spaceAfter=4))]
+
+            # Build a 30-day grid — 2 rows, one error one volume, 15 columns each
+            from datetime import timedelta as _td
+            today_d = date.today()
+            # Find max volume to scale
+            max_vol = max(list(heatmap_volume.values()) + [1])
+
+            def _err_color(v):
+                if v is None: return "#e2e8f0"
+                if v >= 10: return "#991b1b"
+                if v >= 5:  return "#dc2626"
+                if v >= 2:  return "#f87171"
+                if v >= 1:  return "#fca5a5"
+                return "#fee2e2"
+
+            def _vol_color(v):
+                if v is None: return "#e2e8f0"
+                r = v / max_vol if max_vol > 0 else 0
+                if r >= 0.85: return "#1e3a8a"
+                if r >= 0.65: return "#1d4ed8"
+                if r >= 0.40: return "#3b82f6"
+                if r >= 0.15: return "#93c5fd"
+                return "#dbeafe"
+
+            def _make_hm_row(title, value_map, color_fn, suffix=""):
+                w = 16.5 * cm
+                h = 40
+                d = Drawing(w, h)
+                d.add(String(0, h - 8, title, fontSize=8, fontName="Helvetica-Bold",
+                             fillColor=colors.HexColor(NAVY), textAnchor="start"))
+                cell_w = (w - 8) / 30
+                for i in range(29, -1, -1):
+                    dt = today_d - _td(days=i)
+                    key = str(dt)
+                    v = value_map.get(key)
+                    x = (29 - i) * cell_w + 2
+                    y = 8
+                    d.add(Rect(x, y, cell_w - 1, 14,
+                               fillColor=colors.HexColor(color_fn(v)),
+                               strokeColor=colors.HexColor("#ffffff"),
+                               strokeWidth=0.5))
+                    # Week number labels (every 7 days)
+                    if i % 7 == 0:
+                        d.add(String(x + cell_w/2, 1, dt.strftime("%d"),
+                                     fontSize=5.5, textAnchor="middle",
+                                     fillColor=colors.HexColor(GRAY)))
+                return d
+
+            err_row = _make_hm_row("Error Density %", heatmap_errors, _err_color)
+            vol_row = _make_hm_row("Volume (Items Handled)", heatmap_volume, _vol_color)
+
+            hm_table = Table([[err_row], [vol_row]])
+            hm_table.setStyle(TableStyle([
+                ("ALIGN", (0, 0), (-1, -1), "CENTER"),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
+            ]))
+            elems += [hm_table, Spacer(1, 0.1 * cm)]
+            # Legend
+            legend_data = [[
+                Paragraph("<b>Error scale:</b>", p("L1", fontSize=8)),
+                Paragraph("<font color='#fee2e2'>■</font> 0% "
+                          "<font color='#fca5a5'>■</font> 1% "
+                          "<font color='#f87171'>■</font> 2%+ "
+                          "<font color='#dc2626'>■</font> 5%+ "
+                          "<font color='#991b1b'>■</font> 10%+", p("L2", fontSize=8)),
+                Paragraph("<b>Volume scale:</b>", p("L3", fontSize=8)),
+                Paragraph("<font color='#dbeafe'>■</font> low  "
+                          "<font color='#93c5fd'>■</font> "
+                          "<font color='#3b82f6'>■</font> "
+                          "<font color='#1d4ed8'>■</font> "
+                          "<font color='#1e3a8a'>■</font> peak", p("L4", fontSize=8)),
+            ]]
+            lt = Table(legend_data, colWidths=[2.2*cm, 5.5*cm, 2.2*cm, 5.5*cm])
+            lt.setStyle(TableStyle([("VALIGN", (0, 0), (-1, -1), "MIDDLE")]))
+            elems += [lt, Spacer(1, 0.4 * cm)]
+
+        # ── PENDING LOG (Constant Protocol) ───────────────────────────
+        pending = payload.get("pending_validations", []) or []
+        if pending:
+            elems += [Paragraph("PENDING BILL VALIDATIONS", h2_st),
+                      Paragraph("Bills awaiting Constant Protocol validation (4-way count check).",
+                                p("PL", fontSize=8, textColor=colors.HexColor(GRAY), spaceAfter=6))]
+
+            pl_rows = [["Date", "Picker", "Count", "Checkers", "Status", "Notes"]]
+            for pv in pending:
+                slots = f"{pv['slots_filled']}/3 submitted"
+                status_map = {
+                    "pending": (f"<font color='{AMBER}'>⏳ Pending</font>", ""),
+                    "mismatch": (f"<font color='{ROSE}'>⚠ Mismatch</font>", "Review needed — deduct points"),
+                    "admin_override": (f"<font color='{PURPLE}'>⚡ Override</font>", "Admin accepted"),
+                }
+                status_html, note = status_map.get(pv["status"], (pv["status"], ""))
+                pl_rows.append([
+                    pv["date"].strftime("%d %b"),
+                    pv["picker_name"] + (" (you)" if pv["is_mine"] else ""),
+                    f"{pv['picker_count']}",
+                    slots,
+                    Paragraph(status_html, p("PLSt", fontSize=8)),
+                    Paragraph(note, p("PLN", fontSize=7.5, textColor=colors.HexColor(GRAY))),
+                ])
+            pl_table = Table(pl_rows, colWidths=[2.0*cm, 4.0*cm, 1.5*cm, 3.0*cm, 2.5*cm, 4.5*cm], repeatRows=1)
+            pl_table.setStyle(TableStyle([
+                ("BACKGROUND",     (0, 0), (-1, 0),  colors.HexColor(AMBER)),
+                ("TEXTCOLOR",      (0, 0), (-1, 0),  colors.white),
+                ("FONTNAME",       (0, 0), (-1, 0),  "Helvetica-Bold"),
+                ("FONTNAME",       (0, 1), (-1, -1), "Helvetica"),
+                ("FONTSIZE",       (0, 0), (-1, -1), 8),
+                ("ALIGN",          (0, 0), (-1, -1), "LEFT"),
+                ("ALIGN",          (2, 1), (2, -1),  "CENTER"),
+                ("VALIGN",         (0, 0), (-1, -1), "MIDDLE"),
+                ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.HexColor(SURFACE), colors.white]),
+                ("GRID",           (0, 0), (-1, -1), 0.3, colors.HexColor(LGRAY)),
+                ("TOPPADDING",     (0, 0), (-1, -1), 4),
+                ("BOTTOMPADDING",  (0, 0), (-1, -1), 4),
+            ]))
+            elems += [pl_table, Spacer(1, 0.3 * cm)]
 
         # ── FOOTER ───────────────────────────────────────────────────
         elems += [
