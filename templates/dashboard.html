@@ -181,6 +181,7 @@ table.htable tbody tr:hover td { background: var(--bg); }
   <div class="nav-right">
     <span class="nav-user">{{ user_name }}</span>
     <a href="/staff/{{ user_id }}" style="padding:7px 14px;background:var(--blue-lite);color:var(--blue);border:1px solid var(--blue-mid);border-radius:8px;font-size:12px;font-weight:600;text-decoration:none;">👤 My Profile</a>
+    <a href="/validations" style="padding:7px 14px;background:#fef3c7;color:#b45309;border:1px solid #fbbf24;border-radius:8px;font-size:12px;font-weight:600;text-decoration:none;">⚖️ Validations</a>
     <a href="/export_pdf" style="padding:7px 14px;background:var(--green-bg);color:var(--success);border:1px solid #bbf7d0;border-radius:8px;font-size:12px;font-weight:600;text-decoration:none;">📄 PDF Report</a>
     <form method="POST" action="/logout" style="display:inline;">
       <button type="submit" class="btn-logout">🚪 Logout</button>
@@ -269,6 +270,44 @@ table.htable tbody tr:hover td { background: var(--bg); }
       <div class="kpi-sub">All time submissions</div>
     </div>
   </div>
+
+  <!-- POTENTIAL BAR — hard-level target tracker -->
+  {% if w_stats and w_stats.hard_target_items %}
+  <div class="card">
+    <div class="section-label">🎯 Hard-Level Target (weekly view)
+      {% if w_stats.is_efficient %}<span style="margin-left:10px;padding:3px 9px;border-radius:6px;background:#dcfce7;color:#15803d;font-size:11px;font-weight:700;">✓ EFFICIENT</span>{% endif %}
+    </div>
+    {% set items_pct = ((w_stats.items_daily or 0) / (w_stats.hard_target_items or 200) * 100)|round(1) %}
+    {% set bills_pct = ((w_stats.bills_daily or 0) / (w_stats.hard_target_bills or 50) * 100)|round(1) %}
+    {% if items_pct > 100 %}{% set items_disp = 100 %}{% else %}{% set items_disp = items_pct %}{% endif %}
+    {% if bills_pct > 100 %}{% set bills_disp = 100 %}{% else %}{% set bills_disp = bills_pct %}{% endif %}
+    <div style="display:flex;flex-direction:column;gap:12px;margin-top:6px;">
+      <div>
+        <div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:3px;">
+          <span style="font-weight:600;color:var(--text);">Items per day</span>
+          <span style="color:var(--muted);">{{ w_stats.items_daily or 0 }} / {{ w_stats.hard_target_items|int }} ({{ items_pct }}%)</span>
+        </div>
+        <div style="height:10px;background:rgba(199,217,245,0.4);border-radius:6px;overflow:hidden;">
+          <div style="height:100%;width:{{ items_disp }}%;background:linear-gradient(90deg,{% if items_pct >= 100 %}#16a34a,#10b981{% elif items_pct >= 70 %}#d97706,#f59e0b{% else %}#dc2626,#ef4444{% endif %});border-radius:6px;transition:width 0.6s;"></div>
+        </div>
+      </div>
+      <div>
+        <div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:3px;">
+          <span style="font-weight:600;color:var(--text);">Bills per day</span>
+          <span style="color:var(--muted);">{{ w_stats.bills_daily or 0 }} / {{ w_stats.hard_target_bills|int }} ({{ bills_pct }}%)</span>
+        </div>
+        <div style="height:10px;background:rgba(199,217,245,0.4);border-radius:6px;overflow:hidden;">
+          <div style="height:100%;width:{{ bills_disp }}%;background:linear-gradient(90deg,{% if bills_pct >= 100 %}#16a34a,#10b981{% elif bills_pct >= 70 %}#d97706,#f59e0b{% else %}#dc2626,#ef4444{% endif %});border-radius:6px;transition:width 0.6s;"></div>
+        </div>
+      </div>
+    </div>
+    {% if w_stats.auto_suggest %}
+    <div style="margin-top:12px;padding:9px 13px;background:rgba(219,234,254,0.6);border-left:3px solid var(--blue);border-radius:8px;font-size:12px;color:var(--text);">
+      <b>💡 System:</b> {{ w_stats.auto_suggest }}
+    </div>
+    {% endif %}
+  </div>
+  {% endif %}
   {% endif %}
 
   <!-- TODAY FORM / SUBMITTED -->
@@ -520,17 +559,17 @@ table.htable tbody tr:hover td { background: var(--bg); }
       <div class="section-label">Period Summary</div>
       <table class="ptable">
         <thead>
-          <tr><th>Period</th><th>Accuracy</th><th>Speed</th><th>Grade</th><th>Days</th></tr>
+          <tr><th>Period</th><th>VWCR</th><th>Speed</th><th>Grade</th><th>Days</th></tr>
         </thead>
         <tbody>
           {% if d_stats %}
           <tr>
             <td><strong>Today</strong></td>
             {% if staff_type == 'checker' %}
-            <td>{{ d_stats.check_acc }}%</td>
+            <td>{{ d_stats.vwcr or 0 }}%</td>
             <td>{{ d_stats.ck_speed }}/hr</td>
             {% else %}
-            <td>{{ d_stats.pick_acc }}%</td>
+            <td>{{ d_stats.vwcr or 0 }}%</td>
             <td>{{ d_stats.pick_speed }}/hr</td>
             {% endif %}
             <td><span class="tag {% if d_stats.grade in ['ELITE','EXCELLENT'] %}tag-ex{% elif d_stats.grade in ['GOOD','PROFICIENT'] %}tag-good{% elif d_stats.grade in ['AVERAGE','SATISFACTORY'] %}tag-avg{% else %}tag-poor{% endif %}">{{ d_stats.grade }}</span></td>
@@ -541,10 +580,10 @@ table.htable tbody tr:hover td { background: var(--bg); }
           <tr>
             <td><strong>This Week</strong></td>
             {% if staff_type == 'checker' %}
-            <td>{{ w_stats.check_acc }}%</td>
+            <td>{{ w_stats.vwcr or 0 }}%</td>
             <td>{{ w_stats.ck_speed }}/hr</td>
             {% else %}
-            <td>{{ w_stats.pick_acc }}%</td>
+            <td>{{ w_stats.vwcr or 0 }}%</td>
             <td>{{ w_stats.pick_speed }}/hr</td>
             {% endif %}
             <td><span class="tag {% if w_stats.grade in ['ELITE','EXCELLENT'] %}tag-ex{% elif w_stats.grade in ['GOOD','PROFICIENT'] %}tag-good{% elif w_stats.grade in ['AVERAGE','SATISFACTORY'] %}tag-avg{% else %}tag-poor{% endif %}">{{ w_stats.grade }}</span></td>
@@ -555,10 +594,10 @@ table.htable tbody tr:hover td { background: var(--bg); }
           <tr>
             <td><strong>This Month</strong></td>
             {% if staff_type == 'checker' %}
-            <td>{{ m_stats.check_acc }}%</td>
+            <td>{{ m_stats.vwcr or 0 }}%</td>
             <td>{{ m_stats.ck_speed }}/hr</td>
             {% else %}
-            <td>{{ m_stats.pick_acc }}%</td>
+            <td>{{ m_stats.vwcr or 0 }}%</td>
             <td>{{ m_stats.pick_speed }}/hr</td>
             {% endif %}
             <td><span class="tag {% if m_stats.grade in ['ELITE','EXCELLENT'] %}tag-ex{% elif m_stats.grade in ['GOOD','PROFICIENT'] %}tag-good{% elif m_stats.grade in ['AVERAGE','SATISFACTORY'] %}tag-avg{% else %}tag-poor{% endif %}">{{ m_stats.grade }}</span></td>
