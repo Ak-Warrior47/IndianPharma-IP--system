@@ -62,6 +62,9 @@ class Employee(db.Model):
     sunday_override = db.Column(db.Boolean, default=False)
     twofa_secret  = db.Column(db.String(32), nullable=True)
     twofa_enabled = db.Column(db.Boolean, default=False)
+    admin_adjustment = db.Column(db.Float, default=0.0)  # Ongoing +/- pts applied to every score
+    admin_adjustment_note = db.Column(db.String(200), default="")  # Reason/notes
+    custom_hourly_target = db.Column(db.Float, nullable=True)  # Override default role target (Phase 1 auto-raise)
     created_at    = db.Column(db.DateTime, default=datetime.utcnow)
     entries = db.relationship("KPIEntry", backref="owner", lazy="select", cascade="all, delete-orphan")
 
@@ -93,6 +96,7 @@ class KPIEntry(db.Model):
     bills_received   = db.Column(db.Integer, default=0)  # Checker: total bills received (manual)
     pending_bills_manual = db.Column(db.Integer, default=0)  # Checker: manually entered pending bills
     total_bills_received = db.Column(db.Integer, default=0)  # Picker: total bills given to pick
+    admin_adjustment = db.Column(db.Float, default=0.0)  # Admin Adjustment — manual +/- points override per entry
 
     __table_args__ = (
         db.UniqueConstraint("emp_id", "entry_date", name="_emp_date_uc"),
@@ -183,6 +187,78 @@ class PastEntryWindow(db.Model):
     opened_by   = db.Column(db.Integer, db.ForeignKey("employees.id"))
     opened_at   = db.Column(db.DateTime, default=datetime.utcnow)
     is_active   = db.Column(db.Boolean, default=True)               # admin can close it again
+
+
+class BillValidation(db.Model):
+    """
+    Constant Protocol — 4-way bill count validation.
+    One row per (picker, date). Picker submits their count, then 3 checkers
+    independently submit theirs. All 4 must match for the picker's KPI entry
+    to be 'confirmed'. Mismatches are logged and flagged for admin.
+    """
+    __tablename__ = "bill_validations"
+    id            = db.Column(db.Integer, primary_key=True)
+    entry_date    = db.Column(db.Date, nullable=False, index=True)
+    picker_id     = db.Column(db.Integer, db.ForeignKey("employees.id", ondelete="CASCADE"),
+                              nullable=False, index=True)
+    picker_count  = db.Column(db.Integer, nullable=False)
+    # Three independent checker submissions
+    checker1_id    = db.Column(db.Integer, db.ForeignKey("employees.id"), nullable=True)
+    checker1_count = db.Column(db.Integer, nullable=True)
+    checker1_at    = db.Column(db.DateTime, nullable=True)
+    checker2_id    = db.Column(db.Integer, db.ForeignKey("employees.id"), nullable=True)
+    checker2_count = db.Column(db.Integer, nullable=True)
+    checker2_at    = db.Column(db.DateTime, nullable=True)
+    checker3_id    = db.Column(db.Integer, db.ForeignKey("employees.id"), nullable=True)
+    checker3_count = db.Column(db.Integer, nullable=True)
+    checker3_at    = db.Column(db.DateTime, nullable=True)
+    # pending | confirmed | mismatch | admin_override
+    status        = db.Column(db.String(20), default="pending", index=True)
+    # Comma-separated list of emp ids that entered wrong values (for deductions)
+    mismatch_emp_ids = db.Column(db.String(100), default="")
+    # Admin override reason if applicable
+    override_by   = db.Column(db.Integer, db.ForeignKey("employees.id"), nullable=True)
+    override_note = db.Column(db.String(200), default="")
+    created_at    = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at    = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    __table_args__ = (
+        db.UniqueConstraint("picker_id", "entry_date", name="_picker_date_uc"),
+    )
+
+    @property
+    def checker_count_submitted(self):
+        """How many of the 3 checker slots are filled."""
+        return sum(1 for v in [self.checker1_count, self.checker2_count, self.checker3_count] if v is not None)
+
+    @property
+    def is_complete(self):
+        return self.checker_count_submitted >= 3
+
+    @property
+    def all_match(self):
+        if not self.is_complete: return False
+        vals = [self.picker_count, self.checker1_count, self.checker2_count, self.checker3_count]
+        return len(set(vals)) == 1
+
+    def evaluate(self):
+        """Re-evaluate status. Returns (new_status, mismatch_ids_list)."""
+        if not self.is_complete:
+            return "pending", []
+        vals_with_ids = [
+            (self.picker_id, self.picker_count),
+            (self.checker1_id, self.checker1_count),
+            (self.checker2_id, self.checker2_count),
+            (self.checker3_id, self.checker3_count),
+        ]
+        # Find the mode (most common value) — those who disagree are flagged
+        from collections import Counter
+        counts = Counter(v for _, v in vals_with_ids if v is not None)
+        if len(counts) == 1:
+            return "confirmed", []
+        majority_val, _ = counts.most_common(1)[0]
+        wrong = [emp_id for emp_id, v in vals_with_ids if v != majority_val and emp_id is not None]
+        return "mismatch", wrong
 
 
 # ─── HELPERS ─────────────────────────────────────────────────────────────────
@@ -318,6 +394,89 @@ def build_analytics(entries: List[KPIEntry], staff_type: str = "picker", emp_id:
         else:
             trend = "stable"
 
+        # ─────────────────────────────────────────────────────────────
+        # NEW HARD-LEVEL FORMULAS (Phase 1)
+        # ─────────────────────────────────────────────────────────────
+        # Hourly targets (admin can override per-employee via custom_hourly_target)
+        PICKER_TARGET_HR  = 50.0   # items/hr (per spec: Picker Target 50/hr)
+        CHECKER_TARGET_HR = 70.0   # items/hr (per spec: Checker Target 70/hr)
+        # Check for per-employee override
+        try:
+            if emp_id is not None:
+                _emp_for_target = db.session.get(Employee, emp_id)
+                if _emp_for_target and _emp_for_target.custom_hourly_target:
+                    if staff_type == "picker":
+                        PICKER_TARGET_HR = float(_emp_for_target.custom_hourly_target)
+                    elif staff_type == "checker":
+                        CHECKER_TARGET_HR = float(_emp_for_target.custom_hourly_target)
+        except Exception:
+            pass
+        # Efficiency ratio targets (hard level = 200 items / 50 bills)
+        HARD_ITEMS_PER_DAY = 200.0
+        HARD_BILLS_PER_DAY = 50.0
+
+        # Volume-Weighted Clean Rate:
+        #   VWCR = (correct/total) × (actual_vol / hourly_target) × 100
+        # Capped at 120 per admin preference (allows some reward for above-target).
+        def _vwcr(correct, total, actual_per_hour, target_per_hour, cap=120.0):
+            if total <= 0: return 0.0
+            acc_ratio  = correct / total
+            vol_ratio  = actual_per_hour / max(target_per_hour, 0.01)
+            return round(min(acc_ratio * vol_ratio * 100, cap), 1)
+
+        # Cleaner Rate — item weighting:
+        #   Cleaner = (Normal×100 + Sweep/Rack×10) / Total Volume
+        # "Sweep/Rack" treated as a combined bonus pool (days completed × rack_score)
+        def _cleaner_rate(normal_items, total_items, sweep_days, rack_avg):
+            if total_items <= 0: return 0.0
+            # rack_avg is 0-10 scale, sweep_days is integer count
+            sweep_rack_pool = (sweep_days or 0) + (rack_avg or 0)
+            top = (normal_items * 100) + (sweep_rack_pool * 10)
+            return round(min(safe_div(top, max(total_items, 1)), 100.0), 1)
+
+        # Efficiency Ratio — are they hitting hard-level workload?
+        #   Hard Level = 200 items / 50 bills per day
+        #   Returns ratio 0-1 where 1.0 = hitting both targets
+        def _efficiency_ratio(items_per_day, bills_per_day):
+            items_r = min(safe_div(items_per_day, HARD_ITEMS_PER_DAY), 1.0)
+            bills_r = min(safe_div(bills_per_day, HARD_BILLS_PER_DAY), 1.0)
+            # Both must be hit — use minimum (weakest link)
+            return round(min(items_r, bills_r), 3)
+
+        # Calculate VWCR for the role
+        daily_vol_items   = safe_div(ti, days) if staff_type == "picker" else safe_div(tck_total, days)
+        daily_vol_per_hr  = safe_div(daily_vol_items, 9.0)  # 9-hr workday
+        if staff_type == "picker":
+            vwcr = _vwcr(tp, ti, daily_vol_per_hr, PICKER_TARGET_HR)
+        elif staff_type == "checker":
+            vwcr = _vwcr(tck_normal, tck_total, daily_vol_per_hr, CHECKER_TARGET_HR)
+        else:
+            # Purchaser VWCR: racked items accuracy × volume vs target
+            pur_items_daily = safe_div(tck_urgent, days)  # tck_urgent = pur_items for purchaser
+            pur_items_per_hr = safe_div(pur_items_daily, 9.0)
+            vwcr = _vwcr(tro, max(tck_urgent, 1), pur_items_per_hr, 30.0)  # purchaser lighter target
+
+        # Cleaner Rate
+        if staff_type == "picker":
+            cleaner_rate_score = _cleaner_rate(tp, max(ti, 1), tsd, safe_div(tro, max(days, 1)))
+        elif staff_type == "checker":
+            cleaner_rate_score = _cleaner_rate(tck_normal, max(tck_total, 1), tsd, 0)
+        else:
+            cleaner_rate_score = _cleaner_rate(tro, max(tck_urgent, 1), tsd, 0)
+
+        # Efficiency Ratio per day
+        items_daily = safe_div(ti if staff_type == "picker" else tck_total, max(days, 1))
+        bills_daily = safe_div(tsb, max(days, 1))
+        efficiency_ratio = _efficiency_ratio(items_daily, bills_daily)
+        is_efficient = efficiency_ratio >= 1.0
+
+        # Workspace Score for ALL roles — rack (0-10)/2 + table Y/N ×3 + sweep Y/N ×2 → /10 ×100
+        # Already computed as workspace_score above, but compute for checker too (was 0 before)
+        if staff_type == "checker":
+            # Checker workspace = table (3) + sweep (2) — no rack since they don't arrange racks
+            workspace_score_checker = round((table_ws + sweep_ws) / 5 * 100, 1) if days > 0 else 0.0
+            workspace_score = workspace_score_checker
+
         if staff_type == "purchaser":
             # Purchaser params using DB fields:
             # sales_bills_open = Total PO Bills Received
@@ -336,72 +495,91 @@ def build_analytics(entries: List[KPIEntry], staff_type: str = "picker", emp_id:
             pur_items_racked   = tro                   # Items Racked
 
             pur_bill_rate      = round(safe_div(pur_bills_checked, pur_bills_received) * 100, 1) if pur_bills_received > 0 else 0.0
-            pur_pending_bills  = max(pur_bills_received - pur_bills_checked, 0)  # auto-calculated
+            pur_pending_bills  = max(pur_bills_received - pur_bills_checked, 0)
             pur_cs_fulfilment  = round(min(safe_div(pur_cs_received, pur_cs_open) * 100, 100.0), 1) if pur_cs_open > 0 else 100.0
             pur_racking_eff    = round(safe_div(pur_items_racked, pur_items) * 100, 1) if pur_items > 0 else 0.0
             pur_speed          = round(safe_div(pur_items, ts_total), 1)
+            pur_entry_rate     = round(min(safe_div(pur_bill_entry, max(pur_bills_received,1)), 1.0) * 100, 1)
+            pur_pending_pct    = max(0.0, 1.0 - safe_div(pur_pending_bills, max(pur_bills_received,1)))
 
-            # ── PURCHASER POINT SYSTEM — HARD DIFFICULTY (100 pts) ──
-            pur_entry_rate  = round(min(safe_div(pur_bill_entry, max(pur_bills_received,1)), 1.0) * 100, 1)
-            pur_pending_pct = max(0.0, 1.0 - safe_div(pur_pending_bills, max(pur_bills_received,1)))
-            pur_sweep_score = safe_div(tsd, days) * 2
+            # ── PURCHASER POINT SYSTEM (100 pts total) — Phase 1 rebalance ──
             eff_score = round(
-                (pur_bill_rate     / 100) * 28 +
-                (pur_cs_fulfilment / 100) * 23 +
-                (pur_racking_eff   / 100) * 18 +
-                min(pur_speed      / 60,  1.0) * 12 +
+                (pur_bill_rate     / 100) * 25 +  # was 28
+                (pur_cs_fulfilment / 100) * 20 +  # was 23
+                (pur_racking_eff   / 100) * 15 +  # was 18
+                min(pur_speed      / 60,  1.0) * 10 +  # was 12
                 (pur_entry_rate    / 100) * 8 +
                 pur_pending_pct              * 5 +
-                pur_sweep_score              * 2 + # sweep bonus
-                (workspace_score   / 100) * 4,    # rack+table
+                (vwcr              / 120) * 8 +   # NEW: VWCR (cap 120 → /120 to normalise)
+                efficiency_ratio             * 4 +    # NEW: Efficiency Ratio
+                (workspace_score   / 100) * 3 +   # was 4
+                (consistency       / 100) * 2,    # NEW: Log Consistency
                 1)
 
         elif staff_type == "picker":
-            # ── PICKER POINT SYSTEM — HARD DIFFICULTY (100 pts) ──
-            # workspace_score already includes rack(5) + table(3) + sweep(2)
+            # ── PICKER POINT SYSTEM (100 pts total) — Phase 1 rebalance ──
+            # OLD: Acc×25 + Fulfil×20 + Speed×18 + PackEff×12 + Workspace×10 + CS×8 + Consistency×7
+            # NEW: VWCR×25 + Fulfil×18 + Speed×15 + EffRatio×10 + Workspace×10
+            #    + CS×8 + Cleaner×7 + LogCons×7
+            # (Packing Efficiency removed; 12 pts redistributed to VWCR+6, EffRatio+4, LogCons+2)
             eff_score = round(
-                (pick_acc        / 100) * 25 +
-                (bill_fulfilment / 100) * 20 +
-                min(pick_speed   / 250, 1.0) * 18 +
-                min(packing_eff  / 100, 1.0) * 12 +
-                (workspace_score / 100) * 10 +   # rack+table+sweep all here
+                (vwcr            / 120) * 25 +    # NEW: VWCR (was Pick Accuracy×25)
+                (bill_fulfilment / 100) * 18 +    # was 20
+                min(pick_speed   / 250, 1.0) * 15 +  # was 18
+                efficiency_ratio           * 10 + # NEW: Efficiency Ratio (200/50)
+                (workspace_score / 100) * 10 +
                 min(cs_fulfilment/ 100, 1.0) * 8 +
-                (consistency     / 100) * 7,
+                (cleaner_rate_score / 100) * 7 + # NEW: Cleaner Rate (replaces some of packing)
+                (consistency     / 100) * 7,     # Log Consistency
                 1)
         else:
-            # ── CHECKER POINT SYSTEM — HARD DIFFICULTY (100 pts) ──
-            speed_score     = min(safe_div(check_speed, 80.0), 1.0) * 30
-            clearance_score = (clearance_rate / 100.0) * 25
-            accuracy_score  = (normal_pct / 100.0) * 20
-            consist_score   = (consistency / 100.0) * 10
-            poteff_score    = (potential_eff / 100.0) * 8
-            volume_score    = min(safe_div(tck_total, 500.0), 1.0) * 5
-            sweep_score     = safe_div(tsd, days) * 2  # sweep done yes/no
-            eff_score       = round(speed_score + clearance_score + accuracy_score +
-                                    consist_score + poteff_score + volume_score + sweep_score, 1)
-        # Apply complaint deductions (minus marking) — now per-employee when target_emp_id is set
+            # ── CHECKER POINT SYSTEM (100 pts total) — Phase 1 rebalance ──
+            speed_score     = min(safe_div(check_speed, 80.0), 1.0) * 22  # was 30
+            clearance_score = (clearance_rate / 100.0) * 22  # was 25
+            vwcr_score      = (vwcr / 120.0) * 20  # NEW: VWCR replaces "Normal %"
+            cleaner_score   = (cleaner_rate_score / 100.0) * 8  # NEW
+            eff_ratio_score = efficiency_ratio * 8  # NEW: Efficiency Ratio
+            consist_score   = (consistency / 100.0) * 8   # was 10 — Log Consistency
+            poteff_score    = (potential_eff / 100.0) * 5  # was 8
+            workspace_ck    = (workspace_score / 100.0) * 4  # NEW: Workspace for checker
+            sweep_score     = safe_div(tsd, days) * 3  # was 2
+            eff_score       = round(speed_score + clearance_score + vwcr_score +
+                                    cleaner_score + eff_ratio_score + consist_score +
+                                    poteff_score + workspace_ck + sweep_score, 1)
+        # Apply complaint deductions (minus marking)
         complaint_deduction = get_complaint_deduction(staff_type, emp_id=emp_id)
-        eff_score = max(round(eff_score - complaint_deduction, 1), 0.0)
+        # Apply ongoing employee admin adjustment
+        try:
+            _emp_adj = 0.0
+            if emp_id is not None:
+                _emp = db.session.get(Employee, emp_id)
+                if _emp and _emp.admin_adjustment:
+                    _emp_adj = float(_emp.admin_adjustment or 0)
+        except Exception:
+            _emp_adj = 0.0
+        # Apply per-entry admin adjustments (summed across entries in range)
+        per_entry_adj = sum(float(e.admin_adjustment or 0) for e in entries if hasattr(e, 'admin_adjustment'))
+        total_adjustment = _emp_adj + per_entry_adj
+
+        eff_score = max(round(eff_score - complaint_deduction + total_adjustment, 1), 0.0)
         eff_score = min(eff_score, 100.0)
 
-        if staff_type == "picker":
-            # Point-based grade (medium-upper difficulty)
-            if   eff_score >= 88: grade="ELITE"
-            elif eff_score >= 72: grade="PROFICIENT"
-            elif eff_score >= 52: grade="SATISFACTORY"
-            else:                 grade="RE-TRAINING"
-        elif staff_type == "purchaser":
-            # Point-based grade (medium-upper difficulty)
-            if   eff_score >= 88: grade="ELITE"
-            elif eff_score >= 72: grade="PROFICIENT"
-            elif eff_score >= 52: grade="SATISFACTORY"
-            else:                 grade="RE-TRAINING"
-        else:
-            # Point-based grade (medium-upper difficulty)
-            if   eff_score >= 88: grade="ELITE"
-            elif eff_score >= 72: grade="PROFICIENT"
-            elif eff_score >= 52: grade="SATISFACTORY"
-            else:                 grade="RE-TRAINING"
+        # Auto-suggest: if error rate stays <1% over enough days, suggest raising the target
+        auto_suggest = None
+        if days >= 7 and ti > 100:  # enough signal
+            err_rate = safe_div(tm, ti) * 100 if staff_type == "picker" else urgent_pct
+            if err_rate < 1.0 and daily_vol_per_hr > 0:
+                current_target = PICKER_TARGET_HR if staff_type == "picker" else CHECKER_TARGET_HR
+                if daily_vol_per_hr > current_target * 0.9:
+                    auto_suggest = f"Error rate under 1% for {days} days — consider raising hourly target from {int(current_target)} to {int(current_target * 1.4)}/hr."
+
+        # Grade thresholds (unified across roles)
+
+        # Unified grade thresholds
+        if   eff_score >= 88: grade = "ELITE"
+        elif eff_score >= 72: grade = "PROFICIENT"
+        elif eff_score >= 52: grade = "SATISFACTORY"
+        else:                 grade = "RE-TRAINING"
 
         if staff_type == "checker":
             feedback_map = {
@@ -454,6 +632,19 @@ def build_analytics(entries: List[KPIEntry], staff_type: str = "picker", emp_id:
             pur_racking_eff=pur_racking_eff if staff_type=="purchaser" else 0,
             pur_speed=pur_speed if staff_type=="purchaser" else 0,
             complaint_deduction=complaint_deduction,
+            admin_adjustment=round(total_adjustment, 1),
+            vwcr=vwcr,
+            cleaner_rate=cleaner_rate_score,
+            efficiency_ratio=efficiency_ratio,
+            is_efficient=is_efficient,
+            items_daily=round(items_daily, 1),
+            bills_daily=round(bills_daily, 1),
+            hard_target_items=HARD_ITEMS_PER_DAY,
+            hard_target_bills=HARD_BILLS_PER_DAY,
+            hourly_target=(PICKER_TARGET_HR if staff_type == "picker"
+                           else CHECKER_TARGET_HR if staff_type == "checker"
+                           else 30.0),
+            auto_suggest=auto_suggest,
             tsd=tsd,
             eff_score=eff_score, grade=grade, days=days,
             consistency=consistency, trend=trend,
@@ -480,6 +671,146 @@ def get_period_entries(emp_id: int, period: str) -> List[KPIEntry]:
     except Exception as e:
         logger.error(f"get_period_entries: {e}")
         return []
+
+
+def build_pdf_payload(emp: "Employee") -> Dict[str, Any]:
+    """Build the dict passed to utils.generate_visual_pdf().
+
+    Centralises the logic so /export_pdf, /download/<id> and /admin/export_all_pdf
+    all produce identical data. Includes ranking, targeted complaints, and
+    ordered (newest-first) entries.
+    """
+    try:
+        # All entries, newest first (fixes the `all_entries[-30:]` bug where ordering
+        # was unspecified and could yield arbitrary 30 rows)
+        all_entries = (
+            KPIEntry.query
+            .filter_by(emp_id=emp.id)
+            .order_by(KPIEntry.entry_date.desc())
+            .all()
+        )
+        recent_30 = all_entries[:30]
+
+        # Compute ranks (same logic as staff_detail)
+        emp_overall_rank = None
+        emp_role_rank = None
+        try:
+            all_staff = Employee.query.filter_by(is_admin=False).all()
+            all_sc, role_sc = [], []
+            for s in all_staff:
+                s_ents = KPIEntry.query.filter_by(emp_id=s.id).all()
+                s_stats = build_analytics(s_ents, s.staff_type, emp_id=s.id)
+                if s_stats:
+                    all_sc.append((s.id, s_stats["eff_score"]))
+                    if s.staff_type == emp.staff_type:
+                        role_sc.append((s.id, s_stats["eff_score"]))
+            all_sc.sort(key=lambda x: x[1], reverse=True)
+            role_sc.sort(key=lambda x: x[1], reverse=True)
+            emp_overall_rank = next((i+1 for i,(sid,_) in enumerate(all_sc)  if sid==emp.id), None)
+            emp_role_rank    = next((i+1 for i,(sid,_) in enumerate(role_sc) if sid==emp.id), None)
+            total_staff = len(all_staff)
+            total_role  = sum(1 for s in all_staff if s.staff_type == emp.staff_type)
+        except Exception as re_err:
+            logger.warning(f"PDF rank calc: {re_err}")
+            total_staff = total_role = 0
+
+        # Targeted complaints (pinned to this employee) + role-wide complaints
+        complaints_targeted = []
+        complaints_role = []
+        try:
+            unresolved = Complaint.query.filter_by(is_resolved=False).all()
+            for c in unresolved:
+                rec = {
+                    "date": c.entry_date,
+                    "type": c.complaint_type,
+                    "description": c.description,
+                    "picker_pts": c.picker_final or 0,
+                    "checker_pts": c.checker_final or 0,
+                    "purchaser_pts": c.purchaser_final or 0,
+                    "target_emp_id": c.target_emp_id,
+                }
+                if c.target_emp_id == emp.id:
+                    complaints_targeted.append(rec)
+                elif c.target_emp_id is None:
+                    complaints_role.append(rec)
+        except Exception as ce:
+            logger.warning(f"PDF complaint fetch: {ce}")
+
+        # 30-day heatmap + sparkline data (newest → oldest, so chart reads left→right as time forward)
+        today = date.today()
+        heatmap = {}
+        heatmap_errors = {}  # error-density map for Phase 3 PDF heat map
+        heatmap_volume = {}  # volume map for Phase 3 PDF heat map
+        for e in recent_30:
+            delta = (today - e.entry_date).days
+            if delta <= 29:
+                if emp.staff_type == "checker":
+                    tck_day = (e.checked or 0) + (e.errors_found or 0)
+                    spd = round(tck_day / 9.0, 1)
+                    heatmap[str(e.entry_date)] = min(round(spd / 50 * 100, 1), 100)
+                    # Error density for checker = urgent items / total
+                    err_total = (e.errors_found or 0)
+                    total_items = tck_day or 1
+                    heatmap_errors[str(e.entry_date)] = round(err_total / total_items * 100, 1)
+                    heatmap_volume[str(e.entry_date)] = tck_day
+                else:
+                    heatmap[str(e.entry_date)] = e.accuracy
+                    # Error density for picker = missed / total
+                    total_picks = (e.picked or 0) + (e.missed or 0) or 1
+                    heatmap_errors[str(e.entry_date)] = round((e.missed or 0) / total_picks * 100, 1)
+                    heatmap_volume[str(e.entry_date)] = total_picks
+
+        # Pending bill validations (Constant Protocol — Phase 3)
+        pending_validations = []
+        try:
+            # Only pickers have their own submissions pending; for all staff show role-relevant ones
+            if emp.staff_type == "picker":
+                bvs = BillValidation.query.filter_by(
+                    picker_id=emp.id
+                ).filter(
+                    BillValidation.status.in_(["pending", "mismatch"])
+                ).order_by(BillValidation.entry_date.desc()).limit(20).all()
+            else:
+                # For checkers/purchasers, show any pending validations they might help with
+                bvs = BillValidation.query.filter(
+                    BillValidation.status == "pending"
+                ).order_by(BillValidation.entry_date.desc()).limit(10).all()
+            for bv in bvs:
+                picker_emp = db.session.get(Employee, bv.picker_id)
+                pending_validations.append({
+                    "date": bv.entry_date,
+                    "picker_name": picker_emp.name if picker_emp else f"#{bv.picker_id}",
+                    "picker_count": bv.picker_count,
+                    "slots_filled": bv.checker_count_submitted,
+                    "status": bv.status,
+                    "is_mine": bv.picker_id == emp.id,
+                })
+        except Exception as ve:
+            logger.warning(f"PDF pending validations fetch: {ve}")
+
+        return {
+            "all_stats":    build_analytics(all_entries, emp.staff_type, emp_id=emp.id),
+            "day_stats":    build_analytics(get_period_entries(emp.id, "day"),   emp.staff_type, emp_id=emp.id),
+            "week_stats":   build_analytics(get_period_entries(emp.id, "week"),  emp.staff_type, emp_id=emp.id),
+            "month_stats":  build_analytics(get_period_entries(emp.id, "month"), emp.staff_type, emp_id=emp.id),
+            "staff_type":   emp.staff_type,
+            "emp_email":    emp.email,
+            "emp_role":     emp.role,
+            "emp_role_rank":    emp_role_rank,
+            "emp_overall_rank": emp_overall_rank,
+            "total_role":       total_role,
+            "total_staff":       total_staff,
+            "complaints_targeted": complaints_targeted,
+            "complaints_role":     complaints_role,
+            "heatmap":      heatmap,
+            "heatmap_errors": heatmap_errors,
+            "heatmap_volume": heatmap_volume,
+            "pending_validations": pending_validations,
+            "all_entries":  recent_30,
+        }
+    except Exception as e:
+        logger.error(f"build_pdf_payload: {e}")
+        return {"staff_type": emp.staff_type, "all_entries": []}
 
 
 def login_required(f):
@@ -523,6 +854,9 @@ def run_migrations():
                 ("sunday_override", "BOOLEAN DEFAULT FALSE"),
                 ("twofa_secret",    "VARCHAR(32)"),
                 ("twofa_enabled",   "BOOLEAN DEFAULT FALSE"),
+                ("admin_adjustment","FLOAT DEFAULT 0"),
+                ("admin_adjustment_note","VARCHAR(200) DEFAULT ''"),
+                ("custom_hourly_target", "FLOAT"),
                 ("created_at",      "TIMESTAMP DEFAULT CURRENT_TIMESTAMP"),
             ]
             for col, col_type in emp_cols:
@@ -565,6 +899,7 @@ def run_migrations():
                 ("sweep_done",          "INTEGER DEFAULT 0"),
                 ("pending_bills_manual","INTEGER DEFAULT 0"),
                 ("total_bills_received","INTEGER DEFAULT 0"),
+                ("admin_adjustment",    "FLOAT DEFAULT 0"),
             ]
             for col, col_type in kpi_cols:
                 try:
@@ -586,6 +921,43 @@ def run_migrations():
             except Exception as ce:
                 db.session.rollback()
                 logger.warning(f"complaints.target_emp_id migration skipped: {ce}")
+            # Create bill_validations table (Constant Protocol — Phase 2)
+            try:
+                db.session.execute(db.text("""
+                    CREATE TABLE IF NOT EXISTS bill_validations (
+                        id SERIAL PRIMARY KEY,
+                        entry_date DATE NOT NULL,
+                        picker_id INTEGER NOT NULL REFERENCES employees(id) ON DELETE CASCADE,
+                        picker_count INTEGER NOT NULL,
+                        checker1_id INTEGER REFERENCES employees(id),
+                        checker1_count INTEGER,
+                        checker1_at TIMESTAMP,
+                        checker2_id INTEGER REFERENCES employees(id),
+                        checker2_count INTEGER,
+                        checker2_at TIMESTAMP,
+                        checker3_id INTEGER REFERENCES employees(id),
+                        checker3_count INTEGER,
+                        checker3_at TIMESTAMP,
+                        status VARCHAR(20) DEFAULT 'pending',
+                        mismatch_emp_ids VARCHAR(100) DEFAULT '',
+                        override_by INTEGER REFERENCES employees(id),
+                        override_note VARCHAR(200) DEFAULT '',
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        CONSTRAINT _picker_date_uc UNIQUE (picker_id, entry_date)
+                    )
+                """))
+                db.session.execute(db.text(
+                    "CREATE INDEX IF NOT EXISTS idx_bv_date ON bill_validations(entry_date)"
+                ))
+                db.session.execute(db.text(
+                    "CREATE INDEX IF NOT EXISTS idx_bv_status ON bill_validations(status)"
+                ))
+                db.session.commit()
+                logger.info("✅ bill_validations table ensured")
+            except Exception as ce:
+                db.session.rollback()
+                logger.warning(f"bill_validations migration skipped: {ce}")
         else:
             # SQLite doesn't support IF NOT EXISTS on ALTER TABLE
             import sqlite3
@@ -598,11 +970,23 @@ def run_migrations():
                 "sunday_override": "BOOLEAN DEFAULT 0",
                 "twofa_secret": "VARCHAR(32)",
                 "twofa_enabled": "BOOLEAN DEFAULT 0",
+                "admin_adjustment": "FLOAT DEFAULT 0",
+                "admin_adjustment_note": "VARCHAR(200) DEFAULT ''",
+                "custom_hourly_target": "FLOAT",
             }
             for col, col_type in sqlite_cols.items():
                 if col not in existing:
                     cursor.execute(f"ALTER TABLE employees ADD COLUMN {col} {col_type}")
                     logger.info(f"✅ SQLite column '{col}' added")
+            # KPI entries sqlite
+            try:
+                cursor.execute("PRAGMA table_info(kpi_entries)")
+                kpi_existing = [row[1] for row in cursor.fetchall()]
+                if "admin_adjustment" not in kpi_existing:
+                    cursor.execute("ALTER TABLE kpi_entries ADD COLUMN admin_adjustment FLOAT DEFAULT 0")
+                    logger.info("✅ SQLite kpi_entries.admin_adjustment added")
+            except Exception as kce:
+                logger.warning(f"SQLite kpi_entries migration: {kce}")
             # complaints.target_emp_id
             try:
                 cursor.execute("PRAGMA table_info(complaints)")
@@ -784,6 +1168,26 @@ def dashboard():
                     db.session.add(ne)
                     db.session.commit()
 
+                    # ── Constant Protocol: create pending BillValidation for pickers
+                    if staff_type == "picker" and total_bills_received > 0:
+                        try:
+                            bv = BillValidation.query.filter_by(
+                                picker_id=emp_id, entry_date=today
+                            ).first()
+                            if not bv:
+                                bv = BillValidation(
+                                    picker_id=emp_id,
+                                    entry_date=today,
+                                    picker_count=total_bills_received,
+                                    status="pending",
+                                )
+                                db.session.add(bv)
+                                db.session.commit()
+                                logger.info(f"Bill validation created: picker {emp_id}, count {total_bills_received}")
+                        except Exception as bve:
+                            db.session.rollback()
+                            logger.error(f"BillValidation create failed: {bve}")
+
                     all_entries = KPIEntry.query.filter_by(emp_id=emp_id).all()
                     all_stats = build_analytics(all_entries, staff_type, emp_id=emp_id)
                     if all_stats:
@@ -795,7 +1199,15 @@ def dashboard():
                     flash("✅ Metrics recorded successfully.", "success")
                     today_entry = ne
 
-                    socketio.emit('entry_update', {'user': session.get('user_name'), 'accuracy': ne.accuracy})
+                    # Live broadcast — Last Entry update for admin dashboard
+                    socketio.emit('entry_update', {
+                        'user': session.get('user_name'),
+                        'user_id': emp_id,
+                        'staff_type': staff_type,
+                        'accuracy': ne.accuracy,
+                        'last_entry': today.strftime('%Y-%m-%d'),
+                        'last_entry_time': datetime.utcnow().strftime('%H:%M'),
+                    })
                 except Exception as e:
                     db.session.rollback()
                     logger.error(f"Dashboard POST: {e}")
@@ -1125,6 +1537,20 @@ def admin_edit_user(emp_id):
                 return redirect(url_for("admin_dashboard"))
             emp.set_password(new_password)
 
+        # Admin Adjustment — ongoing manual +/- points
+        adj_raw = request.form.get("admin_adjustment", "").strip()
+        if adj_raw != "":
+            try:
+                adj_val = float(adj_raw)
+                # Clamp to sensible range
+                adj_val = max(-30.0, min(30.0, adj_val))
+                emp.admin_adjustment = adj_val
+            except (ValueError, TypeError):
+                pass
+        adj_note = request.form.get("admin_adjustment_note", "").strip()
+        if adj_note:
+            emp.admin_adjustment_note = adj_note[:200]
+
         db.session.commit()
         log_audit("edit_user", name, "Updated by admin")
         flash(f"✅ {emp.name} updated successfully.", "success")
@@ -1211,17 +1637,11 @@ def export_pdf():
         from utils import generate_visual_pdf
         emp_id = session.get("user_id")
         emp = db.session.get(Employee, emp_id)
-        all_entries = KPIEntry.query.filter_by(emp_id=emp_id).all()
+        if not emp:
+            flash("User not found.", "danger")
+            return redirect(url_for("dashboard"))
 
-        payload = {
-            "all_stats": build_analytics(all_entries, emp.staff_type, emp_id=emp.id),
-            "day_stats": build_analytics(get_period_entries(emp_id, "day"), emp.staff_type, emp_id=emp.id),
-            "week_stats": build_analytics(get_period_entries(emp_id, "week"), emp.staff_type, emp_id=emp.id),
-            "month_stats": build_analytics(get_period_entries(emp_id, "month"), emp.staff_type, emp_id=emp.id),
-            "staff_type": emp.staff_type,
-            "all_entries": all_entries[-30:],
-        }
-
+        payload = build_pdf_payload(emp)
         pdf_buffer = generate_visual_pdf(emp.name, payload)
         return Response(
             pdf_buffer.getvalue(),
@@ -1245,17 +1665,8 @@ def download_pdf(emp_id):
         if not emp:
             flash("Employee not found.", "danger")
             return redirect(url_for("admin_dashboard"))
-        all_entries = KPIEntry.query.filter_by(emp_id=emp_id).all()
 
-        payload = {
-            "all_stats": build_analytics(all_entries, emp.staff_type, emp_id=emp.id),
-            "day_stats": build_analytics(get_period_entries(emp_id, "day"), emp.staff_type, emp_id=emp.id),
-            "week_stats": build_analytics(get_period_entries(emp_id, "week"), emp.staff_type, emp_id=emp.id),
-            "month_stats": build_analytics(get_period_entries(emp_id, "month"), emp.staff_type, emp_id=emp.id),
-            "staff_type": emp.staff_type,
-            "all_entries": all_entries[-30:],
-        }
-
+        payload = build_pdf_payload(emp)
         pdf_buffer = generate_visual_pdf(emp.name, payload)
         return Response(
             pdf_buffer.getvalue(),
@@ -1638,20 +2049,7 @@ def admin_export_all_pdf():
         with zipfile.ZipFile(zip_buf, 'w', zipfile.ZIP_DEFLATED) as zf:
             for emp in employees:
                 try:
-                    entries = KPIEntry.query.filter_by(emp_id=emp.id).all()
-                    all_stats   = build_analytics(entries, emp.staff_type, emp_id=emp.id)
-                    day_stats   = build_analytics(get_period_entries(emp.id, "day"), emp.staff_type, emp_id=emp.id)
-                    week_stats  = build_analytics(get_period_entries(emp.id, "week"), emp.staff_type, emp_id=emp.id)
-                    month_stats = build_analytics(get_period_entries(emp.id, "month"), emp.staff_type, emp_id=emp.id)
-
-                    payload = {
-                        "all_stats":   all_stats,
-                        "day_stats":   day_stats,
-                        "week_stats":  week_stats,
-                        "month_stats": month_stats,
-                        "staff_type":  emp.staff_type,
-                        "all_entries": entries[-30:],
-                    }
+                    payload = build_pdf_payload(emp)
                     pdf_buf = generate_visual_pdf(emp.name, payload)
                     safe_name = emp.name.replace(" ", "_").replace("/", "-")
                     zf.writestr(f"KRA_{safe_name}_{date.today()}.pdf", pdf_buf.getvalue())
@@ -1670,6 +2068,302 @@ def admin_export_all_pdf():
         logger.error(f"export_all_pdf: {e}")
         flash("Error generating PDFs.", "danger")
         return redirect(url_for("admin_dashboard"))
+
+
+# ─── CONSTANT PROTOCOL ROUTES (Phase 2) ──────────────────────────────────
+
+@app.route("/validations")
+@login_required
+def validations_list():
+    """Show pending validations waiting for checker input. Visible to all staff."""
+    try:
+        today = date.today()
+        # Show pending validations from last 3 days (so checkers can catch up)
+        cutoff = today - timedelta(days=3)
+        pending = BillValidation.query.filter(
+            BillValidation.status == "pending",
+            BillValidation.entry_date >= cutoff
+        ).order_by(BillValidation.entry_date.desc(), BillValidation.created_at.desc()).all()
+        # Recent completed (last 7 days)
+        recent = BillValidation.query.filter(
+            BillValidation.status.in_(["confirmed", "mismatch", "admin_override"]),
+            BillValidation.entry_date >= today - timedelta(days=7)
+        ).order_by(BillValidation.updated_at.desc()).limit(30).all()
+
+        # Build helper maps for display
+        emp_map = {e.id: e for e in Employee.query.all()}
+        current_user_id = session.get("user_id")
+
+        def _serialize(bv):
+            already_voted = current_user_id in [bv.checker1_id, bv.checker2_id, bv.checker3_id]
+            return {
+                "bv": bv,
+                "picker": emp_map.get(bv.picker_id),
+                "checker1": emp_map.get(bv.checker1_id) if bv.checker1_id else None,
+                "checker2": emp_map.get(bv.checker2_id) if bv.checker2_id else None,
+                "checker3": emp_map.get(bv.checker3_id) if bv.checker3_id else None,
+                "already_voted": already_voted,
+                "slots_filled": bv.checker_count_submitted,
+            }
+
+        return render_template("validations.html",
+            pending=[_serialize(b) for b in pending],
+            recent=[_serialize(b) for b in recent],
+            current_user_id=current_user_id,
+            is_admin=bool(session.get("is_admin")),
+            today=today,
+        )
+    except Exception as e:
+        logger.error(f"validations_list: {e}")
+        flash("Error loading validations.", "danger")
+        return redirect(url_for("dashboard"))
+
+
+@app.route("/validation/<int:bv_id>/submit", methods=["POST"])
+@login_required
+def validation_submit(bv_id):
+    """A checker submits their count for a pending validation."""
+    try:
+        bv = db.session.get(BillValidation, bv_id)
+        if not bv:
+            flash("Validation not found.", "danger")
+            return redirect(url_for("validations_list"))
+        if bv.status not in ("pending",):
+            flash("This validation is already resolved.", "warning")
+            return redirect(url_for("validations_list"))
+
+        current_id = session.get("user_id")
+        if current_id == bv.picker_id:
+            flash("You cannot validate your own submission.", "warning")
+            return redirect(url_for("validations_list"))
+        if current_id in [bv.checker1_id, bv.checker2_id, bv.checker3_id]:
+            flash("You have already submitted your count for this validation.", "info")
+            return redirect(url_for("validations_list"))
+
+        try:
+            count = max(0, int(request.form.get("count", 0) or 0))
+        except (ValueError, TypeError):
+            flash("Invalid count.", "danger")
+            return redirect(url_for("validations_list"))
+
+        # Fill the first empty slot
+        now = datetime.utcnow()
+        if bv.checker1_count is None:
+            bv.checker1_id = current_id
+            bv.checker1_count = count
+            bv.checker1_at = now
+        elif bv.checker2_count is None:
+            bv.checker2_id = current_id
+            bv.checker2_count = count
+            bv.checker2_at = now
+        elif bv.checker3_count is None:
+            bv.checker3_id = current_id
+            bv.checker3_count = count
+            bv.checker3_at = now
+        else:
+            flash("All 3 checker slots already filled.", "warning")
+            return redirect(url_for("validations_list"))
+
+        # If all 3 slots now filled, evaluate
+        if bv.checker_count_submitted >= 3:
+            new_status, wrong_ids = bv.evaluate()
+            bv.status = new_status
+            bv.mismatch_emp_ids = ",".join(str(x) for x in wrong_ids)
+            db.session.commit()
+            if new_status == "confirmed":
+                flash("✅ All 4 counts matched — submission confirmed.", "success")
+            else:
+                # ── Auto-create complaint entries for each flagged staff ──
+                # Deduction scales with how far off they were from the majority.
+                try:
+                    from collections import Counter
+                    all_votes = [
+                        (bv.picker_id, bv.picker_count),
+                        (bv.checker1_id, bv.checker1_count),
+                        (bv.checker2_id, bv.checker2_count),
+                        (bv.checker3_id, bv.checker3_count),
+                    ]
+                    counts = Counter(v for _, v in all_votes if v is not None)
+                    majority_val, _ = counts.most_common(1)[0]
+
+                    for wid in wrong_ids:
+                        wrong_emp = db.session.get(Employee, wid)
+                        if not wrong_emp:
+                            continue
+                        wrong_val = next((v for eid, v in all_votes if eid == wid), 0)
+                        diff = abs((wrong_val or 0) - majority_val)
+                        # Scale: 0.5 pt per unit difference, capped at 15 pts
+                        deduct_pts = min(round(diff * 0.5, 1), 15.0)
+                        if deduct_pts < 0.5:
+                            deduct_pts = 0.5  # minimum deduction per mismatch
+
+                        # Role-specific deduction routing
+                        picker_f = deduct_pts if wrong_emp.staff_type == "picker" else 0.0
+                        checker_f = deduct_pts if wrong_emp.staff_type == "checker" else 0.0
+                        purchaser_f = deduct_pts if wrong_emp.staff_type == "purchaser" else 0.0
+
+                        auto_complaint = Complaint(
+                            entry_date=date.today(),
+                            reported_by=None,  # auto-generated, no admin
+                            target_emp_id=wid,  # Phase 1 targeted deduction
+                            description=(f"[AUTO] Bill count mismatch on {bv.entry_date}. "
+                                         f"Entered {wrong_val}, majority was {majority_val} (off by {diff})."),
+                            complaint_type="missing",
+                            picker_deduct=picker_f,
+                            checker_deduct=checker_f,
+                            purchaser_deduct=purchaser_f,
+                            picker_final=picker_f,
+                            checker_final=checker_f,
+                            purchaser_final=purchaser_f,
+                            is_resolved=False,
+                        )
+                        db.session.add(auto_complaint)
+                    db.session.commit()
+                    log_audit("auto_deduction",
+                              f"bv_id={bv.id} date={bv.entry_date}",
+                              f"{len(wrong_ids)} staff auto-deducted for mismatch")
+                except Exception as ae:
+                    logger.error(f"Auto-deduction on mismatch failed: {ae}")
+                    db.session.rollback()
+
+                # Broadcast mismatch alert to admin
+                try:
+                    wrong_names = [db.session.get(Employee, wid).name
+                                   for wid in wrong_ids if db.session.get(Employee, wid)]
+                    socketio.emit("validation_mismatch", {
+                        "picker_id": bv.picker_id,
+                        "date": str(bv.entry_date),
+                        "wrong_names": wrong_names,
+                    })
+                except Exception:
+                    pass
+                flash(f"⚠️ Counts do not match! {len(wrong_ids)} staff flagged and auto-deducted. Admin can review and resolve via Complaints.", "warning")
+        else:
+            db.session.commit()
+            flash(f"✓ Count recorded ({bv.checker_count_submitted}/3 checkers).", "success")
+
+        # Live update
+        socketio.emit("validation_update", {
+            "bv_id": bv.id,
+            "status": bv.status,
+            "slots_filled": bv.checker_count_submitted,
+        })
+
+        return redirect(url_for("validations_list"))
+    except Exception as e:
+        db.session.rollback()
+        logger.error(f"validation_submit: {e}")
+        flash("Error submitting validation.", "danger")
+        return redirect(url_for("validations_list"))
+
+
+@app.route("/admin/validation/<int:bv_id>/override", methods=["POST"])
+@admin_required
+def admin_validation_override(bv_id):
+    """Admin override — accept a pending or mismatched validation.
+    Used when fewer than 3 checkers are on shift, or for dispute resolution.
+    """
+    try:
+        bv = db.session.get(BillValidation, bv_id)
+        if not bv:
+            flash("Validation not found.", "danger")
+            return redirect(url_for("validations_list"))
+
+        action = request.form.get("action", "accept")
+        note = request.form.get("note", "").strip()[:200]
+        admin_id = session.get("user_id")
+
+        if action == "accept":
+            bv.status = "admin_override"
+            bv.override_by = admin_id
+            bv.override_note = note or "Admin override (short-staffed / accepted)"
+            db.session.commit()
+            log_audit("validation_override", f"picker={bv.picker_id} date={bv.entry_date}",
+                      f"Accepted. Note: {note}")
+            flash(f"✅ Validation #{bv.id} accepted by admin override.", "success")
+        elif action == "reject":
+            bv.status = "mismatch"
+            bv.override_by = admin_id
+            bv.override_note = note or "Admin rejected"
+            db.session.commit()
+            log_audit("validation_reject", f"picker={bv.picker_id} date={bv.entry_date}",
+                      f"Rejected. Note: {note}")
+            flash(f"⚠️ Validation #{bv.id} marked as mismatch.", "warning")
+        else:
+            flash("Unknown action.", "warning")
+
+        return redirect(url_for("validations_list"))
+    except Exception as e:
+        db.session.rollback()
+        logger.error(f"admin_validation_override: {e}")
+        flash("Error processing override.", "danger")
+        return redirect(url_for("validations_list"))
+
+
+@app.route("/api/last_entry")
+@login_required
+def api_last_entry():
+    """Return the last entry timestamp for every employee (for live Last Entry card)."""
+    try:
+        out = {}
+        employees = Employee.query.filter_by(is_admin=False).all()
+        for emp in employees:
+            last = KPIEntry.query.filter_by(emp_id=emp.id).order_by(
+                KPIEntry.entry_date.desc()).first()
+            out[emp.id] = {
+                "name": emp.name,
+                "staff_type": emp.staff_type,
+                "last_entry_date": str(last.entry_date) if last else None,
+            }
+        return jsonify(employees=out, server_time=datetime.utcnow().isoformat())
+    except Exception as e:
+        logger.error(f"api_last_entry: {e}")
+        return jsonify(error="Server error"), 500
+
+
+
+@app.route("/admin/accept_target_suggestion/<int:emp_id>", methods=["POST"])
+@admin_required
+def admin_accept_target_suggestion(emp_id):
+    """Admin accepts the auto-suggest: raise this employee's hourly target by 40%."""
+    try:
+        emp = db.session.get(Employee, emp_id)
+        if not emp:
+            flash("Employee not found.", "danger")
+            return redirect(url_for("admin_dashboard"))
+        current = emp.custom_hourly_target or (
+            50.0 if emp.staff_type == "picker"
+            else 70.0 if emp.staff_type == "checker"
+            else 30.0
+        )
+        new_target = round(current * 1.4, 1)
+        emp.custom_hourly_target = new_target
+        db.session.commit()
+        log_audit("raise_target", emp.name,
+                  f"Hourly target raised from {current} to {new_target}/hr")
+        flash(f"✅ {emp.name}'s hourly target raised to {new_target}/hr (was {current}).", "success")
+    except Exception as e:
+        db.session.rollback()
+        logger.error(f"accept_target_suggestion: {e}")
+        flash("Error updating target.", "danger")
+    return redirect(url_for("admin_dashboard"))
+
+
+@app.route("/admin/reset_target/<int:emp_id>", methods=["POST"])
+@admin_required
+def admin_reset_target(emp_id):
+    """Reset employee's custom target back to role default."""
+    try:
+        emp = db.session.get(Employee, emp_id)
+        if emp:
+            emp.custom_hourly_target = None
+            db.session.commit()
+            log_audit("reset_target", emp.name, "Reset to role default")
+            flash(f"✅ {emp.name}'s target reset to role default.", "success")
+    except Exception as e:
+        db.session.rollback()
+        logger.error(f"reset_target: {e}")
+    return redirect(url_for("admin_dashboard"))
 
 
 @app.route("/admin/migrate_checker/<int:emp_id>", methods=["POST"])
