@@ -1177,6 +1177,28 @@ def dashboard():
                         missed               = gi("missed")
                         total_bills_received = gi("total_bills_received")
 
+                    # ── VALIDATION: reject submission if required fields missing ──
+                    missing_fields = []
+                    if staff_type == "picker":
+                        if total_bills_received <= 0:
+                            missing_fields.append("Total Bills Received (TB Sales)")
+                        if picked <= 0:
+                            missing_fields.append("Items Picked")
+                    elif staff_type == "checker":
+                        if bills_received <= 0:
+                            missing_fields.append("Bills Received (TB Sales)")
+                        if checked <= 0:
+                            missing_fields.append("Items Checked")
+                    elif staff_type == "purchaser":
+                        if sales_bills_open <= 0:
+                            missing_fields.append("PO Bills Received (TB Sales)")
+                        if errors_found <= 0:
+                            missing_fields.append("Number of Items")
+
+                    if missing_fields:
+                        flash(f"❌ Cannot save — required fields missing or zero: {', '.join(missing_fields)}.", "danger")
+                        return redirect(url_for("dashboard"))
+
                     ne = KPIEntry(
                         emp_id               = emp_id,
                         sales_bills_open     = sales_bills_open,
@@ -1844,6 +1866,28 @@ def past_entry(date_str):
                 pending_bills_manual = 0
                 total_bills_received = gi("total_bills_received")
 
+            # ── VALIDATION: reject submission if required fields missing ──
+            missing_fields = []
+            if staff_type == "picker":
+                if total_bills_received <= 0:
+                    missing_fields.append("Total Bills Received (TB Sales)")
+                if picked <= 0:
+                    missing_fields.append("Items Picked")
+            elif staff_type == "checker":
+                if bills_received <= 0:
+                    missing_fields.append("Bills Received (TB Sales)")
+                if checked <= 0:
+                    missing_fields.append("Items Checked")
+            elif staff_type == "purchaser":
+                if sales_bills_open <= 0:
+                    missing_fields.append("PO Bills Received (TB Sales)")
+                if errors_found <= 0:
+                    missing_fields.append("Number of Items")
+
+            if missing_fields:
+                flash(f"❌ Cannot save — required fields missing or zero: {', '.join(missing_fields)}.", "danger")
+                return redirect(url_for("past_entry", date_str=date_str))
+
             ne = KPIEntry(
                 emp_id               = emp_id,
                 sales_bills_open     = sales_bills_open,
@@ -2118,10 +2162,11 @@ def validations_list():
             BillValidation.entry_date >= cutoff
         ).order_by(BillValidation.entry_date.desc(), BillValidation.created_at.desc()).all()
         # Recent completed (last 7 days)
+        # Order by created_at (always set) instead of updated_at (may be NULL on old rows)
         recent = BillValidation.query.filter(
             BillValidation.status.in_(["confirmed", "mismatch", "admin_override"]),
             BillValidation.entry_date >= today - timedelta(days=7)
-        ).order_by(BillValidation.updated_at.desc()).limit(30).all()
+        ).order_by(BillValidation.created_at.desc()).limit(30).all()
 
         # Build helper maps for display
         emp_map = {e.id: e for e in Employee.query.all()}
@@ -2147,9 +2192,10 @@ def validations_list():
             today=today,
         )
     except Exception as e:
-        logger.error(f"validations_list: {e}")
-        flash("Error loading validations.", "danger")
-        return redirect(url_for("dashboard"))
+        import traceback
+        logger.error(f"validations_list: {e}\n{traceback.format_exc()}")
+        flash(f"Error loading validations: {str(e)[:120]}", "danger")
+        return redirect(url_for("admin_dashboard") if session.get("is_admin") else url_for("dashboard"))
 
 
 @app.route("/validation/<int:bv_id>/submit", methods=["POST"])
