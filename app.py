@@ -830,6 +830,37 @@ def admin_required(f):
     return decorated
 
 
+def _safe_stats(stats):
+    """Return a zero-filled stats dict when build_analytics returns None
+    (staff with zero entries). Keeps templates safe to render."""
+    if stats is None or not isinstance(stats, dict):
+        return {
+            "eff_score": 0.0, "grade": "NO DATA", "feedback": "No entries submitted yet.",
+            "days": 0, "trend": "—", "consistency": 0,
+            "complaint_deduction": 0, "admin_adjustment": 0,
+            "vwcr": 0, "cleaner_rate": 0, "efficiency_ratio": 0, "is_efficient": False,
+            "items_daily": 0, "bills_daily": 0,
+            "hard_target_items": 200, "hard_target_bills": 50,
+            "hourly_target": 50, "auto_suggest": None,
+            "pick_acc": 0, "pick_speed": 0, "packing_eff": 0,
+            "cs_fulfilment": 0, "workspace_score": 0, "bill_fulfilment": 0,
+            "tp": 0, "tm": 0, "ti": 0, "tcs": 0, "tro": 0, "ttc": 0, "tsd": 0,
+            "tsb": 0, "tpd": 0, "tbr_picker": 0, "potential_items": 0, "gap_items": 0,
+            "ts": 0, "ttt": 0,
+            "check_speed": 0, "ck_speed": 0, "clearance_rate": 100,
+            "normal_pct": 0, "urgent_pct": 0, "potential_eff": 0,
+            "tck_total": 0, "tck": 0, "tck_normal": 0, "tck_urgent": 0, "ter": 0,
+            "tsb_normal": 0, "tsb_urgent": 0, "tsb_total": 0,
+            "tbr": 0, "pending_bills": 0, "error_rate": 0, "check_acc": 0,
+            "pur_bills_received": 0, "pur_bills_checked": 0, "pur_bill_entry": 0,
+            "pur_items": 0, "pur_cs_open": 0, "pur_cs_received": 0,
+            "pur_items_racked": 0, "pur_bill_rate": 0, "pur_cs_fulfilment": 0,
+            "pur_racking_eff": 0, "pur_speed": 0, "pur_entry_rate": 0,
+            "pur_pending_bills": 0,
+        }
+    return stats
+
+
 def log_audit(action, target, details=""):
     try:
         log = AuditLog(
@@ -1358,10 +1389,11 @@ def staff_detail(emp_id):
         entries = KPIEntry.query.filter_by(emp_id=emp_id).order_by(KPIEntry.entry_date.desc()).all()
         today = date.today()
 
-        a_stats = build_analytics(entries, emp.staff_type, emp_id=emp.id)
-        d_stats = build_analytics(get_period_entries(emp_id, "day"), emp.staff_type, emp_id=emp.id)
-        w_stats = build_analytics(get_period_entries(emp_id, "week"), emp.staff_type, emp_id=emp.id)
-        m_stats = build_analytics(get_period_entries(emp_id, "month"), emp.staff_type, emp_id=emp.id)
+        # Guard against None stats (staff with zero entries) to keep template safe
+        a_stats = _safe_stats(build_analytics(entries, emp.staff_type, emp_id=emp.id))
+        d_stats = _safe_stats(build_analytics(get_period_entries(emp_id, "day"), emp.staff_type, emp_id=emp.id))
+        w_stats = _safe_stats(build_analytics(get_period_entries(emp_id, "week"), emp.staff_type, emp_id=emp.id))
+        m_stats = _safe_stats(build_analytics(get_period_entries(emp_id, "month"), emp.staff_type, emp_id=emp.id))
 
         # Heatmap: last 30 days — use accuracy for pickers, check_rate for checkers
         heatmap = {}
@@ -1451,8 +1483,9 @@ def staff_detail(emp_id):
             is_admin=bool(session.get("is_admin"))
         )
     except Exception as e:
-        logger.error(f"Staff detail error: {e}")
-        flash("Error loading staff profile.", "danger")
+        import traceback
+        logger.error(f"Staff detail error for emp_id={emp_id}: {e}\n{traceback.format_exc()}")
+        flash(f"Error loading staff profile: {str(e)[:120]}", "danger")
         return redirect(url_for("admin_dashboard") if session.get("is_admin") else url_for("dashboard"))
 
 
