@@ -353,6 +353,14 @@ tbody tr:hover td { background: rgba(219,234,254,0.3); }
           <label>New Password (optional)</label>
           <input type="password" name="new_password" placeholder="Leave blank to keep">
         </div>
+        <div class="field" style="grid-column: span 2;background:linear-gradient(135deg,rgba(29,78,216,0.06),rgba(5,150,105,0.04));padding:12px;border-radius:10px;border:1px dashed rgba(29,78,216,0.25);margin-top:4px;">
+          <label style="color:var(--blue);font-weight:700;">⚡ Admin Adjustment (ongoing ±30 pts)</label>
+          <div style="display:flex;gap:10px;align-items:center;">
+            <input type="number" name="admin_adjustment" id="edit-adj" min="-30" max="30" step="0.5" placeholder="0" style="width:90px;">
+            <input type="text" name="admin_adjustment_note" id="edit-adj-note" maxlength="200" placeholder="Reason (e.g. trained new staff, low attendance)" style="flex:1;">
+          </div>
+          <small style="font-size:11px;color:var(--muted);margin-top:4px;display:block;">Applies to every scored period for this employee until changed. Positive = bonus, Negative = penalty.</small>
+        </div>
       </div>
       <div class="modal-actions">
         <button type="button" class="btn-cancel" onclick="closeEdit()">Cancel</button>
@@ -369,6 +377,7 @@ tbody tr:hover td { background: rgba(219,234,254,0.3); }
     <span class="pill-admin">Admin</span>
   </div>
   <div class="nav-right">
+    <a href="/validations" class="btn-export" style="background:#fef3c7;color:#b45309;border-color:#fbbf24;">⚖️ Validations</a>
     <a href="/admin/export_csv" class="btn-export">📥 Export CSV</a>
     <a href="/admin/export_full" class="btn-export" style="background:#16a34a;color:#fff;">💾 Full Data Export (JSON)</a>
     <a href="/admin/export_all_pdf" class="btn-export" style="background:linear-gradient(135deg,#6d28d9,#4c1d95);color:#fff;">📄 All Staff PDFs (ZIP)</a>
@@ -539,7 +548,7 @@ tbody tr:hover td { background: rgba(219,234,254,0.3); }
                 <span class="tag {% if g in ['ELITE','EXCELLENT'] %}tag-ex{% elif g in ['GOOD','PROFICIENT'] %}tag-good{% elif g in ['AVERAGE','SATISFACTORY'] %}tag-avg{% else %}tag-poor{% endif %}">{{ g }}</span>
               {% else %}<span class="tag tag-none">No data</span>{% endif %}
             </td>
-            <td>
+            <td class="last-entry-cell" data-emp-id="{{ r.emp.id }}">
               {% if r.last_entry %}
                 <span class="last-seen-dot {% if today_flag %}dot-today{% elif this_week %}dot-week{% else %}dot-old{% endif %}"></span>
                 {{ r.last_entry.strftime('%d %b') }}
@@ -549,7 +558,7 @@ tbody tr:hover td { background: rgba(219,234,254,0.3); }
               <div class="actions">
                 <a href="/staff/{{ r.emp.id }}" class="btn-sm btn-view">👤 View</a>
                 <button class="btn-sm btn-edit"
-                  onclick="openEdit({{ r.emp.id }}, {{ r.emp.name|tojson }}, {{ r.emp.email|tojson }}, {{ r.emp.staff_type|tojson }})">
+                  onclick="openEdit({{ r.emp.id }}, {{ r.emp.name|tojson }}, {{ r.emp.email|tojson }}, {{ r.emp.staff_type|tojson }}, {{ (r.emp.admin_adjustment or 0)|tojson }}, {{ (r.emp.admin_adjustment_note or '')|tojson }})">
                   ✏️ Edit
                 </button>
                 <form method="POST" action="/admin/delete_user/{{ r.emp.id }}" style="display:inline;">
@@ -744,7 +753,7 @@ tbody tr:hover td { background: rgba(219,234,254,0.3); }
         <!-- PICKER SCORECARD -->
         <div>
           <div style="font-size:11px;font-weight:800;color:var(--blue);text-transform:uppercase;letter-spacing:.7px;margin-bottom:10px;">📦 Picker Scorecard</div>
-          <div style="font-size:9px;color:var(--muted);margin-bottom:8px;">Acc×28 + Fulfilment×22 + Speed×18 + Packing×12 + Workspace×10 + CS×5 + Consistency×5</div>
+          <div style="font-size:9px;color:var(--muted);margin-bottom:8px;">VWCR×25 + Fulfilment×18 + Speed÷250×15 + EffRatio×10 + Workspace×10 + CS×8 + Cleaner×7 + LogCons×7</div>
           {% if picker_lb %}{% for r in picker_lb %}
           <div style="background:{% if loop.index0==0 %}rgba(255,215,0,0.12){% elif loop.index0==1 %}rgba(192,192,192,0.12){% elif loop.index0==2 %}rgba(205,127,50,0.1){% else %}rgba(238,244,255,0.4){% endif %};border:1px solid {% if loop.index0==0 %}rgba(255,215,0,0.4){% elif loop.index0==1 %}rgba(192,192,192,0.4){% elif loop.index0==2 %}rgba(205,127,50,0.25){% else %}var(--border){% endif %};border-radius:12px;padding:10px 12px;margin-bottom:6px;">
             <div style="display:flex;align-items:center;gap:8px;">
@@ -762,7 +771,7 @@ tbody tr:hover td { background: rgba(219,234,254,0.3); }
               <div style="background:rgba(29,78,216,0.07);border-radius:5px;padding:3px;"><div style="color:var(--muted);">Accuracy</div><div style="font-weight:700;">{{ r.stats.pick_acc }}%</div></div>
               <div style="background:rgba(29,78,216,0.07);border-radius:5px;padding:3px;"><div style="color:var(--muted);">Speed/hr</div><div style="font-weight:700;">{{ r.stats.pick_speed }}</div></div>
               <div style="background:rgba(29,78,216,0.07);border-radius:5px;padding:3px;"><div style="color:var(--muted);">Workspace</div><div style="font-weight:700;">{{ r.stats.workspace_score }}%</div></div>
-              <div style="background:rgba(29,78,216,0.07);border-radius:5px;padding:3px;"><div style="color:var(--muted);">Packing</div><div style="font-weight:700;">{{ r.stats.packing_eff }}%</div></div>
+              <div style="background:rgba(29,78,216,0.07);border-radius:5px;padding:3px;"><div style="color:var(--muted);">VWCR</div><div style="font-weight:700;">{{ r.stats.vwcr or 0 }}%</div></div>
             </div>
             {% set g = r.stats.grade %}
             <div style="margin-top:6px;text-align:right;"><span style="font-size:10px;font-weight:800;padding:2px 8px;border-radius:5px;background:{% if g=='ELITE' %}#ede9fe{% elif g=='PROFICIENT' %}#dcfce7{% elif g=='SATISFACTORY' %}#fef3c7{% else %}#fee2e2{% endif %};color:{% if g=='ELITE' %}#6d28d9{% elif g=='PROFICIENT' %}#16a34a{% elif g=='SATISFACTORY' %}#d97706{% else %}#dc2626{% endif %};">{{ g }}</span></div>
@@ -773,7 +782,7 @@ tbody tr:hover td { background: rgba(219,234,254,0.3); }
         <!-- CHECKER SCORECARD -->
         <div>
           <div style="font-size:11px;font-weight:800;color:#6d28d9;text-transform:uppercase;letter-spacing:.7px;margin-bottom:10px;">🔍 Checker Scorecard</div>
-          <div style="font-size:9px;color:var(--muted);margin-bottom:8px;">Speed×30 + Clearance×25 + Normal%×20 + Consistency×10 + PotEff×8 + Volume×7</div>
+          <div style="font-size:9px;color:var(--muted);margin-bottom:8px;">Speed×22 + Clearance×22 + VWCR×20 + Cleaner×8 + EffRatio×8 + LogCons×8 + PotEff×5 + Workspace×4 + Sweep×3</div>
           {% if checker_lb %}{% for r in checker_lb %}
           <div style="background:{% if loop.index0==0 %}rgba(255,215,0,0.12){% elif loop.index0==1 %}rgba(192,192,192,0.12){% elif loop.index0==2 %}rgba(205,127,50,0.1){% else %}rgba(245,243,255,0.4){% endif %};border:1px solid {% if loop.index0==0 %}rgba(255,215,0,0.4){% elif loop.index0==1 %}rgba(192,192,192,0.4){% elif loop.index0==2 %}rgba(205,127,50,0.25){% else %}rgba(167,139,250,0.2){% endif %};border-radius:12px;padding:10px 12px;margin-bottom:6px;">
             <div style="display:flex;align-items:center;gap:8px;">
@@ -805,7 +814,7 @@ tbody tr:hover td { background: rgba(219,234,254,0.3); }
         <!-- PURCHASER SCORECARD -->
         <div>
           <div style="font-size:11px;font-weight:800;color:#16a34a;text-transform:uppercase;letter-spacing:.7px;margin-bottom:10px;">🛒 Purchaser Scorecard</div>
-          <div style="font-size:9px;color:var(--muted);margin-bottom:8px;">BillRate×30 + CS×25 + Racking×20 + Speed×12 + Entry×8 + Pending×5</div>
+          <div style="font-size:9px;color:var(--muted);margin-bottom:8px;">BillRate×25 + CS×20 + Racking×15 + Speed÷60×10 + Entry×8 + VWCR×8 + Pending×5 + EffRatio×4 + Workspace×3 + LogCons×2</div>
           {% if purchaser_lb is defined and purchaser_lb %}{% for r in purchaser_lb %}
           <div style="background:{% if loop.index0==0 %}rgba(255,215,0,0.12){% else %}rgba(240,253,244,0.4){% endif %};border:1px solid {% if loop.index0==0 %}rgba(255,215,0,0.4){% else %}rgba(22,163,74,0.15){% endif %};border-radius:12px;padding:10px 12px;margin-bottom:6px;">
             <div style="display:flex;align-items:center;gap:8px;">
@@ -1072,7 +1081,7 @@ document.addEventListener('click', function(e) {
   }
 });
 
-function openEdit(id, name, email, stype) {
+function openEdit(id, name, email, stype, adj, adjNote) {
   var f = document.getElementById('editForm');
   if(!f){ console.error("editForm not found"); return; }
   f.action = '/admin/edit_user/' + id;
@@ -1080,6 +1089,10 @@ function openEdit(id, name, email, stype) {
   document.getElementById('edit-email').value = email;
   var sel = document.getElementById('edit-type');
   if(sel) sel.value = stype;
+  var adjEl = document.getElementById('edit-adj');
+  if(adjEl) adjEl.value = (adj === undefined || adj === null) ? 0 : adj;
+  var adjNoteEl = document.getElementById('edit-adj-note');
+  if(adjNoteEl) adjNoteEl.value = adjNote || '';
   var modal = document.getElementById('editModal');
   if(modal) modal.classList.add('open');
 }
@@ -1119,6 +1132,40 @@ if (typeof io !== 'undefined') {
     el.textContent = '⚠️ ' + msg.name + ' — ' + msg.eff + '% accuracy';
     document.body.appendChild(el);
     setTimeout(() => el.remove(), 5000);
+  });
+
+  // Live "Last Entry" toast — when any staff submits
+  socket.on('entry_update', function(msg){
+    const el = document.createElement('div');
+    el.className = 'alert alert-success';
+    el.style.cssText = 'position:fixed;top:70px;right:20px;z-index:999;max-width:340px;box-shadow:0 8px 24px rgba(0,0,0,0.15);animation:slideIn 0.3s ease;';
+    el.innerHTML = '📝 <strong>' + (msg.user || 'Someone') + '</strong> just submitted ('
+                 + (msg.staff_type || '') + ') · ' + (msg.last_entry_time || '');
+    document.body.appendChild(el);
+    setTimeout(() => el.remove(), 4000);
+  });
+
+  // Validation mismatch alert (high-priority)
+  socket.on('validation_mismatch', function(data){
+    const el = document.createElement('div');
+    el.className = 'alert alert-danger';
+    el.style.cssText = 'position:fixed;top:70px;right:20px;z-index:999;max-width:360px;box-shadow:0 8px 24px rgba(0,0,0,0.15);animation:slideIn 0.3s ease;';
+    el.innerHTML = '⚠ <strong>Bill count mismatch</strong> — ' + (data.date || '') + '<br>'
+                 + 'Flagged: ' + ((data.wrong_names || []).join(', ') || 'check validations page')
+                 + '<br><a href="/validations" style="color:#dc2626;font-weight:700;">View validations →</a>';
+    document.body.appendChild(el);
+    setTimeout(() => el.remove(), 9000);
+  });
+  // Live update the Last Entry cell in the staff table
+  socket.on('entry_update', function(msg){
+    if (!msg || !msg.user_id) return;
+    var cell = document.querySelector('.last-entry-cell[data-emp-id="' + msg.user_id + '"]');
+    if (cell) {
+      cell.innerHTML = '<span class="last-seen-dot dot-today"></span> Just now';
+      cell.style.transition = 'background 0.4s';
+      cell.style.background = '#dcfce7';
+      setTimeout(function(){ cell.style.background = ''; }, 1800);
+    }
   });
 }
 
