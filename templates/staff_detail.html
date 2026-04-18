@@ -413,14 +413,14 @@ body{
       <div class="sc-sub">Items per hour</div>
     </div>
     <div class="sc-card accent-emerald">
-      <div class="sc-label">Clearance Rate</div>
-      <div class="sc-value">{{ a_stats.clearance_rate or 100 }}<span class="suf">%</span></div>
-      <div class="sc-sub">Bills cleared</div>
+      <div class="sc-label">VWCR</div>
+      <div class="sc-value">{{ a_stats.vwcr or 0 }}<span class="suf">%</span></div>
+      <div class="sc-sub">Volume-weighted clean rate</div>
     </div>
     <div class="sc-card accent-amber">
-      <div class="sc-label">Consistency</div>
+      <div class="sc-label">Log Consistency</div>
       <div class="sc-value">{{ a_stats.consistency }}<span class="suf">%</span></div>
-      <div class="sc-sub">Daily stability</div>
+      <div class="sc-sub">Daily logging stability</div>
     </div>
     {% elif emp.staff_type == 'purchaser' %}
     <div class="sc-card">
@@ -434,15 +434,15 @@ body{
       <div class="sc-sub">CS received ÷ open</div>
     </div>
     <div class="sc-card accent-amber">
-      <div class="sc-label">Consistency</div>
+      <div class="sc-label">Log Consistency</div>
       <div class="sc-value">{{ a_stats.consistency }}<span class="suf">%</span></div>
-      <div class="sc-sub">Daily stability</div>
+      <div class="sc-sub">Daily logging stability</div>
     </div>
     {% else %}
     <div class="sc-card accent-emerald">
-      <div class="sc-label">Bill Fulfilment</div>
-      <div class="sc-value">{{ a_stats.bill_fulfilment or 0 }}<span class="suf">%</span></div>
-      <div class="sc-sub">Picked ÷ received</div>
+      <div class="sc-label">VWCR</div>
+      <div class="sc-value">{{ a_stats.vwcr or 0 }}<span class="suf">%</span></div>
+      <div class="sc-sub">Volume-weighted clean rate</div>
     </div>
     <div class="sc-card">
       <div class="sc-label">Pick Speed</div>
@@ -450,9 +450,48 @@ body{
       <div class="sc-sub">Items per hour</div>
     </div>
     <div class="sc-card accent-amber">
-      <div class="sc-label">Consistency</div>
+      <div class="sc-label">Log Consistency</div>
       <div class="sc-value">{{ a_stats.consistency }}<span class="suf">%</span></div>
-      <div class="sc-sub">Daily stability</div>
+      <div class="sc-sub">Daily logging stability</div>
+    </div>
+    {% endif %}
+  </section>
+  {% endif %}
+
+  <!-- POTENTIAL BAR — volume vs hard-level targets -->
+  {% if a_stats and a_stats.hard_target_items %}
+  <section class="card" style="margin-bottom:20px;">
+    <div class="card-title"><span class="ico">🎯</span>Hard-Level Target Tracker
+      {% if a_stats.is_efficient %}<span style="margin-left:10px;padding:3px 10px;border-radius:8px;background:var(--emerald-lite);color:var(--emerald);font-size:11px;font-weight:700;font-family:'Inter',sans-serif;letter-spacing:0.05em;">✓ EFFICIENT</span>{% endif %}
+    </div>
+    <div class="card-sub">Daily volume vs the 200-items / 50-bills hard target. Staff are marked <b>Efficient</b> only when both targets are met.</div>
+    {% set items_pct = ((a_stats.items_daily or 0) / (a_stats.hard_target_items or 200) * 100)|round(1) %}
+    {% set bills_pct = ((a_stats.bills_daily or 0) / (a_stats.hard_target_bills or 50) * 100)|round(1) %}
+    {% if items_pct > 100 %}{% set items_display = 100 %}{% else %}{% set items_display = items_pct %}{% endif %}
+    {% if bills_pct > 100 %}{% set bills_display = 100 %}{% else %}{% set bills_display = bills_pct %}{% endif %}
+    <div style="display:flex;flex-direction:column;gap:14px;margin-top:8px;">
+      <div>
+        <div style="display:flex;justify-content:space-between;align-items:baseline;font-size:12px;margin-bottom:4px;">
+          <span style="font-weight:600;color:var(--navy);">Items per day</span>
+          <span style="color:var(--muted);">{{ a_stats.items_daily or 0 }} / {{ a_stats.hard_target_items|int }} ({{ items_pct }}%)</span>
+        </div>
+        <div style="height:12px;background:var(--surface-2);border-radius:8px;overflow:hidden;position:relative;">
+          <div style="height:100%;width:{{ items_display }}%;background:linear-gradient(90deg,{% if items_pct >= 100 %}var(--emerald),#10b981{% elif items_pct >= 70 %}var(--amber),#f59e0b{% else %}var(--rose),#ef4444{% endif %});border-radius:8px;transition:width 0.6s;"></div>
+        </div>
+      </div>
+      <div>
+        <div style="display:flex;justify-content:space-between;align-items:baseline;font-size:12px;margin-bottom:4px;">
+          <span style="font-weight:600;color:var(--navy);">Bills per day</span>
+          <span style="color:var(--muted);">{{ a_stats.bills_daily or 0 }} / {{ a_stats.hard_target_bills|int }} ({{ bills_pct }}%)</span>
+        </div>
+        <div style="height:12px;background:var(--surface-2);border-radius:8px;overflow:hidden;">
+          <div style="height:100%;width:{{ bills_display }}%;background:linear-gradient(90deg,{% if bills_pct >= 100 %}var(--emerald),#10b981{% elif bills_pct >= 70 %}var(--amber),#f59e0b{% else %}var(--rose),#ef4444{% endif %});border-radius:8px;transition:width 0.6s;"></div>
+        </div>
+      </div>
+    </div>
+    {% if a_stats.auto_suggest %}
+    <div style="margin-top:14px;padding:10px 14px;background:#eff6ff;border-left:3px solid var(--brand);border-radius:8px;font-size:12px;color:var(--navy);">
+      <b>💡 System Suggestion:</b> {{ a_stats.auto_suggest }}
     </div>
     {% endif %}
   </section>
@@ -510,33 +549,39 @@ body{
       <div class="points-breakdown">
         {% if emp.staff_type == 'checker' %}
           {% set _pts = [
-            ('Check Speed',     a_stats.check_speed, 80.0, 30),
-            ('Clearance Rate',  a_stats.clearance_rate or 100, 100.0, 25),
-            ('Clean Check %',   a_stats.normal_pct or 0, 100.0, 20),
-            ('Consistency',     a_stats.consistency, 100.0, 10),
-            ('Potential Eff.',  a_stats.potential_eff, 100.0, 8),
-            ('Volume',          a_stats.tck_total, 500.0, 5),
-            ('Sweep Bonus',     a_stats.tsd, 1.0 * (a_stats.days or 1), 2),
+            ('Check Speed',      a_stats.check_speed, 80.0, 22),
+            ('Clearance Rate',   a_stats.clearance_rate or 100, 100.0, 22),
+            ('VWCR',             a_stats.vwcr or 0, 120.0, 20),
+            ('Cleaner Rate',     a_stats.cleaner_rate or 0, 100.0, 8),
+            ('Efficiency Ratio', (a_stats.efficiency_ratio or 0) * 100, 100.0, 8),
+            ('Log Consistency',  a_stats.consistency, 100.0, 8),
+            ('Potential Eff.',   a_stats.potential_eff, 100.0, 5),
+            ('Workspace',        a_stats.workspace_score, 100.0, 4),
+            ('Sweep Bonus',      a_stats.tsd, max(a_stats.days, 1), 3),
           ] %}
         {% elif emp.staff_type == 'purchaser' %}
           {% set _pts = [
-            ('Bill Processing Rate', a_stats.pur_bill_rate or 0, 100.0, 28),
-            ('CS Fulfilment',        a_stats.pur_cs_fulfilment or 0, 100.0, 23),
-            ('Racking Efficiency',   a_stats.pur_racking_eff or 0, 100.0, 18),
-            ('Processing Speed',     a_stats.pur_speed or 0, 60.0, 12),
+            ('Bill Processing Rate', a_stats.pur_bill_rate or 0, 100.0, 25),
+            ('CS Fulfilment',        a_stats.pur_cs_fulfilment or 0, 100.0, 20),
+            ('Racking Efficiency',   a_stats.pur_racking_eff or 0, 100.0, 15),
+            ('Processing Speed',     a_stats.pur_speed or 0, 60.0, 10),
             ('Bill Entry Rate',      a_stats.pur_entry_rate or 0, 100.0, 8),
-            ('Workspace',            a_stats.workspace_score, 100.0, 4),
-            ('Sweep Bonus',          a_stats.tsd, 1.0 * (a_stats.days or 1), 2),
+            ('VWCR',                 a_stats.vwcr or 0, 120.0, 8),
+            ('Pending Bills',        100 - ((a_stats.pur_pending_bills or 0) / max((a_stats.pur_bills_received or 1), 1) * 100), 100.0, 5),
+            ('Efficiency Ratio',     (a_stats.efficiency_ratio or 0) * 100, 100.0, 4),
+            ('Workspace',            a_stats.workspace_score, 100.0, 3),
+            ('Log Consistency',      a_stats.consistency, 100.0, 2),
           ] %}
         {% else %}
           {% set _pts = [
-            ('Pick Accuracy',   a_stats.pick_acc, 100.0, 25),
-            ('Bill Fulfilment', a_stats.bill_fulfilment or 0, 100.0, 20),
-            ('Pick Speed',      a_stats.pick_speed, 250.0, 18),
-            ('Packing Eff.',    a_stats.packing_eff, 100.0, 12),
-            ('Workspace',       a_stats.workspace_score, 100.0, 10),
-            ('CS Fulfilment',   a_stats.cs_fulfilment, 100.0, 8),
-            ('Consistency',     a_stats.consistency, 100.0, 7),
+            ('VWCR',             a_stats.vwcr or 0, 120.0, 25),
+            ('Bill Fulfilment',  a_stats.bill_fulfilment or 0, 100.0, 18),
+            ('Pick Speed',       a_stats.pick_speed, 250.0, 15),
+            ('Efficiency Ratio', (a_stats.efficiency_ratio or 0) * 100, 100.0, 10),
+            ('Workspace',        a_stats.workspace_score, 100.0, 10),
+            ('CS Fulfilment',    a_stats.cs_fulfilment, 100.0, 8),
+            ('Cleaner Rate',     a_stats.cleaner_rate or 0, 100.0, 7),
+            ('Log Consistency',  a_stats.consistency, 100.0, 7),
           ] %}
         {% endif %}
         {% for label, val, denom, cap in _pts %}
@@ -555,6 +600,16 @@ body{
       <div class="deduction-box">
         <span class="lbl">⚠️ Minus Marking (complaints)</span>
         <span class="val">−{{ a_stats.complaint_deduction }} pts</span>
+      </div>
+      {% endif %}
+      {% if a_stats.admin_adjustment and a_stats.admin_adjustment != 0 %}
+      <div class="deduction-box" style="background:{% if a_stats.admin_adjustment > 0 %}var(--emerald-lite){% else %}var(--rose-lite){% endif %};border-color:{% if a_stats.admin_adjustment > 0 %}#6ee7b7{% else %}#fca5a5{% endif %};">
+        <span class="lbl" style="color:{% if a_stats.admin_adjustment > 0 %}var(--emerald){% else %}var(--rose){% endif %};">
+          {% if a_stats.admin_adjustment > 0 %}⭐ Admin Adjustment (bonus){% else %}⚠️ Admin Adjustment (penalty){% endif %}
+        </span>
+        <span class="val" style="color:{% if a_stats.admin_adjustment > 0 %}var(--emerald){% else %}var(--rose){% endif %};">
+          {% if a_stats.admin_adjustment > 0 %}+{% endif %}{{ a_stats.admin_adjustment }} pts
+        </span>
       </div>
       {% endif %}
     </section>
@@ -590,7 +645,7 @@ body{
           <div class="mini"><div class="mini-lbl">CS Fulfilment</div><div class="mini-val">{{ pstats.pur_cs_fulfilment or 0 }}<span class="suf">%</span></div></div>
           <div class="mini"><div class="mini-lbl">Racking Eff.</div><div class="mini-val">{{ pstats.pur_racking_eff or 0 }}<span class="suf">%</span></div></div>
           <div class="mini"><div class="mini-lbl">Speed/hr</div><div class="mini-val">{{ pstats.pur_speed or 0 }}</div></div>
-          <div class="mini"><div class="mini-lbl">Consistency</div><div class="mini-val">{{ pstats.consistency }}<span class="suf">%</span></div></div>
+          <div class="mini"><div class="mini-lbl">Log Consistency</div><div class="mini-val">{{ pstats.consistency }}<span class="suf">%</span></div></div>
         {% elif emp.staff_type == 'picker' %}
           <div class="mini"><div class="mini-lbl">Bills Received</div><div class="mini-val">{{ pstats.tbr_picker or 0 }}</div></div>
           <div class="mini"><div class="mini-lbl">Sales Bills Picked</div><div class="mini-val">{{ pstats.tsb }}</div></div>
@@ -598,9 +653,9 @@ body{
           <div class="mini"><div class="mini-lbl">Items Missed</div><div class="mini-val">{{ pstats.tm }}</div></div>
           <div class="mini"><div class="mini-lbl">Bill Fulfilment</div><div class="mini-val">{{ pstats.bill_fulfilment or 0 }}<span class="suf">%</span></div></div>
           <div class="mini"><div class="mini-lbl">Pick Speed/hr</div><div class="mini-val">{{ pstats.pick_speed }}</div></div>
-          <div class="mini"><div class="mini-lbl">Packing Eff.</div><div class="mini-val">{{ pstats.packing_eff }}<span class="suf">%</span></div></div>
+          <div class="mini"><div class="mini-lbl">Cleaner Rate</div><div class="mini-val">{{ pstats.cleaner_rate or 0 }}<span class="suf">%</span></div></div>
           <div class="mini"><div class="mini-lbl">Workspace</div><div class="mini-val">{{ pstats.workspace_score }}<span class="suf">%</span></div></div>
-          <div class="mini"><div class="mini-lbl">Consistency</div><div class="mini-val">{{ pstats.consistency }}<span class="suf">%</span></div></div>
+          <div class="mini"><div class="mini-lbl">Log Consistency</div><div class="mini-val">{{ pstats.consistency }}<span class="suf">%</span></div></div>
           <div class="mini"><div class="mini-lbl">Potential Eff.</div><div class="mini-val">{{ pstats.potential_eff }}<span class="suf">%</span></div></div>
         {% else %}
           <div class="mini"><div class="mini-lbl">Total SB Checked</div><div class="mini-val">{{ (pstats.tsb or 0) + (pstats.tcs or 0) }}</div></div>
@@ -610,7 +665,7 @@ body{
           <div class="mini {% if (pstats.pending_bills or 0) > 0 %}danger{% endif %}"><div class="mini-lbl">Pending Bills</div><div class="mini-val">{{ pstats.pending_bills or 0 }}</div></div>
           <div class="mini"><div class="mini-lbl">Clean Check %</div><div class="mini-val">{{ pstats.normal_pct or 0 }}<span class="suf">%</span></div></div>
           <div class="mini"><div class="mini-lbl">Packing Done</div><div class="mini-val">{{ pstats.tpk }}</div></div>
-          <div class="mini"><div class="mini-lbl">Consistency</div><div class="mini-val">{{ pstats.consistency }}<span class="suf">%</span></div></div>
+          <div class="mini"><div class="mini-lbl">Log Consistency</div><div class="mini-val">{{ pstats.consistency }}<span class="suf">%</span></div></div>
           <div class="mini"><div class="mini-lbl">Potential Eff.</div><div class="mini-val">{{ pstats.potential_eff }}<span class="suf">%</span></div></div>
         {% endif %}
         {% if pstats.complaint_deduction and pstats.complaint_deduction > 0 %}
@@ -693,17 +748,27 @@ body{
               {% set e_sb = (e.sales_bills_open or 0)+(e.cs_sales_open or 0) %}
               {% set e_pending = [((e.bills_received or 0) - e_sb), 0]|max %}
               {% set e_clear = (e_sb / (e.bills_received or 1) * 100)|round(1) if (e.bills_received or 0) > 0 else 100 %}
-              <td style="color:{% if e_pending > 0 %}var(--rose){% else %}var(--emerald){% endif %};font-weight:600">{{ e_pending }}</td>
+              <td style="color:{% if e_pending > 0 %}var(--rose){% else %}var(--emerald){% endif %};font-weight:600">
+                {{ e_pending }}
+                {% if not e.bills_received or e.bills_received == 0 %}
+                  <span style="display:inline-block;margin-left:4px;padding:1px 6px;border-radius:5px;background:var(--amber-lite);color:var(--amber);font-size:9px;font-weight:700;" title="TB Sales (Bills Received) missing">⚠ TB</span>
+                {% endif %}
+              </td>
               <td><span class="acc-pill {% if e_clear >= 95 %}acc-good{% elif e_clear >= 85 %}acc-mid{% else %}acc-bad{% endif %}">{{ e_clear }}%</span></td>
               {% set e_speed = (((e.checked or 0) + (e.errors_found or 0)) / 9.0)|round(1) %}
               <td>{{ e_speed }}/hr</td>
             {% else %}
-              <td>{{ e.sales_bills_open }}</td>
+              <td>
+                {{ e.sales_bills_open }}
+                {% if not e.sales_bills_open or e.sales_bills_open == 0 %}
+                  <span style="display:inline-block;margin-left:4px;padding:1px 6px;border-radius:5px;background:var(--amber-lite);color:var(--amber);font-size:9px;font-weight:700;" title="TB Sales missing or zero">⚠ TB</span>
+                {% endif %}
+              </td>
               <td>{{ e.picked }}</td>
               <td>{{ e.missed }}</td>
               <td>{{ e.cs_sales_open }}</td>
               <td>{% if e.table_clean %}✅{% else %}❌{% endif %}</td>
-              <td>{{ e.rack_organized or 0 }}/10</td>
+              <td>{{ e.rack_organized or 0 }}/10 {% if (e.rack_organized or 0) >= 8 %}✅{% elif (e.rack_organized or 0) >= 5 %}⚠{% else %}❌{% endif %}</td>
               <td>{{ e.packing_done }}</td>
               <td><span class="acc-pill {% if e.accuracy >= 95 %}acc-good{% elif e.accuracy >= 88 %}acc-mid{% else %}acc-bad{% endif %}">{{ e.accuracy }}%</span></td>
               <td>{{ e.pick_speed }}</td>
@@ -730,22 +795,28 @@ body{
       <div class="formula-row"><b>CS Fulfilment</b> = CS Received ÷ CS Open × 100</div>
       <div class="formula-row"><b>Racking Eff.</b> = Items Racked ÷ Number of Items × 100</div>
       <div class="formula-row"><b>Speed</b> = Items ÷ (9 hrs × Days)</div>
-      <div class="formula-row"><b>Points (100)</b> = BillRate×28 + CS×23 + Racking×18 + Speed÷60×12 + Entry×8 + Pending×5 + Workspace×4 + Sweep×2</div>
+      <div class="formula-row"><b>VWCR</b> = (Correct÷Total) × (Actual÷Target) × 100, cap 120%</div>
+      <div class="formula-row"><b>Efficiency Ratio</b> = min(items/200, bills/50) — staff is <b>Efficient</b> only when both = 1.0</div>
+      <div class="formula-row"><b>Points (100)</b> = BillRate×25 + CS×20 + Racking×15 + Speed÷60×10 + Entry×8 + VWCR×8 + Pending×5 + EffRatio×4 + Workspace×3 + LogCons×2</div>
       {% elif emp.staff_type == 'picker' %}
-      <div class="formula-row"><b>Pick Accuracy</b> = Picked ÷ (Picked + Missed) × 100</div>
+      <div class="formula-row"><b>VWCR</b> = (Picked÷Total) × (Items/hr ÷ 50) × 100, cap 120%</div>
       <div class="formula-row"><b>Bill Fulfilment</b> = SB Picked ÷ Bills Received × 100</div>
       <div class="formula-row"><b>Pick Speed</b> = Items ÷ (9 hrs × Days)</div>
-      <div class="formula-row"><b>Packing Eff.</b> = Packing ÷ SB Picked × 100</div>
+      <div class="formula-row"><b>Cleaner Rate</b> = (Normal×100 + Sweep/Rack×10) ÷ Total Volume</div>
+      <div class="formula-row"><b>Efficiency Ratio</b> = min(items/200, bills/50) — hits hard level only when both = 1.0</div>
       <div class="formula-row"><b>Workspace</b> = Rack×50% + Table×30% + Sweep×20%</div>
-      <div class="formula-row"><b>Points (100)</b> = Acc×25 + Fulfilment×20 + Speed÷250×18 + Packing×12 + Workspace×10 + CS×8 + Consistency×7</div>
+      <div class="formula-row"><b>Points (100)</b> = VWCR×25 + Fulfilment×18 + Speed÷250×15 + EffRatio×10 + Workspace×10 + CS×8 + Cleaner×7 + LogCons×7</div>
       {% else %}
       <div class="formula-row"><b>Check Speed</b> = Items Checked ÷ (9 hrs × Days)</div>
+      <div class="formula-row"><b>VWCR</b> = (Normal÷Total) × (Items/hr ÷ 70) × 100, cap 120%</div>
       <div class="formula-row"><b>Clearance</b> = SB Checked ÷ (SB Checked + Pending) × 100</div>
-      <div class="formula-row"><b>Clean Check %</b> = Normal Items ÷ Total Items × 100</div>
-      <div class="formula-row"><b>Consistency</b> = max(0, 100 − std_dev × 2)</div>
-      <div class="formula-row"><b>Points (100)</b> = Speed÷80×30 + Clearance×25 + CleanCheck×20 + Consistency×10 + PotEff×8 + Volume×5 + Sweep×2</div>
+      <div class="formula-row"><b>Cleaner Rate</b> = (Normal×100 + Sweep/Rack×10) ÷ Total Volume</div>
+      <div class="formula-row"><b>Efficiency Ratio</b> = min(items/200, bills/50) — Efficient badge when both = 1.0</div>
+      <div class="formula-row"><b>Log Consistency</b> = max(0, 100 − std_dev × 2) — rewards stable daily logging</div>
+      <div class="formula-row"><b>Points (100)</b> = Speed÷80×22 + Clearance×22 + VWCR×20 + Cleaner×8 + EffRatio×8 + LogCons×8 + PotEff×5 + Workspace×4 + Sweep×3</div>
       {% endif %}
       <div class="formula-row"><b>Minus Marking</b> = Complaint deductions subtracted from points (capped 30)</div>
+      <div class="formula-row"><b>Admin Adjustment</b> = Manual ± override set per employee or per entry</div>
       <div class="formula-row"><b>Grades</b>: ELITE ≥88 · PROFICIENT ≥72 · SATISFACTORY ≥52 · RE-TRAINING &lt;52</div>
     </div>
   </section>
