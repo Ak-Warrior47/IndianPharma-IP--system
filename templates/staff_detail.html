@@ -557,7 +557,7 @@ body{
             ('Log Consistency',  a_stats.consistency, 100.0, 8),
             ('Potential Eff.',   a_stats.potential_eff, 100.0, 5),
             ('Workspace',        a_stats.workspace_score, 100.0, 4),
-            ('Sweep Bonus',      a_stats.tsd, max(a_stats.days, 1), 3),
+            ('Sweep Bonus',      a_stats.tsd, (a_stats.days or 1), 3),
           ] %}
         {% elif emp.staff_type == 'purchaser' %}
           {% set _pts = [
@@ -567,7 +567,7 @@ body{
             ('Processing Speed',     a_stats.pur_speed or 0, 60.0, 10),
             ('Bill Entry Rate',      a_stats.pur_entry_rate or 0, 100.0, 8),
             ('VWCR',                 a_stats.vwcr or 0, 120.0, 8),
-            ('Pending Bills',        100 - ((a_stats.pur_pending_bills or 0) / max((a_stats.pur_bills_received or 1), 1) * 100), 100.0, 5),
+            ('Pending Bills',        100 - ((a_stats.pur_pending_bills or 0) / (a_stats.pur_bills_received or 1) * 100), 100.0, 5),
             ('Efficiency Ratio',     (a_stats.efficiency_ratio or 0) * 100, 100.0, 4),
             ('Workspace',            a_stats.workspace_score, 100.0, 3),
             ('Log Consistency',      a_stats.consistency, 100.0, 2),
