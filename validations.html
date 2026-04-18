@@ -1,0 +1,303 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Bill Validations — Constant Protocol</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.2/socket.io.min.js"></script>
+<style>
+:root{
+  --navy:#0a1628; --slate:#334155; --muted:#64748b; --muted-2:#94a3b8;
+  --ink:#0f172a; --bg:#f7f9fc; --surface:#ffffff; --surface-2:#f1f5fa;
+  --border:#e2e8f0; --brand:#1e40af; --brand-2:#2563eb; --brand-lite:#dbeafe;
+  --emerald:#059669; --emerald-lite:#d1fae5;
+  --amber:#d97706; --amber-lite:#fef3c7;
+  --rose:#dc2626; --rose-lite:#fee2e2;
+  --shadow-sm:0 1px 3px rgba(15,23,42,0.06);
+  --shadow-md:0 4px 12px rgba(15,23,42,0.08);
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--ink);min-height:100vh;line-height:1.5;
+  background-image:radial-gradient(1200px 600px at 100% -10%,rgba(37,99,235,0.05),transparent 60%);background-attachment:fixed;}
+.top-nav{background:var(--surface);border-bottom:1px solid var(--border);padding:14px 28px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:50;box-shadow:var(--shadow-sm);}
+.top-nav .brand{font-family:'Fraunces',serif;font-size:17px;font-weight:600;color:var(--navy);display:flex;align-items:center;gap:10px;}
+.top-nav .brand-mark{width:32px;height:32px;border-radius:9px;background:linear-gradient(135deg,var(--navy),var(--brand-2));display:flex;align-items:center;justify-content:center;color:#fff;font-size:15px;}
+.top-nav .actions{display:flex;gap:10px;align-items:center;}
+.btn-nav{padding:7px 14px;background:var(--surface-2);color:var(--slate);border:1px solid var(--border);border-radius:8px;text-decoration:none;font-size:12px;font-weight:600;transition:all 0.15s;}
+.btn-nav:hover{background:var(--brand-lite);color:var(--brand);}
+.btn-logout{padding:7px 14px;background:var(--rose-lite);color:var(--rose);border:1px solid #fca5a5;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;}
+
+.main{max-width:1200px;margin:0 auto;padding:28px 24px;}
+.page-head{margin-bottom:24px;}
+.page-title{font-family:'Fraunces',serif;font-size:30px;font-weight:600;color:var(--navy);letter-spacing:-0.02em;line-height:1.1;margin-bottom:6px;}
+.page-sub{font-size:14px;color:var(--muted);max-width:720px;}
+
+.alert{padding:12px 16px;border-radius:10px;font-size:13px;font-weight:500;margin-bottom:14px;}
+.alert-success{background:var(--emerald-lite);color:var(--emerald);border:1px solid #6ee7b7;}
+.alert-warning{background:var(--amber-lite);color:var(--amber);border:1px solid #fcd34d;}
+.alert-danger{background:var(--rose-lite);color:var(--rose);border:1px solid #fca5a5;}
+.alert-info{background:var(--brand-lite);color:var(--brand);border:1px solid #93c5fd;}
+
+.card{background:var(--surface);border:1px solid var(--border);border-radius:18px;padding:22px;box-shadow:var(--shadow-sm);margin-bottom:20px;}
+.card-title{font-family:'Fraunces',serif;font-size:18px;font-weight:600;color:var(--navy);letter-spacing:-0.01em;margin-bottom:4px;display:flex;align-items:center;gap:10px;}
+.card-sub{font-size:12px;color:var(--muted);margin-bottom:16px;}
+
+.pill{display:inline-block;padding:3px 10px;border-radius:999px;font-size:10px;font-weight:700;letter-spacing:0.04em;text-transform:uppercase;}
+.pill-pending{background:var(--amber-lite);color:var(--amber);}
+.pill-confirmed{background:var(--emerald-lite);color:var(--emerald);}
+.pill-mismatch{background:var(--rose-lite);color:var(--rose);}
+.pill-override{background:#ede9fe;color:#6d28d9;}
+
+.val-row{background:var(--surface-2);border:1px solid var(--border);border-radius:14px;padding:16px 18px;margin-bottom:10px;transition:all 0.15s;}
+.val-row.pending{border-left:4px solid var(--amber);}
+.val-row.confirmed{border-left:4px solid var(--emerald);}
+.val-row.mismatch{border-left:4px solid var(--rose);}
+.val-row.admin_override{border-left:4px solid #6d28d9;}
+.val-row:hover{box-shadow:var(--shadow-md);transform:translateY(-1px);}
+
+.val-head{display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:8px;margin-bottom:10px;}
+.val-picker{font-size:14px;font-weight:600;color:var(--navy);}
+.val-picker .count{font-family:'Fraunces',serif;font-size:22px;font-weight:600;margin-left:8px;color:var(--brand);}
+.val-date{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:0.05em;}
+
+.slot-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:12px;}
+.slot{background:#fff;border:1px solid var(--border);border-radius:10px;padding:10px 12px;}
+.slot.empty{border-style:dashed;background:var(--surface-2);}
+.slot.filled{border-color:var(--emerald);}
+.slot.mismatch-val{border-color:var(--rose);background:var(--rose-lite);}
+.slot-lbl{font-size:10px;font-weight:600;letter-spacing:0.08em;text-transform:uppercase;color:var(--muted);margin-bottom:4px;}
+.slot-val{font-family:'Fraunces',serif;font-size:20px;font-weight:600;color:var(--navy);line-height:1;}
+.slot-sub{font-size:11px;color:var(--muted);margin-top:3px;}
+.slot.empty .slot-val{color:var(--muted-2);font-family:'Inter',sans-serif;font-size:14px;font-weight:500;}
+
+.val-action{margin-top:14px;display:flex;gap:8px;align-items:center;flex-wrap:wrap;}
+.val-action form{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:0;}
+.val-action input[type=number]{padding:8px 10px;border:1.5px solid var(--border);border-radius:8px;font-family:inherit;font-size:13px;width:110px;}
+.val-action input[type=number]:focus{outline:none;border-color:var(--brand);box-shadow:0 0 0 3px var(--brand-lite);}
+.btn-primary{padding:8px 14px;background:var(--brand);color:#fff;border:none;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;transition:background 0.15s;}
+.btn-primary:hover{background:var(--brand-2);}
+.btn-primary:disabled{background:var(--muted-2);cursor:not-allowed;}
+.btn-emerald{background:var(--emerald);}
+.btn-emerald:hover{background:#047857;}
+.btn-ghost{padding:8px 14px;background:transparent;color:var(--muted);border:1px solid var(--border);border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;}
+.btn-ghost:hover{background:var(--surface-2);color:var(--navy);}
+.btn-danger{background:var(--rose);color:#fff;border:none;padding:8px 14px;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;}
+
+.inline-note{font-size:11px;color:var(--muted);}
+.inline-note strong{color:var(--navy);}
+
+.empty-state{text-align:center;padding:40px 20px;color:var(--muted);font-size:13px;}
+.empty-state .big{font-size:36px;margin-bottom:8px;}
+
+.mismatch-box{background:var(--rose-lite);border:1px solid #fca5a5;border-radius:10px;padding:10px 14px;margin-top:10px;font-size:12px;color:var(--rose);}
+.mismatch-box strong{font-weight:700;}
+.override-info{background:#ede9fe;border:1px solid #c4b5fd;border-radius:10px;padding:10px 14px;margin-top:10px;font-size:12px;color:#6d28d9;}
+
+.admin-panel{margin-top:10px;padding:10px 14px;background:var(--brand-lite);border:1px dashed var(--brand);border-radius:10px;}
+.admin-panel-title{font-size:11px;font-weight:700;color:var(--brand);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:8px;}
+.admin-panel form{display:flex;gap:8px;flex-wrap:wrap;}
+.admin-panel input[type=text]{flex:1;min-width:200px;padding:7px 10px;border:1.5px solid var(--border);border-radius:7px;font-family:inherit;font-size:12px;}
+
+@media (max-width:700px){
+  .slot-grid{grid-template-columns:1fr;}
+  .main{padding:20px 14px;}
+}
+</style>
+</head>
+<body>
+
+<nav class="top-nav">
+  <div class="brand">
+    <div class="brand-mark">🔬</div>
+    <div>Bill Validations <span style="font-size:11px;color:var(--muted);font-weight:500;margin-left:6px;">Constant Protocol</span></div>
+  </div>
+  <div class="actions">
+    {% if is_admin %}
+      <a href="/admin_dashboard" class="btn-nav">🏠 Admin</a>
+    {% else %}
+      <a href="/dashboard" class="btn-nav">📊 Dashboard</a>
+    {% endif %}
+    <form method="POST" action="/logout" style="margin:0;"><button type="submit" class="btn-logout">🚪 Logout</button></form>
+  </div>
+</nav>
+
+<main class="main">
+
+  <div class="page-head">
+    <div class="page-title">Bill Validations</div>
+    <div class="page-sub">
+      The Constant Protocol requires 4 independent counts of the day's total bills — one from the picker and three from separate checkers. All four must match exactly before a submission is confirmed. Any mismatch flags the disagreeing staff for admin review.
+    </div>
+  </div>
+
+  {% with messages = get_flashed_messages(with_categories=true) %}
+    {% if messages %}{% for cat, msg in messages %}
+    <div class="alert alert-{{ cat }}">{{ msg }}</div>
+    {% endfor %}{% endif %}
+  {% endwith %}
+
+  <!-- PENDING -->
+  <section class="card">
+    <div class="card-title">
+      <span>⏳</span>Pending Validations
+      <span style="margin-left:auto;font-size:12px;color:var(--muted);font-weight:500;font-family:'Inter',sans-serif;">{{ pending|length }} waiting</span>
+    </div>
+    <div class="card-sub">Enter your independent bill count. You cannot validate your own submission. Once 3 checkers have voted, the system auto-evaluates.</div>
+
+    {% if pending %}
+      {% for item in pending %}
+      {% set bv = item.bv %}
+      <div class="val-row pending" id="bv-{{ bv.id }}">
+        <div class="val-head">
+          <div>
+            <span class="val-picker">{{ item.picker.name if item.picker else 'Unknown Picker' }} submitted <span class="count">{{ bv.picker_count }}</span> bills</span>
+            <div style="font-size:11px;color:var(--muted);margin-top:2px;">Picker ID #{{ bv.picker_id }}</div>
+          </div>
+          <div>
+            <span class="pill pill-pending">Pending · {{ item.slots_filled }}/3</span>
+            <div class="val-date" style="margin-top:4px;text-align:right;">{{ bv.entry_date.strftime('%d %b %Y') }}</div>
+          </div>
+        </div>
+
+        <div class="slot-grid">
+          <div class="slot {% if bv.checker1_count is not none %}filled{% else %}empty{% endif %}">
+            <div class="slot-lbl">Checker 1</div>
+            <div class="slot-val">{% if bv.checker1_count is not none %}{{ bv.checker1_count }}{% else %}Waiting…{% endif %}</div>
+            {% if item.checker1 %}<div class="slot-sub">{{ item.checker1.name }}</div>{% endif %}
+          </div>
+          <div class="slot {% if bv.checker2_count is not none %}filled{% else %}empty{% endif %}">
+            <div class="slot-lbl">Checker 2</div>
+            <div class="slot-val">{% if bv.checker2_count is not none %}{{ bv.checker2_count }}{% else %}Waiting…{% endif %}</div>
+            {% if item.checker2 %}<div class="slot-sub">{{ item.checker2.name }}</div>{% endif %}
+          </div>
+          <div class="slot {% if bv.checker3_count is not none %}filled{% else %}empty{% endif %}">
+            <div class="slot-lbl">Checker 3</div>
+            <div class="slot-val">{% if bv.checker3_count is not none %}{{ bv.checker3_count }}{% else %}Waiting…{% endif %}</div>
+            {% if item.checker3 %}<div class="slot-sub">{{ item.checker3.name }}</div>{% endif %}
+          </div>
+        </div>
+
+        <div class="val-action">
+          {% if current_user_id == bv.picker_id %}
+            <span class="inline-note">⚠️ You submitted this — wait for 3 checkers to verify.</span>
+          {% elif item.already_voted %}
+            <span class="inline-note">✓ You have already voted on this validation.</span>
+          {% elif item.slots_filled >= 3 %}
+            <span class="inline-note">All 3 checker slots filled — evaluating...</span>
+          {% else %}
+            <form method="POST" action="/validation/{{ bv.id }}/submit">
+              <label style="font-size:12px;font-weight:600;color:var(--navy);">Your count:</label>
+              <input type="number" name="count" min="0" required autocomplete="off" placeholder="0">
+              <button type="submit" class="btn-primary">Submit Count</button>
+              <span class="inline-note">Enter the number <strong>you</strong> counted independently.</span>
+            </form>
+          {% endif %}
+
+          {% if is_admin %}
+          <div class="admin-panel">
+            <div class="admin-panel-title">⚡ Admin Override</div>
+            <form method="POST" action="/admin/validation/{{ bv.id }}/override">
+              <input type="hidden" name="action" value="accept">
+              <input type="text" name="note" placeholder="Note (e.g. short-staffed, accepted picker's count)" maxlength="200">
+              <button type="submit" class="btn-primary btn-emerald">✓ Accept</button>
+            </form>
+          </div>
+          {% endif %}
+        </div>
+      </div>
+      {% endfor %}
+    {% else %}
+      <div class="empty-state">
+        <div class="big">✅</div>
+        <div>No pending validations. Good work, team.</div>
+      </div>
+    {% endif %}
+  </section>
+
+  <!-- RECENT -->
+  <section class="card">
+    <div class="card-title">
+      <span>📜</span>Recent Validations (last 7 days)
+      <span style="margin-left:auto;font-size:12px;color:var(--muted);font-weight:500;font-family:'Inter',sans-serif;">{{ recent|length }} resolved</span>
+    </div>
+    {% if recent %}
+      {% for item in recent %}
+      {% set bv = item.bv %}
+      <div class="val-row {{ bv.status }}">
+        <div class="val-head">
+          <div>
+            <span class="val-picker">{{ item.picker.name if item.picker else 'Unknown' }} · <span class="count">{{ bv.picker_count }}</span></span>
+          </div>
+          <div>
+            {% if bv.status == 'confirmed' %}<span class="pill pill-confirmed">✓ Confirmed</span>
+            {% elif bv.status == 'mismatch' %}<span class="pill pill-mismatch">⚠ Mismatch</span>
+            {% elif bv.status == 'admin_override' %}<span class="pill pill-override">⚡ Override</span>
+            {% endif %}
+            <div class="val-date" style="margin-top:4px;text-align:right;">{{ bv.entry_date.strftime('%d %b %Y') }}</div>
+          </div>
+        </div>
+
+        <div class="slot-grid">
+          {% set vals_all = [bv.picker_count, bv.checker1_count, bv.checker2_count, bv.checker3_count] %}
+          {% set vals_notnull = vals_all|reject("none")|list %}
+          {% set consensus = vals_notnull[0] if vals_notnull else None %}
+          <div class="slot filled">
+            <div class="slot-lbl">Checker 1</div>
+            <div class="slot-val">{{ bv.checker1_count if bv.checker1_count is not none else '—' }}</div>
+            {% if item.checker1 %}<div class="slot-sub">{{ item.checker1.name }}</div>{% endif %}
+          </div>
+          <div class="slot filled">
+            <div class="slot-lbl">Checker 2</div>
+            <div class="slot-val">{{ bv.checker2_count if bv.checker2_count is not none else '—' }}</div>
+            {% if item.checker2 %}<div class="slot-sub">{{ item.checker2.name }}</div>{% endif %}
+          </div>
+          <div class="slot filled">
+            <div class="slot-lbl">Checker 3</div>
+            <div class="slot-val">{{ bv.checker3_count if bv.checker3_count is not none else '—' }}</div>
+            {% if item.checker3 %}<div class="slot-sub">{{ item.checker3.name }}</div>{% endif %}
+          </div>
+        </div>
+
+        {% if bv.status == 'mismatch' and bv.mismatch_emp_ids %}
+        <div class="mismatch-box">
+          <strong>Flagged for deduction:</strong> {{ bv.mismatch_emp_ids }} (staff IDs)
+          — admin should review and apply a complaint.
+        </div>
+        {% endif %}
+        {% if bv.status == 'admin_override' and bv.override_note %}
+        <div class="override-info">
+          <strong>Admin note:</strong> {{ bv.override_note }}
+        </div>
+        {% endif %}
+      </div>
+      {% endfor %}
+    {% else %}
+      <div class="empty-state">No validations completed in the last 7 days.</div>
+    {% endif %}
+  </section>
+
+</main>
+
+<script>
+// Live updates via SocketIO
+try {
+  var socket = io();
+  socket.on('validation_update', function(data){
+    // Simple approach: reload after a short delay so the UI reflects live state
+    setTimeout(function(){ window.location.reload(); }, 600);
+  });
+  socket.on('validation_mismatch', function(data){
+    var msg = '⚠ Mismatch detected for ' + (data.date || '') + ' — ' + (data.wrong_names||[]).join(', ');
+    var el = document.createElement('div');
+    el.className = 'alert alert-danger';
+    el.style.cssText = 'position:fixed;top:70px;right:20px;z-index:999;max-width:360px;box-shadow:0 8px 24px rgba(0,0,0,0.15);';
+    el.textContent = msg;
+    document.body.appendChild(el);
+    setTimeout(function(){ el.remove(); }, 6000);
+  });
+} catch(e) {}
+</script>
+</body>
+</html>
