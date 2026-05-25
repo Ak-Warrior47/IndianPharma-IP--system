@@ -799,6 +799,116 @@ body{
     {% endif %}
   </section>
 
+  <!-- FEATURE 9: LAST 6 MONTHS BAR CHART -->
+  {% if monthly_scores is defined and monthly_scores %}
+  <section class="card" style="margin-bottom:20px;">
+    <div class="card-title"><span class="ico">📊</span>Last 6 Months — Score Trend</div>
+    <div class="card-sub">Monthly effective score (out of 100) for the past 6 months.</div>
+    <div style="position:relative;height:200px;margin-top:12px;">
+      <canvas id="monthlyChart"></canvas>
+    </div>
+    <script>
+    (function(){
+      var ctx = document.getElementById('monthlyChart');
+      if(!ctx) return;
+      var labels = {{ monthly_scores | map(attribute=0) | list | tojson }};
+      var data   = {{ monthly_scores | map(attribute=1) | list | tojson }};
+      new Chart(ctx, {
+        type: 'bar',
+        data: {
+          labels: labels,
+          datasets: [{
+            label: 'Score /100',
+            data: data,
+            backgroundColor: data.map(function(v){ return v >= 88 ? 'rgba(109,40,217,0.7)' : v >= 72 ? 'rgba(5,150,105,0.7)' : v >= 52 ? 'rgba(217,119,6,0.7)' : 'rgba(220,38,38,0.7)'; }),
+            borderRadius: 6,
+            borderSkipped: false
+          }]
+        },
+        options: {
+          responsive: true, maintainAspectRatio: false,
+          plugins: { legend: { display: false } },
+          scales: {
+            y: { min: 0, max: 100, grid: { color: 'rgba(0,0,0,0.05)' }, ticks: { font: { size: 11 } } },
+            x: { grid: { display: false }, ticks: { font: { size: 11 } } }
+          }
+        }
+      });
+    })();
+    </script>
+  </section>
+  {% endif %}
+
+  <!-- FEATURE 7: CUSTOM DATE RANGE ANALYTICS -->
+  <section class="card" style="margin-bottom:20px;">
+    <div class="card-title"><span class="ico">🔎</span>Custom Date Range Analysis</div>
+    <div class="card-sub">Analyse performance for any date window. Results computed on-demand.</div>
+    <div style="display:flex;gap:12px;align-items:flex-end;flex-wrap:wrap;margin-top:12px;">
+      <div>
+        <label style="font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;display:block;margin-bottom:5px;">Start Date</label>
+        <input type="date" id="rangeStart" style="padding:9px 12px;border:1.5px solid var(--border);border-radius:9px;font-size:13px;font-family:inherit;">
+      </div>
+      <div>
+        <label style="font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;display:block;margin-bottom:5px;">End Date</label>
+        <input type="date" id="rangeEnd" style="padding:9px 12px;border:1.5px solid var(--border);border-radius:9px;font-size:13px;font-family:inherit;">
+      </div>
+      <button onclick="runRangeAnalysis()" id="rangeBtn" style="padding:10px 20px;background:linear-gradient(135deg,var(--navy),var(--brand-2));color:#fff;border:none;border-radius:9px;font-size:13px;font-weight:700;font-family:inherit;cursor:pointer;">Analyse</button>
+    </div>
+    <div id="rangeResult" style="margin-top:16px;display:none;">
+      <div id="rangeLoading" style="text-align:center;padding:20px;color:var(--muted);">Loading…</div>
+      <div id="rangeContent" style="display:none;"></div>
+    </div>
+    <script>
+    function runRangeAnalysis(){
+      var start = document.getElementById('rangeStart').value;
+      var end   = document.getElementById('rangeEnd').value;
+      if(!start || !end){ alert('Please select both start and end dates.'); return; }
+      document.getElementById('rangeResult').style.display = '';
+      document.getElementById('rangeLoading').style.display = '';
+      document.getElementById('rangeContent').style.display = 'none';
+      var url = '/api/analytics/range?emp_id={{ emp.id }}&start=' + start + '&end=' + end;
+      fetch(url).then(function(r){ return r.json(); }).then(function(d){
+        document.getElementById('rangeLoading').style.display = 'none';
+        var c = document.getElementById('rangeContent');
+        if(d.error){ c.innerHTML = '<div style="color:var(--rose);font-size:13px;">⚠️ ' + d.error + '</div>'; c.style.display = ''; return; }
+        var s = d.stats;
+        c.innerHTML = '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:10px;">'
+          + mini('Score', s.eff_score + ' /100') + mini('Grade', s.grade) + mini('Days', s.days)
+          + mini('Accuracy', (s.pick_acc || s.vwcr || 0) + '%') + mini('Consistency', s.consistency + '%')
+          + (s.complaint_deduction ? mini('Minus Marking', '-' + s.complaint_deduction) : '')
+          + '</div>';
+        c.style.display = '';
+      }).catch(function(){ document.getElementById('rangeLoading').innerHTML = '<div style="color:var(--rose);font-size:13px;">Error fetching data.</div>'; });
+    }
+    function mini(label, val){
+      return '<div style="background:var(--surface-2);border:1px solid var(--border);border-radius:10px;padding:12px 14px;">'
+           + '<div style="font-size:10px;font-weight:600;letter-spacing:0.08em;text-transform:uppercase;color:var(--muted);">' + label + '</div>'
+           + '<div style="font-size:20px;font-weight:700;color:var(--navy);margin-top:4px;">' + val + '</div>'
+           + '</div>';
+    }
+    </script>
+  </section>
+
+  <!-- FEATURE 5: BADGES DISPLAY -->
+  {% if emp_badges is defined and emp_badges %}
+  <section class="card" style="margin-bottom:20px;">
+    <div class="card-title"><span class="ico">🏅</span>Badges Earned</div>
+    <div class="card-sub">Achievements unlocked by this staff member.</div>
+    <div style="display:flex;flex-wrap:wrap;gap:12px;margin-top:12px;">
+      {% for sb in emp_badges %}
+      <div style="display:flex;align-items:center;gap:10px;padding:12px 16px;background:linear-gradient(135deg,rgba(255,215,0,0.08),rgba(251,191,36,0.05));border:1.5px solid rgba(251,191,36,0.3);border-radius:12px;min-width:160px;">
+        <div style="font-size:28px;line-height:1;">{{ sb.badge.icon }}</div>
+        <div>
+          <div style="font-size:13px;font-weight:700;color:var(--navy);">{{ sb.badge.name }}</div>
+          <div style="font-size:11px;color:var(--muted);margin-top:2px;">{{ sb.badge.description[:50] }}{% if sb.badge.description|length > 50 %}…{% endif %}</div>
+          <div style="font-size:10px;color:var(--muted);margin-top:2px;">{{ sb.awarded_at.strftime('%d %b %Y') }}</div>
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+  </section>
+  {% endif %}
+
   <!-- ── FORMULA ── -->
   {% if a_stats %}
   <section class="card" style="margin-top:20px;">
