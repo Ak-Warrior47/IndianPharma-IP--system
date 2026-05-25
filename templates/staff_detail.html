@@ -397,6 +397,17 @@ body{
       <div class="sc-value">{{ a_stats.eff_score }}<span class="suf">/ 100</span></div>
       <div class="sc-sub">{{ a_stats.grade }}</div>
     </div>
+    <!-- FEATURE 8: Month-over-Month Delta -->
+    {% if mom_delta is defined and prev_month_score is not none %}
+    <div class="sc-card {% if mom_delta > 0 %}accent-emerald{% elif mom_delta < 0 %}accent-rose{% endif %}" style="border-left-color:{% if mom_delta > 0 %}var(--emerald){% elif mom_delta < 0 %}var(--rose){% else %}var(--muted){% endif %};">
+      <div class="sc-label">vs Last Month</div>
+      <div class="sc-value" style="font-size:24px;color:{% if mom_delta > 0 %}var(--emerald){% elif mom_delta < 0 %}var(--rose){% else %}var(--muted){% endif %};">
+        {% if mom_delta > 0 %}↑ +{{ mom_delta }}{% elif mom_delta < 0 %}↓ {{ mom_delta }}{% else %}→ 0{% endif %}
+        <span class="suf">pts</span>
+      </div>
+      <div class="sc-sub">Prev: {{ prev_month_score }} pts</div>
+    </div>
+    {% endif %}
     <div class="sc-card accent-gold">
       <div class="sc-label">{{ emp.staff_type|title }} Rank</div>
       <div class="sc-value">#{{ emp_role_rank or '—' }}</div>
@@ -722,7 +733,7 @@ body{
               <th>SB Picked</th><th>Picked</th><th>Missed</th><th>CS Open</th>
               <th>Table</th><th>Rack</th><th>Packing</th><th>Accuracy</th><th>Speed</th>
             {% endif %}
-            <th>Hours</th>
+            <th>Hours</th><th>Shift Note</th>
           </tr>
         </thead>
         <tbody>
@@ -775,6 +786,9 @@ body{
               <td>{{ e.pick_speed }}</td>
             {% endif %}
             <td>9.0</td>
+            <td style="max-width:180px;color:var(--muted);font-size:11px;font-style:italic;">
+              {% if e.shift_note %}{{ e.shift_note[:80] }}{% if e.shift_note|length > 80 %}…{% endif %}{% else %}—{% endif %}
+            </td>
           </tr>
           {% endfor %}
         </tbody>
