@@ -6,6 +6,7 @@ import logging
 import io
 import csv
 from datetime import date, timedelta, datetime
+from collections import Counter
 from functools import wraps
 from typing import List, Optional, Dict, Any
 
@@ -22,8 +23,12 @@ app = Flask(__name__)
 app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1)
 IS_PRODUCTION = os.environ.get("RENDER") or os.environ.get("DATABASE_URL")
 
+_secret_key = os.environ.get("SECRET_KEY", "pharma_secure_key_2024")
+if IS_PRODUCTION and _secret_key == "pharma_secure_key_2024":
+    logger.critical("⛔ SECRET_KEY is not set! Sessions are insecure in production. Set SECRET_KEY env var.")
+
 app.config.update(
-    SECRET_KEY=os.environ.get("SECRET_KEY", "pharma_secure_key_2024"),
+    SECRET_KEY=_secret_key,
     SESSION_COOKIE_SECURE=bool(IS_PRODUCTION),
     SESSION_COOKIE_HTTPONLY=True,
     SESSION_COOKIE_SAMESITE='Lax',
@@ -252,7 +257,6 @@ class BillValidation(db.Model):
             (self.checker3_id, self.checker3_count),
         ]
         # Find the mode (most common value) — those who disagree are flagged
-        from collections import Counter
         counts = Counter(v for _, v in vals_with_ids if v is not None)
         if len(counts) == 1:
             return "confirmed", []
@@ -871,7 +875,7 @@ def log_audit(action, target, details=""):
         )
         db.session.add(log)
         db.session.commit()
-    except:
+    except Exception:
         db.session.rollback()
 
 
@@ -1040,8 +1044,11 @@ def init_db():
             # Run migrations for existing DBs
             run_migrations()
             if not Employee.query.first():
-                admin = Employee(name="Admin", email="admin@pharmaip.com", staff_type="picker", is_admin=True, role="Admin")
-                admin.set_password("admin123")
+                _admin_pw = os.environ.get("ADMIN_PASSWORD", "admin123")
+                if _admin_pw == "admin123":
+                    logger.warning("⚠️ Using default admin password 'admin123'. Set ADMIN_PASSWORD env var for production.")
+                admin = Employee(name="Admin", email=os.environ.get("ADMIN_EMAIL", "admin@pharmaip.com"), staff_type="picker", is_admin=True, role="Admin")
+                admin.set_password(_admin_pw)
                 db.session.add(admin)
                 p1 = Employee(name="Rahul Sharma", email="rahul@pharmaip.com", staff_type="picker", role="Picker")
                 p1.set_password("test1234")
@@ -1069,7 +1076,7 @@ def health_check():
     try:
         db.session.execute(db.text("SELECT 1"))
         db_ok = True
-    except:
+    except Exception:
         db_ok = False
     return jsonify(status="ok", database="up" if db_ok else "down"), 200 if db_ok else 500
 
@@ -1330,9 +1337,11 @@ def admin_dashboard():
         employees = Employee.query.filter_by(is_admin=False).options(db.joinedload(Employee.entries)).all()
         rows = []
         today = date.today()
+        month_start = today.replace(day=1)
         for emp in employees:
             ents = emp.entries
-            stats = build_analytics(ents, emp.staff_type, emp_id=emp.id)
+            month_ents = [e for e in ents if e.entry_date >= month_start]
+            stats = build_analytics(month_ents, emp.staff_type, emp_id=emp.id)
             week_ents = [e for e in ents if e.entry_date >= today - timedelta(days=6)]
             week_stats = build_analytics(week_ents, emp.staff_type, emp_id=emp.id)
             rows.append({
@@ -1340,7 +1349,7 @@ def admin_dashboard():
                 'stats': stats,
                 'week_stats': week_stats,
                 'count': len(ents),
-                'last_entry': ents[0].entry_date if ents else None,
+                'last_entry': max((e.entry_date for e in ents), default=None),
             })
 
         all_ents = KPIEntry.query.all()
@@ -1376,6 +1385,7 @@ def admin_dashboard():
         return render_template("admin.html",
             rows=rows, total_picked=total_picked, total_entries=total_entries,
             active_today=active_today, emp_count=len(employees), today=today,
+            current_month=today.strftime("%B %Y"),
             open_windows=open_windows,
             open_complaints=open_complaints,
             all_staff=employees,
@@ -1389,7 +1399,9 @@ def admin_dashboard():
         flash("Error loading admin dashboard.", "danger")
         return render_template("admin.html", rows=[], total_picked=0,
                                total_entries=0, active_today=0, emp_count=0, today=date.today(),
-                               open_windows=[], open_complaints=[], picker_lb=[], checker_lb=[], purchaser_lb=[], mixed_lb=[],
+                               current_month=date.today().strftime("%B %Y"),
+                               open_windows=[], open_complaints=[], all_staff=[],
+                               picker_lb=[], checker_lb=[], purchaser_lb=[], mixed_lb=[],
                                picker_week_lb=[], checker_week_lb=[], purchaser_week_lb=[], mixed_week_lb=[],
                                team_avg_eff=0, team_avg_acc=0, improving=[],
                                grade_counts={"ELITE":0,"PROFICIENT":0,"SATISFACTORY":0,"RE-TRAINING":0},
@@ -2255,7 +2267,6 @@ def validation_submit(bv_id):
                 # ── Auto-create complaint entries for each flagged staff ──
                 # Deduction scales with how far off they were from the majority.
                 try:
-                    from collections import Counter
                     all_votes = [
                         (bv.picker_id, bv.picker_count),
                         (bv.checker1_id, bv.checker1_count),
@@ -2384,15 +2395,21 @@ def admin_validation_override(bv_id):
 def api_last_entry():
     """Return the last entry timestamp for every employee (for live Last Entry card)."""
     try:
-        out = {}
+        # Single query: max entry_date per employee
+        latest_subq = (
+            db.session.query(
+                KPIEntry.emp_id,
+                db.func.max(KPIEntry.entry_date).label("last_date")
+            ).group_by(KPIEntry.emp_id).subquery()
+        )
         employees = Employee.query.filter_by(is_admin=False).all()
+        latest_map = {row.emp_id: row.last_date for row in db.session.query(latest_subq).all()}
+        out = {}
         for emp in employees:
-            last = KPIEntry.query.filter_by(emp_id=emp.id).order_by(
-                KPIEntry.entry_date.desc()).first()
             out[emp.id] = {
                 "name": emp.name,
                 "staff_type": emp.staff_type,
-                "last_entry_date": str(last.entry_date) if last else None,
+                "last_entry_date": str(latest_map[emp.id]) if emp.id in latest_map else None,
             }
         return jsonify(employees=out, server_time=datetime.utcnow().isoformat())
     except Exception as e:

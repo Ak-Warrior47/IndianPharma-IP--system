@@ -514,7 +514,7 @@ tbody tr:hover td { background: rgba(219,234,254,0.3); }
             <th>Employee</th>
             <th>Type</th>
             <th>Entries</th>
-            <th>All-Time Score</th>
+            <th>Monthly Score <small style="font-weight:400;font-size:10px;">{{ current_month }}</small></th>
             <th>Week Score</th>
             <th>Grade</th>
             <th>Last Entry</th>
@@ -558,7 +558,13 @@ tbody tr:hover td { background: rgba(219,234,254,0.3); }
               <div class="actions">
                 <a href="/staff/{{ r.emp.id }}" class="btn-sm btn-view">👤 View</a>
                 <button class="btn-sm btn-edit"
-                  onclick="openEdit({{ r.emp.id }}, {{ r.emp.name|tojson }}, {{ r.emp.email|tojson }}, {{ r.emp.staff_type|tojson }}, {{ (r.emp.admin_adjustment or 0)|tojson }}, {{ (r.emp.admin_adjustment_note or '')|tojson }})">
+                  data-emp-id="{{ r.emp.id }}"
+                  data-name="{{ r.emp.name | e }}"
+                  data-email="{{ r.emp.email | e }}"
+                  data-type="{{ r.emp.staff_type | e }}"
+                  data-adj="{{ (r.emp.admin_adjustment or 0) }}"
+                  data-adj-note="{{ (r.emp.admin_adjustment_note or '') | e }}"
+                  onclick="openEditFromBtn(this)">
                   ✏️ Edit
                 </button>
                 <form method="POST" action="/admin/delete_user/{{ r.emp.id }}" style="display:inline;">
@@ -1080,6 +1086,16 @@ document.addEventListener('click', function(e) {
     document.getElementById('addAcList')?.classList.remove('show');
   }
 });
+
+function openEditFromBtn(btn) {
+  var id      = btn.dataset.empId;
+  var name    = btn.dataset.name    || '';
+  var email   = btn.dataset.email   || '';
+  var stype   = btn.dataset.type    || 'picker';
+  var adj     = parseFloat(btn.dataset.adj) || 0;
+  var adjNote = btn.dataset.adjNote || '';
+  openEdit(id, name, email, stype, adj, adjNote);
+}
 
 function openEdit(id, name, email, stype, adj, adjNote) {
   var f = document.getElementById('editForm');
