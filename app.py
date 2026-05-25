@@ -1245,6 +1245,7 @@ def run_migrations():
                 "admin_adjustment": "FLOAT DEFAULT 0",
                 "admin_adjustment_note": "VARCHAR(200) DEFAULT ''",
                 "custom_hourly_target": "FLOAT",
+                "phone": "VARCHAR(20)",  # Feature 15
             }
             for col, col_type in sqlite_cols.items():
                 if col not in existing:
@@ -1277,6 +1278,40 @@ def run_migrations():
                     logger.info("✅ SQLite kpi_entries.shift_note added")
             except Exception as sne:
                 logger.warning(f"SQLite kpi_entries.shift_note migration: {sne}")
+            # Feature 14: admin_staff_notes
+            try:
+                cursor.execute("""CREATE TABLE IF NOT EXISTS admin_staff_notes (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    emp_id INTEGER NOT NULL REFERENCES employees(id) ON DELETE CASCADE,
+                    note TEXT NOT NULL,
+                    created_by INTEGER NOT NULL REFERENCES employees(id),
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)""")
+                logger.info("✅ SQLite admin_staff_notes ensured")
+            except Exception as asne:
+                logger.warning(f"SQLite admin_staff_notes: {asne}")
+            # Feature 15: password_reset_otps
+            try:
+                cursor.execute("""CREATE TABLE IF NOT EXISTS password_reset_otps (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    emp_id INTEGER NOT NULL REFERENCES employees(id) ON DELETE CASCADE,
+                    otp_code VARCHAR(6) NOT NULL,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    expires_at TIMESTAMP NOT NULL,
+                    is_used BOOLEAN DEFAULT 0)""")
+                logger.info("✅ SQLite password_reset_otps ensured")
+            except Exception as prote:
+                logger.warning(f"SQLite password_reset_otps: {prote}")
+            # Feature 16: monthly_report_archives
+            try:
+                cursor.execute("""CREATE TABLE IF NOT EXISTS monthly_report_archives (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    month_str VARCHAR(7) UNIQUE NOT NULL,
+                    generated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    emp_count INTEGER DEFAULT 0,
+                    file_path VARCHAR(200))""")
+                logger.info("✅ SQLite monthly_report_archives ensured")
+            except Exception as mrae:
+                logger.warning(f"SQLite monthly_report_archives: {mrae}")
             conn.commit()
             conn.close()
     except Exception as e:
@@ -1605,6 +1640,19 @@ def admin_dashboard():
         open_windows = PastEntryWindow.query.filter_by(is_active=True).order_by(PastEntryWindow.past_date.desc()).all()
         open_complaints = Complaint.query.filter_by(is_resolved=False).order_by(Complaint.created_at.desc()).all()
 
+        # Feature 17: Stale validations (pending > 24h)
+        stale_cutoff = datetime.utcnow() - timedelta(hours=24)
+        stale_validations_count = BillValidation.query.filter(
+            BillValidation.status == 'pending',
+            BillValidation.created_at <= stale_cutoff
+        ).count()
+
+        # Feature 14: Admin notes grouped by emp_id
+        all_admin_notes = AdminStaffNote.query.order_by(AdminStaffNote.created_at.desc()).all()
+        notes_by_emp = {}
+        for n in all_admin_notes:
+            notes_by_emp.setdefault(n.emp_id, []).append(n)
+
         rws = [r for r in rows if r['stats']]
         def srt(lst, wk=False):
             k = 'week_stats' if wk else 'stats'
@@ -1863,6 +1911,10 @@ def admin_edit_user(emp_id):
         adj_note = request.form.get("admin_adjustment_note", "").strip()
         if adj_note:
             emp.admin_adjustment_note = adj_note[:200]
+
+        # Phone number (Feature 15)
+        phone_val = request.form.get("phone", "").strip()
+        emp.phone = phone_val[:20] if phone_val else None
 
         db.session.commit()
         log_audit("edit_user", name, "Updated by admin")
