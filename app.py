@@ -5,6 +5,9 @@ import os
 import logging
 import io
 import csv
+import random
+import string
+import requests as _requests
 from datetime import date, timedelta, datetime
 from collections import Counter
 from functools import wraps
@@ -13,8 +16,10 @@ from typing import List, Optional, Dict, Any
 from flask import Flask, render_template, request, redirect, url_for, flash, session, Response, jsonify
 from flask_sqlalchemy import SQLAlchemy
 from flask_socketio import SocketIO, emit
+from flask_mail import Mail, Message as MailMessage
 from werkzeug.security import generate_password_hash, check_password_hash
 from werkzeug.middleware.proxy_fix import ProxyFix
+from apscheduler.schedulers.background import BackgroundScheduler
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -36,7 +41,14 @@ app.config.update(
     SESSION_REFRESH_EACH_REQUEST=False,
     PREFERRED_URL_SCHEME='https',
     SQLALCHEMY_TRACK_MODIFICATIONS=False,
-    SQLALCHEMY_ENGINE_OPTIONS={"pool_pre_ping": True, "pool_recycle": 300}
+    SQLALCHEMY_ENGINE_OPTIONS={"pool_pre_ping": True, "pool_recycle": 300},
+    # Flask-Mail config
+    MAIL_SERVER=os.environ.get("MAIL_SERVER", ""),
+    MAIL_PORT=int(os.environ.get("MAIL_PORT", 587)),
+    MAIL_USE_TLS=os.environ.get("MAIL_USE_TLS", "true").lower() != "false",
+    MAIL_USERNAME=os.environ.get("MAIL_USERNAME", ""),
+    MAIL_PASSWORD=os.environ.get("MAIL_PASSWORD", ""),
+    MAIL_DEFAULT_SENDER=os.environ.get("MAIL_USERNAME", "noreply@pharmaip.com"),
 )
 
 db_url = os.environ.get("DATABASE_URL")
@@ -50,6 +62,7 @@ app.config["SQLALCHEMY_DATABASE_URI"] = db_url
 logger.info(f"Using database: {db_url.split('@')[0] if '@' in db_url else 'SQLite (local)'}")
 
 db = SQLAlchemy(app)
+mail = Mail(app)
 socketio = SocketIO(app, cors_allowed_origins="*", async_mode="eventlet")
 
 
@@ -70,6 +83,7 @@ class Employee(db.Model):
     admin_adjustment = db.Column(db.Float, default=0.0)  # Ongoing +/- pts applied to every score
     admin_adjustment_note = db.Column(db.String(200), default="")  # Reason/notes
     custom_hourly_target = db.Column(db.Float, nullable=True)  # Override default role target (Phase 1 auto-raise)
+    phone         = db.Column(db.String(20), nullable=True)   # Feature 15: phone for OTP reset
     created_at    = db.Column(db.DateTime, default=datetime.utcnow)
     entries = db.relationship("KPIEntry", backref="owner", lazy="select", cascade="all, delete-orphan")
 
@@ -122,6 +136,8 @@ class KPIEntry(db.Model):
     @property
     def effective_time(self):
         return self.total_time or self.sweep or 0
+
+    shift_note = db.Column(db.String(300), nullable=True)  # Feature 1: Shift Note
 
     @property
     def _sales_bill_effective(self):
@@ -263,6 +279,116 @@ class BillValidation(db.Model):
         majority_val, _ = counts.most_common(1)[0]
         wrong = [emp_id for emp_id, v in vals_with_ids if v != majority_val and emp_id is not None]
         return "mismatch", wrong
+
+
+# ─── NEW MODELS (Features 2-5) ───────────────────────────────────────────────
+
+class Announcement(db.Model):
+    """Feature 2: Notice Board."""
+    __tablename__ = "announcements"
+    id         = db.Column(db.Integer, primary_key=True)
+    title      = db.Column(db.String(150), nullable=False)
+    body       = db.Column(db.Text, nullable=False)
+    created_by = db.Column(db.Integer, db.ForeignKey("employees.id"))
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    is_active  = db.Column(db.Boolean, default=True)
+    expires_at = db.Column(db.DateTime, nullable=True)
+
+
+class AnnouncementRead(db.Model):
+    """Feature 2: Track which staff dismissed which announcement."""
+    __tablename__ = "announcement_reads"
+    id              = db.Column(db.Integer, primary_key=True)
+    announcement_id = db.Column(db.Integer, db.ForeignKey("announcements.id", ondelete="CASCADE"))
+    emp_id          = db.Column(db.Integer, db.ForeignKey("employees.id", ondelete="CASCADE"))
+    read_at         = db.Column(db.DateTime, default=datetime.utcnow)
+    __table_args__ = (
+        db.UniqueConstraint("announcement_id", "emp_id", name="_ann_emp_uc"),
+    )
+
+
+class StaffGoal(db.Model):
+    """Feature 3: Personal monthly goal."""
+    __tablename__ = "staff_goals"
+    id           = db.Column(db.Integer, primary_key=True)
+    emp_id       = db.Column(db.Integer, db.ForeignKey("employees.id", ondelete="CASCADE"), nullable=False)
+    target_score = db.Column(db.Float, nullable=False)
+    month        = db.Column(db.String(7), nullable=False)  # e.g. "2025-05"
+    created_at   = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at   = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    __table_args__ = (
+        db.UniqueConstraint("emp_id", "month", name="_goal_emp_month_uc"),
+    )
+
+
+class PastEntryRequest(db.Model):
+    """Feature 4: Staff-requested past entry."""
+    __tablename__ = "past_entry_requests"
+    id             = db.Column(db.Integer, primary_key=True)
+    emp_id         = db.Column(db.Integer, db.ForeignKey("employees.id", ondelete="CASCADE"), nullable=False)
+    requested_date = db.Column(db.Date, nullable=False)
+    reason         = db.Column(db.String(200), nullable=False)
+    status         = db.Column(db.String(20), default="pending")  # pending/approved/rejected
+    admin_note     = db.Column(db.String(200), nullable=True)
+    created_at     = db.Column(db.DateTime, default=datetime.utcnow)
+    resolved_at    = db.Column(db.DateTime, nullable=True)
+
+
+class Badge(db.Model):
+    """Feature 5: Badge definitions."""
+    __tablename__ = "badges"
+    id          = db.Column(db.Integer, primary_key=True)
+    name        = db.Column(db.String(100), unique=True, nullable=False)
+    description = db.Column(db.String(200), nullable=False)
+    icon        = db.Column(db.String(10), nullable=False)
+    badge_type  = db.Column(db.String(20), default="auto")  # 'auto' or 'manual'
+
+
+class StaffBadge(db.Model):
+    """Feature 5: Badge awards to staff."""
+    __tablename__ = "staff_badges"
+    id         = db.Column(db.Integer, primary_key=True)
+    emp_id     = db.Column(db.Integer, db.ForeignKey("employees.id", ondelete="CASCADE"), nullable=False)
+    badge_id   = db.Column(db.Integer, db.ForeignKey("badges.id", ondelete="CASCADE"), nullable=False)
+    awarded_at = db.Column(db.DateTime, default=datetime.utcnow)
+    awarded_by = db.Column(db.Integer, db.ForeignKey("employees.id"), nullable=True)
+    note       = db.Column(db.String(200), default="")
+    __table_args__ = (
+        db.UniqueConstraint("emp_id", "badge_id", name="_staff_badge_uc"),
+    )
+
+
+# ─── NEW MODELS (Features 14-17) ─────────────────────────────────────────────
+
+class AdminStaffNote(db.Model):
+    """Feature 14: Timestamped admin notes per staff member."""
+    __tablename__ = "admin_staff_notes"
+    id         = db.Column(db.Integer, primary_key=True)
+    emp_id     = db.Column(db.Integer, db.ForeignKey("employees.id", ondelete="CASCADE"), nullable=False, index=True)
+    note       = db.Column(db.Text, nullable=False)
+    created_by = db.Column(db.Integer, db.ForeignKey("employees.id"), nullable=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+
+class PasswordResetOTP(db.Model):
+    """Feature 15: Phone-based OTP for password reset."""
+    __tablename__ = "password_reset_otps"
+    id         = db.Column(db.Integer, primary_key=True)
+    emp_id     = db.Column(db.Integer, db.ForeignKey("employees.id", ondelete="CASCADE"), nullable=False)
+    otp_code   = db.Column(db.String(6), nullable=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    expires_at = db.Column(db.DateTime, nullable=False)
+    is_used    = db.Column(db.Boolean, default=False)
+
+
+class MonthlyReportArchive(db.Model):
+    """Feature 16: Archive of auto-generated monthly PDF reports."""
+    __tablename__ = "monthly_report_archives"
+    id           = db.Column(db.Integer, primary_key=True)
+    month_str    = db.Column(db.String(7), unique=True, nullable=False)  # e.g. "2025-04"
+    generated_at = db.Column(db.DateTime, default=datetime.utcnow)
+    emp_count    = db.Column(db.Integer, default=0)
+    file_path    = db.Column(db.String(200), nullable=True)
 
 
 # ─── HELPERS ─────────────────────────────────────────────────────────────────
@@ -879,6 +1005,29 @@ def log_audit(action, target, details=""):
         db.session.rollback()
 
 
+def send_sms(to_number: str, body: str) -> bool:
+    """Send SMS via Twilio. Returns True on success. No-ops if env vars not set."""
+    try:
+        account_sid = os.environ.get("TWILIO_ACCOUNT_SID", "")
+        auth_token  = os.environ.get("TWILIO_AUTH_TOKEN", "")
+        from_number = os.environ.get("TWILIO_FROM_NUMBER", "")
+        if not (account_sid and auth_token and from_number):
+            logger.info(f"SMS skipped (Twilio not configured): {body[:60]}")
+            return False
+        url = f"https://api.twilio.com/2010-04-01/Accounts/{account_sid}/Messages.json"
+        resp = _requests.post(url, data={"From": from_number, "To": to_number, "Body": body},
+                              auth=(account_sid, auth_token), timeout=10)
+        if resp.status_code in (200, 201):
+            logger.info(f"SMS sent to {to_number}")
+            return True
+        else:
+            logger.warning(f"SMS failed ({resp.status_code}): {resp.text[:120]}")
+            return False
+    except Exception as e:
+        logger.error(f"send_sms error: {e}")
+        return False
+
+
 def run_migrations():
     """Add missing columns to existing tables without dropping them."""
     try:
@@ -993,6 +1142,94 @@ def run_migrations():
             except Exception as ce:
                 db.session.rollback()
                 logger.warning(f"bill_validations migration skipped: {ce}")
+            # shift_note column on kpi_entries
+            try:
+                db.session.execute(db.text(
+                    "ALTER TABLE kpi_entries ADD COLUMN IF NOT EXISTS shift_note VARCHAR(300)"
+                ))
+                db.session.commit()
+                logger.info("✅ kpi_entries.shift_note ensured")
+            except Exception as ce:
+                db.session.rollback()
+                logger.warning(f"kpi_entries.shift_note migration skipped: {ce}")
+            # Add phone column to employees (Feature 15)
+            try:
+                db.session.execute(db.text(
+                    "ALTER TABLE employees ADD COLUMN IF NOT EXISTS phone VARCHAR(20)"
+                ))
+                db.session.commit()
+                logger.info("✅ employees.phone ensured")
+            except Exception as ce:
+                db.session.rollback()
+                logger.warning(f"employees.phone migration skipped: {ce}")
+            # New feature tables
+            for tbl_sql in [
+                """CREATE TABLE IF NOT EXISTS announcements (
+                    id SERIAL PRIMARY KEY, title VARCHAR(150) NOT NULL, body TEXT NOT NULL,
+                    created_by INTEGER REFERENCES employees(id),
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    is_active BOOLEAN DEFAULT TRUE, expires_at TIMESTAMP)""",
+                """CREATE TABLE IF NOT EXISTS announcement_reads (
+                    id SERIAL PRIMARY KEY,
+                    announcement_id INTEGER REFERENCES announcements(id) ON DELETE CASCADE,
+                    emp_id INTEGER REFERENCES employees(id) ON DELETE CASCADE,
+                    read_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    CONSTRAINT _ann_emp_uc UNIQUE(announcement_id, emp_id))""",
+                """CREATE TABLE IF NOT EXISTS staff_goals (
+                    id SERIAL PRIMARY KEY,
+                    emp_id INTEGER NOT NULL REFERENCES employees(id) ON DELETE CASCADE,
+                    target_score FLOAT NOT NULL, month VARCHAR(7) NOT NULL,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    CONSTRAINT _goal_emp_month_uc UNIQUE(emp_id, month))""",
+                """CREATE TABLE IF NOT EXISTS past_entry_requests (
+                    id SERIAL PRIMARY KEY,
+                    emp_id INTEGER NOT NULL REFERENCES employees(id) ON DELETE CASCADE,
+                    requested_date DATE NOT NULL, reason VARCHAR(200) NOT NULL,
+                    status VARCHAR(20) DEFAULT 'pending', admin_note VARCHAR(200),
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    resolved_at TIMESTAMP)""",
+                """CREATE TABLE IF NOT EXISTS badges (
+                    id SERIAL PRIMARY KEY, name VARCHAR(100) UNIQUE NOT NULL,
+                    description VARCHAR(200) NOT NULL, icon VARCHAR(10) NOT NULL,
+                    badge_type VARCHAR(20) DEFAULT 'auto')""",
+                """CREATE TABLE IF NOT EXISTS staff_badges (
+                    id SERIAL PRIMARY KEY,
+                    emp_id INTEGER NOT NULL REFERENCES employees(id) ON DELETE CASCADE,
+                    badge_id INTEGER NOT NULL REFERENCES badges(id) ON DELETE CASCADE,
+                    awarded_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    awarded_by INTEGER REFERENCES employees(id),
+                    note VARCHAR(200) DEFAULT '',
+                    CONSTRAINT _staff_badge_uc UNIQUE(emp_id, badge_id))""",
+                # Feature 14: Admin Staff Notes
+                """CREATE TABLE IF NOT EXISTS admin_staff_notes (
+                    id SERIAL PRIMARY KEY,
+                    emp_id INTEGER NOT NULL REFERENCES employees(id) ON DELETE CASCADE,
+                    note TEXT NOT NULL,
+                    created_by INTEGER NOT NULL REFERENCES employees(id),
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)""",
+                # Feature 15: Password Reset OTP
+                """CREATE TABLE IF NOT EXISTS password_reset_otps (
+                    id SERIAL PRIMARY KEY,
+                    emp_id INTEGER NOT NULL REFERENCES employees(id) ON DELETE CASCADE,
+                    otp_code VARCHAR(6) NOT NULL,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    expires_at TIMESTAMP NOT NULL,
+                    is_used BOOLEAN DEFAULT FALSE)""",
+                # Feature 16: Monthly Report Archive
+                """CREATE TABLE IF NOT EXISTS monthly_report_archives (
+                    id SERIAL PRIMARY KEY,
+                    month_str VARCHAR(7) UNIQUE NOT NULL,
+                    generated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    emp_count INTEGER DEFAULT 0,
+                    file_path VARCHAR(200))""",
+            ]:
+                try:
+                    db.session.execute(db.text(tbl_sql))
+                    db.session.commit()
+                except Exception as te:
+                    db.session.rollback()
+                    logger.warning(f"New table migration skipped: {te}")
         else:
             # SQLite doesn't support IF NOT EXISTS on ALTER TABLE
             import sqlite3
@@ -1031,6 +1268,15 @@ def run_migrations():
                     logger.info("✅ SQLite complaints.target_emp_id added")
             except Exception as sce:
                 logger.warning(f"SQLite complaints migration: {sce}")
+            # shift_note on kpi_entries
+            try:
+                cursor.execute("PRAGMA table_info(kpi_entries)")
+                kpi_cols2 = [row[1] for row in cursor.fetchall()]
+                if "shift_note" not in kpi_cols2:
+                    cursor.execute("ALTER TABLE kpi_entries ADD COLUMN shift_note VARCHAR(300)")
+                    logger.info("✅ SQLite kpi_entries.shift_note added")
+            except Exception as sne:
+                logger.warning(f"SQLite kpi_entries.shift_note migration: {sne}")
             conn.commit()
             conn.close()
     except Exception as e:
