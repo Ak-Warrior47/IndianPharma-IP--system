@@ -1339,6 +1339,24 @@ def init_db():
                 db.session.add(c1)
                 db.session.commit()
                 logger.info("✅ Database initialized successfully")
+            # Seed default auto badges if none exist
+            try:
+                if Badge.query.count() == 0:
+                    default_badges = [
+                        Badge(name="Perfect Week", description="100% accuracy for 5+ consecutive days", icon="🎯", badge_type="auto"),
+                        Badge(name="Speed Demon", description="Pick speed > 60 items/hr average this month", icon="⚡", badge_type="auto"),
+                        Badge(name="Clean Sweep", description="100% workspace score for full week", icon="🧹", badge_type="auto"),
+                        Badge(name="Century Club", description="100+ items picked in a single day", icon="📦", badge_type="auto"),
+                        Badge(name="Top Performer", description="#1 score in role for the month", icon="🏆", badge_type="auto"),
+                        Badge(name="7-Day Streak", description="Submitted every day for 7 consecutive days", icon="🔥", badge_type="auto"),
+                    ]
+                    for b in default_badges:
+                        db.session.add(b)
+                    db.session.commit()
+                    logger.info("✅ Default badges seeded")
+            except Exception as badge_err:
+                db.session.rollback()
+                logger.warning(f"Badge seeding: {badge_err}")
         except Exception as e:
             logger.error(f"DB init error: {e}")
             db.session.rollback()
@@ -1537,6 +1555,15 @@ def dashboard():
                             session[f"pb_{emp_id}"] = all_stats['eff_score']
                             new_personal_best = True
 
+                    # Save shift note (Feature 1)
+                    try:
+                        shift_note = request.form.get("shift_note", "").strip()[:300]
+                        if shift_note:
+                            ne.shift_note = shift_note
+                            db.session.commit()
+                    except Exception:
+                        pass
+
                     flash("✅ Metrics recorded successfully.", "success")
                     today_entry = ne
 
@@ -1549,6 +1576,24 @@ def dashboard():
                         'last_entry': today.strftime('%Y-%m-%d'),
                         'last_entry_time': datetime.utcnow().strftime('%H:%M'),
                     })
+
+                    # Feature 5: Compute auto badges (never breaks main flow)
+                    try:
+                        compute_auto_badges(emp_id)
+                    except Exception:
+                        pass
+
+                    # Feature 11: SMS alert if low KPI score today
+                    try:
+                        day_s = build_analytics(get_period_entries(emp_id, "day"), staff_type, emp_id=emp_id)
+                        if day_s and day_s.get("eff_score", 100) < 50:
+                            admin_phone = os.environ.get("ADMIN_PHONE", "")
+                            emp_name = session.get("user_name", f"emp#{emp_id}")
+                            score = day_s["eff_score"]
+                            send_sms(admin_phone, f"Low KPI alert: {emp_name} scored {score}pts today.")
+                    except Exception:
+                        pass
+
                 except Exception as e:
                     db.session.rollback()
                     logger.error(f"Dashboard POST: {e}")
@@ -1584,6 +1629,50 @@ def dashboard():
             if not has_entry:
                 pending_windows.append(w)
 
+        # Feature 2: Announcements — active, not expired, not dismissed
+        try:
+            now = datetime.utcnow()
+            anns = Announcement.query.filter_by(is_active=True).all()
+            dismissed_ids = set(
+                ar.announcement_id for ar in AnnouncementRead.query.filter_by(emp_id=emp_id).all()
+            )
+            active_announcements = [
+                a for a in anns
+                if a.id not in dismissed_ids and (a.expires_at is None or a.expires_at > now)
+            ]
+            unread_count = len(active_announcements)
+        except Exception:
+            active_announcements = []
+            unread_count = 0
+
+        # Feature 3: Personal goal for this month
+        try:
+            month_str = today.strftime("%Y-%m")
+            current_goal = StaffGoal.query.filter_by(emp_id=emp_id, month=month_str).first()
+        except Exception:
+            current_goal = None
+
+        # Feature 4: Past entry requests (pending)
+        try:
+            pending_requests = PastEntryRequest.query.filter_by(emp_id=emp_id, status="pending").all()
+        except Exception:
+            pending_requests = []
+
+        # Feature 5: Badges
+        try:
+            my_staff_badges = (
+                db.session.query(StaffBadge, Badge)
+                .join(Badge, StaffBadge.badge_id == Badge.id)
+                .filter(StaffBadge.emp_id == emp_id)
+                .all()
+            )
+            all_auto_badges = Badge.query.filter_by(badge_type="auto").all()
+            earned_badge_ids = {sb.badge_id for sb, _ in my_staff_badges}
+        except Exception:
+            my_staff_badges = []
+            all_auto_badges = []
+            earned_badge_ids = set()
+
         return render_template("dashboard.html",
             user_name=session.get("user_name", "User"),
             user_id=emp_id,
@@ -1599,7 +1688,16 @@ def dashboard():
             trend_speed=trend_speed,
             total_entries=len(all_entries),
             new_personal_best=new_personal_best,
-            pending_windows=pending_windows
+            pending_windows=pending_windows,
+            active_announcements=active_announcements,
+            unread_count=unread_count,
+            current_goal=current_goal,
+            pending_requests=pending_requests,
+            my_staff_badges=my_staff_badges,
+            all_auto_badges=all_auto_badges,
+            earned_badge_ids=earned_badge_ids,
+            current_month=today.strftime("%B %Y"),
+            month_str=today.strftime("%Y-%m"),
         )
     except Exception as e:
         logger.error(f"Dashboard error: {e}")
@@ -1608,7 +1706,10 @@ def dashboard():
             user_name="User", user_id=0, staff_type="picker", today=date.today(),
             today_entry=None, d_stats=None, w_stats=None, m_stats=None,
             recent=[], trend_labels=[], trend_accuracy=[], trend_speed=[], total_entries=0,
-            new_personal_best=False, pending_windows=[])
+            new_personal_best=False, pending_windows=[],
+            active_announcements=[], unread_count=0, current_goal=None,
+            pending_requests=[], my_staff_badges=[], all_auto_badges=[],
+            earned_badge_ids=set(), current_month="", month_str="")
 
 
 @app.route("/admin_dashboard")
@@ -1676,6 +1777,32 @@ def admin_dashboard():
         needs_attention = [r for r in rws if r["stats"].get("grade")=="RE-TRAINING"]
         improving = [r for r in rw2 if r["week_stats"].get("trend")=="improving"]
 
+        # Feature 2: Announcements for admin
+        try:
+            all_announcements = Announcement.query.order_by(Announcement.created_at.desc()).all()
+            total_staff_count = len(employees)
+            ann_read_counts = {}
+            for ann in all_announcements:
+                ann_read_counts[ann.id] = AnnouncementRead.query.filter_by(announcement_id=ann.id).count()
+        except Exception:
+            all_announcements = []
+            ann_read_counts = {}
+            total_staff_count = len(employees)
+
+        # Feature 4: Pending past entry requests
+        try:
+            pending_past_requests = PastEntryRequest.query.filter_by(status="pending").order_by(PastEntryRequest.created_at.desc()).all()
+            emp_map = {e.id: e for e in employees}
+        except Exception:
+            pending_past_requests = []
+            emp_map = {}
+
+        # Feature 5: Badges for admin
+        try:
+            all_badges = Badge.query.all()
+        except Exception:
+            all_badges = []
+
         return render_template("admin.html",
             rows=rows, total_picked=total_picked, total_entries=total_entries,
             active_today=active_today, emp_count=len(employees), today=today,
@@ -1687,6 +1814,14 @@ def admin_dashboard():
             picker_week_lb=picker_week_lb, checker_week_lb=checker_week_lb, purchaser_week_lb=purchaser_week_lb, mixed_week_lb=mixed_week_lb,
             team_avg_eff=team_avg_eff, team_avg_acc=team_avg_acc,
             grade_counts=grade_counts, needs_attention=needs_attention, improving=improving,
+            stale_validations_count=stale_validations_count,
+            notes_by_emp=notes_by_emp,
+            all_announcements=all_announcements,
+            ann_read_counts=ann_read_counts,
+            total_staff_count=total_staff_count,
+            pending_past_requests=pending_past_requests,
+            emp_map=emp_map,
+            all_badges=all_badges,
         )
     except Exception as e:
         logger.error(f"Admin dashboard error: {e}")
@@ -1699,7 +1834,9 @@ def admin_dashboard():
                                picker_week_lb=[], checker_week_lb=[], purchaser_week_lb=[], mixed_week_lb=[],
                                team_avg_eff=0, team_avg_acc=0, improving=[],
                                grade_counts={"ELITE":0,"PROFICIENT":0,"SATISFACTORY":0,"RE-TRAINING":0},
-                               needs_attention=[])
+                               needs_attention=[], stale_validations_count=0, notes_by_emp={},
+                               all_announcements=[], ann_read_counts={}, total_staff_count=0,
+                               pending_past_requests=[], emp_map={}, all_badges=[])
 
 
 @app.route("/staff/<int:emp_id>")
@@ -1795,6 +1932,55 @@ def staff_detail(emp_id):
         except Exception as re_err:
             logger.error(f"staff_detail ranking: {re_err}")
 
+        # Feature 8: Month-over-Month delta
+        mom_delta = 0.0
+        prev_month_score = None
+        try:
+            cur_month_start = today.replace(day=1)
+            prev_month_end = cur_month_start - timedelta(days=1)
+            prev_month_start = prev_month_end.replace(day=1)
+            cur_month_ents = [e for e in entries if e.entry_date >= cur_month_start]
+            prev_month_ents = [e for e in entries if prev_month_start <= e.entry_date <= prev_month_end]
+            cur_m_stats = build_analytics(cur_month_ents, emp.staff_type, emp_id=emp.id)
+            prev_m_stats = build_analytics(prev_month_ents, emp.staff_type, emp_id=emp.id)
+            if cur_m_stats and prev_m_stats:
+                mom_delta = round(cur_m_stats["eff_score"] - prev_m_stats["eff_score"], 1)
+                prev_month_score = prev_m_stats["eff_score"]
+            elif cur_m_stats and not prev_m_stats:
+                mom_delta = 0.0
+        except Exception as mom_err:
+            logger.warning(f"MoM delta: {mom_err}")
+
+        # Feature 9: Last 6 months scorecard
+        monthly_scores = []
+        try:
+            for i in range(5, -1, -1):
+                ref = today.replace(day=1) - timedelta(days=1)
+                for _ in range(i):
+                    ref = ref.replace(day=1) - timedelta(days=1)
+                m_start = ref.replace(day=1)
+                m_end = ref
+                m_label = m_start.strftime("%b %Y")
+                m_ents = [e for e in entries if m_start <= e.entry_date <= m_end]
+                if m_ents:
+                    ms = build_analytics(m_ents, emp.staff_type, emp_id=emp.id)
+                    monthly_scores.append({"month": m_label, "score": ms["eff_score"] if ms else None})
+                else:
+                    monthly_scores.append({"month": m_label, "score": None})
+        except Exception as ms_err:
+            logger.warning(f"6-month scores: {ms_err}")
+
+        # Feature 5: Badges for staff detail
+        try:
+            emp_badges = (
+                db.session.query(StaffBadge, Badge)
+                .join(Badge, StaffBadge.badge_id == Badge.id)
+                .filter(StaffBadge.emp_id == emp_id)
+                .all()
+            )
+        except Exception:
+            emp_badges = []
+
         return render_template("staff_detail.html",
             emp=emp,
             emp_overall_rank=emp_overall_rank,
@@ -1808,7 +1994,11 @@ def staff_detail(emp_id):
             m_stats=m_stats,
             heatmap=heatmap,
             today=today,
-            is_admin=bool(session.get("is_admin"))
+            is_admin=bool(session.get("is_admin")),
+            mom_delta=mom_delta,
+            prev_month_score=prev_month_score,
+            monthly_scores=monthly_scores,
+            emp_badges=emp_badges,
         )
     except Exception as e:
         import traceback
@@ -2623,6 +2813,15 @@ def validation_submit(bv_id):
                         "date": str(bv.entry_date),
                         "wrong_names": wrong_names,
                     })
+                    # Feature 11: SMS alert for mismatch
+                    try:
+                        picker_emp = db.session.get(Employee, bv.picker_id)
+                        picker_name = picker_emp.name if picker_emp else f"#{bv.picker_id}"
+                        admin_phone = os.environ.get("ADMIN_PHONE", "")
+                        send_sms(admin_phone,
+                                 f"Bill count mismatch: {picker_name} on {bv.entry_date}. {len(wrong_ids)} staff flagged.")
+                    except Exception:
+                        pass
                 except Exception:
                     pass
                 flash(f"⚠️ Counts do not match! {len(wrong_ids)} staff flagged and auto-deducted. Admin can review and resolve via Complaints.", "warning")
@@ -2784,3 +2983,759 @@ def migrate_checker_data(emp_id):
 
 if __name__ == "__main__":
     socketio.run(app, host="0.0.0.0", port=int(os.environ.get("PORT", 10000)))
+
+# ─── FEATURE 2: ANNOUNCEMENTS ────────────────────────────────────────────────
+
+@app.route("/admin/announcement/create", methods=["POST"])
+@admin_required
+def admin_create_announcement():
+    try:
+        title = request.form.get("title", "").strip()[:150]
+        body = request.form.get("body", "").strip()
+        expires_str = request.form.get("expires_at", "").strip()
+        if not title or not body:
+            flash("Title and body are required.", "warning")
+            return redirect(url_for("admin_dashboard"))
+        expires_at = None
+        if expires_str:
+            try:
+                expires_at = datetime.strptime(expires_str, "%Y-%m-%d")
+            except ValueError:
+                pass
+        ann = Announcement(
+            title=title, body=body,
+            created_by=session.get("user_id"),
+            is_active=True, expires_at=expires_at
+        )
+        db.session.add(ann)
+        db.session.commit()
+        flash(f"Announcement '{title}' created.", "success")
+    except Exception as e:
+        db.session.rollback()
+        logger.error(f"create_announcement: {e}")
+        flash("Error creating announcement.", "danger")
+    return redirect(url_for("admin_dashboard"))
+
+
+@app.route("/admin/announcement/<int:ann_id>/deactivate", methods=["POST"])
+@admin_required
+def admin_deactivate_announcement(ann_id):
+    try:
+        ann = db.session.get(Announcement, ann_id)
+        if ann:
+            ann.is_active = False
+            db.session.commit()
+            flash("Announcement deactivated.", "success")
+    except Exception as e:
+        db.session.rollback()
+        logger.error(f"deactivate_announcement: {e}")
+        flash("Error.", "danger")
+    return redirect(url_for("admin_dashboard"))
+
+
+@app.route("/announcement/<int:ann_id>/dismiss", methods=["POST"])
+@login_required
+def dismiss_announcement(ann_id):
+    try:
+        emp_id = session.get("user_id")
+        existing = AnnouncementRead.query.filter_by(
+            announcement_id=ann_id, emp_id=emp_id
+        ).first()
+        if not existing:
+            ar = AnnouncementRead(announcement_id=ann_id, emp_id=emp_id)
+            db.session.add(ar)
+            db.session.commit()
+    except Exception as e:
+        db.session.rollback()
+        logger.error(f"dismiss_announcement: {e}")
+    return redirect(url_for("dashboard"))
+
+
+# ─── FEATURE 3: PERSONAL GOAL SETTING ────────────────────────────────────────
+
+@app.route("/goal/set", methods=["POST"])
+@login_required
+def goal_set():
+    try:
+        emp_id = session.get("user_id")
+        target = float(request.form.get("target_score", 70) or 70)
+        target = max(10.0, min(100.0, target))
+        month_str = date.today().strftime("%Y-%m")
+        existing = StaffGoal.query.filter_by(emp_id=emp_id, month=month_str).first()
+        if existing:
+            existing.target_score = target
+            existing.updated_at = datetime.utcnow()
+        else:
+            goal = StaffGoal(emp_id=emp_id, target_score=target, month=month_str)
+            db.session.add(goal)
+        db.session.commit()
+        flash(f"Goal set to {target} pts for {month_str}.", "success")
+    except Exception as e:
+        db.session.rollback()
+        logger.error(f"goal_set: {e}")
+        flash("Error setting goal.", "danger")
+    return redirect(url_for("dashboard"))
+
+
+# ─── FEATURE 4: PAST ENTRY REQUESTS ──────────────────────────────────────────
+
+@app.route("/past_entry_request", methods=["POST"])
+@login_required
+def past_entry_request_submit():
+    try:
+        emp_id = session.get("user_id")
+        date_str = request.form.get("requested_date", "").strip()
+        reason = request.form.get("reason", "").strip()[:200]
+        if not date_str or not reason:
+            flash("Date and reason required.", "warning")
+            return redirect(url_for("dashboard"))
+        req_date = datetime.strptime(date_str, "%Y-%m-%d").date()
+        today = date.today()
+        if req_date >= today:
+            flash("Can only request past dates.", "warning")
+            return redirect(url_for("dashboard"))
+        existing_entry = KPIEntry.query.filter_by(emp_id=emp_id, entry_date=req_date).first()
+        if existing_entry:
+            flash("You already have an entry for that date.", "info")
+            return redirect(url_for("dashboard"))
+        existing_req = PastEntryRequest.query.filter_by(
+            emp_id=emp_id, requested_date=req_date, status="pending"
+        ).first()
+        if existing_req:
+            flash("You already have a pending request for that date.", "info")
+            return redirect(url_for("dashboard"))
+        req = PastEntryRequest(
+            emp_id=emp_id, requested_date=req_date, reason=reason, status="pending"
+        )
+        db.session.add(req)
+        db.session.commit()
+        flash("Past entry request submitted. Admin will review.", "success")
+    except Exception as e:
+        db.session.rollback()
+        logger.error(f"past_entry_request: {e}")
+        flash("Error submitting request.", "danger")
+    return redirect(url_for("dashboard"))
+
+
+@app.route("/admin/past_request/<int:req_id>/approve", methods=["POST"])
+@admin_required
+def admin_approve_past_request(req_id):
+    try:
+        req = db.session.get(PastEntryRequest, req_id)
+        if not req:
+            flash("Request not found.", "danger")
+            return redirect(url_for("admin_dashboard"))
+        req.status = "approved"
+        req.resolved_at = datetime.utcnow()
+        window = PastEntryWindow.query.filter_by(past_date=req.requested_date).first()
+        if window:
+            window.is_active = True
+            window.opened_by = session.get("user_id")
+            window.opened_at = datetime.utcnow()
+        else:
+            window = PastEntryWindow(
+                past_date=req.requested_date,
+                opened_by=session.get("user_id"),
+                is_active=True
+            )
+            db.session.add(window)
+        db.session.commit()
+        flash(f"Request approved. Entry window opened for {req.requested_date.strftime('%d %b %Y')}.", "success")
+    except Exception as e:
+        db.session.rollback()
+        logger.error(f"approve_past_request: {e}")
+        flash("Error approving request.", "danger")
+    return redirect(url_for("admin_dashboard"))
+
+
+@app.route("/admin/past_request/<int:req_id>/reject", methods=["POST"])
+@admin_required
+def admin_reject_past_request(req_id):
+    try:
+        req = db.session.get(PastEntryRequest, req_id)
+        if not req:
+            flash("Request not found.", "danger")
+            return redirect(url_for("admin_dashboard"))
+        req.status = "rejected"
+        req.admin_note = request.form.get("admin_note", "").strip()[:200]
+        req.resolved_at = datetime.utcnow()
+        db.session.commit()
+        flash("Request rejected.", "warning")
+    except Exception as e:
+        db.session.rollback()
+        logger.error(f"reject_past_request: {e}")
+        flash("Error rejecting request.", "danger")
+    return redirect(url_for("admin_dashboard"))
+
+
+# ─── FEATURE 5: BADGE SYSTEM ──────────────────────────────────────────────────
+
+def compute_auto_badges(emp_id):
+    """Compute and award auto badges for an employee after a KPI submission."""
+    try:
+        emp = db.session.get(Employee, emp_id)
+        if not emp:
+            return
+        entries = KPIEntry.query.filter_by(emp_id=emp_id).order_by(KPIEntry.entry_date.desc()).all()
+        if not entries:
+            return
+        badges = Badge.query.filter_by(badge_type="auto").all()
+        today = date.today()
+        month_str = today.strftime("%Y-%m")
+        for badge in badges:
+            existing = StaffBadge.query.filter_by(emp_id=emp_id, badge_id=badge.id).first()
+            if existing:
+                continue
+            earned = False
+            try:
+                if badge.name == "Perfect Week":
+                    sorted_entries = sorted(entries, key=lambda e: e.entry_date, reverse=True)
+                    consec = 0
+                    for e in sorted_entries:
+                        t = (e.picked or 0) + (e.missed or 0)
+                        acc = round((e.picked or 0) / t * 100, 1) if t > 0 else 0
+                        if acc >= 100:
+                            consec += 1
+                        else:
+                            break
+                    earned = consec >= 5
+                elif badge.name == "Speed Demon":
+                    month_entries = [e for e in entries if e.entry_date.strftime("%Y-%m") == month_str]
+                    if month_entries:
+                        total_items = sum((e.picked or 0) + (e.missed or 0) for e in month_entries)
+                        total_hrs = 9.0 * len(month_entries)
+                        avg_speed = total_items / total_hrs if total_hrs > 0 else 0
+                        earned = avg_speed > 60
+                elif badge.name == "Clean Sweep":
+                    week_entries = [e for e in entries if (today - e.entry_date).days <= 6]
+                    if len(week_entries) >= 5:
+                        earned = all(
+                            (e.rack_organized or 0) >= 10 and (e.table_clean or 0) == 1 and (e.sweep_done or 0) == 1
+                            for e in week_entries
+                        )
+                elif badge.name == "Century Club":
+                    earned = any((e.picked or 0) >= 100 for e in entries)
+                elif badge.name == "Top Performer":
+                    month_entries_emp = [e for e in entries if e.entry_date.strftime("%Y-%m") == month_str]
+                    if month_entries_emp:
+                        my_stats = build_analytics(month_entries_emp, emp.staff_type, emp_id=emp_id)
+                        if my_stats:
+                            all_staff_role = Employee.query.filter_by(is_admin=False, staff_type=emp.staff_type).all()
+                            top = True
+                            for s in all_staff_role:
+                                if s.id == emp_id:
+                                    continue
+                                s_ents = [e for e in KPIEntry.query.filter_by(emp_id=s.id).all()
+                                          if e.entry_date.strftime("%Y-%m") == month_str]
+                                s_stats = build_analytics(s_ents, s.staff_type, emp_id=s.id)
+                                if s_stats and s_stats["eff_score"] > my_stats["eff_score"]:
+                                    top = False
+                                    break
+                            earned = top
+                elif badge.name == "7-Day Streak":
+                    dates_set = set(str(e.entry_date) for e in entries)
+                    streak = 0
+                    for i in range(30):
+                        d = today - timedelta(days=i)
+                        if str(d) in dates_set:
+                            streak += 1
+                        else:
+                            break
+                    earned = streak >= 7
+            except Exception as be:
+                logger.warning(f"Badge check {badge.name}: {be}")
+                continue
+            if earned:
+                try:
+                    sb = StaffBadge(emp_id=emp_id, badge_id=badge.id, awarded_by=None, note="Auto-awarded")
+                    db.session.add(sb)
+                    db.session.commit()
+                    logger.info(f"Badge '{badge.name}' awarded to emp_id={emp_id}")
+                except Exception as dbe:
+                    db.session.rollback()
+                    logger.warning(f"Badge award failed: {dbe}")
+    except Exception as e:
+        logger.error(f"compute_auto_badges: {e}")
+
+
+@app.route("/admin/badge/award", methods=["POST"])
+@admin_required
+def admin_award_badge():
+    try:
+        emp_id = int(request.form.get("emp_id", 0))
+        badge_id = int(request.form.get("badge_id", 0))
+        note = request.form.get("note", "").strip()[:200]
+        if not emp_id or not badge_id:
+            flash("Employee and badge required.", "warning")
+            return redirect(url_for("admin_dashboard"))
+        existing = StaffBadge.query.filter_by(emp_id=emp_id, badge_id=badge_id).first()
+        if existing:
+            flash("Employee already has this badge.", "info")
+            return redirect(url_for("admin_dashboard"))
+        sb = StaffBadge(
+            emp_id=emp_id, badge_id=badge_id,
+            awarded_by=session.get("user_id"), note=note
+        )
+        db.session.add(sb)
+        db.session.commit()
+        flash("Badge awarded.", "success")
+    except Exception as e:
+        db.session.rollback()
+        logger.error(f"admin_award_badge: {e}")
+        flash("Error awarding badge.", "danger")
+    return redirect(url_for("admin_dashboard"))
+
+
+@app.route("/admin/badge/create", methods=["POST"])
+@admin_required
+def admin_create_badge():
+    try:
+        name = request.form.get("name", "").strip()[:100]
+        description = request.form.get("description", "").strip()[:200]
+        icon = request.form.get("icon", "🏅").strip()[:10]
+        if not name or not description:
+            flash("Name and description required.", "warning")
+            return redirect(url_for("admin_dashboard"))
+        if Badge.query.filter_by(name=name).first():
+            flash(f"Badge '{name}' already exists.", "warning")
+            return redirect(url_for("admin_dashboard"))
+        badge = Badge(name=name, description=description, icon=icon, badge_type="manual")
+        db.session.add(badge)
+        db.session.commit()
+        flash(f"Badge '{name}' created.", "success")
+    except Exception as e:
+        db.session.rollback()
+        logger.error(f"admin_create_badge: {e}")
+        flash("Error creating badge.", "danger")
+    return redirect(url_for("admin_dashboard"))
+
+
+# ─── FEATURE 6: BULK CSV IMPORT ──────────────────────────────────────────────
+
+@app.route("/admin/bulk_import", methods=["GET", "POST"])
+@admin_required
+def admin_bulk_import():
+    if request.method == "GET":
+        return render_template("bulk_import.html")
+    try:
+        f = request.files.get("csv_file")
+        if not f or not f.filename:
+            flash("Please upload a CSV file.", "warning")
+            return render_template("bulk_import.html")
+        content = f.read().decode("utf-8", errors="replace")
+        reader = csv.DictReader(io.StringIO(content))
+        imported = 0
+        skipped = []
+        for row in reader:
+            name = (row.get("name") or "").strip()
+            email = (row.get("email") or "").strip().lower()
+            password = (row.get("password") or "").strip()
+            staff_type = (row.get("staff_type") or "picker").strip().lower()
+            if not name or not email or not password:
+                skipped.append(f"{email or name}: missing fields")
+                continue
+            if len(password) < 6:
+                skipped.append(f"{email}: password too short")
+                continue
+            if staff_type not in ("picker", "checker", "purchaser"):
+                skipped.append(f"{email}: invalid staff_type '{staff_type}'")
+                continue
+            if Employee.query.filter_by(email=email).first():
+                skipped.append(f"{email}: email already exists")
+                continue
+            emp = Employee(
+                name=name, email=email,
+                staff_type=staff_type,
+                role=f"Operations {staff_type.title()}"
+            )
+            emp.set_password(password)
+            db.session.add(emp)
+            imported += 1
+        db.session.commit()
+        msg = f"Imported {imported} employee(s)."
+        if skipped:
+            msg += f" Skipped {len(skipped)}: " + "; ".join(skipped[:5])
+            if len(skipped) > 5:
+                msg += f" ... and {len(skipped)-5} more."
+        flash(msg, "success" if imported > 0 else "warning")
+    except Exception as e:
+        db.session.rollback()
+        logger.error(f"bulk_import: {e}")
+        flash(f"Error processing CSV: {str(e)[:200]}", "danger")
+    return render_template("bulk_import.html")
+
+
+# ─── FEATURE 7: CUSTOM DATE RANGE ANALYTICS API ──────────────────────────────
+
+@app.route("/api/analytics/range")
+@login_required
+def api_analytics_range():
+    try:
+        emp_id = request.args.get("emp_id", type=int)
+        start_str = request.args.get("start", "")
+        end_str = request.args.get("end", "")
+        if not emp_id:
+            return jsonify(error="emp_id required"), 400
+        if not session.get("is_admin") and session.get("user_id") != emp_id:
+            return jsonify(error="Unauthorized"), 403
+        emp = db.session.get(Employee, emp_id)
+        if not emp:
+            return jsonify(error="Employee not found"), 404
+        try:
+            start_date = datetime.strptime(start_str, "%Y-%m-%d").date()
+            end_date = datetime.strptime(end_str, "%Y-%m-%d").date()
+        except ValueError:
+            return jsonify(error="Invalid date format. Use YYYY-MM-DD"), 400
+        entries = KPIEntry.query.filter(
+            KPIEntry.emp_id == emp_id,
+            KPIEntry.entry_date >= start_date,
+            KPIEntry.entry_date <= end_date
+        ).order_by(KPIEntry.entry_date.desc()).all()
+        stats = build_analytics(entries, emp.staff_type, emp_id=emp_id)
+        if not stats:
+            return jsonify(stats=None, days=0, message="No entries in this range")
+        return jsonify(stats=stats, days=len(entries), emp_name=emp.name, staff_type=emp.staff_type)
+    except Exception as e:
+        logger.error(f"api_analytics_range: {e}")
+        return jsonify(error="Server error"), 500
+
+
+# ─── FEATURE 11: SMS/WHATSAPP NOTIFICATIONS (TWILIO) ─────────────────────────
+# Note: send_sms is defined earlier in the file (around line 1008); this is a stub
+# reference comment only — no duplicate definition.
+
+
+# ─── FEATURE 12: MONTHLY PDF EMAIL (APScheduler) ─────────────────────────────
+
+def send_monthly_reports():
+    """Send monthly KPI PDF reports to admin email."""
+    with app.app_context():
+        admin_email = os.environ.get("ADMIN_EMAIL_RECIPIENT", "")
+        if not admin_email or not os.environ.get("MAIL_SERVER"):
+            logger.warning("Mail env vars not set — skipping monthly reports.")
+            return
+        try:
+            from utils import generate_visual_pdf
+            employees = Employee.query.filter_by(is_admin=False).all()
+            now = datetime.utcnow()
+            month_label = now.strftime("%B %Y")
+            msg = MailMessage(
+                subject=f"Monthly KPI Report — {month_label}",
+                recipients=[admin_email],
+                body=f"Please find attached the monthly KPI reports for {month_label}.",
+                sender=app.config.get("MAIL_DEFAULT_SENDER", "noreply@pharmaip.com")
+            )
+            for emp in employees:
+                try:
+                    payload = build_pdf_payload(emp)
+                    pdf_buf = generate_visual_pdf(emp.name, payload)
+                    safe_name = emp.name.replace(" ", "_").replace("/", "-")
+                    msg.attach(
+                        f"KRA_{safe_name}_{now.strftime('%Y-%m')}.pdf",
+                        "application/pdf",
+                        pdf_buf.getvalue()
+                    )
+                except Exception as pe:
+                    logger.error(f"PDF for {emp.name}: {pe}")
+            mail.send(msg)
+            logger.info(f"Monthly report email sent to {admin_email}")
+        except Exception as e:
+            logger.error(f"send_monthly_reports: {e}")
+
+
+@app.route("/admin/send_monthly_report")
+@admin_required
+def admin_send_monthly_report():
+    """Manual trigger for monthly PDF email."""
+    try:
+        send_monthly_reports()
+        flash("Monthly reports sent (check server logs if mail not configured).", "success")
+    except Exception as e:
+        logger.error(f"admin_send_monthly_report: {e}")
+        flash("Error sending reports.", "danger")
+    return redirect(url_for("admin_dashboard"))
+
+
+# ─── FEATURE 14: Admin Staff Notes ───────────────────────────────────────────
+
+@app.route("/admin/staff_note/<int:emp_id>", methods=["POST"])
+@admin_required
+def admin_staff_note(emp_id):
+    """Admin adds a timestamped note to an employee record."""
+    try:
+        emp = db.session.get(Employee, emp_id)
+        if not emp:
+            flash("Employee not found.", "danger")
+            return redirect(url_for("admin_dashboard"))
+        note_text = request.form.get("note", "").strip()
+        if not note_text:
+            flash("Note cannot be empty.", "warning")
+            return redirect(url_for("admin_dashboard"))
+        if len(note_text) > 500:
+            note_text = note_text[:500]
+        note = AdminStaffNote(
+            emp_id=emp_id,
+            note=note_text,
+            created_by=session.get("user_id"),
+        )
+        db.session.add(note)
+        db.session.commit()
+        log_audit("staff_note_added", emp.name, f"Note: {note_text[:60]}")
+        flash(f"✅ Note added for {emp.name}.", "success")
+    except Exception as e:
+        db.session.rollback()
+        logger.error(f"admin_staff_note: {e}")
+        flash("Error saving note.", "danger")
+    return redirect(url_for("admin_dashboard"))
+
+
+# ─── FEATURE 15: Password Reset via Phone OTP ────────────────────────────────
+
+@app.route("/forgot_password", methods=["GET", "POST"])
+def forgot_password():
+    """Step 1: Enter phone number to receive OTP."""
+    if request.method == "POST":
+        phone = request.form.get("phone", "").strip()
+        if not phone:
+            flash("Please enter your phone number.", "warning")
+            return render_template("forgot_password.html")
+        emp = Employee.query.filter_by(phone=phone).first()
+        if not emp:
+            flash("If that number is registered, an OTP has been sent.", "info")
+            return render_template("forgot_password.html")
+        otp_code = "".join(random.choices(string.digits, k=6))
+        expires_at = datetime.utcnow() + timedelta(minutes=30)
+        try:
+            PasswordResetOTP.query.filter_by(emp_id=emp.id, is_used=False).update({"is_used": True})
+            db.session.commit()
+        except Exception:
+            db.session.rollback()
+        otp_obj = PasswordResetOTP(
+            emp_id=emp.id,
+            otp_code=otp_code,
+            expires_at=expires_at,
+        )
+        db.session.add(otp_obj)
+        db.session.commit()
+        sms_sent = send_sms(phone, f"Your Pharma IP password reset OTP is: {otp_code}. Valid for 30 minutes. Do not share.")
+        if not sms_sent:
+            logger.warning(f"OTP SMS not sent (Twilio not configured). OTP for emp {emp.id}: {otp_code}")
+        flash("OTP sent to your registered number.", "info")
+        return redirect(url_for("reset_password", phone=phone))
+    return render_template("forgot_password.html")
+
+
+@app.route("/reset_password", methods=["GET", "POST"])
+def reset_password():
+    """Step 2: Enter OTP + new password."""
+    phone = request.args.get("phone", "").strip() or request.form.get("phone", "").strip()
+    if request.method == "POST":
+        otp_input = request.form.get("otp", "").strip()
+        new_pw = request.form.get("new_password", "")
+        confirm_pw = request.form.get("confirm_password", "")
+        if not otp_input or not new_pw:
+            flash("Please fill in all fields.", "warning")
+            return render_template("reset_password.html", phone=phone)
+        if new_pw != confirm_pw:
+            flash("Passwords do not match.", "danger")
+            return render_template("reset_password.html", phone=phone)
+        if len(new_pw) < 6:
+            flash("Password must be at least 6 characters.", "danger")
+            return render_template("reset_password.html", phone=phone)
+        emp = Employee.query.filter_by(phone=phone).first()
+        if not emp:
+            flash("Invalid or expired reset link.", "danger")
+            return redirect(url_for("forgot_password"))
+        otp_obj = PasswordResetOTP.query.filter_by(
+            emp_id=emp.id, otp_code=otp_input, is_used=False
+        ).filter(PasswordResetOTP.expires_at >= datetime.utcnow()).first()
+        if not otp_obj:
+            flash("OTP is invalid or has expired. Please request a new one.", "danger")
+            return render_template("reset_password.html", phone=phone)
+        emp.set_password(new_pw)
+        otp_obj.is_used = True
+        db.session.commit()
+        log_audit("password_reset_otp", emp.name, "Password reset via phone OTP")
+        flash("✅ Password reset successfully. Please log in.", "success")
+        return redirect(url_for("login"))
+    return render_template("reset_password.html", phone=phone)
+
+
+# ─── FEATURE 16: Monthly PDF Archive ─────────────────────────────────────────
+
+def generate_monthly_report_job(month_str=None):
+    """Generate PDF ZIP for all staff and store metadata in MonthlyReportArchive."""
+    with app.app_context():
+        try:
+            import zipfile
+            from utils import generate_visual_pdf
+
+            if month_str is None:
+                today = date.today()
+                first_of_this_month = today.replace(day=1)
+                prev_month = first_of_this_month - timedelta(days=1)
+                month_str = prev_month.strftime("%Y-%m")
+
+            employees = Employee.query.filter_by(is_admin=False).all()
+            if not employees:
+                logger.info(f"Monthly report {month_str}: no staff found")
+                return
+
+            zip_buf = io.BytesIO()
+            pdf_count = 0
+            with zipfile.ZipFile(zip_buf, 'w', zipfile.ZIP_DEFLATED) as zf:
+                for emp in employees:
+                    try:
+                        payload = build_pdf_payload(emp)
+                        pdf_buf = generate_visual_pdf(emp.name, payload)
+                        safe_name = emp.name.replace(" ", "_").replace("/", "-")
+                        zf.writestr(f"KRA_{safe_name}_{month_str}.pdf", pdf_buf.getvalue())
+                        pdf_count += 1
+                    except Exception as e:
+                        logger.error(f"Monthly report PDF for {emp.name}: {e}")
+            zip_buf.seek(0)
+
+            reports_dir = os.path.join(os.path.dirname(__file__), "reports")
+            os.makedirs(reports_dir, exist_ok=True)
+            file_path = os.path.join(reports_dir, f"monthly_{month_str}.zip")
+            with open(file_path, "wb") as f:
+                f.write(zip_buf.getvalue())
+
+            existing = MonthlyReportArchive.query.filter_by(month_str=month_str).first()
+            if existing:
+                existing.generated_at = datetime.utcnow()
+                existing.emp_count = pdf_count
+                existing.file_path = file_path
+            else:
+                archive = MonthlyReportArchive(
+                    month_str=month_str,
+                    generated_at=datetime.utcnow(),
+                    emp_count=pdf_count,
+                    file_path=file_path,
+                )
+                db.session.add(archive)
+            db.session.commit()
+            logger.info(f"✅ Monthly report {month_str} generated: {pdf_count} PDFs")
+        except Exception as e:
+            logger.error(f"generate_monthly_report_job: {e}")
+            try:
+                db.session.rollback()
+            except Exception:
+                pass
+
+
+@app.route("/admin/reports")
+@admin_required
+def admin_reports_archive():
+    """List all archived monthly reports."""
+    try:
+        archives = MonthlyReportArchive.query.order_by(MonthlyReportArchive.month_str.desc()).all()
+        return render_template("admin_reports.html", archives=archives)
+    except Exception as e:
+        logger.error(f"admin_reports_archive: {e}")
+        flash("Error loading reports archive.", "danger")
+        return redirect(url_for("admin_dashboard"))
+
+
+@app.route("/admin/reports/<month_str>")
+@admin_required
+def admin_reports_download(month_str):
+    """Regenerate and serve the ZIP for a specific month."""
+    try:
+        import zipfile
+        from utils import generate_visual_pdf
+
+        datetime.strptime(month_str, "%Y-%m")
+
+        employees = Employee.query.filter_by(is_admin=False).all()
+        if not employees:
+            flash("No staff found.", "warning")
+            return redirect(url_for("admin_reports_archive"))
+
+        zip_buf = io.BytesIO()
+        with zipfile.ZipFile(zip_buf, 'w', zipfile.ZIP_DEFLATED) as zf:
+            for emp in employees:
+                try:
+                    payload = build_pdf_payload(emp)
+                    pdf_buf = generate_visual_pdf(emp.name, payload)
+                    safe_name = emp.name.replace(" ", "_").replace("/", "-")
+                    zf.writestr(f"KRA_{safe_name}_{month_str}.pdf", pdf_buf.getvalue())
+                except Exception as e:
+                    logger.error(f"Monthly report PDF for {emp.name}: {e}")
+
+        existing = MonthlyReportArchive.query.filter_by(month_str=month_str).first()
+        if existing:
+            existing.generated_at = datetime.utcnow()
+            db.session.commit()
+
+        zip_buf.seek(0)
+        log_audit("monthly_report_download", month_str, "Admin downloaded monthly report")
+        return Response(
+            zip_buf.getvalue(),
+            mimetype="application/zip",
+            headers={"Content-Disposition": f"attachment; filename=AllStaff_KRA_{month_str}.zip"}
+        )
+    except ValueError:
+        flash("Invalid month format.", "danger")
+        return redirect(url_for("admin_reports_archive"))
+    except Exception as e:
+        logger.error(f"admin_reports_download: {e}")
+        flash("Error generating report.", "danger")
+        return redirect(url_for("admin_reports_archive"))
+
+
+# ─── FEATURE 17: Stale Validations SMS job ────────────────────────────────────
+
+def stale_validations_sms_job():
+    """Daily APScheduler job: SMS admin if stale pending validations exist."""
+    with app.app_context():
+        try:
+            cutoff = datetime.utcnow() - timedelta(hours=24)
+            count = BillValidation.query.filter(
+                BillValidation.status == 'pending',
+                BillValidation.created_at <= cutoff
+            ).count()
+            if count > 0:
+                admin_phone = os.environ.get("ADMIN_PHONE", "")
+                if admin_phone:
+                    send_sms(admin_phone, f"⚠️ {count} bill validations have been pending for 24+ hours. Please review.")
+                    logger.info(f"Stale validations SMS sent: {count} pending")
+                else:
+                    logger.info(f"Stale validations: {count} pending, ADMIN_PHONE not set")
+        except Exception as e:
+            logger.error(f"stale_validations_sms_job: {e}")
+
+
+# ─── APScheduler Setup ────────────────────────────────────────────────────────
+
+try:
+    from apscheduler.schedulers.background import BackgroundScheduler
+    _scheduler = BackgroundScheduler()
+    _scheduler.add_job(
+        send_monthly_reports,
+        trigger="cron",
+        day=1, hour=8, minute=0,
+        id="monthly_pdf_report",
+        replace_existing=True
+    )
+    # Feature 16: archive ZIP on 1st of each month at 8:05 AM
+    _scheduler.add_job(
+        generate_monthly_report_job,
+        trigger="cron",
+        day=1, hour=8, minute=5,
+        id="monthly_archive_report",
+        replace_existing=True
+    )
+    # Feature 17: daily stale validations SMS at 9 AM
+    _scheduler.add_job(
+        stale_validations_sms_job,
+        trigger="cron",
+        hour=9, minute=0,
+        id="stale_validations_sms",
+        replace_existing=True
+    )
+    if not _scheduler.running:
+        _scheduler.start()
+    logger.info("APScheduler started — monthly reports job scheduled.")
+except Exception as _sch_err:
+    logger.warning(f"APScheduler init failed: {_sch_err}")

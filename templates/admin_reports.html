@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Reports Archive | Pharma IP System</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&family=DM+Serif+Display&display=swap" rel="stylesheet">
+<style>
+*, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+:root { --blue: #1d4ed8; --blue-dark: #1e3a8a; --border: #c7d9f5; --bg: #e8f0fe;
+        --muted: #64748b; --text: #0f172a; --white: #fff; }
+body { font-family: 'DM Sans', sans-serif; background: var(--bg); min-height: 100vh; color: var(--text); }
+.nav { position: sticky; top: 0; z-index: 200; background: rgba(255,255,255,0.9);
+       backdrop-filter: blur(14px); border-bottom: 1px solid var(--border);
+       padding: 0 28px; height: 60px; display: flex; align-items: center;
+       justify-content: space-between; box-shadow: 0 1px 12px rgba(29,78,216,0.07); }
+.nav-brand { font-family: 'DM Serif Display', serif; font-size: 18px; color: var(--text); }
+.btn-back { padding: 7px 16px; background: #dbeafe; color: var(--blue);
+            border: 1px solid var(--border); border-radius: 8px; font-size: 12px;
+            font-weight: 600; text-decoration: none; cursor: pointer; }
+.main { padding: 28px; max-width: 900px; margin: 0 auto; }
+.card { background: rgba(255,255,255,0.9); border: 1px solid var(--border);
+        border-radius: 16px; padding: 24px; margin-bottom: 20px; }
+.card-title { font-size: 16px; font-weight: 700; margin-bottom: 18px; }
+.alert { padding: 12px 16px; border-radius: 10px; font-size: 13px; margin-bottom: 16px; }
+.alert-success { background: #f0fdf4; color: #16a34a; border: 1px solid #bbf7d0; }
+.alert-danger { background: #fef2f2; color: #dc2626; border: 1px solid #fecaca; }
+table { width: 100%; border-collapse: collapse; }
+th { text-align: left; font-size: 11px; font-weight: 800; text-transform: uppercase;
+     color: var(--muted); padding: 8px 12px; border-bottom: 2px solid var(--border); }
+td { padding: 12px 12px; font-size: 13px; border-bottom: 1px solid rgba(199,217,245,0.5); }
+.btn-dl { padding: 6px 14px; background: var(--blue); color: #fff; border: none;
+          border-radius: 7px; font-size: 11px; font-weight: 700; cursor: pointer;
+          text-decoration: none; display: inline-block; }
+.btn-dl:hover { opacity: 0.88; }
+.empty { text-align: center; padding: 40px; color: var(--muted); font-size: 14px; }
+</style>
+</head>
+<body>
+<nav class="nav">
+  <div class="nav-brand">📊 Reports Archive</div>
+  <a href="/admin_dashboard" class="btn-back">← Back to Admin</a>
+</nav>
+
+<div class="main">
+  {% with messages = get_flashed_messages(with_categories=true) %}
+    {% if messages %}{% for cat, msg in messages %}
+    <div class="alert alert-{{ cat }}">{{ msg }}</div>
+    {% endfor %}{% endif %}
+  {% endwith %}
+
+  <div class="card">
+    <div class="card-title">📊 Monthly Reports Archive</div>
+    <p style="font-size:13px;color:var(--muted);margin-bottom:18px;">
+      Reports are auto-generated on the 1st of each month. You can also re-download any month below.
+    </p>
+    {% if archives %}
+    <table>
+      <thead>
+        <tr>
+          <th>Month</th>
+          <th>Generated At</th>
+          <th>Staff Count</th>
+          <th>Action</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for a in archives %}
+        <tr>
+          <td><strong>{{ a.month_str }}</strong></td>
+          <td>{{ a.generated_at.strftime('%d %b %Y %H:%M') if a.generated_at else '—' }}</td>
+          <td>{{ a.emp_count }} staff</td>
+          <td>
+            <a href="/admin/reports/{{ a.month_str }}" class="btn-dl">📥 Download ZIP</a>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+    <div class="empty">No archived reports yet. Reports are auto-generated on the 1st of each month.</div>
+    {% endif %}
+  </div>
+</div>
+</body>
+</html>

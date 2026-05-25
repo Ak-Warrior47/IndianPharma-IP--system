@@ -353,6 +353,11 @@ tbody tr:hover td { background: rgba(219,234,254,0.3); }
           <label>New Password (optional)</label>
           <input type="password" name="new_password" placeholder="Leave blank to keep">
         </div>
+        <div class="field" style="grid-column: span 2;">
+          <label>Phone Number (optional)</label>
+          <input type="tel" name="phone" id="edit-phone" placeholder="+91XXXXXXXXXX" maxlength="20">
+          <small style="font-size:11px;color:var(--muted);margin-top:3px;display:block;">Used for OTP-based password reset.</small>
+        </div>
         <div class="field" style="grid-column: span 2;background:linear-gradient(135deg,rgba(29,78,216,0.06),rgba(5,150,105,0.04));padding:12px;border-radius:10px;border:1px dashed rgba(29,78,216,0.25);margin-top:4px;">
           <label style="color:var(--blue);font-weight:700;">⚡ Admin Adjustment (ongoing ±30 pts)</label>
           <div style="display:flex;gap:10px;align-items:center;">
@@ -370,6 +375,39 @@ tbody tr:hover td { background: rgba(219,234,254,0.3); }
   </div>
 </div>
 
+<!-- Feature 14: Notes Modal -->
+<div class="modal-backdrop" id="notesModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.45);z-index:300;align-items:center;justify-content:center;">
+  <div class="modal" style="max-width:520px;width:95%;max-height:85vh;overflow-y:auto;">
+    <div class="modal-title" id="notesModalTitle">📋 Notes</div>
+    <div id="notesHistoryList" style="margin-bottom:16px;"></div>
+    <form method="POST" id="noteForm" autocomplete="off">
+      <div class="field">
+        <label style="font-size:11px;font-weight:700;color:#374151;text-transform:uppercase;">Add New Note</label>
+        <textarea name="note" maxlength="500" rows="3" required
+          style="width:100%;padding:10px 13px;border:1.5px solid #c7d9f5;border-radius:9px;font-size:13px;font-family:inherit;resize:vertical;"
+          placeholder="Enter note (max 500 chars)…"></textarea>
+      </div>
+      <div class="modal-actions">
+        <button type="button" onclick="closeNotesModal()" class="btn-cancel">Cancel</button>
+        <button type="submit" class="btn-save">💾 Save Note</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Embedded notes data -->
+<script>
+var NOTES_BY_EMP = {
+  {% for emp_id, notes in notes_by_emp.items() %}
+  "{{ emp_id }}": [
+    {% for n in notes %}
+    {"note": {{ n.note|tojson }}, "created_at": "{{ n.created_at.strftime('%d %b %Y %H:%M') }}"},
+    {% endfor %}
+  ],
+  {% endfor %}
+};
+</script>
+
 <!-- NAV -->
 <nav class="nav">
   <div class="nav-brand">
@@ -378,6 +416,7 @@ tbody tr:hover td { background: rgba(219,234,254,0.3); }
   </div>
   <div class="nav-right">
     <a href="/validations" class="btn-export" style="background:#fef3c7;color:#b45309;border-color:#fbbf24;">⚖️ Validations</a>
+    <a href="/admin/reports" class="btn-export" style="background:#f0fdf4;color:#16a34a;border-color:#bbf7d0;">📊 Reports Archive</a>
     <a href="/admin/export_csv" class="btn-export">📥 Export CSV</a>
     <a href="/admin/export_full" class="btn-export" style="background:#16a34a;color:#fff;">💾 Full Data Export (JSON)</a>
     <a href="/admin/export_all_pdf" class="btn-export" style="background:linear-gradient(135deg,#6d28d9,#4c1d95);color:#fff;">📄 All Staff PDFs (ZIP)</a>
@@ -395,6 +434,14 @@ tbody tr:hover td { background: rgba(219,234,254,0.3); }
     <div class="alert alert-{{ cat }}">{{ msg }}</div>
     {% endfor %}{% endif %}
   {% endwith %}
+
+  <!-- Feature 17: Stale Validations Alert -->
+  {% if stale_validations_count and stale_validations_count > 0 %}
+  <div class="alert alert-danger" style="display:flex;align-items:center;justify-content:space-between;font-size:14px;">
+    <span>⚠️ <strong>{{ stale_validations_count }}</strong> bill validation(s) pending for over 24 hours</span>
+    <a href="/validations" style="background:#dc2626;color:#fff;padding:5px 14px;border-radius:7px;font-size:12px;font-weight:700;text-decoration:none;">View Validations →</a>
+  </div>
+  {% endif %}
 
   <!-- OVERVIEW STATS -->
   <div class="overview-grid">
@@ -564,8 +611,13 @@ tbody tr:hover td { background: rgba(219,234,254,0.3); }
                   data-type="{{ r.emp.staff_type | e }}"
                   data-adj="{{ (r.emp.admin_adjustment or 0) }}"
                   data-adj-note="{{ (r.emp.admin_adjustment_note or '') | e }}"
+                  data-phone="{{ (r.emp.phone or '') | e }}"
                   onclick="openEditFromBtn(this)">
                   ✏️ Edit
+                </button>
+                <button class="btn-sm" style="background:#fef3c7;color:#b45309;border:1px solid #fcd34d;"
+                  onclick="openNotesModal({{ r.emp.id }}, {{ r.emp.name|tojson }})">
+                  📋 Notes
                 </button>
                 <form method="POST" action="/admin/delete_user/{{ r.emp.id }}" style="display:inline;">
                   <button type="submit" class="btn-sm btn-delete"
@@ -1094,10 +1146,11 @@ function openEditFromBtn(btn) {
   var stype   = btn.dataset.type    || 'picker';
   var adj     = parseFloat(btn.dataset.adj) || 0;
   var adjNote = btn.dataset.adjNote || '';
-  openEdit(id, name, email, stype, adj, adjNote);
+  var phone   = btn.dataset.phone   || '';
+  openEdit(id, name, email, stype, adj, adjNote, phone);
 }
 
-function openEdit(id, name, email, stype, adj, adjNote) {
+function openEdit(id, name, email, stype, adj, adjNote, phone) {
   var f = document.getElementById('editForm');
   if(!f){ console.error("editForm not found"); return; }
   f.action = '/admin/edit_user/' + id;
@@ -1109,9 +1162,43 @@ function openEdit(id, name, email, stype, adj, adjNote) {
   if(adjEl) adjEl.value = (adj === undefined || adj === null) ? 0 : adj;
   var adjNoteEl = document.getElementById('edit-adj-note');
   if(adjNoteEl) adjNoteEl.value = adjNote || '';
+  var phoneEl = document.getElementById('edit-phone');
+  if(phoneEl) phoneEl.value = phone || '';
   var modal = document.getElementById('editModal');
   if(modal) modal.classList.add('open');
 }
+
+// Feature 14: Notes modal
+function openNotesModal(empId, empName) {
+  document.getElementById('notesModalTitle').textContent = '📋 Notes — ' + empName;
+  var noteForm = document.getElementById('noteForm');
+  noteForm.action = '/admin/staff_note/' + empId;
+  // Render notes history
+  var list = document.getElementById('notesHistoryList');
+  var notes = NOTES_BY_EMP[String(empId)] || [];
+  if(notes.length === 0) {
+    list.innerHTML = '<div style="font-size:12px;color:#64748b;padding:10px 0;">No notes yet.</div>';
+  } else {
+    var html = '<div style="font-size:11px;font-weight:800;color:#374151;text-transform:uppercase;margin-bottom:8px;">History</div>';
+    notes.forEach(function(n) {
+      html += '<div style="background:#f8fafc;border:1px solid #c7d9f5;border-radius:8px;padding:10px 13px;margin-bottom:7px;">'
+            + '<div style="font-size:12px;color:#0f172a;">' + escHtml(n.note) + '</div>'
+            + '<div style="font-size:10px;color:#64748b;margin-top:4px;">' + escHtml(n.created_at) + '</div>'
+            + '</div>';
+    });
+    list.innerHTML = html;
+  }
+  var modal = document.getElementById('notesModal');
+  modal.style.display = 'flex';
+}
+
+function closeNotesModal() {
+  document.getElementById('notesModal').style.display = 'none';
+}
+
+document.getElementById('notesModal').addEventListener('click', function(e) {
+  if(e.target === this) closeNotesModal();
+});
 
 function confirmDelete(name){
   var typed = prompt('This will PERMANENTLY delete ' + name + ' and all their KPI data.\n\nType the name "' + name + '" to confirm:');
