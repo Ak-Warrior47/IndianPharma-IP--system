@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Bulk Import | Pharma IP System</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&family=DM+Serif+Display&display=swap" rel="stylesheet">
+<style>
+*, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+:root {
+  --blue: #1d4ed8; --blue-dark: #1e3a8a; --blue-lite: #dbeafe; --blue-mid: #bfdbfe;
+  --text: #0f172a; --muted: #64748b; --border: #c7d9f5; --bg: #eef4ff; --page-bg: #e8f0fe;
+  --white: #ffffff; --success: #16a34a; --danger: #dc2626; --warn: #d97706;
+  --green-bg: #f0fdf4; --red-bg: #fef2f2;
+}
+body { font-family: 'DM Sans', sans-serif; background: var(--page-bg); min-height: 100vh; color: var(--text); }
+.nav {
+  position: sticky; top: 0; z-index: 100;
+  background: rgba(255,255,255,0.9); backdrop-filter: blur(14px);
+  border-bottom: 1px solid var(--border); padding: 0 28px; height: 60px;
+  display: flex; align-items: center; justify-content: space-between;
+  box-shadow: 0 1px 12px rgba(29,78,216,0.07);
+}
+.nav-brand { font-family: 'DM Serif Display', serif; font-size: 18px; color: var(--text); display: flex; align-items: center; gap: 10px; }
+.pill-admin { font-family: 'DM Sans', sans-serif; font-size: 10px; font-weight: 700; padding: 3px 10px; border-radius: 20px; background: linear-gradient(135deg, var(--blue-dark), var(--blue)); color: #fff; text-transform: uppercase; letter-spacing: 1px; }
+.nav-right { display: flex; align-items: center; gap: 12px; }
+.btn-back { padding: 7px 16px; background: var(--blue-lite); color: var(--blue); border: 1px solid var(--blue-mid); border-radius: 8px; font-size: 12px; font-weight: 600; text-decoration: none; }
+.btn-logout { padding: 7px 16px; background: var(--red-bg); color: var(--danger); border: 1px solid #fecaca; border-radius: 8px; font-size: 12px; font-weight: 600; cursor: pointer; font-family: inherit; }
+.main { padding: 32px; max-width: 800px; margin: 0 auto; }
+.alert { padding: 12px 16px; border-radius: 10px; font-size: 13px; font-weight: 500; margin-bottom: 16px; }
+.alert-success { background: var(--green-bg); color: var(--success); border: 1px solid #bbf7d0; }
+.alert-warning { background: #fffbeb; color: var(--warn); border: 1px solid #fcd34d; }
+.alert-danger { background: var(--red-bg); color: var(--danger); border: 1px solid #fecaca; }
+.card { background: rgba(255,255,255,0.85); border: 1px solid var(--border); border-radius: 16px; padding: 28px; margin-bottom: 20px; box-shadow: 0 2px 12px rgba(29,78,216,0.07); }
+.card-title { font-size: 18px; font-weight: 700; color: var(--text); margin-bottom: 8px; }
+.card-sub { font-size: 13px; color: var(--muted); margin-bottom: 20px; }
+.field { display: flex; flex-direction: column; margin-bottom: 16px; }
+.field label { font-size: 11px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: 0.6px; margin-bottom: 7px; }
+.field input[type="file"] { padding: 10px 13px; border: 1.5px dashed var(--border); border-radius: 9px; background: rgba(255,255,255,0.8); font-size: 14px; font-family: 'DM Sans', sans-serif; }
+.btn-import {
+  padding: 12px 24px; background: linear-gradient(135deg, var(--blue-dark), var(--blue));
+  color: #fff; border: none; border-radius: 10px; font-size: 14px; font-weight: 700;
+  font-family: inherit; cursor: pointer; box-shadow: 0 4px 14px rgba(29,78,216,0.3);
+}
+.btn-import:hover { transform: translateY(-2px); }
+.format-box { background: var(--bg); border: 1px solid var(--border); border-radius: 10px; padding: 16px; font-size: 12px; }
+.format-box pre { font-family: monospace; margin-top: 8px; color: #334155; background: #fff; padding: 12px; border-radius: 7px; border: 1px solid var(--border); overflow-x: auto; }
+.req-list { list-style: disc; padding-left: 20px; color: var(--muted); font-size: 13px; line-height: 1.8; }
+</style>
+</head>
+<body>
+
+<nav class="nav">
+  <div class="nav-brand">
+    🔬 Pharma IP System
+    <span class="pill-admin">Admin</span>
+  </div>
+  <div class="nav-right">
+    <a href="/admin_dashboard" class="btn-back">← Back to Admin</a>
+    <form method="POST" action="/logout" style="display:inline;">
+      <button type="submit" class="btn-logout">🚪 Logout</button>
+    </form>
+  </div>
+</nav>
+
+<div class="main">
+
+  {% with messages = get_flashed_messages(with_categories=true) %}
+    {% if messages %}{% for cat, msg in messages %}
+    <div class="alert alert-{{ cat }}">{{ msg }}</div>
+    {% endfor %}{% endif %}
+  {% endwith %}
+
+  <div class="card">
+    <div class="card-title">📥 Bulk CSV Employee Import</div>
+    <div class="card-sub">Upload a CSV file to add multiple employees at once. Rows with errors are skipped and reported.</div>
+
+    <form method="POST" action="/admin/bulk_import" enctype="multipart/form-data">
+      <div class="field">
+        <label>CSV File</label>
+        <input type="file" name="csv_file" accept=".csv" required>
+      </div>
+      <button type="submit" class="btn-import">📤 Import Employees</button>
+    </form>
+  </div>
+
+  <div class="card">
+    <div class="card-title" style="font-size:15px;">📋 CSV Format</div>
+    <div class="format-box">
+      <div style="font-size:12px;font-weight:700;color:var(--muted);margin-bottom:6px;">Required columns (header row):</div>
+      <pre>name,email,password,staff_type
+Rahul Sharma,rahul2@pharmaip.com,secure123,picker
+Priya Mehta,priya2@pharmaip.com,mypassword,checker
+Arjun Gupta,arjun@pharmaip.com,pass1234,purchaser</pre>
+    </div>
+    <div style="margin-top:14px;">
+      <div style="font-size:12px;font-weight:700;color:var(--muted);margin-bottom:8px;">Validation rules:</div>
+      <ul class="req-list">
+        <li>All columns required: <code>name</code>, <code>email</code>, <code>password</code>, <code>staff_type</code></li>
+        <li>Password must be at least 6 characters</li>
+        <li>staff_type must be one of: <code>picker</code>, <code>checker</code>, <code>purchaser</code></li>
+        <li>Email must be unique (not already in system)</li>
+        <li>Rows that fail validation are skipped with an explanation</li>
+      </ul>
+    </div>
+  </div>
+
+</div>
+</body>
+</html>

@@ -353,6 +353,11 @@ tbody tr:hover td { background: rgba(219,234,254,0.3); }
           <label>New Password (optional)</label>
           <input type="password" name="new_password" placeholder="Leave blank to keep">
         </div>
+        <div class="field" style="grid-column: span 2;">
+          <label>Phone Number (optional)</label>
+          <input type="tel" name="phone" id="edit-phone" placeholder="+91XXXXXXXXXX" maxlength="20">
+          <small style="font-size:11px;color:var(--muted);margin-top:3px;display:block;">Used for OTP-based password reset.</small>
+        </div>
         <div class="field" style="grid-column: span 2;background:linear-gradient(135deg,rgba(29,78,216,0.06),rgba(5,150,105,0.04));padding:12px;border-radius:10px;border:1px dashed rgba(29,78,216,0.25);margin-top:4px;">
           <label style="color:var(--blue);font-weight:700;">⚡ Admin Adjustment (ongoing ±30 pts)</label>
           <div style="display:flex;gap:10px;align-items:center;">
@@ -370,6 +375,39 @@ tbody tr:hover td { background: rgba(219,234,254,0.3); }
   </div>
 </div>
 
+<!-- Feature 14: Notes Modal -->
+<div class="modal-backdrop" id="notesModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.45);z-index:300;align-items:center;justify-content:center;">
+  <div class="modal" style="max-width:520px;width:95%;max-height:85vh;overflow-y:auto;">
+    <div class="modal-title" id="notesModalTitle">📋 Notes</div>
+    <div id="notesHistoryList" style="margin-bottom:16px;"></div>
+    <form method="POST" id="noteForm" autocomplete="off">
+      <div class="field">
+        <label style="font-size:11px;font-weight:700;color:#374151;text-transform:uppercase;">Add New Note</label>
+        <textarea name="note" maxlength="500" rows="3" required
+          style="width:100%;padding:10px 13px;border:1.5px solid #c7d9f5;border-radius:9px;font-size:13px;font-family:inherit;resize:vertical;"
+          placeholder="Enter note (max 500 chars)…"></textarea>
+      </div>
+      <div class="modal-actions">
+        <button type="button" onclick="closeNotesModal()" class="btn-cancel">Cancel</button>
+        <button type="submit" class="btn-save">💾 Save Note</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Embedded notes data -->
+<script>
+var NOTES_BY_EMP = {
+  {% for emp_id, notes in notes_by_emp.items() %}
+  "{{ emp_id }}": [
+    {% for n in notes %}
+    {"note": {{ n.note|tojson }}, "created_at": "{{ n.created_at.strftime('%d %b %Y %H:%M') }}"},
+    {% endfor %}
+  ],
+  {% endfor %}
+};
+</script>
+
 <!-- NAV -->
 <nav class="nav">
   <div class="nav-brand">
@@ -378,6 +416,8 @@ tbody tr:hover td { background: rgba(219,234,254,0.3); }
   </div>
   <div class="nav-right">
     <a href="/validations" class="btn-export" style="background:#fef3c7;color:#b45309;border-color:#fbbf24;">⚖️ Validations</a>
+    <a href="/admin/reports" class="btn-export" style="background:#f0fdf4;color:#16a34a;border-color:#bbf7d0;">📊 Reports Archive</a>
+    <a href="/admin/bulk_import" class="btn-export" style="background:#f5f3ff;color:#6d28d9;border-color:#ddd6fe;">📥 Bulk Import</a>
     <a href="/admin/export_csv" class="btn-export">📥 Export CSV</a>
     <a href="/admin/export_full" class="btn-export" style="background:#16a34a;color:#fff;">💾 Full Data Export (JSON)</a>
     <a href="/admin/export_all_pdf" class="btn-export" style="background:linear-gradient(135deg,#6d28d9,#4c1d95);color:#fff;">📄 All Staff PDFs (ZIP)</a>
@@ -395,6 +435,14 @@ tbody tr:hover td { background: rgba(219,234,254,0.3); }
     <div class="alert alert-{{ cat }}">{{ msg }}</div>
     {% endfor %}{% endif %}
   {% endwith %}
+
+  <!-- Feature 17: Stale Validations Alert -->
+  {% if stale_validations_count and stale_validations_count > 0 %}
+  <div class="alert alert-danger" style="display:flex;align-items:center;justify-content:space-between;font-size:14px;">
+    <span>⚠️ <strong>{{ stale_validations_count }}</strong> bill validation(s) pending for over 24 hours</span>
+    <a href="/validations" style="background:#dc2626;color:#fff;padding:5px 14px;border-radius:7px;font-size:12px;font-weight:700;text-decoration:none;">View Validations →</a>
+  </div>
+  {% endif %}
 
   <!-- OVERVIEW STATS -->
   <div class="overview-grid">
@@ -418,6 +466,152 @@ tbody tr:hover td { background: rgba(219,234,254,0.3); }
       <div class="ov-value">{{ "{:,}".format(total_picked) }}</div>
       <div class="ov-sub">Items all time</div>
     </div>
+  </div>
+
+  <!-- FEATURE 2: ANNOUNCEMENT / NOTICE BOARD -->
+  <div class="card" style="margin-bottom:20px;border-left:4px solid var(--blue);">
+    <div class="card-header">
+      <div class="card-title">📢 Announcements / Notice Board
+        {% if all_announcements %}<span class="cnt">{{ all_announcements|length }} notices</span>{% endif %}
+      </div>
+      <a href="/admin/send_monthly_report" class="btn-sm btn-view" style="font-size:12px;padding:7px 14px;" onclick="return confirm('Send monthly PDF reports now?')">📧 Send Monthly Reports</a>
+    </div>
+    <form method="POST" action="/admin/announcements/create" autocomplete="off" style="display:grid;grid-template-columns:1fr 1fr auto;gap:12px;align-items:flex-end;margin-bottom:16px;">
+      <div class="field" style="margin:0;">
+        <label>Title</label>
+        <input type="text" name="title" placeholder="Announcement title" required maxlength="120">
+      </div>
+      <div class="field" style="margin:0;">
+        <label>Body</label>
+        <input type="text" name="body" placeholder="Details (optional)" maxlength="500">
+      </div>
+      <button type="submit" class="btn-add" style="white-space:nowrap;">📢 Post</button>
+    </form>
+    {% if all_announcements %}
+    <div style="display:flex;flex-direction:column;gap:8px;">
+      {% for ann in all_announcements %}
+      <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;padding:12px 14px;background:{% if ann.is_active %}rgba(219,234,254,0.4){% else %}rgba(241,245,249,0.6){% endif %};border:1px solid {% if ann.is_active %}var(--blue-mid){% else %}var(--border){% endif %};border-radius:10px;">
+        <div style="flex:1;">
+          <div style="font-size:13px;font-weight:700;color:var(--text);">{{ ann.title }}</div>
+          {% if ann.body %}<div style="font-size:12px;color:var(--muted);margin-top:2px;">{{ ann.body }}</div>{% endif %}
+          <div style="font-size:10px;color:var(--muted);margin-top:4px;">
+            Posted {{ ann.created_at.strftime('%d %b %Y') }}
+            &nbsp;·&nbsp;
+            Read by <strong>{{ ann_read_counts.get(ann.id, 0) }}</strong> / {{ total_staff_count }} staff
+            {% if not ann.is_active %}&nbsp;·&nbsp;<span style="color:var(--muted);">Archived</span>{% endif %}
+          </div>
+        </div>
+        {% if ann.is_active %}
+        <form method="POST" action="/admin/announcements/{{ ann.id }}/deactivate" style="margin:0;">
+          <button type="submit" class="btn-sm btn-delete" style="white-space:nowrap;font-size:11px;">✕ Archive</button>
+        </form>
+        {% endif %}
+      </div>
+      {% endfor %}
+    </div>
+    {% else %}
+    <div class="empty" style="padding:20px;">No announcements yet. Post your first notice above.</div>
+    {% endif %}
+  </div>
+
+  <!-- FEATURE 4: PENDING PAST ENTRY REQUESTS -->
+  {% if pending_past_requests %}
+  <div class="card" style="margin-bottom:20px;border-left:4px solid #d97706;">
+    <div class="card-header">
+      <div class="card-title">📅 Pending Past Entry Requests
+        <span class="cnt" style="background:#fffbeb;color:#b45309;border-color:#fcd34d;">{{ pending_past_requests|length }} pending</span>
+      </div>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:8px;">
+      {% for req in pending_past_requests %}
+      <div style="display:flex;align-items:center;gap:12px;padding:12px 14px;background:#fffbeb;border:1px solid #fcd34d;border-radius:10px;flex-wrap:wrap;">
+        <div style="flex:1;min-width:200px;">
+          <div style="font-size:13px;font-weight:700;color:var(--text);">{{ emp_map.get(req.employee_id, 'Unknown') }}</div>
+          <div style="font-size:12px;color:var(--muted);margin-top:2px;">
+            Requesting: <strong>{{ req.requested_date.strftime('%d %b %Y') }}</strong>
+            &nbsp;·&nbsp; Requested {{ req.created_at.strftime('%d %b %Y %H:%M') }}
+          </div>
+          {% if req.reason %}<div style="font-size:12px;color:var(--muted);margin-top:2px;">Reason: {{ req.reason }}</div>{% endif %}
+        </div>
+        <div style="display:flex;gap:8px;">
+          <form method="POST" action="/admin/past_entry_request/{{ req.id }}/approve" style="margin:0;">
+            <button type="submit" class="btn-sm" style="background:#f0fdf4;color:#16a34a;border:1px solid #bbf7d0;">✅ Approve</button>
+          </form>
+          <form method="POST" action="/admin/past_entry_request/{{ req.id }}/reject" style="margin:0;">
+            <button type="submit" class="btn-sm btn-delete">✕ Reject</button>
+          </form>
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+  {% endif %}
+
+  <!-- FEATURE 5: BADGE MANAGEMENT -->
+  <div class="card" style="margin-bottom:20px;">
+    <div class="card-header">
+      <div class="card-title">🏅 Badge Management
+        {% if all_badges %}<span class="cnt">{{ all_badges|length }} badges</span>{% endif %}
+      </div>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-bottom:16px;">
+      <!-- Award Badge Form -->
+      <div>
+        <div style="font-size:12px;font-weight:700;color:var(--muted);text-transform:uppercase;margin-bottom:8px;">Award Badge to Staff</div>
+        <form method="POST" action="/admin/badges/award" autocomplete="off" style="display:grid;gap:10px;">
+          <div class="field" style="margin:0;">
+            <label>Badge</label>
+            <select name="badge_id" required style="padding:9px 12px;border:1.5px solid var(--border);border-radius:9px;font-size:13px;font-family:inherit;">
+              {% for b in all_badges %}
+              <option value="{{ b.id }}">{{ b.icon }} {{ b.name }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="field" style="margin:0;">
+            <label>Staff Member</label>
+            <select name="employee_id" required style="padding:9px 12px;border:1.5px solid var(--border);border-radius:9px;font-size:13px;font-family:inherit;">
+              {% for r in rows %}
+              <option value="{{ r.emp.id }}">{{ r.emp.name }} ({{ r.emp.staff_type }})</option>
+              {% endfor %}
+            </select>
+          </div>
+          <button type="submit" class="btn-add" style="width:fit-content;">🏅 Award Badge</button>
+        </form>
+      </div>
+      <!-- Create Custom Badge Form -->
+      <div>
+        <div style="font-size:12px;font-weight:700;color:var(--muted);text-transform:uppercase;margin-bottom:8px;">Create Custom Badge</div>
+        <form method="POST" action="/admin/badges/create" autocomplete="off" style="display:grid;gap:10px;">
+          <div style="display:grid;grid-template-columns:60px 1fr;gap:10px;">
+            <div class="field" style="margin:0;">
+              <label>Icon</label>
+              <input type="text" name="icon" placeholder="🌟" maxlength="4" required style="padding:9px;border:1.5px solid var(--border);border-radius:9px;font-size:16px;text-align:center;">
+            </div>
+            <div class="field" style="margin:0;">
+              <label>Name</label>
+              <input type="text" name="name" placeholder="Badge name" required maxlength="60">
+            </div>
+          </div>
+          <div class="field" style="margin:0;">
+            <label>Description</label>
+            <input type="text" name="description" placeholder="How to earn this badge" required maxlength="200">
+          </div>
+          <button type="submit" class="btn-add" style="background:linear-gradient(135deg,#7c3aed,#6d28d9);width:fit-content;">✨ Create Badge</button>
+        </form>
+      </div>
+    </div>
+    {% if all_badges %}
+    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:10px;margin-top:8px;border-top:1px solid var(--border);padding-top:14px;">
+      {% for b in all_badges %}
+      <div style="background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:12px;text-align:center;">
+        <div style="font-size:24px;margin-bottom:4px;">{{ b.icon }}</div>
+        <div style="font-size:12px;font-weight:700;color:var(--text);">{{ b.name }}</div>
+        <div style="font-size:10px;color:var(--muted);margin-top:2px;">{{ b.description[:50] }}{% if b.description|length > 50 %}...{% endif %}</div>
+        <div style="font-size:10px;color:{% if b.badge_type == 'auto' %}var(--blue){% else %}#7c3aed{% endif %};margin-top:4px;font-weight:600;text-transform:uppercase;">{{ b.badge_type }}</div>
+      </div>
+      {% endfor %}
+    </div>
+    {% endif %}
   </div>
 
   <!-- ADD EMPLOYEE -->
@@ -514,7 +708,7 @@ tbody tr:hover td { background: rgba(219,234,254,0.3); }
             <th>Employee</th>
             <th>Type</th>
             <th>Entries</th>
-            <th>All-Time Score</th>
+            <th>Monthly Score <small style="font-weight:400;font-size:10px;">{{ current_month }}</small></th>
             <th>Week Score</th>
             <th>Grade</th>
             <th>Last Entry</th>
@@ -558,8 +752,19 @@ tbody tr:hover td { background: rgba(219,234,254,0.3); }
               <div class="actions">
                 <a href="/staff/{{ r.emp.id }}" class="btn-sm btn-view">👤 View</a>
                 <button class="btn-sm btn-edit"
-                  onclick="openEdit({{ r.emp.id }}, {{ r.emp.name|tojson }}, {{ r.emp.email|tojson }}, {{ r.emp.staff_type|tojson }}, {{ (r.emp.admin_adjustment or 0)|tojson }}, {{ (r.emp.admin_adjustment_note or '')|tojson }})">
+                  data-emp-id="{{ r.emp.id }}"
+                  data-name="{{ r.emp.name | e }}"
+                  data-email="{{ r.emp.email | e }}"
+                  data-type="{{ r.emp.staff_type | e }}"
+                  data-adj="{{ (r.emp.admin_adjustment or 0) }}"
+                  data-adj-note="{{ (r.emp.admin_adjustment_note or '') | e }}"
+                  data-phone="{{ (r.emp.phone or '') | e }}"
+                  onclick="openEditFromBtn(this)">
                   ✏️ Edit
+                </button>
+                <button class="btn-sm" style="background:#fef3c7;color:#b45309;border:1px solid #fcd34d;"
+                  onclick="openNotesModal({{ r.emp.id }}, {{ r.emp.name|tojson }})">
+                  📋 Notes
                 </button>
                 <form method="POST" action="/admin/delete_user/{{ r.emp.id }}" style="display:inline;">
                   <button type="submit" class="btn-sm btn-delete"
@@ -1081,7 +1286,18 @@ document.addEventListener('click', function(e) {
   }
 });
 
-function openEdit(id, name, email, stype, adj, adjNote) {
+function openEditFromBtn(btn) {
+  var id      = btn.dataset.empId;
+  var name    = btn.dataset.name    || '';
+  var email   = btn.dataset.email   || '';
+  var stype   = btn.dataset.type    || 'picker';
+  var adj     = parseFloat(btn.dataset.adj) || 0;
+  var adjNote = btn.dataset.adjNote || '';
+  var phone   = btn.dataset.phone   || '';
+  openEdit(id, name, email, stype, adj, adjNote, phone);
+}
+
+function openEdit(id, name, email, stype, adj, adjNote, phone) {
   var f = document.getElementById('editForm');
   if(!f){ console.error("editForm not found"); return; }
   f.action = '/admin/edit_user/' + id;
@@ -1093,9 +1309,43 @@ function openEdit(id, name, email, stype, adj, adjNote) {
   if(adjEl) adjEl.value = (adj === undefined || adj === null) ? 0 : adj;
   var adjNoteEl = document.getElementById('edit-adj-note');
   if(adjNoteEl) adjNoteEl.value = adjNote || '';
+  var phoneEl = document.getElementById('edit-phone');
+  if(phoneEl) phoneEl.value = phone || '';
   var modal = document.getElementById('editModal');
   if(modal) modal.classList.add('open');
 }
+
+// Feature 14: Notes modal
+function openNotesModal(empId, empName) {
+  document.getElementById('notesModalTitle').textContent = '📋 Notes — ' + empName;
+  var noteForm = document.getElementById('noteForm');
+  noteForm.action = '/admin/staff_note/' + empId;
+  // Render notes history
+  var list = document.getElementById('notesHistoryList');
+  var notes = NOTES_BY_EMP[String(empId)] || [];
+  if(notes.length === 0) {
+    list.innerHTML = '<div style="font-size:12px;color:#64748b;padding:10px 0;">No notes yet.</div>';
+  } else {
+    var html = '<div style="font-size:11px;font-weight:800;color:#374151;text-transform:uppercase;margin-bottom:8px;">History</div>';
+    notes.forEach(function(n) {
+      html += '<div style="background:#f8fafc;border:1px solid #c7d9f5;border-radius:8px;padding:10px 13px;margin-bottom:7px;">'
+            + '<div style="font-size:12px;color:#0f172a;">' + escHtml(n.note) + '</div>'
+            + '<div style="font-size:10px;color:#64748b;margin-top:4px;">' + escHtml(n.created_at) + '</div>'
+            + '</div>';
+    });
+    list.innerHTML = html;
+  }
+  var modal = document.getElementById('notesModal');
+  modal.style.display = 'flex';
+}
+
+function closeNotesModal() {
+  document.getElementById('notesModal').style.display = 'none';
+}
+
+document.getElementById('notesModal').addEventListener('click', function(e) {
+  if(e.target === this) closeNotesModal();
+});
 
 function confirmDelete(name){
   var typed = prompt('This will PERMANENTLY delete ' + name + ' and all their KPI data.\n\nType the name "' + name + '" to confirm:');

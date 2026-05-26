@@ -180,6 +180,12 @@ table.htable tbody tr:hover td { background: var(--bg); }
   </div>
   <div class="nav-right">
     <span class="nav-user">{{ user_name }}</span>
+    {% if unread_count and unread_count > 0 %}
+    <span style="position:relative;display:inline-block;">
+      <a href="#announcements-section" style="padding:7px 14px;background:#fef3c7;color:#b45309;border:1px solid #fbbf24;border-radius:8px;font-size:12px;font-weight:600;text-decoration:none;">📢 Notices</a>
+      <span style="position:absolute;top:-5px;right:-5px;background:#dc2626;color:#fff;border-radius:999px;font-size:10px;font-weight:700;padding:1px 5px;">{{ unread_count }}</span>
+    </span>
+    {% endif %}
     <a href="/staff/{{ user_id }}" style="padding:7px 14px;background:var(--blue-lite);color:var(--blue);border:1px solid var(--blue-mid);border-radius:8px;font-size:12px;font-weight:600;text-decoration:none;">👤 My Profile</a>
     <a href="/validations" style="padding:7px 14px;background:#fef3c7;color:#b45309;border:1px solid #fbbf24;border-radius:8px;font-size:12px;font-weight:600;text-decoration:none;">⚖️ Validations</a>
     <a href="/export_pdf" style="padding:7px 14px;background:var(--green-bg);color:var(--success);border:1px solid #bbf7d0;border-radius:8px;font-size:12px;font-weight:600;text-decoration:none;">📄 PDF Report</a>
@@ -190,6 +196,25 @@ table.htable tbody tr:hover td { background: var(--bg); }
 </nav>
 
 <div class="main">
+
+  <!-- FEATURE 2: ANNOUNCEMENTS BANNER -->
+  {% if active_announcements %}
+  <div id="announcements-section">
+    {% for ann in active_announcements %}
+    <div style="background:linear-gradient(135deg,#eff6ff,#dbeafe);border:1.5px solid var(--blue-mid);border-radius:13px;padding:14px 18px;margin-bottom:12px;display:flex;align-items:flex-start;gap:14px;">
+      <div style="font-size:20px;">📢</div>
+      <div style="flex:1;">
+        <div style="font-size:14px;font-weight:700;color:var(--blue-dark);">{{ ann.title }}</div>
+        <div style="font-size:13px;color:var(--text);margin-top:4px;line-height:1.5;">{{ ann.body }}</div>
+        <div style="font-size:11px;color:var(--muted);margin-top:5px;">{{ ann.created_at.strftime('%d %b %Y') }}</div>
+      </div>
+      <form method="POST" action="/announcement/{{ ann.id }}/dismiss" style="margin:0;">
+        <button type="submit" style="padding:5px 12px;background:rgba(255,255,255,0.7);border:1px solid var(--blue-mid);border-radius:7px;font-size:11px;font-weight:700;color:var(--muted);cursor:pointer;font-family:inherit;">✕ Dismiss</button>
+      </form>
+    </div>
+    {% endfor %}
+  </div>
+  {% endif %}
 
   {% with messages = get_flashed_messages(with_categories=true) %}
     {% if messages %}{% for cat, msg in messages %}
@@ -541,6 +566,13 @@ table.htable tbody tr:hover td { background: var(--bg); }
         {% endif %}
       </div>
       <p style="font-size:12px;color:var(--muted);margin-bottom:14px;padding:10px 14px;background:rgba(240,253,244,0.8);border-radius:9px;border:1px solid rgba(22,163,74,0.2);">⏱ Working time is fixed at <strong>9 hours</strong> per day for all speed calculations.</p>
+      <!-- FEATURE 1: SHIFT NOTE -->
+      <div class="field" style="margin-bottom:16px;">
+        <label>📝 Shift Note (optional, max 300 chars)</label>
+        <textarea name="shift_note" maxlength="300" rows="2"
+          placeholder="Any notes about today's shift — issues, highlights, etc."
+          style="padding:10px 13px;border:1.5px solid var(--border);border-radius:9px;background:rgba(255,255,255,0.8);font-size:13px;font-family:'DM Sans',sans-serif;color:var(--text);resize:vertical;"></textarea>
+      </div>
       <button type="submit" class="btn-submit">✅ Submit Today's Metrics</button>
     </form>
     {% endif %}
@@ -606,6 +638,140 @@ table.htable tbody tr:hover td { background: var(--bg); }
           {% endif %}
         </tbody>
       </table>
+    </div>
+  </div>
+  {% endif %}
+
+  <!-- FEATURE 3: PERSONAL GOAL -->
+  <div class="card">
+    <div class="section-label">🎯 My Goal — {{ current_month }}</div>
+    {% if current_goal %}
+      {% set m_score = m_stats.eff_score if m_stats else 0 %}
+      {% set pct = ((m_score / current_goal.target_score) * 100)|round(1) if current_goal.target_score > 0 else 0 %}
+      {% if pct > 100 %}{% set disp_pct = 100 %}{% else %}{% set disp_pct = pct %}{% endif %}
+      <div style="margin-bottom:12px;">
+        <div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:5px;">
+          <span style="font-weight:600;">Your goal: <strong>{{ current_goal.target_score }}</strong> pts</span>
+          <span style="color:var(--muted);">Current: <strong>{{ m_score }}</strong> pts — <strong>{{ pct }}%</strong> there</span>
+        </div>
+        <div style="height:12px;background:rgba(199,217,245,0.4);border-radius:8px;overflow:hidden;">
+          <div style="height:100%;width:{{ disp_pct }}%;background:linear-gradient(90deg,{% if pct >= 90 %}#16a34a,#10b981{% elif pct >= 70 %}#d97706,#f59e0b{% else %}#dc2626,#ef4444{% endif %});border-radius:8px;transition:width 0.6s;"></div>
+        </div>
+        {% if pct >= 100 %}
+        <div style="margin-top:8px;font-size:12px;color:#16a34a;font-weight:700;">🏆 Goal achieved! Excellent work!</div>
+        {% endif %}
+      </div>
+    {% else %}
+      <p style="font-size:13px;color:var(--muted);margin-bottom:14px;">Set a monthly target score to track your progress.</p>
+    {% endif %}
+    <form method="POST" action="/goal/set" style="display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap;">
+      <div class="field" style="flex:1;min-width:180px;">
+        <label>Target Score (10-100)</label>
+        <input type="number" name="target_score" min="10" max="100" step="1"
+          value="{{ current_goal.target_score if current_goal else 70 }}"
+          style="padding:9px 12px;border:1.5px solid var(--border);border-radius:9px;font-size:14px;font-family:inherit;">
+      </div>
+      <button type="submit" style="padding:10px 20px;background:linear-gradient(135deg,var(--blue-dark),var(--blue));color:#fff;border:none;border-radius:9px;font-size:13px;font-weight:700;font-family:inherit;cursor:pointer;">{{ 'Update Goal' if current_goal else 'Set Goal' }}</button>
+    </form>
+  </div>
+
+  <!-- FEATURE 10: TARGET ACHIEVEMENT PROGRESS BARS -->
+  {% if d_stats or w_stats or m_stats %}
+  <div class="card">
+    <div class="section-label">📊 Target Achievement</div>
+    {% set ref_stats = d_stats or w_stats or m_stats %}
+    <div style="display:flex;flex-direction:column;gap:14px;margin-top:6px;">
+      {% if staff_type == 'picker' %}
+        {% set targets = [
+          ('Pick Accuracy', ref_stats.pick_acc if ref_stats else 0, 95, '%'),
+          ('Pick Speed', ref_stats.pick_speed if ref_stats else 0, 50, '/hr'),
+          ('Bill Fulfilment', (ref_stats.bill_fulfilment if ref_stats else 0), 100, '%'),
+          ('Workspace Score', (ref_stats.workspace_score if ref_stats else 0), 80, '%'),
+        ] %}
+      {% elif staff_type == 'checker' %}
+        {% set targets = [
+          ('Check Speed', (ref_stats.check_speed or ref_stats.ck_speed) if ref_stats else 0, 70, '/hr'),
+          ('Clearance Rate', (ref_stats.clearance_rate or 100) if ref_stats else 0, 95, '%'),
+          ('Workspace Score', (ref_stats.workspace_score if ref_stats else 0), 80, '%'),
+        ] %}
+      {% else %}
+        {% set targets = [
+          ('Bill Rate', (ref_stats.pur_bill_rate if ref_stats else 0), 90, '%'),
+          ('CS Fulfilment', (ref_stats.pur_cs_fulfilment if ref_stats else 0), 95, '%'),
+        ] %}
+      {% endif %}
+      {% for label, actual, target, unit in targets %}
+        {% set pct_of_target = ((actual / target) * 100)|round(1) if target > 0 else 0 %}
+        {% if pct_of_target > 100 %}{% set bar_w = 100 %}{% else %}{% set bar_w = pct_of_target %}{% endif %}
+        <div>
+          <div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:4px;">
+            <span style="font-weight:600;color:var(--text);">{{ label }}</span>
+            <span style="color:var(--muted);">{{ actual }}{{ unit }} / target {{ target }}{{ unit }} ({{ pct_of_target }}%)</span>
+          </div>
+          <div style="height:10px;background:rgba(199,217,245,0.4);border-radius:6px;overflow:hidden;">
+            <div style="height:100%;width:{{ bar_w }}%;background:linear-gradient(90deg,{% if pct_of_target >= 90 %}#16a34a,#10b981{% elif pct_of_target >= 70 %}#d97706,#f59e0b{% else %}#dc2626,#ef4444{% endif %});border-radius:6px;transition:width 0.6s;"></div>
+          </div>
+        </div>
+      {% endfor %}
+    </div>
+  </div>
+  {% endif %}
+
+  <!-- FEATURE 4: PAST ENTRY REQUEST -->
+  <div class="card">
+    <div class="section-label">📅 Request Past Entry</div>
+    {% if pending_requests %}
+    <div style="margin-bottom:14px;">
+      <div style="font-size:12px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px;">Pending Requests</div>
+      {% for r in pending_requests %}
+      <div style="display:flex;align-items:center;justify-content:space-between;padding:9px 13px;background:#fef3c7;border:1px solid #fbbf24;border-radius:10px;margin-bottom:6px;font-size:12px;">
+        <span style="font-weight:700;color:#92400e;">{{ r.requested_date.strftime('%d %b %Y') }}</span>
+        <span style="color:var(--muted);">{{ r.reason[:50] }}{% if r.reason|length > 50 %}...{% endif %}</span>
+        <span style="padding:3px 9px;border-radius:6px;background:#fde68a;color:#92400e;font-weight:700;">⏳ Pending</span>
+      </div>
+      {% endfor %}
+    </div>
+    {% endif %}
+    <form method="POST" action="/past_entry_request" style="display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap;">
+      <div class="field" style="flex:1;min-width:160px;">
+        <label>Date (past only)</label>
+        <input type="date" name="requested_date" max="{{ today.strftime('%Y-%m-%d') }}"
+          style="padding:9px 12px;border:1.5px solid var(--border);border-radius:9px;font-size:13px;font-family:inherit;" required>
+      </div>
+      <div class="field" style="flex:2;min-width:200px;">
+        <label>Reason</label>
+        <input type="text" name="reason" maxlength="200" placeholder="Why you couldn't submit on that day"
+          style="padding:9px 12px;border:1.5px solid var(--border);border-radius:9px;font-size:13px;font-family:inherit;" required>
+      </div>
+      <button type="submit" style="padding:10px 20px;background:linear-gradient(135deg,#7c3aed,#6d28d9);color:#fff;border:none;border-radius:9px;font-size:13px;font-weight:700;font-family:inherit;cursor:pointer;white-space:nowrap;">📨 Submit Request</button>
+    </form>
+  </div>
+
+  <!-- FEATURE 5: MY BADGES -->
+  {% if all_auto_badges %}
+  <div class="card">
+    <div class="section-label">🏅 My Badges</div>
+    <div style="display:flex;flex-wrap:wrap;gap:10px;margin-bottom:16px;">
+      {% for sb, badge in my_staff_badges %}
+      <div style="display:flex;align-items:center;gap:8px;padding:10px 14px;background:linear-gradient(135deg,#ede9fe,#ddd6fe);border:1.5px solid #c4b5fd;border-radius:12px;">
+        <span style="font-size:22px;">{{ badge.icon }}</span>
+        <div>
+          <div style="font-size:12px;font-weight:700;color:#4c1d95;">{{ badge.name }}</div>
+          <div style="font-size:10px;color:#6d28d9;">{{ badge.description }}</div>
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+    <div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px;">Locked Badges (auto):</div>
+    <div style="display:flex;flex-wrap:wrap;gap:8px;">
+      {% for badge in all_auto_badges %}
+        {% if badge.id not in earned_badge_ids %}
+        <div title="{{ badge.description }}" style="display:flex;align-items:center;gap:6px;padding:8px 12px;background:rgba(241,245,249,0.7);border:1.5px solid var(--border);border-radius:10px;opacity:0.55;cursor:help;">
+          <span style="font-size:18px;filter:grayscale(1);">{{ badge.icon }}</span>
+          <span style="font-size:11px;color:var(--muted);font-weight:600;">{{ badge.name }}</span>
+        </div>
+        {% endif %}
+      {% endfor %}
     </div>
   </div>
   {% endif %}
