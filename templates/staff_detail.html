@@ -811,8 +811,8 @@ body{
     (function(){
       var ctx = document.getElementById('monthlyChart');
       if(!ctx) return;
-      var labels = {{ monthly_scores | map(attribute=0) | list | tojson }};
-      var data   = {{ monthly_scores | map(attribute=1) | list | tojson }};
+      var labels = {{ monthly_scores | map(attribute='month') | list | tojson }};
+      var data   = {{ monthly_scores | map(attribute='score') | list | tojson }};
       new Chart(ctx, {
         type: 'bar',
         data: {
