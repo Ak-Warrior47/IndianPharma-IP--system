@@ -33,6 +33,46 @@ body {
   color: var(--text);
 }
 
+/* DASH HERO BANNER */
+.dash-hero {
+  background: linear-gradient(135deg, #060d1f 0%, #0e1f45 55%, #060d1f 100%);
+  position: relative; overflow: hidden;
+  padding: 32px 28px;
+  border-bottom: 1px solid rgba(99,179,237,0.15);
+}
+.dash-hero::before {
+  content: ''; position: absolute; inset: 0; pointer-events: none;
+  background:
+    radial-gradient(ellipse 60% 80% at 0% 50%, rgba(29,78,216,0.4) 0%, transparent 60%),
+    radial-gradient(ellipse 40% 60% at 100% 30%, rgba(14,165,233,0.25) 0%, transparent 55%);
+  animation: dashMesh 10s ease-in-out infinite alternate;
+}
+@keyframes dashMesh { 0%{transform:scale(1);} 100%{transform:scale(1.06);} }
+.dash-hero::after {
+  content: ''; position: absolute; top: 0; left: -80%; width: 50%; height: 100%;
+  background: linear-gradient(105deg, transparent, rgba(255,255,255,0.04), transparent);
+  animation: dashGlare 8s ease-in-out infinite; pointer-events: none;
+}
+@keyframes dashGlare { 0%{left:-80%;} 60%{left:160%;} 100%{left:160%;} }
+.dash-hero-orb { position: absolute; border-radius: 50%; filter: blur(70px); pointer-events: none; animation: orbFloat linear infinite; }
+.dash-orb1 { width:260px;height:260px;background:rgba(29,78,216,0.18);top:-80px;right:200px;animation-duration:18s; }
+.dash-orb2 { width:180px;height:180px;background:rgba(14,165,233,0.14);bottom:-60px;right:20px;animation-duration:22s;animation-direction:reverse; }
+.dash-hero-canvas { position: absolute; inset: 0; pointer-events: none; opacity: 0.6; }
+.dash-hero-content { position: relative; z-index: 2; display: flex; align-items: center; justify-content: space-between; max-width: 1200px; margin: 0 auto; }
+.dash-hero-left {}
+.dash-hello { font-size: 12px; font-weight: 600; color: rgba(148,163,184,0.7); text-transform: uppercase; letter-spacing: 1.5px; margin-bottom: 6px; }
+.dash-name { font-family: 'DM Serif Display', serif; font-size: 30px; color: #fff; letter-spacing: -0.3px; line-height: 1.1; text-shadow: 0 2px 16px rgba(29,78,216,0.4); margin-bottom: 12px; }
+.dash-role-chip { display: inline-block; padding: 5px 16px; border-radius: 20px; font-size: 11px; font-weight: 700; background: rgba(29,78,216,0.3); border: 1px solid rgba(99,179,237,0.4); color: #93c5fd; letter-spacing: 0.8px; text-transform: uppercase; backdrop-filter: blur(8px); }
+.dash-hero-right { display: flex; align-items: center; gap: 20px; }
+.dash-stat-ring { position: relative; display: flex; align-items: center; justify-content: center; }
+.dash-ring-label { position: absolute; font-size: 9px; font-weight: 700; color: rgba(148,163,184,0.7); text-transform: uppercase; letter-spacing: 0.8px; }
+@keyframes orbFloat {
+  0%  { transform: translate(0,0) scale(1); }
+  33% { transform: translate(20px,-15px) scale(1.04); }
+  66% { transform: translate(-15px,20px) scale(0.97); }
+  100%{ transform: translate(0,0) scale(1); }
+}
+
 /* NAV */
 .nav {
   position: sticky; top: 0; z-index: 100;
@@ -194,6 +234,37 @@ table.htable tbody tr:hover td { background: var(--bg); }
     </form>
   </div>
 </nav>
+
+<!-- ANIMATED DARK HERO BANNER -->
+<div class="dash-hero">
+  <div class="dash-hero-orb dash-orb1"></div>
+  <div class="dash-hero-orb dash-orb2"></div>
+  <canvas class="dash-hero-canvas" id="dashCanvas"></canvas>
+  <div class="dash-hero-content">
+    <div class="dash-hero-left">
+      <div class="dash-hello">Welcome back</div>
+      <div class="dash-name">{{ user_name }}</div>
+      <div class="dash-role-chip">{{ staff_type|title }}</div>
+    </div>
+    <div class="dash-hero-right">
+      <div class="dash-stat-ring">
+        <svg viewBox="0 0 80 80" width="80" height="80">
+          <circle cx="40" cy="40" r="34" fill="none" stroke="rgba(99,179,237,0.15)" stroke-width="6"/>
+          <circle cx="40" cy="40" r="34" fill="none" stroke="url(#ringGrad)" stroke-width="6"
+            stroke-dasharray="213" stroke-dashoffset="53" stroke-linecap="round"
+            transform="rotate(-90 40 40)"/>
+          <defs>
+            <linearGradient id="ringGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+              <stop offset="0%" stop-color="#60a5fa"/>
+              <stop offset="100%" stop-color="#22d3ee"/>
+            </linearGradient>
+          </defs>
+        </svg>
+        <div class="dash-ring-label">Active</div>
+      </div>
+    </div>
+  </div>
+</div>
 
 <div class="main">
 
@@ -1028,6 +1099,32 @@ function validateAndSubmit(e){
   }
   return true;
 }
+</script>
+
+<script>
+(function(){
+  const c=document.getElementById('dashCanvas');
+  if(!c)return;
+  const ctx=c.getContext('2d');
+  let W,H,pts=[];
+  function resize(){
+    const hero=c.parentElement;
+    W=c.width=hero.offsetWidth; H=c.height=hero.offsetHeight;
+  }
+  resize(); window.addEventListener('resize',resize);
+  for(let i=0;i<60;i++) pts.push({x:Math.random()*2000,y:Math.random()*2000,a:Math.random()*0.5+0.05,s:Math.random()*0.25+0.04,ts:Math.random()*0.015+0.004,td:Math.random()>0.5?1:-1,c:Math.random()<0.6?'#60a5fa':Math.random()<0.5?'#a5f3fc':'#fff'});
+  function draw(){
+    ctx.clearRect(0,0,W,H);
+    for(const p of pts){
+      p.a+=p.ts*p.td; if(p.a>0.6||p.a<0.04)p.td*=-1;
+      p.y-=p.s; if(p.y<0){p.y=H;p.x=Math.random()*W;}
+      ctx.globalAlpha=p.a; ctx.fillStyle=p.c;
+      ctx.fillRect(Math.floor(p.x%W),Math.floor(p.y),1,1);
+    }
+    ctx.globalAlpha=1; requestAnimationFrame(draw);
+  }
+  requestAnimationFrame(draw);
+})();
 </script>
 </body>
 </html>
