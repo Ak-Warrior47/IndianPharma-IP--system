@@ -1588,9 +1588,10 @@ def dashboard():
                         day_s = build_analytics(get_period_entries(emp_id, "day"), staff_type, emp_id=emp_id)
                         if day_s and day_s.get("eff_score", 100) < 50:
                             admin_phone = os.environ.get("ADMIN_PHONE", "")
-                            emp_name = session.get("user_name", f"emp#{emp_id}")
-                            score = day_s["eff_score"]
-                            send_sms(admin_phone, f"Low KPI alert: {emp_name} scored {score}pts today.")
+                            if admin_phone:
+                                emp_name = session.get("user_name", f"emp#{emp_id}")
+                                score = day_s["eff_score"]
+                                send_sms(admin_phone, f"Low KPI alert: {emp_name} scored {score}pts today.")
                     except Exception:
                         pass
 
@@ -2818,8 +2819,9 @@ def validation_submit(bv_id):
                         picker_emp = db.session.get(Employee, bv.picker_id)
                         picker_name = picker_emp.name if picker_emp else f"#{bv.picker_id}"
                         admin_phone = os.environ.get("ADMIN_PHONE", "")
-                        send_sms(admin_phone,
-                                 f"Bill count mismatch: {picker_name} on {bv.entry_date}. {len(wrong_ids)} staff flagged.")
+                        if admin_phone:
+                            send_sms(admin_phone,
+                                     f"Bill count mismatch: {picker_name} on {bv.entry_date}. {len(wrong_ids)} staff flagged.")
                     except Exception:
                         pass
                 except Exception:
@@ -3386,6 +3388,10 @@ def api_analytics_range():
             end_date = datetime.strptime(end_str, "%Y-%m-%d").date()
         except ValueError:
             return jsonify(error="Invalid date format. Use YYYY-MM-DD"), 400
+        if start_date > end_date:
+            return jsonify(error="Start date must be before end date"), 400
+        if (end_date - start_date).days > 366 * 5:
+            return jsonify(error="Date range too large (max 5 years)"), 400
         entries = KPIEntry.query.filter(
             KPIEntry.emp_id == emp_id,
             KPIEntry.entry_date >= start_date,
