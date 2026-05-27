@@ -916,13 +916,13 @@ body{
     <div class="card-title"><span class="ico">▸</span>Badges Earned</div>
     <div class="card-sub">Achievements unlocked by this staff member.</div>
     <div style="display:flex;flex-wrap:wrap;gap:12px;margin-top:12px;">
-      {% for sb in emp_badges %}
+      {% for sb, badge in emp_badges %}
       <div style="display:flex;align-items:center;gap:10px;padding:12px 16px;background:linear-gradient(135deg,rgba(255,215,0,0.08),rgba(251,191,36,0.05));border:1.5px solid rgba(251,191,36,0.3);border-radius:12px;min-width:160px;">
-        <div style="font-size:28px;line-height:1;">{{ sb.badge.icon }}</div>
+        <div style="font-size:22px;font-weight:700;line-height:1;color:#fbbf24;">{{ badge.icon }}</div>
         <div>
-          <div style="font-size:13px;font-weight:700;color:var(--navy);">{{ sb.badge.name }}</div>
-          <div style="font-size:11px;color:var(--muted);margin-top:2px;">{{ sb.badge.description[:50] }}{% if sb.badge.description|length > 50 %}…{% endif %}</div>
-          <div style="font-size:10px;color:var(--muted);margin-top:2px;">{{ sb.awarded_at.strftime('%d %b %Y') }}</div>
+          <div style="font-size:13px;font-weight:700;color:var(--navy);">{{ badge.name }}</div>
+          <div style="font-size:11px;color:var(--muted);margin-top:2px;">{{ badge.description[:50] }}{% if badge.description|length > 50 %}…{% endif %}</div>
+          <div style="font-size:10px;color:var(--muted);margin-top:2px;">{{ sb.awarded_at.strftime('%d %b %Y') if sb.awarded_at else '' }}</div>
         </div>
       </div>
       {% endfor %}
