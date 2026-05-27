@@ -1782,9 +1782,12 @@ def admin_dashboard():
         try:
             all_announcements = Announcement.query.order_by(Announcement.created_at.desc()).all()
             total_staff_count = len(employees)
-            ann_read_counts = {}
-            for ann in all_announcements:
-                ann_read_counts[ann.id] = AnnouncementRead.query.filter_by(announcement_id=ann.id).count()
+            read_rows = (
+                db.session.query(AnnouncementRead.announcement_id, db.func.count(AnnouncementRead.id))
+                .group_by(AnnouncementRead.announcement_id)
+                .all()
+            )
+            ann_read_counts = {ann_id: cnt for ann_id, cnt in read_rows}
         except Exception:
             all_announcements = []
             ann_read_counts = {}
