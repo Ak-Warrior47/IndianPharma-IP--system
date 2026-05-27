@@ -29,11 +29,7 @@ html{scroll-behavior:smooth}
 body{
   font-family:'Inter',system-ui,-apple-system,sans-serif;
   font-size:14px;line-height:1.5;color:var(--ink);
-  background:var(--bg);
-  background-image:
-    radial-gradient(1200px 600px at 100% -10%,rgba(37,99,235,0.06),transparent 60%),
-    radial-gradient(900px 500px at -10% 110%,rgba(5,150,105,0.05),transparent 55%);
-  background-attachment:fixed;
+  background:#ffffff;
   min-height:100vh;display:flex;
   -webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale;
 }
@@ -88,59 +84,52 @@ body{
 
 /* ── HERO ────────────────────────────────────────── */
 .hero{
-  background:linear-gradient(135deg,var(--navy) 0%,var(--navy-2) 55%,var(--brand) 140%);
+  background:#ffffff;
+  border:1px solid var(--border);
   border-radius:var(--radius-xl);padding:32px 36px;margin-bottom:20px;
-  color:#fff;position:relative;overflow:hidden;
-  box-shadow:var(--shadow-lg);
+  color:var(--navy);position:relative;overflow:hidden;
+  box-shadow:var(--shadow-md);
 }
-.hero::before{
-  content:'';position:absolute;top:-60%;right:-10%;width:460px;height:460px;
-  background:radial-gradient(circle,rgba(37,99,235,0.35),transparent 60%);
-  pointer-events:none;
-}
-.hero::after{
-  content:'';position:absolute;bottom:-40%;left:-5%;width:360px;height:360px;
-  background:radial-gradient(circle,rgba(5,150,105,0.18),transparent 65%);
-  pointer-events:none;
-}
+.hero::before{content:none;}
+.hero::after{content:none;}
 .hero-grid{position:relative;display:grid;grid-template-columns:1fr auto;gap:32px;align-items:center;}
 .hero-id{display:flex;align-items:center;gap:18px;}
 .hero-avatar{
   width:72px;height:72px;border-radius:50%;
-  background:linear-gradient(135deg,#fff,#e0e7ff);color:var(--navy);
+  background:linear-gradient(135deg,var(--brand-lite),var(--brand));color:#fff;
   display:flex;align-items:center;justify-content:center;
   font-family:'Fraunces',serif;font-size:30px;font-weight:700;
-  box-shadow:0 8px 24px rgba(0,0,0,0.25),inset 0 1px 0 rgba(255,255,255,0.6);
+  box-shadow:0 4px 12px rgba(30,64,175,0.2);
   flex-shrink:0;
 }
-.hero-name{font-family:'Fraunces',serif;font-size:28px;font-weight:600;letter-spacing:-0.02em;line-height:1.15;}
-.hero-role{font-size:13px;opacity:0.75;margin-top:4px;}
+.hero-name{font-family:'Fraunces',serif;font-size:28px;font-weight:600;letter-spacing:-0.02em;line-height:1.15;color:var(--navy);}
+.hero-role{font-size:13px;color:var(--muted);margin-top:4px;}
 .hero-chips{display:flex;gap:8px;margin-top:12px;flex-wrap:wrap;}
 .chip{
   padding:4px 11px;border-radius:999px;font-size:11px;font-weight:600;
-  background:rgba(255,255,255,0.12);backdrop-filter:blur(10px);
-  border:1px solid rgba(255,255,255,0.18);letter-spacing:0.02em;
+  background:var(--surface-2);
+  border:1px solid var(--border-2);letter-spacing:0.02em;color:var(--slate);
 }
-.chip.grade-ELITE{background:linear-gradient(135deg,#a78bfa,#7c3aed);border-color:transparent;}
-.chip.grade-PROFICIENT{background:linear-gradient(135deg,#34d399,#059669);border-color:transparent;}
-.chip.grade-SATISFACTORY{background:linear-gradient(135deg,#fbbf24,#d97706);border-color:transparent;}
-.chip.grade-RE-TRAINING{background:linear-gradient(135deg,#f87171,#dc2626);border-color:transparent;}
-.chip.trend-up{background:rgba(52,211,153,0.18);border-color:rgba(52,211,153,0.3);}
-.chip.trend-down{background:rgba(248,113,113,0.18);border-color:rgba(248,113,113,0.3);}
+.chip.grade-ELITE{background:#ede9fe;color:#6d28d9;border-color:#c4b5fd;}
+.chip.grade-PROFICIENT{background:var(--emerald-lite);color:var(--emerald);border-color:#6ee7b7;}
+.chip.grade-SATISFACTORY{background:var(--amber-lite);color:var(--amber);border-color:#fcd34d;}
+.chip.grade-RE-TRAINING{background:var(--rose-lite);color:var(--rose);border-color:#fca5a5;}
+.chip.trend-up{background:var(--emerald-lite);color:var(--emerald);border-color:#6ee7b7;}
+.chip.trend-down{background:var(--rose-lite);color:var(--rose);border-color:#fca5a5;}
 
 .hero-score{text-align:right;}
-.hero-score-label{font-size:10px;letter-spacing:0.14em;text-transform:uppercase;opacity:0.7;margin-bottom:4px;}
-.hero-score-big{font-family:'Fraunces',serif;font-size:72px;font-weight:600;line-height:0.95;letter-spacing:-0.03em;}
-.hero-score-big .of{font-size:22px;opacity:0.5;font-weight:500;}
-.hero-feedback{font-size:12px;opacity:0.8;margin-top:6px;max-width:260px;margin-left:auto;line-height:1.4;}
+.hero-score-label{font-size:10px;letter-spacing:0.14em;text-transform:uppercase;color:var(--muted);margin-bottom:4px;}
+.hero-score-big{font-family:'Fraunces',serif;font-size:72px;font-weight:600;line-height:0.95;letter-spacing:-0.03em;color:var(--brand);}
+.hero-score-big .of{font-size:22px;color:var(--muted);font-weight:500;}
+.hero-feedback{font-size:12px;color:var(--muted);margin-top:6px;max-width:260px;margin-left:auto;line-height:1.4;}
 .btn-dl{
   display:inline-flex;align-items:center;gap:6px;padding:8px 16px;
-  background:rgba(255,255,255,0.14);backdrop-filter:blur(10px);
-  border:1px solid rgba(255,255,255,0.22);border-radius:10px;
+  background:var(--brand);
+  border:1px solid var(--brand);border-radius:10px;
   color:#fff;text-decoration:none;font-size:12px;font-weight:600;
   margin-top:14px;transition:all 0.15s;
 }
-.btn-dl:hover{background:rgba(255,255,255,0.22);transform:translateY(-1px);}
+.btn-dl:hover{background:var(--brand-2);transform:translateY(-1px);}
 
 /* ── SCORECARD GRID ──────────────────────────────── */
 .scorecard{
@@ -212,9 +201,9 @@ body{
   font-family:'Fraunces',serif;font-size:20px;font-weight:600;color:var(--navy);
   width:40px;text-align:center;
 }
-.lb-row.top1 .lb-rank::before{content:'🥇 ';font-size:14px;}
-.lb-row.top2 .lb-rank::before{content:'🥈 ';font-size:14px;}
-.lb-row.top3 .lb-rank::before{content:'🥉 ';font-size:14px;}
+.lb-row.top1 .lb-rank::before{content:'1. ';font-size:14px;}
+.lb-row.top2 .lb-rank::before{content:'2. ';font-size:14px;}
+.lb-row.top3 .lb-rank::before{content:'3. ';font-size:14px;}
 .lb-name{font-size:13px;font-weight:600;color:var(--navy);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
 .lb-name .role{font-size:11px;color:var(--muted);font-weight:500;margin-left:6px;}
 .lb-self-marker{font-size:10px;background:var(--brand);color:#fff;padding:2px 7px;border-radius:6px;font-weight:700;letter-spacing:0.03em;text-transform:uppercase;}
@@ -322,29 +311,29 @@ body{
 <!-- SIDEBAR -->
 <aside class="sidebar">
   <div class="sidebar-brand">
-    <div class="brand-mark">🔬</div>
+    <div class="brand-mark" style="font-size:12px;font-weight:800;letter-spacing:-0.5px;">IP</div>
     <div class="brand-name">Pharma IP</div>
     <div class="brand-sub">KPI System</div>
   </div>
   <nav class="sidebar-nav">
     <div class="nav-label">Navigation</div>
     {% if is_admin %}
-    <a href="/admin_dashboard" class="nav-link"><span class="icon">🏠</span> Admin Dashboard</a>
+    <a href="/admin_dashboard" class="nav-link"><span class="icon">•</span> Admin Dashboard</a>
     {% else %}
-    <a href="/dashboard" class="nav-link"><span class="icon">📊</span> My Dashboard</a>
+    <a href="/dashboard" class="nav-link"><span class="icon">•</span> My Dashboard</a>
     {% endif %}
-    <a href="/staff/{{ emp.id }}" class="nav-link active"><span class="icon">👤</span> Staff Profile</a>
+    <a href="/staff/{{ emp.id }}" class="nav-link active"><span class="icon">•</span> Staff Profile</a>
     <div class="nav-label">Export</div>
     {% if is_admin %}
-    <a href="/download/{{ emp.id }}" class="nav-link"><span class="icon">📄</span> Download PDF</a>
-    <a href="/admin/export_csv" class="nav-link"><span class="icon">📥</span> Export CSV</a>
+    <a href="/download/{{ emp.id }}" class="nav-link"><span class="icon">•</span> Download PDF</a>
+    <a href="/admin/export_csv" class="nav-link"><span class="icon">•</span> Export CSV</a>
     {% else %}
-    <a href="/export_pdf" class="nav-link"><span class="icon">📄</span> My PDF Report</a>
+    <a href="/export_pdf" class="nav-link"><span class="icon">•</span> My PDF Report</a>
     {% endif %}
   </nav>
   <div class="sidebar-foot">
     <form method="POST" action="/logout" style="margin:0">
-      <button type="submit" class="logout-btn"><span>🚪</span> Sign Out</button>
+      <button type="submit" class="logout-btn">Sign Out</button>
     </form>
   </div>
 </aside>
@@ -381,9 +370,9 @@ body{
         <div class="hero-score-big">{{ a_stats.eff_score if a_stats else '—' }}<span class="of">/100</span></div>
         {% if a_stats %}<div class="hero-feedback">{{ a_stats.feedback }}</div>{% endif %}
         {% if is_admin %}
-          <a href="/download/{{ emp.id }}" class="btn-dl">📄 Download PDF</a>
+          <a href="/download/{{ emp.id }}" class="btn-dl">Download PDF</a>
         {% else %}
-          <a href="/export_pdf" class="btn-dl">📄 Download My Report</a>
+          <a href="/export_pdf" class="btn-dl">Download My Report</a>
         {% endif %}
       </div>
     </div>
@@ -473,8 +462,8 @@ body{
   <!-- POTENTIAL BAR — volume vs hard-level targets -->
   {% if a_stats and a_stats.hard_target_items %}
   <section class="card" style="margin-bottom:20px;">
-    <div class="card-title"><span class="ico">🎯</span>Hard-Level Target Tracker
-      {% if a_stats.is_efficient %}<span style="margin-left:10px;padding:3px 10px;border-radius:8px;background:var(--emerald-lite);color:var(--emerald);font-size:11px;font-weight:700;font-family:'Inter',sans-serif;letter-spacing:0.05em;">✓ EFFICIENT</span>{% endif %}
+    <div class="card-title"><span class="ico">▸</span>Hard-Level Target Tracker
+      {% if a_stats.is_efficient %}<span style="margin-left:10px;padding:3px 10px;border-radius:8px;background:var(--emerald-lite);color:var(--emerald);font-size:11px;font-weight:700;font-family:'Inter',sans-serif;letter-spacing:0.05em;">EFFICIENT</span>{% endif %}
     </div>
     <div class="card-sub">Daily volume vs the 200-items / 50-bills hard target. Staff are marked <b>Efficient</b> only when both targets are met.</div>
     {% set items_pct = ((a_stats.items_daily or 0) / (a_stats.hard_target_items or 200) * 100)|round(1) %}
@@ -503,7 +492,7 @@ body{
     </div>
     {% if a_stats.auto_suggest %}
     <div style="margin-top:14px;padding:10px 14px;background:#eff6ff;border-left:3px solid var(--brand);border-radius:8px;font-size:12px;color:var(--navy);">
-      <b>💡 System Suggestion:</b> {{ a_stats.auto_suggest }}
+      <b>System Suggestion:</b> {{ a_stats.auto_suggest }}
     </div>
     {% endif %}
   </section>
@@ -513,7 +502,7 @@ body{
   <div class="two-col">
     <!-- LEADERBOARD -->
     <section class="card">
-      <div class="card-title"><span class="ico">🏆</span>Leaderboard</div>
+      <div class="card-title"><span class="ico">▸</span>Leaderboard</div>
       <div class="card-sub">See where this staff stands — {{ emp.staff_type|title }} rankings and overall.</div>
       <div class="lb-tabs" role="tablist">
         <button class="lb-tab active" data-target="lb-role" type="button">{{ emp.staff_type|title }}s Only</button>
@@ -556,7 +545,7 @@ body{
     <!-- POINTS BREAKDOWN -->
     {% if a_stats %}
     <section class="card">
-      <div class="card-title"><span class="ico">📊</span>Points Breakdown</div>
+      <div class="card-title"><span class="ico">▸</span>Points Breakdown</div>
       <div class="card-sub">How the {{ a_stats.eff_score }}/100 score was earned.</div>
       <div class="points-breakdown">
         {% if emp.staff_type == 'checker' %}
@@ -610,14 +599,14 @@ body{
       </div>
       {% if a_stats.complaint_deduction and a_stats.complaint_deduction > 0 %}
       <div class="deduction-box">
-        <span class="lbl">⚠️ Minus Marking (complaints)</span>
+        <span class="lbl">Minus Marking (complaints)</span>
         <span class="val">−{{ a_stats.complaint_deduction }} pts</span>
       </div>
       {% endif %}
       {% if a_stats.admin_adjustment and a_stats.admin_adjustment != 0 %}
       <div class="deduction-box" style="background:{% if a_stats.admin_adjustment > 0 %}var(--emerald-lite){% else %}var(--rose-lite){% endif %};border-color:{% if a_stats.admin_adjustment > 0 %}#6ee7b7{% else %}#fca5a5{% endif %};">
         <span class="lbl" style="color:{% if a_stats.admin_adjustment > 0 %}var(--emerald){% else %}var(--rose){% endif %};">
-          {% if a_stats.admin_adjustment > 0 %}⭐ Admin Adjustment (bonus){% else %}⚠️ Admin Adjustment (penalty){% endif %}
+          {% if a_stats.admin_adjustment > 0 %}Admin Adjustment (bonus){% else %}Admin Adjustment (penalty){% endif %}
         </span>
         <span class="val" style="color:{% if a_stats.admin_adjustment > 0 %}var(--emerald){% else %}var(--rose){% endif %};">
           {% if a_stats.admin_adjustment > 0 %}+{% endif %}{{ a_stats.admin_adjustment }} pts
@@ -631,7 +620,7 @@ body{
   <!-- ── PERIOD BREAKDOWN ── -->
   {% if a_stats %}
   <section class="card" style="margin-bottom:20px;">
-    <div class="card-title"><span class="ico">📅</span>Performance by Period</div>
+    <div class="card-title"><span class="ico">▸</span>Performance by Period</div>
     <div class="card-sub">Compare today, this week, this month, and all time.</div>
     <div class="period-tabs">
       <button class="period-tab active" data-period="day"  type="button">Today</button>
@@ -694,7 +683,7 @@ body{
 
   <!-- ── HEAT MAP ── -->
   <section class="card" style="margin-bottom:20px;">
-    <div class="card-title"><span class="ico">🔥</span>Last 30 Days — Activity Heat Map</div>
+    <div class="card-title"><span class="ico">▸</span>Last 30 Days — Activity Heat Map</div>
     <div class="card-sub">
       {% if emp.staff_type == 'checker' %}Daily check speed (darker = faster).
       {% else %}Daily pick accuracy (darker = higher).{% endif %}
@@ -715,7 +704,7 @@ body{
 
   <!-- ── DAILY LOG ── -->
   <section class="card">
-    <div class="card-title"><span class="ico">📋</span>Daily Entry Log</div>
+    <div class="card-title"><span class="ico">▸</span>Daily Entry Log</div>
     <div class="card-sub">Most recent {{ entries|length }} entries, newest first.</div>
     {% if entries %}
     <div class="log-wrap">
@@ -763,7 +752,7 @@ body{
               <td style="color:{% if e_pending > 0 %}var(--rose){% else %}var(--emerald){% endif %};font-weight:600">
                 {{ e_pending }}
                 {% if not e.bills_received or e.bills_received == 0 %}
-                  <span style="display:inline-block;margin-left:4px;padding:1px 6px;border-radius:5px;background:var(--amber-lite);color:var(--amber);font-size:9px;font-weight:700;" title="TB Sales (Bills Received) missing">⚠ TB</span>
+                  <span style="display:inline-block;margin-left:4px;padding:1px 6px;border-radius:5px;background:var(--amber-lite);color:var(--amber);font-size:9px;font-weight:700;" title="TB Sales (Bills Received) missing">TB</span>
                 {% endif %}
               </td>
               <td><span class="acc-pill {% if e_clear >= 95 %}acc-good{% elif e_clear >= 85 %}acc-mid{% else %}acc-bad{% endif %}">{{ e_clear }}%</span></td>
@@ -773,14 +762,14 @@ body{
               <td>
                 {{ e.sales_bills_open }}
                 {% if not e.sales_bills_open or e.sales_bills_open == 0 %}
-                  <span style="display:inline-block;margin-left:4px;padding:1px 6px;border-radius:5px;background:var(--amber-lite);color:var(--amber);font-size:9px;font-weight:700;" title="TB Sales missing or zero">⚠ TB</span>
+                  <span style="display:inline-block;margin-left:4px;padding:1px 6px;border-radius:5px;background:var(--amber-lite);color:var(--amber);font-size:9px;font-weight:700;" title="TB Sales missing or zero">TB</span>
                 {% endif %}
               </td>
               <td>{{ e.picked }}</td>
               <td>{{ e.missed }}</td>
               <td>{{ e.cs_sales_open }}</td>
-              <td>{% if e.table_clean %}✅{% else %}❌{% endif %}</td>
-              <td>{{ e.rack_organized or 0 }}/10 {% if (e.rack_organized or 0) >= 8 %}✅{% elif (e.rack_organized or 0) >= 5 %}⚠{% else %}❌{% endif %}</td>
+              <td>{% if e.table_clean %}Yes{% else %}No{% endif %}</td>
+              <td>{{ e.rack_organized or 0 }}/10 {% if (e.rack_organized or 0) >= 8 %}Good{% elif (e.rack_organized or 0) >= 5 %}Avg{% else %}Low{% endif %}</td>
               <td>{{ e.packing_done }}</td>
               <td><span class="acc-pill {% if e.accuracy >= 95 %}acc-good{% elif e.accuracy >= 88 %}acc-mid{% else %}acc-bad{% endif %}">{{ e.accuracy }}%</span></td>
               <td>{{ e.pick_speed }}</td>
@@ -802,7 +791,7 @@ body{
   <!-- FEATURE 9: LAST 6 MONTHS BAR CHART -->
   {% if monthly_scores is defined and monthly_scores %}
   <section class="card" style="margin-bottom:20px;">
-    <div class="card-title"><span class="ico">📊</span>Last 6 Months — Score Trend</div>
+    <div class="card-title"><span class="ico">▸</span>Last 6 Months — Score Trend</div>
     <div class="card-sub">Monthly effective score (out of 100) for the past 6 months.</div>
     <div style="position:relative;height:200px;margin-top:12px;">
       <canvas id="monthlyChart"></canvas>
@@ -841,7 +830,7 @@ body{
 
   <!-- FEATURE 7: CUSTOM DATE RANGE ANALYTICS -->
   <section class="card" style="margin-bottom:20px;">
-    <div class="card-title"><span class="ico">🔎</span>Custom Date Range Analysis</div>
+    <div class="card-title"><span class="ico">▸</span>Custom Date Range Analysis</div>
     <div class="card-sub">Analyse performance for any date window. Results computed on-demand.</div>
     <div style="display:flex;gap:12px;align-items:flex-end;flex-wrap:wrap;margin-top:12px;">
       <div>
@@ -870,7 +859,7 @@ body{
       fetch(url).then(function(r){ return r.json(); }).then(function(d){
         document.getElementById('rangeLoading').style.display = 'none';
         var c = document.getElementById('rangeContent');
-        if(d.error){ c.innerHTML = '<div style="color:var(--rose);font-size:13px;">⚠️ ' + d.error + '</div>'; c.style.display = ''; return; }
+        if(d.error){ c.innerHTML = '<div style="color:var(--rose);font-size:13px;">Error: ' + d.error + '</div>'; c.style.display = ''; return; }
         var s = d.stats;
         c.innerHTML = '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:10px;">'
           + mini('Score', s.eff_score + ' /100') + mini('Grade', s.grade) + mini('Days', s.days)
@@ -892,7 +881,7 @@ body{
   <!-- FEATURE 5: BADGES DISPLAY -->
   {% if emp_badges is defined and emp_badges %}
   <section class="card" style="margin-bottom:20px;">
-    <div class="card-title"><span class="ico">🏅</span>Badges Earned</div>
+    <div class="card-title"><span class="ico">▸</span>Badges Earned</div>
     <div class="card-sub">Achievements unlocked by this staff member.</div>
     <div style="display:flex;flex-wrap:wrap;gap:12px;margin-top:12px;">
       {% for sb in emp_badges %}
@@ -912,7 +901,7 @@ body{
   <!-- ── FORMULA ── -->
   {% if a_stats %}
   <section class="card" style="margin-top:20px;">
-    <div class="card-title"><span class="ico">📐</span>How Points Are Calculated</div>
+    <div class="card-title"><span class="ico">▸</span>How Points Are Calculated</div>
     <div class="card-sub">Formula reference for {{ emp.staff_type|title }} role.</div>
     <div class="formula-grid">
       {% if emp.staff_type == 'purchaser' %}

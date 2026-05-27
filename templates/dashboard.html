@@ -16,8 +16,8 @@
   --text:      #0f172a;
   --muted:     #64748b;
   --border:    #c7d9f5;
-  --bg:        #eef4ff;
-  --page-bg:   #e8f0fe;
+  --bg:        #f8fafc;
+  --page-bg:   #ffffff;
   --white:     #ffffff;
   --success:   #16a34a;
   --danger:    #dc2626;
@@ -175,22 +175,22 @@ table.htable tbody tr:hover td { background: var(--bg); }
 
 <nav class="nav">
   <div class="nav-brand">
-    🔬 Pharma IP System
+    Pharma IP System
     <span class="nav-pill">{{ staff_type|title }}</span>
   </div>
   <div class="nav-right">
     <span class="nav-user">{{ user_name }}</span>
     {% if unread_count and unread_count > 0 %}
     <span style="position:relative;display:inline-block;">
-      <a href="#announcements-section" style="padding:7px 14px;background:#fef3c7;color:#b45309;border:1px solid #fbbf24;border-radius:8px;font-size:12px;font-weight:600;text-decoration:none;">📢 Notices</a>
+      <a href="#announcements-section" style="padding:7px 14px;background:#fef3c7;color:#b45309;border:1px solid #fbbf24;border-radius:8px;font-size:12px;font-weight:600;text-decoration:none;">Notices</a>
       <span style="position:absolute;top:-5px;right:-5px;background:#dc2626;color:#fff;border-radius:999px;font-size:10px;font-weight:700;padding:1px 5px;">{{ unread_count }}</span>
     </span>
     {% endif %}
-    <a href="/staff/{{ user_id }}" style="padding:7px 14px;background:var(--blue-lite);color:var(--blue);border:1px solid var(--blue-mid);border-radius:8px;font-size:12px;font-weight:600;text-decoration:none;">👤 My Profile</a>
-    <a href="/validations" style="padding:7px 14px;background:#fef3c7;color:#b45309;border:1px solid #fbbf24;border-radius:8px;font-size:12px;font-weight:600;text-decoration:none;">⚖️ Validations</a>
-    <a href="/export_pdf" style="padding:7px 14px;background:var(--green-bg);color:var(--success);border:1px solid #bbf7d0;border-radius:8px;font-size:12px;font-weight:600;text-decoration:none;">📄 PDF Report</a>
+    <a href="/staff/{{ user_id }}" style="padding:7px 14px;background:var(--blue-lite);color:var(--blue);border:1px solid var(--blue-mid);border-radius:8px;font-size:12px;font-weight:600;text-decoration:none;">My Profile</a>
+    <a href="/validations" style="padding:7px 14px;background:#fef3c7;color:#b45309;border:1px solid #fbbf24;border-radius:8px;font-size:12px;font-weight:600;text-decoration:none;">Validations</a>
+    <a href="/export_pdf" style="padding:7px 14px;background:var(--green-bg);color:var(--success);border:1px solid #bbf7d0;border-radius:8px;font-size:12px;font-weight:600;text-decoration:none;">PDF Report</a>
     <form method="POST" action="/logout" style="display:inline;">
-      <button type="submit" class="btn-logout">🚪 Logout</button>
+      <button type="submit" class="btn-logout">Logout</button>
     </form>
   </div>
 </nav>
@@ -202,14 +202,14 @@ table.htable tbody tr:hover td { background: var(--bg); }
   <div id="announcements-section">
     {% for ann in active_announcements %}
     <div style="background:linear-gradient(135deg,#eff6ff,#dbeafe);border:1.5px solid var(--blue-mid);border-radius:13px;padding:14px 18px;margin-bottom:12px;display:flex;align-items:flex-start;gap:14px;">
-      <div style="font-size:20px;">📢</div>
+      
       <div style="flex:1;">
         <div style="font-size:14px;font-weight:700;color:var(--blue-dark);">{{ ann.title }}</div>
         <div style="font-size:13px;color:var(--text);margin-top:4px;line-height:1.5;">{{ ann.body }}</div>
         <div style="font-size:11px;color:var(--muted);margin-top:5px;">{{ ann.created_at.strftime('%d %b %Y') }}</div>
       </div>
       <form method="POST" action="/announcement/{{ ann.id }}/dismiss" style="margin:0;">
-        <button type="submit" style="padding:5px 12px;background:rgba(255,255,255,0.7);border:1px solid var(--blue-mid);border-radius:7px;font-size:11px;font-weight:700;color:var(--muted);cursor:pointer;font-family:inherit;">✕ Dismiss</button>
+        <button type="submit" style="padding:5px 12px;background:rgba(255,255,255,0.7);border:1px solid var(--blue-mid);border-radius:7px;font-size:11px;font-weight:700;color:var(--muted);cursor:pointer;font-family:inherit;">Dismiss</button>
       </form>
     </div>
     {% endfor %}
@@ -226,12 +226,12 @@ table.htable tbody tr:hover td { background: var(--bg); }
   <!-- PENDING PAST ENTRY WINDOWS -->
   {% if pending_windows %}
   <div class="pending-banner">
-    <div class="pending-banner-title">📅 Admin has opened past date entry — fill your missing data!</div>
+    <div class="pending-banner-title">Admin has opened past date entry — fill your missing data!</div>
     <div class="pending-cards">
       {% for w in pending_windows %}
       <div class="pending-card">
         <div class="pending-date">{{ w.past_date.strftime('%d %b %Y') }}</div>
-        <a href="/past_entry/{{ w.past_date.strftime('%Y-%m-%d') }}" class="btn-fill-past">✏️ Fill Now</a>
+        <a href="/past_entry/{{ w.past_date.strftime('%Y-%m-%d') }}" class="btn-fill-past">Fill Now</a>
       </div>
       {% endfor %}
     </div>
@@ -239,7 +239,7 @@ table.htable tbody tr:hover td { background: var(--bg); }
   {% endif %}
 
   {% if new_personal_best %}
-  <div class="alert alert-success">🏆 New personal best score! Keep it up!</div>
+  <div class="alert alert-success">New personal best score! Keep it up!</div>
   {% endif %}
 
   <!-- TOP KPI CARDS -->
@@ -299,8 +299,8 @@ table.htable tbody tr:hover td { background: var(--bg); }
   <!-- POTENTIAL BAR — hard-level target tracker -->
   {% if w_stats and w_stats.hard_target_items %}
   <div class="card">
-    <div class="section-label">🎯 Hard-Level Target (weekly view)
-      {% if w_stats.is_efficient %}<span style="margin-left:10px;padding:3px 9px;border-radius:6px;background:#dcfce7;color:#15803d;font-size:11px;font-weight:700;">✓ EFFICIENT</span>{% endif %}
+    <div class="section-label">Hard-Level Target (weekly view)
+      {% if w_stats.is_efficient %}<span style="margin-left:10px;padding:3px 9px;border-radius:6px;background:#dcfce7;color:#15803d;font-size:11px;font-weight:700;">EFFICIENT</span>{% endif %}
     </div>
     {% set items_pct = ((w_stats.items_daily or 0) / (w_stats.hard_target_items or 200) * 100)|round(1) %}
     {% set bills_pct = ((w_stats.bills_daily or 0) / (w_stats.hard_target_bills or 50) * 100)|round(1) %}
@@ -328,7 +328,7 @@ table.htable tbody tr:hover td { background: var(--bg); }
     </div>
     {% if w_stats.auto_suggest %}
     <div style="margin-top:12px;padding:9px 13px;background:rgba(219,234,254,0.6);border-left:3px solid var(--blue);border-radius:8px;font-size:12px;color:var(--text);">
-      <b>💡 System:</b> {{ w_stats.auto_suggest }}
+      <b>Note:</b> {{ w_stats.auto_suggest }}
     </div>
     {% endif %}
   </div>
@@ -340,7 +340,7 @@ table.htable tbody tr:hover td { background: var(--bg); }
     <div class="section-label">Today's Metrics — {{ today.strftime('%A, %d %b %Y') }}</div>
 
     {% if today_entry %}
-    <div class="submitted-box">✅ Already submitted today. See you tomorrow!</div>
+    <div class="submitted-box">Already submitted today. See you tomorrow!</div>
     <div class="kpi-grid">
       {% if staff_type == 'checker' %}
       <div class="kpi-card"><div class="kpi-label">SB Checked</div><div class="kpi-value">{{ today_entry.sales_bills_open }}</div></div>
@@ -360,12 +360,12 @@ table.htable tbody tr:hover td { background: var(--bg); }
       <div class="form-grid">
         {% if staff_type == 'checker' %}
         <div class="field">
-          <label>★ Total Bills Received Today</label>
+          <label>Total Bills Received Today</label>
           <input type="number" name="bills_received" id="f_bills_received" min="0" value="0" required oninput="updateCheckerTotals()">
           <small>All bills given to you today</small>
         </div>
         <div class="field">
-          <label>★ Pending Bills (not checked yet)</label>
+          <label>Pending Bills (not checked yet)</label>
           <input type="number" name="pending_bills_manual" id="f_pending" min="0" value="0" oninput="updateCheckerTotals()">
           <small>Bills you could not complete today</small>
         </div>
@@ -416,16 +416,16 @@ table.htable tbody tr:hover td { background: var(--bg); }
           <label>Table Clean</label>
           <input type="hidden" name="table_clean" id="ck_table_clean_val" value="1">
           <div class="yn-group">
-            <button type="button" class="yn-btn yes active" id="ck_tc_yes" onclick="document.getElementById('ck_table_clean_val').value='1';this.classList.add('active');document.getElementById('ck_tc_no').classList.remove('active')">✅ Yes</button>
-            <button type="button" class="yn-btn no" id="ck_tc_no" onclick="document.getElementById('ck_table_clean_val').value='0';this.classList.add('active');document.getElementById('ck_tc_yes').classList.remove('active')">❌ No</button>
+            <button type="button" class="yn-btn yes active" id="ck_tc_yes" onclick="document.getElementById('ck_table_clean_val').value='1';this.classList.add('active');document.getElementById('ck_tc_no').classList.remove('active')">Yes</button>
+            <button type="button" class="yn-btn no" id="ck_tc_no" onclick="document.getElementById('ck_table_clean_val').value='0';this.classList.add('active');document.getElementById('ck_tc_yes').classList.remove('active')">No</button>
           </div>
         </div>
         <div class="field">
           <label>Sweeping Done</label>
           <input type="hidden" name="sweep_done" id="ck_sweep_done_val" value="1">
           <div class="yn-group">
-            <button type="button" class="yn-btn yes active" id="ck_sd_yes" onclick="document.getElementById('ck_sweep_done_val').value='1';this.classList.add('active');document.getElementById('ck_sd_no').classList.remove('active')">✅ Yes</button>
-            <button type="button" class="yn-btn no" id="ck_sd_no" onclick="document.getElementById('ck_sweep_done_val').value='0';this.classList.add('active');document.getElementById('ck_sd_yes').classList.remove('active')">❌ No</button>
+            <button type="button" class="yn-btn yes active" id="ck_sd_yes" onclick="document.getElementById('ck_sweep_done_val').value='1';this.classList.add('active');document.getElementById('ck_sd_no').classList.remove('active')">Yes</button>
+            <button type="button" class="yn-btn no" id="ck_sd_no" onclick="document.getElementById('ck_sweep_done_val').value='0';this.classList.add('active');document.getElementById('ck_sd_yes').classList.remove('active')">No</button>
           </div>
         </div>
         {% elif staff_type == 'purchaser' %}
@@ -486,20 +486,20 @@ table.htable tbody tr:hover td { background: var(--bg); }
           <label>Table Clean</label>
           <input type="hidden" name="table_clean" id="pur_table_val" value="1">
           <div class="yn-group">
-            <button type="button" class="yn-btn yes active" id="pur_table_yes" onclick="setYN('pur_table','1')">✅ Yes</button>
-            <button type="button" class="yn-btn no" id="pur_table_no" onclick="setYN('pur_table','0')">❌ No</button>
+            <button type="button" class="yn-btn yes active" id="pur_table_yes" onclick="setYN('pur_table','1')">Yes</button>
+            <button type="button" class="yn-btn no" id="pur_table_no" onclick="setYN('pur_table','0')">No</button>
           </div>
         </div>
         <div class="field">
           <label>Sweeping Done</label>
           <input type="hidden" name="sweep_done" id="pur_sweep_val" value="1">
           <div class="yn-group">
-            <button type="button" class="yn-btn yes active" id="pur_sweep_yes" onclick="setYN('pur_sweep','1')">✅ Yes</button>
-            <button type="button" class="yn-btn no" id="pur_sweep_no" onclick="setYN('pur_sweep','0')">❌ No</button>
+            <button type="button" class="yn-btn yes active" id="pur_sweep_yes" onclick="setYN('pur_sweep','1')">Yes</button>
+            <button type="button" class="yn-btn no" id="pur_sweep_no" onclick="setYN('pur_sweep','0')">No</button>
           </div>
         </div>
         <div class="field" style="grid-column:span 2;background:rgba(238,244,255,0.5);border:1px solid var(--border);border-radius:10px;padding:12px;font-size:12px;color:var(--muted);">
-          ⏱️ Working time is fixed at <strong>9 hours</strong> per day
+          Working time is fixed at <strong>9 hours</strong> per day
         </div>
         {% else %}
         <!-- PICKER LIVE BANNER -->
@@ -516,7 +516,7 @@ table.htable tbody tr:hover td { background: var(--bg); }
           </div>
         </div>
         <div class="field">
-          <label>★ Total Bills Received to Pick</label>
+          <label>Total Bills Received to Pick</label>
           <input type="number" name="total_bills_received" id="f_total_bills" min="0" value="0" required oninput="updatePickerFulfilment()">
           <small>Total bills given to you today to pick</small>
         </div>
@@ -550,30 +550,30 @@ table.htable tbody tr:hover td { background: var(--bg); }
           <label>Table Clean</label>
           <input type="hidden" name="table_clean" id="table_clean_val" value="1">
           <div class="yn-group">
-            <button type="button" class="yn-btn yes active" id="table_clean_yes" onclick="setYN('table_clean','1')">✅ Yes</button>
-            <button type="button" class="yn-btn no" id="table_clean_no" onclick="setYN('table_clean','0')">❌ No</button>
+            <button type="button" class="yn-btn yes active" id="table_clean_yes" onclick="setYN('table_clean','1')">Yes</button>
+            <button type="button" class="yn-btn no" id="table_clean_no" onclick="setYN('table_clean','0')">No</button>
           </div>
         </div>
         <div class="field">
           <label>Sweeping Done</label>
           <input type="hidden" name="sweep_done" id="sweep_done_val" value="1">
           <div class="yn-group">
-            <button type="button" class="yn-btn yes active" id="sweep_done_yes" onclick="setYN('sweep_done','1')">✅ Yes</button>
-            <button type="button" class="yn-btn no" id="sweep_done_no" onclick="setYN('sweep_done','0')">❌ No</button>
+            <button type="button" class="yn-btn yes active" id="sweep_done_yes" onclick="setYN('sweep_done','1')">Yes</button>
+            <button type="button" class="yn-btn no" id="sweep_done_no" onclick="setYN('sweep_done','0')">No</button>
           </div>
         </div>
         {% endif %}
         {% endif %}
       </div>
-      <p style="font-size:12px;color:var(--muted);margin-bottom:14px;padding:10px 14px;background:rgba(240,253,244,0.8);border-radius:9px;border:1px solid rgba(22,163,74,0.2);">⏱ Working time is fixed at <strong>9 hours</strong> per day for all speed calculations.</p>
+      <p style="font-size:12px;color:var(--muted);margin-bottom:14px;padding:10px 14px;background:rgba(240,253,244,0.8);border-radius:9px;border:1px solid rgba(22,163,74,0.2);">Working time is fixed at <strong>9 hours</strong> per day for all speed calculations.</p>
       <!-- FEATURE 1: SHIFT NOTE -->
       <div class="field" style="margin-bottom:16px;">
-        <label>📝 Shift Note (optional, max 300 chars)</label>
+        <label>Shift Note (optional, max 300 chars)</label>
         <textarea name="shift_note" maxlength="300" rows="2"
           placeholder="Any notes about today's shift — issues, highlights, etc."
           style="padding:10px 13px;border:1.5px solid var(--border);border-radius:9px;background:rgba(255,255,255,0.8);font-size:13px;font-family:'DM Sans',sans-serif;color:var(--text);resize:vertical;"></textarea>
       </div>
-      <button type="submit" class="btn-submit">✅ Submit Today's Metrics</button>
+      <button type="submit" class="btn-submit">Submit Today's Metrics</button>
     </form>
     {% endif %}
   </div>
@@ -644,7 +644,7 @@ table.htable tbody tr:hover td { background: var(--bg); }
 
   <!-- FEATURE 3: PERSONAL GOAL -->
   <div class="card">
-    <div class="section-label">🎯 My Goal — {{ current_month }}</div>
+    <div class="section-label">My Goal — {{ current_month }}</div>
     {% if current_goal %}
       {% set m_score = m_stats.eff_score if m_stats else 0 %}
       {% set pct = ((m_score / current_goal.target_score) * 100)|round(1) if current_goal.target_score > 0 else 0 %}
@@ -658,7 +658,7 @@ table.htable tbody tr:hover td { background: var(--bg); }
           <div style="height:100%;width:{{ disp_pct }}%;background:linear-gradient(90deg,{% if pct >= 90 %}#16a34a,#10b981{% elif pct >= 70 %}#d97706,#f59e0b{% else %}#dc2626,#ef4444{% endif %});border-radius:8px;transition:width 0.6s;"></div>
         </div>
         {% if pct >= 100 %}
-        <div style="margin-top:8px;font-size:12px;color:#16a34a;font-weight:700;">🏆 Goal achieved! Excellent work!</div>
+        <div style="margin-top:8px;font-size:12px;color:#16a34a;font-weight:700;">Goal achieved! Excellent work!</div>
         {% endif %}
       </div>
     {% else %}
@@ -678,7 +678,7 @@ table.htable tbody tr:hover td { background: var(--bg); }
   <!-- FEATURE 10: TARGET ACHIEVEMENT PROGRESS BARS -->
   {% if d_stats or w_stats or m_stats %}
   <div class="card">
-    <div class="section-label">📊 Target Achievement</div>
+    <div class="section-label">Target Achievement</div>
     {% set ref_stats = d_stats or w_stats or m_stats %}
     <div style="display:flex;flex-direction:column;gap:14px;margin-top:6px;">
       {% if staff_type == 'picker' %}
@@ -719,7 +719,7 @@ table.htable tbody tr:hover td { background: var(--bg); }
 
   <!-- FEATURE 4: PAST ENTRY REQUEST -->
   <div class="card">
-    <div class="section-label">📅 Request Past Entry</div>
+    <div class="section-label">Request Past Entry</div>
     {% if pending_requests %}
     <div style="margin-bottom:14px;">
       <div style="font-size:12px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px;">Pending Requests</div>
@@ -727,7 +727,7 @@ table.htable tbody tr:hover td { background: var(--bg); }
       <div style="display:flex;align-items:center;justify-content:space-between;padding:9px 13px;background:#fef3c7;border:1px solid #fbbf24;border-radius:10px;margin-bottom:6px;font-size:12px;">
         <span style="font-weight:700;color:#92400e;">{{ r.requested_date.strftime('%d %b %Y') }}</span>
         <span style="color:var(--muted);">{{ r.reason[:50] }}{% if r.reason|length > 50 %}...{% endif %}</span>
-        <span style="padding:3px 9px;border-radius:6px;background:#fde68a;color:#92400e;font-weight:700;">⏳ Pending</span>
+        <span style="padding:3px 9px;border-radius:6px;background:#fde68a;color:#92400e;font-weight:700;">Pending</span>
       </div>
       {% endfor %}
     </div>
@@ -743,14 +743,14 @@ table.htable tbody tr:hover td { background: var(--bg); }
         <input type="text" name="reason" maxlength="200" placeholder="Why you couldn't submit on that day"
           style="padding:9px 12px;border:1.5px solid var(--border);border-radius:9px;font-size:13px;font-family:inherit;" required>
       </div>
-      <button type="submit" style="padding:10px 20px;background:linear-gradient(135deg,#7c3aed,#6d28d9);color:#fff;border:none;border-radius:9px;font-size:13px;font-weight:700;font-family:inherit;cursor:pointer;white-space:nowrap;">📨 Submit Request</button>
+      <button type="submit" style="padding:10px 20px;background:linear-gradient(135deg,#7c3aed,#6d28d9);color:#fff;border:none;border-radius:9px;font-size:13px;font-weight:700;font-family:inherit;cursor:pointer;white-space:nowrap;">Submit Request</button>
     </form>
   </div>
 
   <!-- FEATURE 5: MY BADGES -->
   {% if all_auto_badges %}
   <div class="card">
-    <div class="section-label">🏅 My Badges</div>
+    <div class="section-label">My Badges</div>
     <div style="display:flex;flex-wrap:wrap;gap:10px;margin-bottom:16px;">
       {% for sb, badge in my_staff_badges %}
       <div style="display:flex;align-items:center;gap:8px;padding:10px 14px;background:linear-gradient(135deg,#ede9fe,#ddd6fe);border:1.5px solid #c4b5fd;border-radius:12px;">
@@ -817,7 +817,7 @@ table.htable tbody tr:hover td { background: var(--bg); }
             <td>{{ e.sales_bills_open }}</td>
             <td>{{ e.packing_done }}</td>
             <td>{{ e.rack_organized or 0 }}/10</td>
-            <td>{% if e.table_clean %}✅{% else %}❌{% endif %}</td>
+            <td>{% if e.table_clean %}Yes{% else %}No{% endif %}</td>
             {% endif %}
             <td>{{ "%.1f" | format(e.total_time or 0) }}</td>
           </tr>
@@ -1000,7 +1000,7 @@ function validateAndSubmit(e){
   form.querySelectorAll('input[required]:not([type="hidden"])').forEach(function(inp){
     if(inp.value === '' || inp.value === null){
       var label = inp.closest('.field')?.querySelector('label')?.textContent || inp.name;
-      empty.push(label.trim().replace(/^★\s*/, ''));
+      empty.push(label.trim());
     }
   });
 
@@ -1017,7 +1017,7 @@ function validateAndSubmit(e){
   if(btn){
     btn.disabled = true;
     btn.dataset.origText = btn.innerHTML;
-    btn.innerHTML = '⏳ Submitting...';
+    btn.innerHTML = 'Submitting...';
     // Re-enable after 10s in case of network failure
     setTimeout(function(){
       if(btn.disabled){
