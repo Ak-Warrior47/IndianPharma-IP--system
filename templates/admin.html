@@ -526,7 +526,7 @@ var NOTES_BY_EMP = {
       {% for req in pending_past_requests %}
       <div style="display:flex;align-items:center;gap:12px;padding:12px 14px;background:#fffbeb;border:1px solid #fcd34d;border-radius:10px;flex-wrap:wrap;">
         <div style="flex:1;min-width:200px;">
-          <div style="font-size:13px;font-weight:700;color:var(--text);">{{ emp_map.get(req.employee_id, 'Unknown') }}</div>
+          <div style="font-size:13px;font-weight:700;color:var(--text);">{{ emp_map.get(req.emp_id, 'Unknown') }}</div>
           <div style="font-size:12px;color:var(--muted);margin-top:2px;">
             Requesting: <strong>{{ req.requested_date.strftime('%d %b %Y') }}</strong>
             &nbsp;·&nbsp; Requested {{ req.created_at.strftime('%d %b %Y %H:%M') }}
@@ -534,10 +534,10 @@ var NOTES_BY_EMP = {
           {% if req.reason %}<div style="font-size:12px;color:var(--muted);margin-top:2px;">Reason: {{ req.reason }}</div>{% endif %}
         </div>
         <div style="display:flex;gap:8px;">
-          <form method="POST" action="/admin/past_entry_request/{{ req.id }}/approve" style="margin:0;">
+          <form method="POST" action="/admin/past_request/{{ req.id }}/approve" style="margin:0;">
             <button type="submit" class="btn-sm" style="background:#f0fdf4;color:#16a34a;border:1px solid #bbf7d0;">Approve</button>
           </form>
-          <form method="POST" action="/admin/past_entry_request/{{ req.id }}/reject" style="margin:0;">
+          <form method="POST" action="/admin/past_request/{{ req.id }}/reject" style="margin:0;">
             <button type="submit" class="btn-sm btn-delete">Reject</button>
           </form>
         </div>

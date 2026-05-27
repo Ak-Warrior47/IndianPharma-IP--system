@@ -824,8 +824,8 @@ table.htable tbody tr:hover td { background: var(--bg); }
     <div class="section-label">My Badges</div>
     <div style="display:flex;flex-wrap:wrap;gap:10px;margin-bottom:16px;">
       {% for sb, badge in my_staff_badges %}
-      <div style="display:flex;align-items:center;gap:8px;padding:10px 14px;background:linear-gradient(135deg,#ede9fe,#ddd6fe);border:1.5px solid #c4b5fd;border-radius:12px;">
-        <span style="font-size:22px;">{{ badge.icon }}</span>
+      <div style="display:flex;align-items:center;gap:10px;padding:10px 14px;background:linear-gradient(135deg,#ede9fe,#ddd6fe);border:1.5px solid #c4b5fd;border-radius:12px;">
+        <div style="width:34px;height:34px;border-radius:9px;background:linear-gradient(135deg,#6d28d9,#7c3aed);color:#fff;display:flex;align-items:center;justify-content:center;font-family:'DM Serif Display',serif;font-size:14px;font-weight:700;flex-shrink:0;">{{ badge.name[0]|upper }}</div>
         <div>
           <div style="font-size:12px;font-weight:700;color:#4c1d95;">{{ badge.name }}</div>
           <div style="font-size:10px;color:#6d28d9;">{{ badge.description }}</div>
@@ -837,8 +837,8 @@ table.htable tbody tr:hover td { background: var(--bg); }
     <div style="display:flex;flex-wrap:wrap;gap:8px;">
       {% for badge in all_auto_badges %}
         {% if badge.id not in earned_badge_ids %}
-        <div title="{{ badge.description }}" style="display:flex;align-items:center;gap:6px;padding:8px 12px;background:rgba(241,245,249,0.7);border:1.5px solid var(--border);border-radius:10px;opacity:0.55;cursor:help;">
-          <span style="font-size:18px;filter:grayscale(1);">{{ badge.icon }}</span>
+        <div title="{{ badge.description }}" style="display:flex;align-items:center;gap:8px;padding:8px 12px;background:rgba(241,245,249,0.7);border:1.5px solid var(--border);border-radius:10px;opacity:0.55;cursor:help;">
+          <div style="width:24px;height:24px;border-radius:6px;background:#cbd5e1;color:#64748b;display:flex;align-items:center;justify-content:center;font-family:'DM Serif Display',serif;font-size:11px;font-weight:700;flex-shrink:0;">{{ badge.name[0]|upper }}</div>
           <span style="font-size:11px;color:var(--muted);font-weight:600;">{{ badge.name }}</span>
         </div>
         {% endif %}
