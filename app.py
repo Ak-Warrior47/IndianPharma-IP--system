@@ -391,6 +391,36 @@ class MonthlyReportArchive(db.Model):
     file_path    = db.Column(db.String(200), nullable=True)
 
 
+class MultitaskEntry(db.Model):
+    """Secondary-role work logged by staff on the same day (multitasking)."""
+    __tablename__ = "multitask_entries"
+    id             = db.Column(db.Integer, primary_key=True)
+    emp_id         = db.Column(db.Integer, db.ForeignKey("employees.id", ondelete="CASCADE"), nullable=False)
+    entry_date     = db.Column(db.Date, nullable=False)
+    secondary_type = db.Column(db.String(20), nullable=False)  # picker/checker/purchaser/delivery/billing
+    quantity       = db.Column(db.Integer, default=0)
+    note           = db.Column(db.String(300), nullable=True)
+    created_at     = db.Column(db.DateTime, default=datetime.utcnow)
+    __table_args__ = (db.Index("idx_mt_emp_date", "emp_id", "entry_date"),)
+
+
+class DeliveryBillerNote(db.Model):
+    """Daily operational note from Delivery or Biller staff."""
+    __tablename__ = "delivery_biller_notes"
+    id           = db.Column(db.Integer, primary_key=True)
+    emp_id       = db.Column(db.Integer, db.ForeignKey("employees.id", ondelete="CASCADE"), nullable=False)
+    entry_date   = db.Column(db.Date, nullable=False)
+    note_type    = db.Column(db.String(20), nullable=False)  # 'delivery' or 'biller'
+    note_text    = db.Column(db.Text, nullable=False)
+    quantity     = db.Column(db.Integer, default=0)   # deliveries made / bills processed
+    issues_count = db.Column(db.Integer, default=0)   # complaints / errors logged
+    created_at   = db.Column(db.DateTime, default=datetime.utcnow)
+    __table_args__ = (
+        db.UniqueConstraint("emp_id", "entry_date", name="_dbnote_emp_date_uc"),
+        db.Index("idx_dbn_date", "entry_date"),
+    )
+
+
 # ─── HELPERS ─────────────────────────────────────────────────────────────────
 
 def safe_div(a, b, default=0.0):
@@ -1223,6 +1253,26 @@ def run_migrations():
                     generated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     emp_count INTEGER DEFAULT 0,
                     file_path VARCHAR(200))""",
+                # Multitask entries
+                """CREATE TABLE IF NOT EXISTS multitask_entries (
+                    id SERIAL PRIMARY KEY,
+                    emp_id INTEGER NOT NULL REFERENCES employees(id) ON DELETE CASCADE,
+                    entry_date DATE NOT NULL,
+                    secondary_type VARCHAR(20) NOT NULL,
+                    quantity INTEGER DEFAULT 0,
+                    note VARCHAR(300),
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)""",
+                # Delivery / Biller notes
+                """CREATE TABLE IF NOT EXISTS delivery_biller_notes (
+                    id SERIAL PRIMARY KEY,
+                    emp_id INTEGER NOT NULL REFERENCES employees(id) ON DELETE CASCADE,
+                    entry_date DATE NOT NULL,
+                    note_type VARCHAR(20) NOT NULL,
+                    note_text TEXT NOT NULL,
+                    quantity INTEGER DEFAULT 0,
+                    issues_count INTEGER DEFAULT 0,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    CONSTRAINT _dbnote_emp_date_uc UNIQUE(emp_id, entry_date))""",
             ]:
                 try:
                     db.session.execute(db.text(tbl_sql))
@@ -1312,6 +1362,34 @@ def run_migrations():
                 logger.info("✅ SQLite monthly_report_archives ensured")
             except Exception as mrae:
                 logger.warning(f"SQLite monthly_report_archives: {mrae}")
+            # Multitask entries
+            try:
+                cursor.execute("""CREATE TABLE IF NOT EXISTS multitask_entries (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    emp_id INTEGER NOT NULL REFERENCES employees(id) ON DELETE CASCADE,
+                    entry_date DATE NOT NULL,
+                    secondary_type VARCHAR(20) NOT NULL,
+                    quantity INTEGER DEFAULT 0,
+                    note VARCHAR(300),
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)""")
+                logger.info("✅ SQLite multitask_entries ensured")
+            except Exception as mte:
+                logger.warning(f"SQLite multitask_entries: {mte}")
+            # Delivery / Biller notes
+            try:
+                cursor.execute("""CREATE TABLE IF NOT EXISTS delivery_biller_notes (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    emp_id INTEGER NOT NULL REFERENCES employees(id) ON DELETE CASCADE,
+                    entry_date DATE NOT NULL,
+                    note_type VARCHAR(20) NOT NULL,
+                    note_text TEXT NOT NULL,
+                    quantity INTEGER DEFAULT 0,
+                    issues_count INTEGER DEFAULT 0,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    CONSTRAINT _dbnote_emp_date_uc UNIQUE(emp_id, entry_date))""")
+                logger.info("✅ SQLite delivery_biller_notes ensured")
+            except Exception as dbne:
+                logger.warning(f"SQLite delivery_biller_notes: {dbne}")
             conn.commit()
             conn.close()
     except Exception as e:
@@ -1440,6 +1518,49 @@ def dashboard():
         today_entry = KPIEntry.query.filter_by(emp_id=emp_id, entry_date=today).first()
         new_personal_best = False
 
+        # ── Delivery / Biller: simple note entry (no KPIEntry) ──────────────────
+        today_db_note = None
+        if staff_type in ("delivery", "biller"):
+            today_db_note = DeliveryBillerNote.query.filter_by(emp_id=emp_id, entry_date=today).first()
+            if request.method == "POST" and not today_db_note:
+                note_text = request.form.get("delivery_note", "").strip()
+                if note_text:
+                    try:
+                        db_note = DeliveryBillerNote(
+                            emp_id=emp_id,
+                            entry_date=today,
+                            note_type=staff_type,
+                            note_text=note_text[:1000],
+                            quantity=max(0, int(request.form.get("delivery_qty", 0) or 0)),
+                            issues_count=max(0, int(request.form.get("delivery_issues", 0) or 0)),
+                        )
+                        db.session.add(db_note)
+                        db.session.commit()
+                        today_db_note = db_note
+                        flash("✅ Daily note recorded successfully.", "success")
+                    except Exception as dbe:
+                        db.session.rollback()
+                        logger.error(f"DeliveryBillerNote save: {dbe}")
+                        flash("Error saving note.", "danger")
+            return render_template("dashboard.html",
+                user_name=session.get("user_name", "User"),
+                user_id=emp_id,
+                staff_type=staff_type,
+                today=today,
+                today_entry=None,
+                today_db_note=today_db_note,
+                d_stats=None, w_stats=None, m_stats=None,
+                recent=DeliveryBillerNote.query.filter_by(emp_id=emp_id).order_by(
+                    DeliveryBillerNote.entry_date.desc()).limit(14).all(),
+                trend_labels=[], trend_accuracy=[], trend_speed=[],
+                total_entries=DeliveryBillerNote.query.filter_by(emp_id=emp_id).count(),
+                new_personal_best=False, pending_windows=[], active_announcements=[],
+                unread_count=0, current_goal=None, pending_requests=[],
+                my_staff_badges=[], all_auto_badges=[], earned_badge_ids=set(),
+                current_month=today.strftime("%B %Y"), month_str=today.strftime("%Y-%m"),
+                today_multitask=[],
+            )
+
         if request.method == "POST" and not today_entry:
             is_sunday = today.weekday() == 6
             emp = db.session.get(Employee, emp_id)
@@ -1567,6 +1688,25 @@ def dashboard():
                     flash("✅ Metrics recorded successfully.", "success")
                     today_entry = ne
 
+                    # ── Multitask: save secondary role work ───────────────
+                    try:
+                        multitask_role = request.form.get("multitask_role", "").strip()
+                        multitask_qty  = max(0, int(request.form.get("multitask_qty", 0) or 0))
+                        multitask_note = request.form.get("multitask_note", "").strip()[:300]
+                        if multitask_role and multitask_role != staff_type and (multitask_qty > 0 or multitask_note):
+                            mt = MultitaskEntry(
+                                emp_id=emp_id,
+                                entry_date=today,
+                                secondary_type=multitask_role,
+                                quantity=multitask_qty,
+                                note=multitask_note or None,
+                            )
+                            db.session.add(mt)
+                            db.session.commit()
+                    except Exception as mte:
+                        db.session.rollback()
+                        logger.warning(f"MultitaskEntry save: {mte}")
+
                     # Live broadcast — Last Entry update for admin dashboard
                     socketio.emit('entry_update', {
                         'user': session.get('user_name'),
@@ -1588,10 +1728,9 @@ def dashboard():
                         day_s = build_analytics(get_period_entries(emp_id, "day"), staff_type, emp_id=emp_id)
                         if day_s and day_s.get("eff_score", 100) < 50:
                             admin_phone = os.environ.get("ADMIN_PHONE", "")
-                            if admin_phone:
-                                emp_name = session.get("user_name", f"emp#{emp_id}")
-                                score = day_s["eff_score"]
-                                send_sms(admin_phone, f"Low KPI alert: {emp_name} scored {score}pts today.")
+                            emp_name = session.get("user_name", f"emp#{emp_id}")
+                            score = day_s["eff_score"]
+                            send_sms(admin_phone, f"Low KPI alert: {emp_name} scored {score}pts today.")
                     except Exception:
                         pass
 
@@ -1674,6 +1813,14 @@ def dashboard():
             all_auto_badges = []
             earned_badge_ids = set()
 
+        # Multitask entries for today
+        try:
+            today_multitask = MultitaskEntry.query.filter_by(
+                emp_id=emp_id, entry_date=today
+            ).order_by(MultitaskEntry.created_at.desc()).all()
+        except Exception:
+            today_multitask = []
+
         return render_template("dashboard.html",
             user_name=session.get("user_name", "User"),
             user_id=emp_id,
@@ -1699,6 +1846,8 @@ def dashboard():
             earned_badge_ids=earned_badge_ids,
             current_month=today.strftime("%B %Y"),
             month_str=today.strftime("%Y-%m"),
+            today_multitask=today_multitask,
+            today_db_note=None,
         )
     except Exception as e:
         logger.error(f"Dashboard error: {e}")
@@ -1710,7 +1859,8 @@ def dashboard():
             new_personal_best=False, pending_windows=[],
             active_announcements=[], unread_count=0, current_goal=None,
             pending_requests=[], my_staff_badges=[], all_auto_badges=[],
-            earned_badge_ids=set(), current_month="", month_str="")
+            earned_badge_ids=set(), current_month="", month_str="",
+            today_multitask=[], today_db_note=None)
 
 
 @app.route("/admin_dashboard")
@@ -1782,12 +1932,9 @@ def admin_dashboard():
         try:
             all_announcements = Announcement.query.order_by(Announcement.created_at.desc()).all()
             total_staff_count = len(employees)
-            read_rows = (
-                db.session.query(AnnouncementRead.announcement_id, db.func.count(AnnouncementRead.id))
-                .group_by(AnnouncementRead.announcement_id)
-                .all()
-            )
-            ann_read_counts = {ann_id: cnt for ann_id, cnt in read_rows}
+            ann_read_counts = {}
+            for ann in all_announcements:
+                ann_read_counts[ann.id] = AnnouncementRead.query.filter_by(announcement_id=ann.id).count()
         except Exception:
             all_announcements = []
             ann_read_counts = {}
@@ -1796,10 +1943,24 @@ def admin_dashboard():
         # Feature 4: Pending past entry requests
         try:
             pending_past_requests = PastEntryRequest.query.filter_by(status="pending").order_by(PastEntryRequest.created_at.desc()).all()
-            emp_map = {e.id: e for e in employees}
+            # emp_map: id -> Employee (all employees incl. delivery/biller)
+            _all_emp = Employee.query.all()
+            emp_map = {e.id: e for e in _all_emp}
         except Exception:
             pending_past_requests = []
             emp_map = {}
+
+        # Delivery / Biller notes (recent 30 days)
+        try:
+            cutoff_30 = today - timedelta(days=30)
+            recent_db_notes = (
+                DeliveryBillerNote.query
+                .filter(DeliveryBillerNote.entry_date >= cutoff_30)
+                .order_by(DeliveryBillerNote.entry_date.desc(), DeliveryBillerNote.created_at.desc())
+                .all()
+            )
+        except Exception:
+            recent_db_notes = []
 
         # Feature 5: Badges for admin
         try:
@@ -1826,6 +1987,7 @@ def admin_dashboard():
             pending_past_requests=pending_past_requests,
             emp_map=emp_map,
             all_badges=all_badges,
+            recent_db_notes=recent_db_notes,
         )
     except Exception as e:
         logger.error(f"Admin dashboard error: {e}")
@@ -1840,7 +2002,8 @@ def admin_dashboard():
                                grade_counts={"ELITE":0,"PROFICIENT":0,"SATISFACTORY":0,"RE-TRAINING":0},
                                needs_attention=[], stale_validations_count=0, notes_by_emp={},
                                all_announcements=[], ann_read_counts={}, total_staff_count=0,
-                               pending_past_requests=[], emp_map={}, all_badges=[])
+                               pending_past_requests=[], emp_map={}, all_badges=[],
+                               recent_db_notes=[])
 
 
 @app.route("/staff/<int:emp_id>")
@@ -2048,7 +2211,11 @@ def admin_add_user():
             flash(f"Email '{email}' already exists.", "warning")
             return redirect(url_for("admin_dashboard"))
 
-        emp = Employee(name=name, email=email, staff_type=staff_type, role=f"Operations {staff_type.title() if staff_type != 'purchaser' else 'Purchaser'}")
+        _role_names = {"picker": "Operations Picker", "checker": "Operations Checker",
+                       "purchaser": "Operations Purchaser", "delivery": "Delivery Staff",
+                       "biller": "Billing Staff"}
+        emp = Employee(name=name, email=email, staff_type=staff_type,
+                       role=_role_names.get(staff_type, f"Operations {staff_type.title()}"))
         emp.set_password(password)
         db.session.add(emp)
         db.session.commit()
@@ -2083,9 +2250,12 @@ def admin_edit_user(emp_id):
                 flash(f"Email '{email}' already taken.", "warning")
                 return redirect(url_for("admin_dashboard"))
             emp.email = email
-        if staff_type in ("picker", "checker", "purchaser"):
+        if staff_type in ("picker", "checker", "purchaser", "delivery", "biller"):
             emp.staff_type = staff_type
-            emp.role = f"Operations {staff_type.title()}"
+            role_names = {"picker": "Operations Picker", "checker": "Operations Checker",
+                          "purchaser": "Operations Purchaser", "delivery": "Delivery Staff",
+                          "biller": "Billing Staff"}
+            emp.role = role_names.get(staff_type, f"Operations {staff_type.title()}")
         if new_password:
             if len(new_password) < 6:
                 flash("New password must be at least 6 characters.", "danger")
@@ -2822,9 +2992,8 @@ def validation_submit(bv_id):
                         picker_emp = db.session.get(Employee, bv.picker_id)
                         picker_name = picker_emp.name if picker_emp else f"#{bv.picker_id}"
                         admin_phone = os.environ.get("ADMIN_PHONE", "")
-                        if admin_phone:
-                            send_sms(admin_phone,
-                                     f"Bill count mismatch: {picker_name} on {bv.entry_date}. {len(wrong_ids)} staff flagged.")
+                        send_sms(admin_phone,
+                                 f"Bill count mismatch: {picker_name} on {bv.entry_date}. {len(wrong_ids)} staff flagged.")
                     except Exception:
                         pass
                 except Exception:
@@ -3391,10 +3560,6 @@ def api_analytics_range():
             end_date = datetime.strptime(end_str, "%Y-%m-%d").date()
         except ValueError:
             return jsonify(error="Invalid date format. Use YYYY-MM-DD"), 400
-        if start_date > end_date:
-            return jsonify(error="Start date must be before end date"), 400
-        if (end_date - start_date).days > 366 * 5:
-            return jsonify(error="Date range too large (max 5 years)"), 400
         entries = KPIEntry.query.filter(
             KPIEntry.emp_id == emp_id,
             KPIEntry.entry_date >= start_date,
