@@ -169,6 +169,30 @@ table.htable tbody tr:hover td { background: var(--bg); }
   transition: all 0.2s;
 }
 .btn-fill-past:hover { transform: translateY(-1px); }
+
+/* ── ANIMATIONS ── */
+@keyframes fadeSlideUp {
+  from { opacity:0; transform:translateY(16px); }
+  to   { opacity:1; transform:translateY(0); }
+}
+@keyframes popIn {
+  from { opacity:0; transform:scale(0.88); }
+  to   { opacity:1; transform:scale(1); }
+}
+@keyframes shimmerBar {
+  0%   { background-position:-200% center; }
+  100% { background-position: 200% center; }
+}
+.card {
+  animation: fadeSlideUp 0.38s cubic-bezier(.22,.68,0,1.2) both;
+  transition: box-shadow .22s, transform .22s;
+}
+.card:hover { box-shadow:0 5px 22px rgba(29,78,216,0.09); transform:translateY(-1px); }
+.kpi-card { animation: popIn 0.42s cubic-bezier(.22,.68,0,1.2) both; transition:transform .2s,box-shadow .2s; }
+.kpi-card:hover { transform:translateY(-2px) scale(1.015); box-shadow:0 6px 18px rgba(29,78,216,0.11); }
+.btn-submit { transition:transform .18s,box-shadow .18s; }
+.btn-submit:hover { transform:translateY(-2px); box-shadow:0 6px 16px rgba(29,78,216,0.22); }
+.multitask-section { animation: fadeSlideUp 0.35s cubic-bezier(.22,.68,0,1.2) both; }
 </style>
 </head>
 <body>
@@ -339,8 +363,42 @@ table.htable tbody tr:hover td { background: var(--bg); }
   <div class="card">
     <div class="section-label">Today's Metrics — {{ today.strftime('%A, %d %b %Y') }}</div>
 
-    {% if today_entry %}
-    <div class="submitted-box">✅ Already submitted today. See you tomorrow!</div>
+    {% if staff_type in ('delivery', 'biller') %}
+    <!-- DELIVERY / BILLER NOTE FORM -->
+    {% if today_db_note %}
+    <div class="submitted-box">Note submitted for today. See you tomorrow!</div>
+    <div style="background:linear-gradient(135deg,#f5f3ff,#ede9fe);border:1.5px solid #ddd6fe;border-radius:13px;padding:16px 20px;margin-top:12px;">
+      <div style="font-size:11px;font-weight:700;color:#6d28d9;text-transform:uppercase;letter-spacing:.8px;margin-bottom:6px;">Today's Note</div>
+      <div style="font-size:14px;color:var(--text);line-height:1.5;">{{ today_db_note.note_text }}</div>
+      <div style="display:flex;gap:14px;margin-top:10px;font-size:12px;color:var(--muted);">
+        <span>Processed: <strong>{{ today_db_note.quantity }}</strong></span>
+        <span>Issues: <strong>{{ today_db_note.issues_count }}</strong></span>
+      </div>
+    </div>
+    {% else %}
+    <form method="POST" autocomplete="off">
+      <div class="form-grid">
+        <div class="field" style="grid-column:span 2;">
+          <label>{{ 'Deliveries Made' if staff_type == 'delivery' else 'Bills Processed' }}</label>
+          <input type="number" name="delivery_qty" min="0" value="0" placeholder="Count for today">
+        </div>
+        <div class="field" style="grid-column:span 2;">
+          <label>Issues / Complaints Today</label>
+          <input type="number" name="delivery_issues" min="0" value="0" placeholder="Number of issues or 0">
+        </div>
+        <div class="field" style="grid-column:span 2;">
+          <label>Daily Note <span style="color:var(--danger);">*</span></label>
+          <textarea name="delivery_note" rows="4" maxlength="1000" required
+            placeholder="{% if staff_type == 'delivery' %}Describe today's deliveries — routes, issues, customer feedback...{% else %}Describe today's billing activity — pending bills, errors, notes...{% endif %}"
+            style="width:100%;padding:10px 13px;border:1.5px solid var(--border);border-radius:9px;background:rgba(255,255,255,0.9);font-size:13px;font-family:'DM Sans',sans-serif;color:var(--text);resize:vertical;min-height:90px;"></textarea>
+        </div>
+      </div>
+      <button type="submit" class="btn-submit">Submit Daily Note</button>
+    </form>
+    {% endif %}
+
+    {% elif today_entry %}
+    <div class="submitted-box">Already submitted today. See you tomorrow!</div>
     <div class="kpi-grid">
       {% if staff_type == 'checker' %}
       <div class="kpi-card"><div class="kpi-label">SB Checked</div><div class="kpi-value">{{ today_entry.sales_bills_open }}</div></div>
@@ -573,10 +631,78 @@ table.htable tbody tr:hover td { background: var(--bg); }
           placeholder="Any notes about today's shift — issues, highlights, etc."
           style="padding:10px 13px;border:1.5px solid var(--border);border-radius:9px;background:rgba(255,255,255,0.8);font-size:13px;font-family:'DM Sans',sans-serif;color:var(--text);resize:vertical;"></textarea>
       </div>
-      <button type="submit" class="btn-submit">✅ Submit Today's Metrics</button>
+      <!-- MULTITASKING SECTION -->
+      <div class="multitask-section" style="margin-bottom:16px;">
+        <label style="display:flex;align-items:center;gap:8px;font-size:13px;font-weight:600;color:var(--text);cursor:pointer;user-select:none;">
+          <input type="checkbox" id="multitask_toggle" onchange="toggleMultitask(this)" style="accent-color:var(--blue);width:16px;height:16px;">
+          I also did another task today (multitasking)
+        </label>
+        <div id="multitask_panel" style="display:none;margin-top:12px;padding:16px;background:rgba(245,243,255,0.8);border:1.5px solid #ddd6fe;border-radius:13px;animation:fadeSlideUp .3s cubic-bezier(.22,.68,0,1.2) both;">
+          <div style="font-size:11px;font-weight:700;color:#6d28d9;text-transform:uppercase;letter-spacing:.8px;margin-bottom:10px;">Secondary Task Details</div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+            <div class="field" style="margin:0;">
+              <label>Secondary Role</label>
+              <select name="multitask_role" id="multitask_role" style="padding:9px 12px;border:1.5px solid var(--border);border-radius:9px;font-size:13px;font-family:inherit;background:rgba(255,255,255,0.9);width:100%;">
+                <option value="">-- Select Role --</option>
+                {% if staff_type != 'picker' %}<option value="picker">Picker</option>{% endif %}
+                {% if staff_type != 'checker' %}<option value="checker">Checker</option>{% endif %}
+                {% if staff_type != 'purchaser' %}<option value="purchaser">Purchaser</option>{% endif %}
+                <option value="delivery">Delivery</option>
+                <option value="billing">Billing</option>
+                <option value="packing">Packing</option>
+                <option value="other">Other</option>
+              </select>
+            </div>
+            <div class="field" style="margin:0;">
+              <label>Qty / Items Done</label>
+              <input type="number" name="multitask_qty" min="0" value="0" style="padding:9px 12px;border:1.5px solid var(--border);border-radius:9px;font-size:13px;width:100%;background:rgba(255,255,255,0.9);">
+            </div>
+            <div class="field" style="margin:0;grid-column:span 2;">
+              <label>Brief Note (optional)</label>
+              <input type="text" name="multitask_note" maxlength="300" placeholder="e.g. Helped with checking from 2pm-4pm" style="padding:9px 12px;border:1.5px solid var(--border);border-radius:9px;font-size:13px;width:100%;background:rgba(255,255,255,0.9);">
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <button type="submit" class="btn-submit">Submit Today's Metrics</button>
     </form>
     {% endif %}
+
+    <!-- MULTITASK ENTRIES TODAY (shown after submission) -->
+    {% if today_multitask %}
+    <div style="margin-top:16px;padding:14px 16px;background:rgba(245,243,255,0.7);border:1.5px solid #ddd6fe;border-radius:13px;">
+      <div style="font-size:11px;font-weight:700;color:#6d28d9;text-transform:uppercase;letter-spacing:.8px;margin-bottom:8px;">Also Worked Today (Multitasking)</div>
+      {% for mt in today_multitask %}
+      <div style="display:flex;align-items:center;gap:10px;padding:8px 0;{% if not loop.last %}border-bottom:1px solid rgba(221,214,254,0.5);{% endif %}">
+        <span style="padding:3px 10px;background:#ede9fe;color:#6d28d9;border-radius:20px;font-size:11px;font-weight:700;text-transform:uppercase;">{{ mt.secondary_type }}</span>
+        <span style="font-size:13px;font-weight:600;color:var(--text);">{{ mt.quantity }} items</span>
+        {% if mt.note %}<span style="font-size:12px;color:var(--muted);">— {{ mt.note }}</span>{% endif %}
+      </div>
+      {% endfor %}
+    </div>
+    {% endif %}
   </div>
+
+  <!-- DELIVERY / BILLER RECENT NOTES -->
+  {% if staff_type in ('delivery', 'biller') and recent %}
+  <div class="card" style="margin-bottom:20px;">
+    <div class="section-label">Recent Daily Notes</div>
+    <div style="display:flex;flex-direction:column;gap:8px;max-height:300px;overflow-y:auto;">
+      {% for note in recent %}
+      <div style="padding:10px 13px;background:rgba(245,243,255,0.6);border:1px solid #ddd6fe;border-radius:10px;">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
+          <span style="font-size:11px;font-weight:700;color:#6d28d9;">{{ note.entry_date.strftime('%d %b %Y') }}</span>
+          <span style="font-size:11px;color:var(--muted);">{{ note.quantity }} processed · {{ note.issues_count }} issues</span>
+        </div>
+        <div style="font-size:13px;color:var(--text);line-height:1.4;">{{ note.note_text }}</div>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+  {% endif %}
+
+
 
   <!-- CHART + PERIOD SUMMARY -->
   {% if trend_labels %}
@@ -989,6 +1115,24 @@ document.addEventListener('DOMContentLoaded', function(){
     }
   });
 });
+
+// Multitask toggle
+function toggleMultitask(cb) {
+  var panel = document.getElementById('multitask_panel');
+  if (!panel) return;
+  if (cb.checked) {
+    panel.style.display = 'block';
+  } else {
+    panel.style.display = 'none';
+    // Clear fields when hidden so they don't accidentally submit
+    var sel = document.getElementById('multitask_role');
+    if (sel) sel.value = '';
+    var qty = panel.querySelector('[name="multitask_qty"]');
+    if (qty) qty.value = '0';
+    var note = panel.querySelector('[name="multitask_note"]');
+    if (note) note.value = '';
+  }
+}
 
 // Empty field warning before submit + disable button to prevent double-submit
 function validateAndSubmit(e){

@@ -323,6 +323,36 @@ tbody tr:hover td { background: rgba(219,234,254,0.3); }
 .lb-tab{padding:6px 14px;border:1px solid var(--border);border-radius:8px;font-size:12px;font-weight:700;font-family:inherit;cursor:pointer;background:var(--bg);color:var(--muted);transition:all .2s;}
 .lb-tab.active{background:linear-gradient(135deg,var(--blue-dark),var(--blue));color:#fff;border-color:transparent;}
 .lb-tab:not(.active):hover{background:var(--blue-lite);color:var(--blue);}
+
+/* ── ANIMATIONS ── */
+@keyframes fadeSlideUp {
+  from { opacity:0; transform:translateY(18px); }
+  to   { opacity:1; transform:translateY(0); }
+}
+@keyframes countUp {
+  from { opacity:0; transform:scale(0.85); }
+  to   { opacity:1; transform:scale(1); }
+}
+@keyframes shimmer {
+  0%   { background-position: -200% center; }
+  100% { background-position:  200% center; }
+}
+@keyframes pulseGlow {
+  0%,100% { box-shadow:0 0 0 0 rgba(29,78,216,0); }
+  50%      { box-shadow:0 0 0 6px rgba(29,78,216,0.12); }
+}
+.anim-fade-in {
+  animation: fadeSlideUp 0.45s cubic-bezier(.22,.68,0,1.2) both;
+}
+.card { animation: fadeSlideUp 0.4s cubic-bezier(.22,.68,0,1.2) both; }
+.card:hover { box-shadow:0 4px 24px rgba(29,78,216,0.10); transform:translateY(-1px); transition:box-shadow .25s,transform .25s; }
+.overview-stat { animation: countUp 0.5s cubic-bezier(.22,.68,0,1.2) both; transition:transform .2s,box-shadow .2s; }
+.overview-stat:hover { transform:translateY(-2px) scale(1.02); box-shadow:0 6px 20px rgba(29,78,216,0.12); }
+.btn-sm, .btn-delete { transition:transform .18s,box-shadow .18s; }
+.btn-sm:hover { transform:translateY(-1px); box-shadow:0 3px 10px rgba(29,78,216,0.15); }
+.btn-delete:hover { transform:translateY(-1px); box-shadow:0 3px 10px rgba(220,38,38,0.18); }
+.emp-row { animation: fadeSlideUp 0.35s cubic-bezier(.22,.68,0,1.2) both; transition:background .2s,box-shadow .2s; }
+.emp-row:hover { background:rgba(219,234,254,0.18) !important; }
 </style>
 </head>
 <body>
@@ -347,6 +377,8 @@ tbody tr:hover td { background: rgba(219,234,254,0.3); }
             <option value="picker">Picker</option>
             <option value="checker">Checker</option>
             <option value="purchaser">Purchaser</option>
+            <option value="delivery">Delivery</option>
+            <option value="biller">Biller</option>
           </select>
         </div>
         <div class="field">
@@ -526,7 +558,8 @@ var NOTES_BY_EMP = {
       {% for req in pending_past_requests %}
       <div style="display:flex;align-items:center;gap:12px;padding:12px 14px;background:#fffbeb;border:1px solid #fcd34d;border-radius:10px;flex-wrap:wrap;">
         <div style="flex:1;min-width:200px;">
-          <div style="font-size:13px;font-weight:700;color:var(--text);">{{ emp_map.get(req.employee_id, 'Unknown') }}</div>
+          {% set req_emp = emp_map.get(req.emp_id) %}
+          <div style="font-size:13px;font-weight:700;color:var(--text);">{{ req_emp.name if req_emp else 'Employee #' ~ req.emp_id }}</div>
           <div style="font-size:12px;color:var(--muted);margin-top:2px;">
             Requesting: <strong>{{ req.requested_date.strftime('%d %b %Y') }}</strong>
             &nbsp;·&nbsp; Requested {{ req.created_at.strftime('%d %b %Y %H:%M') }}
@@ -540,6 +573,34 @@ var NOTES_BY_EMP = {
           <form method="POST" action="/admin/past_entry_request/{{ req.id }}/reject" style="margin:0;">
             <button type="submit" class="btn-sm btn-delete">✕ Reject</button>
           </form>
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+  {% endif %}
+
+  <!-- DELIVERY / BILLER NOTES PANEL -->
+  {% if recent_db_notes %}
+  <div class="card anim-fade-in" style="margin-bottom:20px;border-left:4px solid #7c3aed;">
+    <div class="card-header">
+      <div class="card-title">Delivery &amp; Biller Daily Notes
+        <span class="cnt" style="background:#f5f3ff;color:#7c3aed;border-color:#ddd6fe;">{{ recent_db_notes|length }} (30 days)</span>
+      </div>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:6px;max-height:320px;overflow-y:auto;">
+      {% for note in recent_db_notes %}
+      {% set ne = emp_map.get(note.emp_id) %}
+      <div style="display:flex;align-items:flex-start;gap:12px;padding:10px 13px;background:{% if note.note_type == 'delivery' %}#f5f3ff{% else %}#eff6ff{% endif %};border:1px solid {% if note.note_type == 'delivery' %}#ddd6fe{% else %}#bfdbfe{% endif %};border-radius:10px;">
+        <div style="flex:0 0 auto;width:36px;height:36px;border-radius:50%;background:{% if note.note_type == 'delivery' %}#7c3aed{% else %}#1d4ed8{% endif %};color:#fff;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;">
+          {{ (ne.name[0] if ne else '?')|upper }}
+        </div>
+        <div style="flex:1;min-width:0;">
+          <div style="font-size:13px;font-weight:700;color:var(--text);">{{ ne.name if ne else 'Unknown' }}
+            <span style="font-size:10px;font-weight:600;padding:2px 8px;border-radius:20px;background:{% if note.note_type == 'delivery' %}#ede9fe{% else %}#dbeafe{% endif %};color:{% if note.note_type == 'delivery' %}#6d28d9{% else %}#1d4ed8{% endif %};text-transform:uppercase;letter-spacing:.5px;">{{ note.note_type|title }}</span>
+          </div>
+          <div style="font-size:12px;color:var(--muted);margin-top:1px;">{{ note.entry_date.strftime('%d %b %Y') }} &nbsp;·&nbsp; {{ note.quantity }} processed &nbsp;·&nbsp; {{ note.issues_count }} issues</div>
+          <div style="font-size:13px;color:var(--text);margin-top:4px;line-height:1.4;">{{ note.note_text }}</div>
         </div>
       </div>
       {% endfor %}
@@ -642,6 +703,8 @@ var NOTES_BY_EMP = {
             <option value="picker">📦 Picker</option>
             <option value="checker">🔍 Checker</option>
             <option value="purchaser">🛒 Purchaser</option>
+            <option value="delivery">🚚 Delivery</option>
+            <option value="biller">🧾 Biller</option>
           </select>
         </div>
       </div>
