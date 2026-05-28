@@ -366,6 +366,18 @@ tbody tr:hover td { background: rgba(219,234,254,0.3); }
           </select>
         </div>
         <div class="field">
+          <label>Secondary Role (multitasking)</label>
+          <select name="secondary_staff_type" id="edit-secondary">
+            <option value="">— None —</option>
+            <option value="picker">Picker</option>
+            <option value="checker">Checker</option>
+            <option value="purchaser">Purchaser</option>
+            <option value="delivery">Delivery</option>
+            <option value="biller">Biller</option>
+          </select>
+          <small style="font-size:11px;color:var(--muted);">Optional. Lets staff switch role from the nav bar.</small>
+        </div>
+        <div class="field" style="grid-column: span 2;">
           <label>New Password (optional)</label>
           <input type="password" name="new_password" placeholder="Leave blank to keep">
         </div>
@@ -804,6 +816,7 @@ var NOTES_BY_EMP = {
                   data-adj="{{ (r.emp.admin_adjustment or 0) }}"
                   data-adj-note="{{ (r.emp.admin_adjustment_note or '') | e }}"
                   data-phone="{{ (r.emp.phone or '') | e }}"
+                  data-secondary="{{ (r.emp.secondary_staff_type or '') | e }}"
                   onclick="openEditFromBtn(this)">
                   Edit
                 </button>
@@ -1339,10 +1352,11 @@ function openEditFromBtn(btn) {
   var adj     = parseFloat(btn.dataset.adj) || 0;
   var adjNote = btn.dataset.adjNote || '';
   var phone   = btn.dataset.phone   || '';
-  openEdit(id, name, email, stype, adj, adjNote, phone);
+  var secondary = btn.dataset.secondary || '';
+  openEdit(id, name, email, stype, adj, adjNote, phone, secondary);
 }
 
-function openEdit(id, name, email, stype, adj, adjNote, phone) {
+function openEdit(id, name, email, stype, adj, adjNote, phone, secondary) {
   var f = document.getElementById('editForm');
   if(!f){ console.error("editForm not found"); return; }
   f.action = '/admin/edit_user/' + id;
@@ -1350,6 +1364,8 @@ function openEdit(id, name, email, stype, adj, adjNote, phone) {
   document.getElementById('edit-email').value = email;
   var sel = document.getElementById('edit-type');
   if(sel) sel.value = stype;
+  var sec = document.getElementById('edit-secondary');
+  if(sec) sec.value = secondary || '';
   var adjEl = document.getElementById('edit-adj');
   if(adjEl) adjEl.value = (adj === undefined || adj === null) ? 0 : adj;
   var adjNoteEl = document.getElementById('edit-adj-note');

@@ -230,6 +230,13 @@ table.htable tbody tr:hover td { background: var(--bg); }
     <span class="nav-pill">{{ staff_type|title }}</span>
   </div>
   <div class="nav-right">
+    {% if secondary_staff_type %}
+    <form method="POST" action="/switch_role" style="display:flex;align-items:center;gap:6px;margin:0;background:linear-gradient(135deg,#ede9fe,#ddd6fe);border:1px solid #c4b5fd;border-radius:8px;padding:4px 8px;">
+      <span style="font-size:11px;font-weight:700;color:#6d28d9;text-transform:uppercase;letter-spacing:.5px;">Role:</span>
+      <button type="submit" name="role" value="{{ primary_staff_type }}" style="padding:4px 10px;border:none;border-radius:6px;font-size:11px;font-weight:700;font-family:inherit;cursor:pointer;{% if staff_type == primary_staff_type %}background:#6d28d9;color:#fff;{% else %}background:transparent;color:#6d28d9;{% endif %}">{{ primary_staff_type|title }} (1)</button>
+      <button type="submit" name="role" value="{{ secondary_staff_type }}" style="padding:4px 10px;border:none;border-radius:6px;font-size:11px;font-weight:700;font-family:inherit;cursor:pointer;{% if staff_type == secondary_staff_type %}background:#6d28d9;color:#fff;{% else %}background:transparent;color:#6d28d9;{% endif %}">{{ secondary_staff_type|title }} (2)</button>
+    </form>
+    {% endif %}
     <span class="nav-user">{{ user_name }}</span>
     {% if unread_count and unread_count > 0 %}
     <span style="position:relative;display:inline-block;">

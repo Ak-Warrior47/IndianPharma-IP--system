@@ -84,6 +84,7 @@ class Employee(db.Model):
     admin_adjustment_note = db.Column(db.String(200), default="")  # Reason/notes
     custom_hourly_target = db.Column(db.Float, nullable=True)  # Override default role target (Phase 1 auto-raise)
     phone         = db.Column(db.String(20), nullable=True)   # Feature 15: phone for OTP reset
+    secondary_staff_type = db.Column(db.String(20), nullable=True)  # optional 2nd role for multitasking
     created_at    = db.Column(db.DateTime, default=datetime.utcnow)
     entries = db.relationship("KPIEntry", backref="owner", lazy="select", cascade="all, delete-orphan")
 
@@ -1192,6 +1193,16 @@ def run_migrations():
             except Exception as ce:
                 db.session.rollback()
                 logger.warning(f"employees.phone migration skipped: {ce}")
+            # Secondary staff type
+            try:
+                db.session.execute(db.text(
+                    "ALTER TABLE employees ADD COLUMN IF NOT EXISTS secondary_staff_type VARCHAR(20)"
+                ))
+                db.session.commit()
+                logger.info("✅ employees.secondary_staff_type ensured")
+            except Exception as ce:
+                db.session.rollback()
+                logger.warning(f"employees.secondary_staff_type migration skipped: {ce}")
             # New feature tables
             for tbl_sql in [
                 """CREATE TABLE IF NOT EXISTS announcements (
@@ -1296,6 +1307,7 @@ def run_migrations():
                 "admin_adjustment_note": "VARCHAR(200) DEFAULT ''",
                 "custom_hourly_target": "FLOAT",
                 "phone": "VARCHAR(20)",  # Feature 15
+                "secondary_staff_type": "VARCHAR(20)",  # 2nd role for multitasking
             }
             for col, col_type in sqlite_cols.items():
                 if col not in existing:
@@ -1492,6 +1504,8 @@ def login():
             session["user_id"] = user.id
             session["user_name"] = user.name
             session["staff_type"] = user.staff_type
+            session["primary_staff_type"] = user.staff_type
+            session["secondary_staff_type"] = user.secondary_staff_type
             session["is_admin"] = bool(user.is_admin)
 
             logger.info(f"User login successful: {email}")
@@ -1506,6 +1520,29 @@ def login():
 def logout():
     session.clear()
     return redirect(url_for("login"))
+
+
+@app.route("/switch_role", methods=["POST"])
+@login_required
+def switch_role():
+    """Toggle session staff_type between primary and secondary role (multitasking)."""
+    target = request.form.get("role", "").strip()
+    primary = session.get("primary_staff_type")
+    secondary = session.get("secondary_staff_type")
+    # Re-fetch from DB if session is missing values (older session pre-feature)
+    if not primary:
+        emp = db.session.get(Employee, session.get("user_id"))
+        if emp:
+            primary = emp.staff_type
+            secondary = emp.secondary_staff_type
+            session["primary_staff_type"] = primary
+            session["secondary_staff_type"] = secondary
+    if target in (primary, secondary) and target:
+        session["staff_type"] = target
+        flash(f"Now working as {target.title()}.", "success")
+    else:
+        flash("Invalid role switch.", "warning")
+    return redirect(url_for("dashboard"))
 
 
 @app.route("/dashboard", methods=["GET", "POST"])
@@ -1559,6 +1596,8 @@ def dashboard():
                 my_staff_badges=[], all_auto_badges=[], earned_badge_ids=set(),
                 current_month=today.strftime("%B %Y"), month_str=today.strftime("%Y-%m"),
                 today_multitask=[],
+                primary_staff_type=session.get("primary_staff_type") or staff_type,
+                secondary_staff_type=session.get("secondary_staff_type"),
             )
 
         if request.method == "POST" and not today_entry:
@@ -1848,6 +1887,8 @@ def dashboard():
             month_str=today.strftime("%Y-%m"),
             today_multitask=today_multitask,
             today_db_note=None,
+            primary_staff_type=session.get("primary_staff_type") or staff_type,
+            secondary_staff_type=session.get("secondary_staff_type"),
         )
     except Exception as e:
         logger.error(f"Dashboard error: {e}")
@@ -1860,7 +1901,8 @@ def dashboard():
             active_announcements=[], unread_count=0, current_goal=None,
             pending_requests=[], my_staff_badges=[], all_auto_badges=[],
             earned_badge_ids=set(), current_month="", month_str="",
-            today_multitask=[], today_db_note=None)
+            today_multitask=[], today_db_note=None,
+            primary_staff_type="picker", secondary_staff_type=None)
 
 
 @app.route("/admin_dashboard")
@@ -2256,6 +2298,14 @@ def admin_edit_user(emp_id):
                           "purchaser": "Operations Purchaser", "delivery": "Delivery Staff",
                           "biller": "Billing Staff"}
             emp.role = role_names.get(staff_type, f"Operations {staff_type.title()}")
+        # Secondary role (optional; "" = clear)
+        sec_raw = request.form.get("secondary_staff_type", None)
+        if sec_raw is not None:
+            sec = sec_raw.strip()
+            if sec == "" or sec == "none":
+                emp.secondary_staff_type = None
+            elif sec in ("picker", "checker", "purchaser", "delivery", "biller") and sec != emp.staff_type:
+                emp.secondary_staff_type = sec
         if new_password:
             if len(new_password) < 6:
                 flash("New password must be at least 6 characters.", "danger")
