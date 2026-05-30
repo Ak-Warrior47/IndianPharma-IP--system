@@ -451,6 +451,53 @@ class DeliveryBillerNote(db.Model):
     )
 
 
+class DeliveryAssignment(db.Model):
+    """Purchaser assigns a package to a delivery employee with destination info."""
+    __tablename__ = "delivery_assignments"
+    id               = db.Column(db.Integer, primary_key=True)
+    purchaser_id     = db.Column(db.Integer, db.ForeignKey("employees.id"), nullable=False)
+    delivery_emp_id  = db.Column(db.Integer, db.ForeignKey("employees.id"), nullable=False)
+    destination_addr = db.Column(db.Text, nullable=False)
+    destination_lat  = db.Column(db.Float, nullable=True)   # null if address-only
+    destination_lng  = db.Column(db.Float, nullable=True)
+    package_desc     = db.Column(db.Text, nullable=False)
+    bills_count      = db.Column(db.Integer, default=0)
+    recipient_name   = db.Column(db.String(150), nullable=True)
+    company_name     = db.Column(db.String(150), nullable=True)
+    # status: pending | in_transit | delivered | failed
+    status           = db.Column(db.String(20), default="pending", index=True)
+    assigned_at      = db.Column(db.DateTime, default=datetime.utcnow)
+    notes            = db.Column(db.Text, nullable=True)
+    __table_args__ = (
+        db.Index("idx_da_delivery_emp", "delivery_emp_id"),
+        db.Index("idx_da_status", "status"),
+    )
+
+
+class DeliveryTrip(db.Model):
+    """GPS-tracked delivery trip for a DeliveryAssignment."""
+    __tablename__ = "delivery_trips"
+    id                   = db.Column(db.Integer, primary_key=True)
+    assignment_id        = db.Column(db.Integer, db.ForeignKey("delivery_assignments.id", ondelete="CASCADE"), nullable=False, unique=True)
+    emp_id               = db.Column(db.Integer, db.ForeignKey("employees.id", ondelete="CASCADE"), nullable=False)
+    trip_date            = db.Column(db.Date, nullable=False, default=date.today)
+    departure_lat        = db.Column(db.Float, nullable=True)
+    departure_lng        = db.Column(db.Float, nullable=True)
+    departure_time       = db.Column(db.DateTime, nullable=True)
+    arrival_time         = db.Column(db.DateTime, nullable=True)
+    delivered_to_name    = db.Column(db.String(150), nullable=True)
+    delivered_to_company = db.Column(db.String(150), nullable=True)
+    delivery_note        = db.Column(db.Text, nullable=True)
+    duration_minutes     = db.Column(db.Float, nullable=True)
+    is_on_time           = db.Column(db.Boolean, nullable=True)
+    # status: active | completed | cancelled
+    status               = db.Column(db.String(20), default="active")
+    created_at           = db.Column(db.DateTime, default=datetime.utcnow)
+    __table_args__ = (
+        db.Index("idx_dt_emp_date", "emp_id", "trip_date"),
+    )
+
+
 # ─── HELPERS ─────────────────────────────────────────────────────────────────
 
 def safe_div(a, b, default=0.0):
@@ -1330,6 +1377,46 @@ def run_migrations():
                 except Exception as te:
                     db.session.rollback()
                     logger.warning(f"New table migration skipped: {te}")
+            # Delivery tracking tables
+            for tbl_sql in [
+                """CREATE TABLE IF NOT EXISTS delivery_assignments (
+                    id SERIAL PRIMARY KEY,
+                    purchaser_id INTEGER NOT NULL REFERENCES employees(id),
+                    delivery_emp_id INTEGER NOT NULL REFERENCES employees(id),
+                    destination_addr TEXT NOT NULL,
+                    destination_lat FLOAT,
+                    destination_lng FLOAT,
+                    package_desc TEXT NOT NULL,
+                    bills_count INTEGER DEFAULT 0,
+                    recipient_name VARCHAR(150),
+                    company_name VARCHAR(150),
+                    status VARCHAR(20) DEFAULT 'pending',
+                    assigned_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    notes TEXT)""",
+                """CREATE TABLE IF NOT EXISTS delivery_trips (
+                    id SERIAL PRIMARY KEY,
+                    assignment_id INTEGER NOT NULL REFERENCES delivery_assignments(id) ON DELETE CASCADE,
+                    emp_id INTEGER NOT NULL REFERENCES employees(id) ON DELETE CASCADE,
+                    trip_date DATE NOT NULL DEFAULT CURRENT_DATE,
+                    departure_lat FLOAT,
+                    departure_lng FLOAT,
+                    departure_time TIMESTAMP,
+                    arrival_time TIMESTAMP,
+                    delivered_to_name VARCHAR(150),
+                    delivered_to_company VARCHAR(150),
+                    delivery_note TEXT,
+                    duration_minutes FLOAT,
+                    is_on_time BOOLEAN,
+                    status VARCHAR(20) DEFAULT 'active',
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    CONSTRAINT _dt_assignment_uc UNIQUE(assignment_id))""",
+            ]:
+                try:
+                    db.session.execute(db.text(tbl_sql))
+                    db.session.commit()
+                except Exception as te:
+                    db.session.rollback()
+                    logger.warning(f"Delivery table migration skipped: {te}")
             # Add multitask KPI-parameter columns to an existing multitask_entries table
             for mt_col, mt_type in [
                 ("sales_bills_open", "INTEGER DEFAULT 0"),
@@ -1480,6 +1567,43 @@ def run_migrations():
                 logger.info("✅ SQLite delivery_biller_notes ensured")
             except Exception as dbne:
                 logger.warning(f"SQLite delivery_biller_notes: {dbne}")
+            # SQLite: delivery_assignments and delivery_trips
+            try:
+                cursor.execute("""CREATE TABLE IF NOT EXISTS delivery_assignments (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    purchaser_id INTEGER NOT NULL,
+                    delivery_emp_id INTEGER NOT NULL,
+                    destination_addr TEXT NOT NULL,
+                    destination_lat REAL,
+                    destination_lng REAL,
+                    package_desc TEXT NOT NULL,
+                    bills_count INTEGER DEFAULT 0,
+                    recipient_name VARCHAR(150),
+                    company_name VARCHAR(150),
+                    status VARCHAR(20) DEFAULT 'pending',
+                    assigned_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    notes TEXT)""")
+                cursor.execute("""CREATE TABLE IF NOT EXISTS delivery_trips (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    assignment_id INTEGER NOT NULL,
+                    emp_id INTEGER NOT NULL,
+                    trip_date DATE NOT NULL,
+                    departure_lat REAL,
+                    departure_lng REAL,
+                    departure_time TIMESTAMP,
+                    arrival_time TIMESTAMP,
+                    delivered_to_name VARCHAR(150),
+                    delivered_to_company VARCHAR(150),
+                    delivery_note TEXT,
+                    duration_minutes REAL,
+                    is_on_time INTEGER,
+                    status VARCHAR(20) DEFAULT 'active',
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    UNIQUE(assignment_id))""")
+                conn.commit()
+                logger.info("✅ SQLite delivery tables created")
+            except Exception as dte:
+                logger.warning(f"SQLite delivery tables: {dte}")
             conn.commit()
             conn.close()
     except Exception as e:
@@ -1517,6 +1641,10 @@ def init_db():
                         Badge(name="Century Club", description="100+ items picked in a single day", icon="📦", badge_type="auto"),
                         Badge(name="Top Performer", description="#1 score in role for the month", icon="🏆", badge_type="auto"),
                         Badge(name="7-Day Streak", description="Submitted every day for 7 consecutive days", icon="🔥", badge_type="auto"),
+                        Badge(name="First Delivery", description="Completed your very first GPS delivery", icon="🚚", badge_type="auto"),
+                        Badge(name="Speed Rider", description="Completed 3 deliveries faster than the average time", icon="⚡", badge_type="auto"),
+                        Badge(name="Perfect Courier", description="10 consecutive on-time deliveries", icon="🎯", badge_type="auto"),
+                        Badge(name="Veteran Courier", description="50 total deliveries completed", icon="🏆", badge_type="auto"),
                     ]
                     for b in default_badges:
                         db.session.add(b)
@@ -3620,6 +3748,54 @@ def compute_auto_badges(emp_id):
                     logger.warning(f"Badge award failed: {dbe}")
     except Exception as e:
         logger.error(f"compute_auto_badges: {e}")
+
+
+def compute_delivery_badges(emp_id):
+    """Award delivery-related auto badges based on completed DeliveryTrip records."""
+    try:
+        completed_trips = DeliveryTrip.query.filter_by(emp_id=emp_id, status="completed").all()
+        total = len(completed_trips)
+        on_time_count = sum(1 for t in completed_trips if t.is_on_time)
+
+        badge_checks = [
+            ("First Delivery",     total >= 1),
+            ("Speed Rider",        on_time_count >= 3),
+            ("Veteran Courier",    total >= 50),
+        ]
+        # Perfect Courier: check for 10 consecutive on-time
+        consecutive = 0
+        max_consec = 0
+        for t in sorted(completed_trips, key=lambda x: x.created_at or datetime.min):
+            if t.is_on_time:
+                consecutive += 1
+                max_consec = max(max_consec, consecutive)
+            else:
+                consecutive = 0
+        badge_checks.append(("Perfect Courier", max_consec >= 10))
+
+        for badge_name, earned in badge_checks:
+            if not earned:
+                continue
+            badge = Badge.query.filter_by(name=badge_name).first()
+            if not badge:
+                continue
+            existing = StaffBadge.query.filter_by(emp_id=emp_id, badge_id=badge.id).first()
+            if not existing:
+                db.session.add(StaffBadge(emp_id=emp_id, badge_id=badge.id, note="auto-delivery"))
+        db.session.commit()
+    except Exception as e:
+        db.session.rollback()
+        logger.warning(f"compute_delivery_badges: {e}")
+
+
+def score_delivery_trip(trip):
+    """Return point score for a completed delivery trip."""
+    score = 10  # base completion
+    if trip.is_on_time:
+        score += 20  # on-time bonus
+    if trip.duration_minutes and trip.duration_minutes < 30:
+        score += 5   # speed bonus
+    return score
 
 
 @app.route("/admin/badge/award", methods=["POST"])
