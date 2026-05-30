@@ -2115,6 +2115,39 @@ def dashboard():
         except Exception:
             today_multitask = []
 
+        # Delivery module data
+        try:
+            my_assignments = []
+            purchaser_delivery_staff = []
+            my_deliveries_today = []
+            trip_map = {}
+            if staff_type == "delivery":
+                my_assignments = (
+                    DeliveryAssignment.query
+                    .filter(
+                        DeliveryAssignment.delivery_emp_id == emp_id,
+                        DeliveryAssignment.status.in_(["pending", "in_transit"])
+                    )
+                    .order_by(DeliveryAssignment.assigned_at.desc())
+                    .all()
+                )
+                my_deliveries_today = (
+                    DeliveryTrip.query
+                    .filter_by(emp_id=emp_id, trip_date=today, status="completed")
+                    .all()
+                )
+            elif staff_type == "purchaser" or session.get("is_admin"):
+                purchaser_delivery_staff = Employee.query.filter_by(staff_type="delivery", is_admin=False).all()
+            if my_assignments:
+                aid_list = [a.id for a in my_assignments]
+                trips = DeliveryTrip.query.filter(DeliveryTrip.assignment_id.in_(aid_list)).all()
+                trip_map = {t.assignment_id: t for t in trips}
+        except Exception:
+            my_assignments = []
+            purchaser_delivery_staff = []
+            my_deliveries_today = []
+            trip_map = {}
+
         return render_template("dashboard.html",
             user_name=session.get("user_name", "User"),
             user_id=emp_id,
@@ -2144,6 +2177,12 @@ def dashboard():
             today_db_note=None,
             primary_staff_type=session.get("primary_staff_type") or staff_type,
             secondary_staff_type=session.get("secondary_staff_type"),
+            my_assignments=my_assignments,
+            purchaser_delivery_staff=purchaser_delivery_staff,
+            my_deliveries_today=my_deliveries_today,
+            trip_map=trip_map,
+            store_lat=STORE_LAT,
+            store_lng=STORE_LNG,
         )
     except Exception as e:
         logger.error(f"Dashboard error: {e}")
@@ -2157,7 +2196,9 @@ def dashboard():
             pending_requests=[], my_staff_badges=[], all_auto_badges=[],
             earned_badge_ids=set(), current_month="", month_str="",
             today_multitask=[], today_db_note=None,
-            primary_staff_type="picker", secondary_staff_type=None)
+            primary_staff_type="picker", secondary_staff_type=None,
+            my_assignments=[], purchaser_delivery_staff=[], my_deliveries_today=[],
+            trip_map={}, store_lat=0.0, store_lng=0.0)
 
 
 @app.route("/admin_dashboard")
@@ -4244,6 +4285,300 @@ def stale_validations_sms_job():
                     logger.info(f"Stale validations: {count} pending, ADMIN_PHONE not set")
         except Exception as e:
             logger.error(f"stale_validations_sms_job: {e}")
+
+
+# ─── DELIVERY TRACKING MODULE ─────────────────────────────────────────────────
+
+STORE_LAT = float(os.environ.get("STORE_LAT", "0.0"))
+STORE_LNG = float(os.environ.get("STORE_LNG", "0.0"))
+STORE_RADIUS_M = 400    # meters — must be within this to start a trip
+ARRIVAL_RADIUS_M = 200  # meters — must be within this to confirm delivery
+
+
+def _haversine_m(lat1, lng1, lat2, lng2):
+    """Distance in metres between two lat/lng points."""
+    import math
+    R = 6_371_000
+    phi1, phi2 = math.radians(lat1), math.radians(lat2)
+    dphi = math.radians(lat2 - lat1)
+    dlam = math.radians(lng2 - lng1)
+    a = math.sin(dphi / 2) ** 2 + math.cos(phi1) * math.cos(phi2) * math.sin(dlam / 2) ** 2
+    return 2 * R * math.asin(math.sqrt(a))
+
+
+@app.route("/delivery/assign", methods=["POST"])
+@login_required
+def delivery_assign():
+    """Purchaser creates a delivery assignment for a delivery employee."""
+    emp_id = session.get("user_id")
+    staff_type = session.get("staff_type", "")
+    if staff_type not in ("purchaser",) and not session.get("is_admin"):
+        flash("Only purchasers can assign deliveries.", "danger")
+        return redirect(url_for("dashboard"))
+    try:
+        delivery_emp_id  = int(request.form.get("delivery_emp_id", 0))
+        destination_addr = request.form.get("destination_addr", "").strip()
+        package_desc     = request.form.get("package_desc", "").strip()
+        bills_count      = int(request.form.get("bills_count", 0) or 0)
+        recipient_name   = request.form.get("recipient_name", "").strip()
+        company_name     = request.form.get("company_name", "").strip()
+        notes            = request.form.get("notes", "").strip()[:500]
+        dest_lat_s       = request.form.get("dest_lat", "").strip()
+        dest_lng_s       = request.form.get("dest_lng", "").strip()
+
+        if not delivery_emp_id or not destination_addr or not package_desc:
+            flash("Please fill in delivery employee, destination, and package description.", "warning")
+            return redirect(url_for("dashboard"))
+
+        delivery_emp = db.session.get(Employee, delivery_emp_id)
+        if not delivery_emp or delivery_emp.staff_type != "delivery":
+            flash("Selected employee is not a delivery staff member.", "warning")
+            return redirect(url_for("dashboard"))
+
+        dest_lat = float(dest_lat_s) if dest_lat_s else None
+        dest_lng = float(dest_lng_s) if dest_lng_s else None
+
+        assignment = DeliveryAssignment(
+            purchaser_id=emp_id,
+            delivery_emp_id=delivery_emp_id,
+            destination_addr=destination_addr,
+            destination_lat=dest_lat,
+            destination_lng=dest_lng,
+            package_desc=package_desc,
+            bills_count=bills_count,
+            recipient_name=recipient_name,
+            company_name=company_name,
+            notes=notes,
+            status="pending",
+        )
+        db.session.add(assignment)
+        db.session.commit()
+        log_audit("delivery_assign", delivery_emp.name, f"Package: {package_desc[:50]}")
+        flash(f"✅ Delivery assigned to {delivery_emp.name}.", "success")
+    except Exception as e:
+        db.session.rollback()
+        logger.error(f"delivery_assign: {e}")
+        flash("Error creating delivery assignment.", "danger")
+    return redirect(url_for("dashboard"))
+
+
+@app.route("/delivery/start_trip/<int:assignment_id>", methods=["POST"])
+@login_required
+def delivery_start_trip(assignment_id):
+    """Delivery employee starts a trip — GPS must confirm they're near the store."""
+    emp_id = session.get("user_id")
+    try:
+        assignment = db.session.get(DeliveryAssignment, assignment_id)
+        if not assignment or assignment.delivery_emp_id != emp_id:
+            return jsonify({"ok": False, "error": "Assignment not found"}), 404
+        if assignment.status != "pending":
+            return jsonify({"ok": False, "error": "Assignment not in pending state"}), 400
+
+        data = request.get_json(force=True, silent=True) or {}
+        curr_lat = float(data.get("lat", 0))
+        curr_lng = float(data.get("lng", 0))
+
+        if STORE_LAT != 0.0 and STORE_LNG != 0.0:
+            dist = _haversine_m(curr_lat, curr_lng, STORE_LAT, STORE_LNG)
+            if dist > STORE_RADIUS_M:
+                return jsonify({"ok": False, "error": f"You must be at the store to start a trip (you are {int(dist)}m away, max {STORE_RADIUS_M}m)."}), 400
+
+        assignment.status = "in_transit"
+        trip = DeliveryTrip(
+            assignment_id=assignment_id,
+            emp_id=emp_id,
+            trip_date=date.today(),
+            departure_lat=curr_lat,
+            departure_lng=curr_lng,
+            departure_time=datetime.utcnow(),
+            status="active",
+        )
+        db.session.add(trip)
+        db.session.commit()
+        return jsonify({"ok": True, "trip_id": trip.id,
+                        "dest_lat": assignment.destination_lat,
+                        "dest_lng": assignment.destination_lng})
+    except Exception as e:
+        db.session.rollback()
+        logger.error(f"delivery_start_trip: {e}")
+        return jsonify({"ok": False, "error": "Server error"}), 500
+
+
+@app.route("/delivery/check_arrival/<int:assignment_id>", methods=["POST"])
+@login_required
+def delivery_check_arrival(assignment_id):
+    """Check if delivery employee is within ARRIVAL_RADIUS_M of destination. Returns unlock flag."""
+    emp_id = session.get("user_id")
+    try:
+        assignment = db.session.get(DeliveryAssignment, assignment_id)
+        if not assignment or assignment.delivery_emp_id != emp_id:
+            return jsonify({"ok": False, "error": "Not found"}), 404
+
+        data = request.get_json(force=True, silent=True) or {}
+        curr_lat = float(data.get("lat", 0))
+        curr_lng = float(data.get("lng", 0))
+
+        if not assignment.destination_lat or not assignment.destination_lng:
+            return jsonify({"ok": True, "unlock": True, "dist": 0})
+
+        dist = _haversine_m(curr_lat, curr_lng, assignment.destination_lat, assignment.destination_lng)
+        unlock = dist <= ARRIVAL_RADIUS_M
+        return jsonify({"ok": True, "unlock": unlock, "dist": int(dist), "radius": ARRIVAL_RADIUS_M})
+    except Exception as e:
+        logger.error(f"delivery_check_arrival: {e}")
+        return jsonify({"ok": False, "error": "Server error"}), 500
+
+
+@app.route("/delivery/confirm/<int:assignment_id>", methods=["POST"])
+@login_required
+def delivery_confirm(assignment_id):
+    """Delivery employee confirms delivery — GPS check, marks assignment delivered."""
+    emp_id = session.get("user_id")
+    try:
+        assignment = db.session.get(DeliveryAssignment, assignment_id)
+        if not assignment or assignment.delivery_emp_id != emp_id:
+            return jsonify({"ok": False, "error": "Not found"}), 404
+        if assignment.status not in ("in_transit", "pending"):
+            return jsonify({"ok": False, "error": "Cannot confirm this assignment"}), 400
+
+        data = request.get_json(force=True, silent=True) or {}
+        curr_lat      = float(data.get("lat", 0))
+        curr_lng      = float(data.get("lng", 0))
+        delivered_to  = data.get("delivered_to", "").strip()
+        company       = data.get("company", "").strip()
+        delivery_note = data.get("note", "").strip()[:500]
+
+        if not delivered_to:
+            return jsonify({"ok": False, "error": "Please enter the name of the person who received the package"}), 400
+
+        if assignment.destination_lat and assignment.destination_lng:
+            dist = _haversine_m(curr_lat, curr_lng, assignment.destination_lat, assignment.destination_lng)
+            if dist > ARRIVAL_RADIUS_M:
+                return jsonify({"ok": False, "error": f"You must be at the destination to confirm delivery ({int(dist)}m away, max {ARRIVAL_RADIUS_M}m)."}), 400
+
+        trip = DeliveryTrip.query.filter_by(assignment_id=assignment_id).first()
+        now = datetime.utcnow()
+        is_on_time = None
+
+        if trip:
+            trip.arrival_time         = now
+            trip.delivered_to_name    = delivered_to
+            trip.delivered_to_company = company
+            trip.delivery_note        = delivery_note
+            trip.status               = "completed"
+            if trip.departure_time:
+                duration = (now - trip.departure_time).total_seconds() / 60.0
+                trip.duration_minutes = round(duration, 1)
+                is_on_time = duration <= 60.0
+                trip.is_on_time = is_on_time
+        else:
+            trip = DeliveryTrip(
+                assignment_id=assignment_id,
+                emp_id=emp_id,
+                trip_date=date.today(),
+                arrival_time=now,
+                delivered_to_name=delivered_to,
+                delivered_to_company=company,
+                delivery_note=delivery_note,
+                status="completed",
+                is_on_time=True,
+            )
+            db.session.add(trip)
+            is_on_time = True
+
+        assignment.status = "delivered"
+        db.session.commit()
+
+        try:
+            compute_delivery_badges(emp_id)
+        except Exception:
+            pass
+
+        log_audit("delivery_confirm", str(emp_id), f"Delivered to {delivered_to} @ {company}")
+        return jsonify({"ok": True, "message": "Delivery confirmed!", "on_time": is_on_time})
+    except Exception as e:
+        db.session.rollback()
+        logger.error(f"delivery_confirm: {e}")
+        return jsonify({"ok": False, "error": "Server error"}), 500
+
+
+@app.route("/delivery/leaderboard")
+@login_required
+def delivery_leaderboard():
+    """Delivery staff leaderboard — ranked by monthly score."""
+    try:
+        today = date.today()
+        month_start = today.replace(day=1)
+        delivery_staff = Employee.query.filter_by(staff_type="delivery", is_admin=False).all()
+        leaderboard = []
+        for emp in delivery_staff:
+            all_trips   = DeliveryTrip.query.filter_by(emp_id=emp.id, status="completed").all()
+            month_trips = [t for t in all_trips if t.trip_date and t.trip_date >= month_start]
+            total       = len(all_trips)
+            on_time     = sum(1 for t in all_trips if t.is_on_time)
+            month_total = len(month_trips)
+            month_score = sum(score_delivery_trip(t) for t in month_trips)
+            all_durs    = [t.duration_minutes for t in all_trips if t.duration_minutes]
+            avg_dur     = round(sum(all_durs) / len(all_durs), 1) if all_durs else 0.0
+            leaderboard.append({
+                "emp": emp,
+                "total": total,
+                "on_time": on_time,
+                "on_time_pct": round(on_time / max(total, 1) * 100, 1),
+                "month_total": month_total,
+                "month_score": month_score,
+                "avg_dur": avg_dur,
+            })
+        leaderboard.sort(key=lambda x: x["month_score"], reverse=True)
+        return render_template("delivery_leaderboard.html",
+                               leaderboard=leaderboard,
+                               current_month=today.strftime("%B %Y"),
+                               today=today)
+    except Exception as e:
+        logger.error(f"delivery_leaderboard: {e}")
+        flash("Error loading leaderboard.", "danger")
+        return redirect(url_for("dashboard"))
+
+
+@app.route("/admin/delivery")
+@admin_required
+def admin_delivery():
+    """Admin panel: all delivery assignments and trips."""
+    try:
+        today      = date.today()
+        cutoff_30  = today - timedelta(days=30)
+        assignments = (
+            DeliveryAssignment.query
+            .order_by(DeliveryAssignment.assigned_at.desc())
+            .limit(100).all()
+        )
+        trips = (
+            DeliveryTrip.query
+            .filter(DeliveryTrip.trip_date >= cutoff_30)
+            .order_by(DeliveryTrip.created_at.desc())
+            .all()
+        )
+        trip_map  = {t.assignment_id: t for t in trips}
+        all_emp   = Employee.query.all()
+        emp_map   = {e.id: e for e in all_emp}
+        delivery_staff = [e for e in all_emp if e.staff_type == "delivery"]
+
+        leaderboard = []
+        for emp in delivery_staff:
+            total    = DeliveryTrip.query.filter_by(emp_id=emp.id, status="completed").count()
+            on_time  = DeliveryTrip.query.filter_by(emp_id=emp.id, status="completed", is_on_time=True).count()
+            leaderboard.append({"emp": emp, "total": total, "on_time": on_time,
+                                 "on_time_pct": round(on_time / max(total, 1) * 100, 1)})
+        leaderboard.sort(key=lambda x: x["total"], reverse=True)
+
+        return render_template("admin_delivery.html",
+                               assignments=assignments, trip_map=trip_map,
+                               emp_map=emp_map, leaderboard=leaderboard,
+                               today=today, current_month=today.strftime("%B %Y"))
+    except Exception as e:
+        logger.error(f"admin_delivery: {e}")
+        flash("Error loading delivery dashboard.", "danger")
+        return redirect(url_for("admin_dashboard"))
 
 
 # ─── APScheduler Setup ────────────────────────────────────────────────────────
