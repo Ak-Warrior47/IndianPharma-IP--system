@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Delivery Leaderboard | Pharma IP System</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&family=DM+Serif+Display&display=swap" rel="stylesheet">
+<style>
+*, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+:root {
+  --blue:      #1d4ed8;
+  --blue-dark: #1e3a8a;
+  --blue-lite: #dbeafe;
+  --text:      #0f172a;
+  --muted:     #64748b;
+  --border:    #c7d9f5;
+  --bg:        #f8fafc;
+}
+body {
+  font-family: 'DM Sans', sans-serif;
+  background: var(--bg);
+  min-height: 100vh;
+  color: var(--text);
+}
+.hero {
+  background: linear-gradient(135deg, #060d1f 0%, #0e1f45 55%, #060d1f 100%);
+  padding: 36px 32px 32px;
+  position: relative;
+  overflow: hidden;
+  border-bottom: 1px solid rgba(99,179,237,0.15);
+}
+.hero::before {
+  content: ''; position: absolute; inset: 0; pointer-events: none;
+  background:
+    radial-gradient(ellipse 60% 80% at 0% 50%, rgba(29,78,216,0.35) 0%, transparent 60%),
+    radial-gradient(ellipse 40% 60% at 100% 30%, rgba(14,165,233,0.2) 0%, transparent 55%);
+}
+.hero-content { position: relative; z-index: 1; }
+.hero-title {
+  font-family: 'DM Serif Display', serif;
+  font-size: 28px;
+  color: #fff;
+  margin-bottom: 6px;
+}
+.hero-sub {
+  font-size: 14px;
+  color: rgba(255,255,255,0.6);
+}
+.back-link {
+  display: inline-block;
+  margin-top: 14px;
+  font-size: 13px;
+  color: #93c5fd;
+  text-decoration: none;
+  font-weight: 600;
+}
+.back-link:hover { color: #bfdbfe; }
+.container {
+  max-width: 900px;
+  margin: 0 auto;
+  padding: 28px 20px 60px;
+}
+.card {
+  background: #fff;
+  border-radius: 14px;
+  border: 1px solid var(--border);
+  box-shadow: 0 1px 4px rgba(29,78,216,0.06);
+  padding: 24px;
+  margin-bottom: 24px;
+}
+.section-label {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  margin-bottom: 16px;
+}
+table { width: 100%; border-collapse: collapse; }
+th {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: .5px;
+  padding: 8px 12px;
+  background: #f8fafc;
+  border-bottom: 1.5px solid var(--border);
+  text-align: left;
+}
+td {
+  padding: 12px 12px;
+  font-size: 13px;
+  color: var(--text);
+  border-bottom: 1px solid rgba(199,217,245,0.4);
+  vertical-align: middle;
+}
+tr:last-child td { border-bottom: none; }
+tr:hover td { background: rgba(219,234,254,0.15); }
+.rank-cell {
+  font-size: 18px;
+  text-align: center;
+  width: 48px;
+}
+.emp-name {
+  font-weight: 700;
+  font-size: 14px;
+}
+.pct-badge {
+  display: inline-block;
+  padding: 3px 9px;
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 700;
+}
+.pct-green { background: #dcfce7; color: #166534; }
+.pct-yellow { background: #fef9c3; color: #854d0e; }
+.pct-red { background: #fee2e2; color: #991b1b; }
+.score-num {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--blue);
+}
+.empty-state {
+  padding: 48px 20px;
+  text-align: center;
+  color: var(--muted);
+  font-size: 14px;
+}
+</style>
+</head>
+<body>
+
+<div class="hero">
+  <div class="hero-content">
+    <div class="hero-title">Delivery Leaderboard</div>
+    <div class="hero-sub">{{ current_month }} — GPS-tracked delivery performance</div>
+    <a href="{{ url_for('dashboard') }}" class="back-link">← Back to Dashboard</a>
+  </div>
+</div>
+
+<div class="container">
+  <div class="card">
+    <div class="section-label">This Month's Rankings — {{ current_month }}</div>
+    {% if leaderboard %}
+    <div style="overflow-x:auto;">
+      <table>
+        <thead>
+          <tr>
+            <th style="text-align:center;">Rank</th>
+            <th>Employee</th>
+            <th>This Month</th>
+            <th>On-Time %</th>
+            <th>Total All-Time</th>
+            <th>Avg Duration</th>
+            <th>Month Score</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for row in leaderboard %}
+          {% set loop_index = loop.index %}
+          <tr>
+            <td class="rank-cell">
+              {% if loop_index == 1 %}
+                <span title="Gold">🥇</span>
+              {% elif loop_index == 2 %}
+                <span title="Silver">🥈</span>
+              {% elif loop_index == 3 %}
+                <span title="Bronze">🥉</span>
+              {% else %}
+                <span style="font-size:13px;color:var(--muted);font-weight:700;">{{ loop_index }}</span>
+              {% endif %}
+            </td>
+            <td>
+              <div class="emp-name">{{ row.emp.name }}</div>
+              <div style="font-size:11px;color:var(--muted);margin-top:2px;">{{ row.emp.staff_type | capitalize }}</div>
+            </td>
+            <td>
+              <strong>{{ row.month_total }}</strong>
+              <span style="font-size:11px;color:var(--muted);"> deliveries</span>
+            </td>
+            <td>
+              {% set pct = row.on_time_pct %}
+              <span class="pct-badge {% if pct >= 90 %}pct-green{% elif pct >= 70 %}pct-yellow{% else %}pct-red{% endif %}">
+                {{ pct }}%
+              </span>
+            </td>
+            <td>{{ row.total }}</td>
+            <td>
+              {% if row.avg_dur %}
+                {{ row.avg_dur }} min
+              {% else %}
+                <span style="color:var(--muted);">—</span>
+              {% endif %}
+            </td>
+            <td>
+              <span class="score-num">{{ row.month_score }}</span>
+              <span style="font-size:11px;color:var(--muted);"> pts</span>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <div class="empty-state">No delivery staff found. Ask admin to add delivery employees.</div>
+    {% endif %}
+  </div>
+
+  <div class="card">
+    <div class="section-label">Scoring Guide</div>
+    <div style="display:flex;flex-wrap:wrap;gap:14px;">
+      <div style="flex:1;min-width:180px;padding:14px;background:#f8fafc;border-radius:10px;border:1px solid var(--border);">
+        <div style="font-size:22px;margin-bottom:6px;">+10</div>
+        <div style="font-size:13px;font-weight:700;color:var(--text);">Base Completion</div>
+        <div style="font-size:12px;color:var(--muted);margin-top:3px;">Each completed delivery</div>
+      </div>
+      <div style="flex:1;min-width:180px;padding:14px;background:#f0fdf4;border-radius:10px;border:1px solid #86efac;">
+        <div style="font-size:22px;margin-bottom:6px;">+20</div>
+        <div style="font-size:13px;font-weight:700;color:#166534;">On-Time Bonus</div>
+        <div style="font-size:12px;color:#15803d;margin-top:3px;">Delivered within 60 minutes</div>
+      </div>
+      <div style="flex:1;min-width:180px;padding:14px;background:#eff6ff;border-radius:10px;border:1px solid #93c5fd;">
+        <div style="font-size:22px;margin-bottom:6px;">+5</div>
+        <div style="font-size:13px;font-weight:700;color:#1e40af;">Speed Bonus</div>
+        <div style="font-size:12px;color:#1d4ed8;margin-top:3px;">Delivered in under 30 minutes</div>
+      </div>
+    </div>
+  </div>
+
+</div>
+</body>
+</html>
