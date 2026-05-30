@@ -1517,7 +1517,9 @@ function _doConfirm(assignmentId, lat, lng, name, company, note, btn) {
 // ─── End Delivery GPS tracking ───────────────────────────────────────────────
 
 // ─── Leaflet live delivery maps (route + ETA + live tracking) ─────────────────
-var _deliveryMaps = {};   // assignmentId -> { map, myMarker, routeLine, destLat, destLng, watchId, arrived }
+var TOMTOM_KEY = "{{ tomtom_key }}";   // empty → falls back to free OSRM (no traffic)
+var ROUTE_REFRESH_MS = 30000;          // throttle traffic recalcs to 1 per 30s (saves quota)
+var _deliveryMaps = {};   // assignmentId -> { map, myMarker, routeLine, destLat, destLng, watchId, arrived, lastRouteAt }
 
 function _fmtDuration(sec) {
   if (sec == null) return '—';
@@ -1532,30 +1534,68 @@ function _fmtDist(m) {
   return (m / 1000).toFixed(1) + ' km';
 }
 
-// Fetch a road route from OSRM (free, no key) and draw it + update ETA/distance
-function updateDeliveryRoute(assignmentId, fromLat, fromLng) {
+function _applyRoute(assignmentId, coords, durationSec, distM, withTraffic) {
   var ctx = _deliveryMaps[assignmentId];
   if (!ctx) return;
+  var infoBar = document.getElementById('route-info-' + assignmentId);
+  if (infoBar) infoBar.style.display = 'flex';
+  var etaEl  = document.getElementById('route-eta-'  + assignmentId);
+  var distEl = document.getElementById('route-dist-' + assignmentId);
+  if (etaEl)  etaEl.textContent  = _fmtDuration(durationSec) + (withTraffic ? ' (traffic)' : '');
+  if (distEl) distEl.textContent = _fmtDist(distM);
+  if (ctx.routeLine) ctx.map.removeLayer(ctx.routeLine);
+  ctx.routeLine = L.polyline(coords, {color: '#1d4ed8', weight: 5, opacity: 0.78}).addTo(ctx.map);
+  ctx.map.fitBounds(ctx.routeLine.getBounds(), {padding: [30, 30]});
+}
+
+// TomTom routing (live traffic). Throttled by ROUTE_REFRESH_MS to conserve free quota.
+function _routeTomTom(assignmentId, fromLat, fromLng) {
+  var ctx = _deliveryMaps[assignmentId];
+  var url = 'https://api.tomtom.com/routing/1/calculateRoute/' +
+            fromLat + ',' + fromLng + ':' + ctx.destLat + ',' + ctx.destLng +
+            '/json?key=' + encodeURIComponent(TOMTOM_KEY) +
+            '&traffic=true&travelMode=car&routeType=fastest';
+  return fetch(url).then(function(r){ return r.json(); }).then(function(data) {
+    if (!data.routes || !data.routes.length) throw new Error('no route');
+    var route = data.routes[0];
+    var summary = route.summary || {};
+    var coords = [];
+    (route.legs || []).forEach(function(leg) {
+      (leg.points || []).forEach(function(p){ coords.push([p.latitude, p.longitude]); });
+    });
+    // travelTimeInSeconds already includes live traffic delay
+    _applyRoute(assignmentId, coords, summary.travelTimeInSeconds, summary.lengthInMeters, true);
+  });
+}
+
+// OSRM routing (free, no key, no live traffic) — fallback
+function _routeOSRM(assignmentId, fromLat, fromLng) {
+  var ctx = _deliveryMaps[assignmentId];
   var url = 'https://router.project-osrm.org/route/v1/driving/' +
             fromLng + ',' + fromLat + ';' + ctx.destLng + ',' + ctx.destLat +
             '?overview=full&geometries=geojson';
-  fetch(url).then(function(r){ return r.json(); }).then(function(data) {
-    var infoBar = document.getElementById('route-info-' + assignmentId);
-    if (infoBar) infoBar.style.display = 'flex';
-    if (data.routes && data.routes.length) {
-      var route = data.routes[0];
-      var etaEl  = document.getElementById('route-eta-'  + assignmentId);
-      var distEl = document.getElementById('route-dist-' + assignmentId);
-      if (etaEl)  etaEl.textContent  = _fmtDuration(route.duration);
-      if (distEl) distEl.textContent = _fmtDist(route.distance);
-      // Draw the road geometry
-      var coords = route.geometry.coordinates.map(function(c){ return [c[1], c[0]]; });
-      if (ctx.routeLine) ctx.map.removeLayer(ctx.routeLine);
-      ctx.routeLine = L.polyline(coords, {color: '#1d4ed8', weight: 5, opacity: 0.75}).addTo(ctx.map);
-      ctx.map.fitBounds(ctx.routeLine.getBounds(), {padding: [30, 30]});
-    }
-  }).catch(function(){
-    // OSRM failed — fall back to straight dashed line
+  return fetch(url).then(function(r){ return r.json(); }).then(function(data) {
+    if (!data.routes || !data.routes.length) throw new Error('no route');
+    var route = data.routes[0];
+    var coords = route.geometry.coordinates.map(function(c){ return [c[1], c[0]]; });
+    _applyRoute(assignmentId, coords, route.duration, route.distance, false);
+  });
+}
+
+// Update the route + ETA. force=true bypasses the throttle (initial load / arrival).
+function updateDeliveryRoute(assignmentId, fromLat, fromLng, force) {
+  var ctx = _deliveryMaps[assignmentId];
+  if (!ctx) return;
+  var now = Date.now();
+  if (!force && ctx.lastRouteAt && (now - ctx.lastRouteAt) < ROUTE_REFRESH_MS) return;
+  ctx.lastRouteAt = now;
+
+  var routePromise = (TOMTOM_KEY && TOMTOM_KEY.length > 5)
+      ? _routeTomTom(assignmentId, fromLat, fromLng).catch(function(){ return _routeOSRM(assignmentId, fromLat, fromLng); })
+      : _routeOSRM(assignmentId, fromLat, fromLng);
+
+  routePromise.catch(function(){
+    // Both failed — straight dashed line fallback
     var infoBar = document.getElementById('route-info-' + assignmentId);
     if (infoBar) infoBar.style.display = 'flex';
     if (ctx.routeLine) ctx.map.removeLayer(ctx.routeLine);
@@ -1634,10 +1674,10 @@ document.addEventListener('DOMContentLoaded', function() {
       myMarker: null, routeLine: null, watchId: null, arrived: false
     };
 
-    // Initial route from current position (one-shot)
+    // Initial route from current position (one-shot, force a fresh route)
     if (navigator.geolocation) {
       navigator.geolocation.getCurrentPosition(function(pos) {
-        updateDeliveryRoute(assignmentId, pos.coords.latitude, pos.coords.longitude);
+        updateDeliveryRoute(assignmentId, pos.coords.latitude, pos.coords.longitude, true);
       }, function(){}, {enableHighAccuracy: true, timeout: 8000});
     }
 

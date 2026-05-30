@@ -2183,6 +2183,7 @@ def dashboard():
             trip_map=trip_map,
             store_lat=STORE_LAT,
             store_lng=STORE_LNG,
+            tomtom_key=TOMTOM_API_KEY,
         )
     except Exception as e:
         logger.error(f"Dashboard error: {e}")
@@ -2198,7 +2199,7 @@ def dashboard():
             today_multitask=[], today_db_note=None,
             primary_staff_type="picker", secondary_staff_type=None,
             my_assignments=[], purchaser_delivery_staff=[], my_deliveries_today=[],
-            trip_map={}, store_lat=0.0, store_lng=0.0)
+            trip_map={}, store_lat=0.0, store_lng=0.0, tomtom_key="")
 
 
 @app.route("/admin_dashboard")
@@ -4293,6 +4294,7 @@ STORE_LAT = float(os.environ.get("STORE_LAT", "0.0"))
 STORE_LNG = float(os.environ.get("STORE_LNG", "0.0"))
 STORE_RADIUS_M = 400    # meters — must be within this to start a trip
 ARRIVAL_RADIUS_M = 200  # meters — must be within this to confirm delivery
+TOMTOM_API_KEY = os.environ.get("TOMTOM_API_KEY", "")  # free key → live-traffic routing
 
 
 def _haversine_m(lat1, lng1, lat2, lng2):
@@ -4311,7 +4313,7 @@ def geocode_address(address):
     try:
         resp = _requests.get(
             "https://nominatim.openstreetmap.org/search",
-            params={"q": address, "format": "json", "limit": 1},
+            params={"q": address, "format": "json", "limit": 1, "countrycodes": "in"},
             headers={"User-Agent": "IndianPharmaKPI/1.0 (delivery-geocoder)"},
             timeout=6,
         )
