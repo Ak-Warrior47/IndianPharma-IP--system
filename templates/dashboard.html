@@ -829,7 +829,22 @@ table.htable tbody tr:hover td { background: var(--bg); }
           <span style="font-size:11px;font-weight:700;padding:3px 10px;background:#dbeafe;color:#1e40af;border-radius:6px;border:1px solid #93c5fd;">In Transit</span>
           {% endif %}
         </div>
-        <div style="font-size:12px;color:var(--muted);margin-bottom:6px;"><strong>Destination:</strong> {{ assignment.destination_addr }}</div>
+        <div style="font-size:12px;color:var(--muted);margin-bottom:10px;display:flex;align-items:flex-start;gap:10px;flex-wrap:wrap;">
+          <div><strong>Destination:</strong> {{ assignment.destination_addr }}</div>
+          {% if assignment.destination_lat and assignment.destination_lng %}
+          <a href="https://www.google.com/maps/dir/?api=1&destination={{ assignment.destination_lat }},{{ assignment.destination_lng }}"
+             target="_blank" rel="noopener"
+             style="display:inline-flex;align-items:center;gap:5px;padding:4px 12px;background:#1d4ed8;color:#fff;border-radius:7px;font-size:11px;font-weight:700;text-decoration:none;white-space:nowrap;">
+            📍 Navigate
+          </a>
+          {% else %}
+          <a href="https://www.google.com/maps/dir/?api=1&destination={{ assignment.destination_addr | urlencode }}"
+             target="_blank" rel="noopener"
+             style="display:inline-flex;align-items:center;gap:5px;padding:4px 12px;background:#1d4ed8;color:#fff;border-radius:7px;font-size:11px;font-weight:700;text-decoration:none;white-space:nowrap;">
+            📍 Navigate
+          </a>
+          {% endif %}
+        </div>
         {% if assignment.recipient_name %}
         <div style="font-size:12px;color:var(--muted);margin-bottom:6px;"><strong>Recipient:</strong> {{ assignment.recipient_name }}{% if assignment.company_name %} — {{ assignment.company_name }}{% endif %}</div>
         {% endif %}
