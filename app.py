@@ -393,16 +393,45 @@ class MonthlyReportArchive(db.Model):
 
 
 class MultitaskEntry(db.Model):
-    """Secondary-role work logged by staff on the same day (multitasking)."""
+    """Secondary-role work logged by staff on the same day (multitasking).
+    Captures the chosen Role-2's own KPI parameters so the admin sees a full
+    report for both the default role (KPIEntry) and the multitask role."""
     __tablename__ = "multitask_entries"
     id             = db.Column(db.Integer, primary_key=True)
     emp_id         = db.Column(db.Integer, db.ForeignKey("employees.id", ondelete="CASCADE"), nullable=False)
     entry_date     = db.Column(db.Date, nullable=False)
     secondary_type = db.Column(db.String(20), nullable=False)  # picker/checker/purchaser/delivery/billing
+    # Role-specific KPI parameters (mirror KPIEntry fields; only relevant ones used per role)
+    sales_bills_open     = db.Column(db.Integer, default=0)
+    picked               = db.Column(db.Integer, default=0)
+    missed               = db.Column(db.Integer, default=0)
+    checked              = db.Column(db.Integer, default=0)
+    errors_found         = db.Column(db.Integer, default=0)
+    packing_done         = db.Column(db.Integer, default=0)
+    cs_sales_open        = db.Column(db.Integer, default=0)
+    total_bills_received = db.Column(db.Integer, default=0)
+    bills_received       = db.Column(db.Integer, default=0)
+    pending_bills_manual = db.Column(db.Integer, default=0)
     quantity       = db.Column(db.Integer, default=0)
     note           = db.Column(db.String(300), nullable=True)
     created_at     = db.Column(db.DateTime, default=datetime.utcnow)
-    __table_args__ = (db.Index("idx_mt_emp_date", "emp_id", "entry_date"),)
+    __table_args__ = (
+        db.UniqueConstraint("emp_id", "entry_date", "secondary_type", name="_mt_emp_date_role_uc"),
+        db.Index("idx_mt_emp_date", "emp_id", "entry_date"),
+    )
+
+    @property
+    def summary(self):
+        """Short human-readable summary of the multitask role's parameters."""
+        st = self.secondary_type
+        if st == "picker":
+            return f"{self.picked or 0} picked / {self.missed or 0} missed · {self.sales_bills_open or 0} bills"
+        if st == "checker":
+            return f"{self.checked or 0} checked / {self.errors_found or 0} urgent · {self.bills_received or 0} bills"
+        if st == "purchaser":
+            return f"{self.checked or 0} PO checked · {self.sales_bills_open or 0} PO bills · {self.errors_found or 0} items"
+        # delivery / billing / packing / other
+        return f"{self.quantity or 0} done"
 
 
 class DeliveryBillerNote(db.Model):
@@ -1270,6 +1299,16 @@ def run_migrations():
                     emp_id INTEGER NOT NULL REFERENCES employees(id) ON DELETE CASCADE,
                     entry_date DATE NOT NULL,
                     secondary_type VARCHAR(20) NOT NULL,
+                    sales_bills_open INTEGER DEFAULT 0,
+                    picked INTEGER DEFAULT 0,
+                    missed INTEGER DEFAULT 0,
+                    checked INTEGER DEFAULT 0,
+                    errors_found INTEGER DEFAULT 0,
+                    packing_done INTEGER DEFAULT 0,
+                    cs_sales_open INTEGER DEFAULT 0,
+                    total_bills_received INTEGER DEFAULT 0,
+                    bills_received INTEGER DEFAULT 0,
+                    pending_bills_manual INTEGER DEFAULT 0,
                     quantity INTEGER DEFAULT 0,
                     note VARCHAR(300),
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)""",
@@ -1291,6 +1330,27 @@ def run_migrations():
                 except Exception as te:
                     db.session.rollback()
                     logger.warning(f"New table migration skipped: {te}")
+            # Add multitask KPI-parameter columns to an existing multitask_entries table
+            for mt_col, mt_type in [
+                ("sales_bills_open", "INTEGER DEFAULT 0"),
+                ("picked", "INTEGER DEFAULT 0"),
+                ("missed", "INTEGER DEFAULT 0"),
+                ("checked", "INTEGER DEFAULT 0"),
+                ("errors_found", "INTEGER DEFAULT 0"),
+                ("packing_done", "INTEGER DEFAULT 0"),
+                ("cs_sales_open", "INTEGER DEFAULT 0"),
+                ("total_bills_received", "INTEGER DEFAULT 0"),
+                ("bills_received", "INTEGER DEFAULT 0"),
+                ("pending_bills_manual", "INTEGER DEFAULT 0"),
+            ]:
+                try:
+                    db.session.execute(db.text(
+                        f"ALTER TABLE multitask_entries ADD COLUMN IF NOT EXISTS {mt_col} {mt_type}"
+                    ))
+                    db.session.commit()
+                except Exception as mce:
+                    db.session.rollback()
+                    logger.warning(f"multitask_entries.{mt_col} migration skipped: {mce}")
         else:
             # SQLite doesn't support IF NOT EXISTS on ALTER TABLE
             import sqlite3
@@ -1381,9 +1441,27 @@ def run_migrations():
                     emp_id INTEGER NOT NULL REFERENCES employees(id) ON DELETE CASCADE,
                     entry_date DATE NOT NULL,
                     secondary_type VARCHAR(20) NOT NULL,
+                    sales_bills_open INTEGER DEFAULT 0,
+                    picked INTEGER DEFAULT 0,
+                    missed INTEGER DEFAULT 0,
+                    checked INTEGER DEFAULT 0,
+                    errors_found INTEGER DEFAULT 0,
+                    packing_done INTEGER DEFAULT 0,
+                    cs_sales_open INTEGER DEFAULT 0,
+                    total_bills_received INTEGER DEFAULT 0,
+                    bills_received INTEGER DEFAULT 0,
+                    pending_bills_manual INTEGER DEFAULT 0,
                     quantity INTEGER DEFAULT 0,
                     note VARCHAR(300),
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)""")
+                # Add columns to an existing table (older deploys)
+                cursor.execute("PRAGMA table_info(multitask_entries)")
+                mt_existing = [row[1] for row in cursor.fetchall()]
+                for mt_col in ["sales_bills_open", "picked", "missed", "checked",
+                               "errors_found", "packing_done", "cs_sales_open",
+                               "total_bills_received", "bills_received", "pending_bills_manual"]:
+                    if mt_col not in mt_existing:
+                        cursor.execute(f"ALTER TABLE multitask_entries ADD COLUMN {mt_col} INTEGER DEFAULT 0")
                 logger.info("✅ SQLite multitask_entries ensured")
             except Exception as mte:
                 logger.warning(f"SQLite multitask_entries: {mte}")
@@ -1545,6 +1623,56 @@ def switch_role():
     return redirect(url_for("dashboard"))
 
 
+def _save_multitask_entry(emp_id, entry_date, primary_role):
+    """Save (or update) the staff member's multitask Role-2 report for the day.
+    Reads per-role mt_* fields from the request form. The chosen role can differ
+    each day. No-ops cleanly if nothing meaningful was entered."""
+    role = (request.form.get("multitask_role", "") or "").strip()
+    if not role or role == primary_role:
+        return
+    def mi(k):
+        try: return max(0, int(request.form.get(k, 0) or 0))
+        except Exception: return 0
+    note = (request.form.get("multitask_note", "") or "").strip()[:300]
+
+    # Map per-role form fields → unified MultitaskEntry columns
+    vals = dict(sales_bills_open=0, picked=0, missed=0, checked=0, errors_found=0,
+                packing_done=0, cs_sales_open=0, total_bills_received=0,
+                bills_received=0, pending_bills_manual=0, quantity=0)
+    if role == "picker":
+        vals.update(total_bills_received=mi("mt_p_total_bills"),
+                    sales_bills_open=mi("mt_p_sbo"), picked=mi("mt_p_picked"),
+                    missed=mi("mt_p_missed"), cs_sales_open=mi("mt_p_cso"),
+                    packing_done=mi("mt_p_packing"))
+    elif role == "checker":
+        vals.update(bills_received=mi("mt_c_bills_received"),
+                    pending_bills_manual=mi("mt_c_pending"),
+                    sales_bills_open=mi("mt_c_sbo"), cs_sales_open=mi("mt_c_cso"),
+                    checked=mi("mt_c_checked"), errors_found=mi("mt_c_errors"))
+    elif role == "purchaser":
+        vals.update(sales_bills_open=mi("mt_pu_sbo"), checked=mi("mt_pu_checked"),
+                    picked=mi("mt_pu_picked"), errors_found=mi("mt_pu_items"),
+                    cs_sales_open=mi("mt_pu_cso"), packing_done=mi("mt_pu_packing"))
+    else:  # delivery / billing / packing / other
+        vals.update(quantity=mi("mt_s_quantity"))
+
+    # Skip if absolutely nothing was filled in
+    if not any(vals.values()) and not note:
+        return
+
+    # Upsert on (emp, date, role) so re-submitting the same role updates it
+    mt = MultitaskEntry.query.filter_by(
+        emp_id=emp_id, entry_date=entry_date, secondary_type=role
+    ).first()
+    if not mt:
+        mt = MultitaskEntry(emp_id=emp_id, entry_date=entry_date, secondary_type=role)
+        db.session.add(mt)
+    for k, v in vals.items():
+        setattr(mt, k, v)
+    mt.note = note or None
+    db.session.commit()
+
+
 @app.route("/dashboard", methods=["GET", "POST"])
 @login_required
 def dashboard():
@@ -1599,6 +1727,17 @@ def dashboard():
                 primary_staff_type=session.get("primary_staff_type") or staff_type,
                 secondary_staff_type=session.get("secondary_staff_type"),
             )
+
+        # ── Independent multitask submission (Role 2 can be filled/changed any time) ──
+        if request.method == "POST" and request.form.get("multitask_only") == "1":
+            try:
+                _save_multitask_entry(emp_id, today, staff_type)
+                flash("✅ Multitask role report saved.", "success")
+            except Exception as mte:
+                db.session.rollback()
+                logger.warning(f"Independent multitask save: {mte}")
+                flash("Error saving multitask report.", "danger")
+            return redirect(url_for("dashboard"))
 
         if request.method == "POST" and not today_entry:
             is_sunday = today.weekday() == 6
@@ -1727,21 +1866,9 @@ def dashboard():
                     flash("✅ Metrics recorded successfully.", "success")
                     today_entry = ne
 
-                    # ── Multitask: save secondary role work ───────────────
+                    # ── Multitask: save secondary role work with its own params ──
                     try:
-                        multitask_role = request.form.get("multitask_role", "").strip()
-                        multitask_qty  = max(0, int(request.form.get("multitask_qty", 0) or 0))
-                        multitask_note = request.form.get("multitask_note", "").strip()[:300]
-                        if multitask_role and multitask_role != staff_type and (multitask_qty > 0 or multitask_note):
-                            mt = MultitaskEntry(
-                                emp_id=emp_id,
-                                entry_date=today,
-                                secondary_type=multitask_role,
-                                quantity=multitask_qty,
-                                note=multitask_note or None,
-                            )
-                            db.session.add(mt)
-                            db.session.commit()
+                        _save_multitask_entry(emp_id, today, staff_type)
                     except Exception as mte:
                         db.session.rollback()
                         logger.warning(f"MultitaskEntry save: {mte}")
@@ -2004,6 +2131,18 @@ def admin_dashboard():
         except Exception:
             recent_db_notes = []
 
+        # Multitask (Role 2) reports — recent 30 days
+        try:
+            cutoff_mt = today - timedelta(days=30)
+            recent_multitask = (
+                MultitaskEntry.query
+                .filter(MultitaskEntry.entry_date >= cutoff_mt)
+                .order_by(MultitaskEntry.entry_date.desc(), MultitaskEntry.created_at.desc())
+                .all()
+            )
+        except Exception:
+            recent_multitask = []
+
         # Feature 5: Badges for admin
         try:
             all_badges = Badge.query.all()
@@ -2030,6 +2169,7 @@ def admin_dashboard():
             emp_map=emp_map,
             all_badges=all_badges,
             recent_db_notes=recent_db_notes,
+            recent_multitask=recent_multitask,
         )
     except Exception as e:
         logger.error(f"Admin dashboard error: {e}")
@@ -2045,7 +2185,7 @@ def admin_dashboard():
                                needs_attention=[], stale_validations_count=0, notes_by_emp={},
                                all_announcements=[], ann_read_counts={}, total_staff_count=0,
                                pending_past_requests=[], emp_map={}, all_badges=[],
-                               recent_db_notes=[])
+                               recent_db_notes=[], recent_multitask=[])
 
 
 @app.route("/staff/<int:emp_id>")

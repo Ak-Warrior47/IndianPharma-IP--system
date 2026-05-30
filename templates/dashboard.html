@@ -230,13 +230,7 @@ table.htable tbody tr:hover td { background: var(--bg); }
     <span class="nav-pill">{{ staff_type|title }}</span>
   </div>
   <div class="nav-right">
-    {% if secondary_staff_type %}
-    <form method="POST" action="/switch_role" style="display:flex;align-items:center;gap:6px;margin:0;background:linear-gradient(135deg,#ede9fe,#ddd6fe);border:1px solid #c4b5fd;border-radius:8px;padding:4px 8px;">
-      <span style="font-size:11px;font-weight:700;color:#6d28d9;text-transform:uppercase;letter-spacing:.5px;">Role:</span>
-      <button type="submit" name="role" value="{{ primary_staff_type }}" style="padding:4px 10px;border:none;border-radius:6px;font-size:11px;font-weight:700;font-family:inherit;cursor:pointer;{% if staff_type == primary_staff_type %}background:#6d28d9;color:#fff;{% else %}background:transparent;color:#6d28d9;{% endif %}">{{ primary_staff_type|title }} (1)</button>
-      <button type="submit" name="role" value="{{ secondary_staff_type }}" style="padding:4px 10px;border:none;border-radius:6px;font-size:11px;font-weight:700;font-family:inherit;cursor:pointer;{% if staff_type == secondary_staff_type %}background:#6d28d9;color:#fff;{% else %}background:transparent;color:#6d28d9;{% endif %}">{{ secondary_staff_type|title }} (2)</button>
-    </form>
-    {% endif %}
+    <span class="nav-pill" style="background:#ede9fe;color:#6d28d9;border-color:#ddd6fe;">Role 1: {{ (primary_staff_type or staff_type)|title }}</span>
     <span class="nav-user">{{ user_name }}</span>
     {% if unread_count and unread_count > 0 %}
     <span style="position:relative;display:inline-block;">
@@ -695,58 +689,105 @@ table.htable tbody tr:hover td { background: var(--bg); }
           placeholder="Any notes about today's shift — issues, highlights, etc."
           style="padding:10px 13px;border:1.5px solid var(--border);border-radius:9px;background:rgba(255,255,255,0.8);font-size:13px;font-family:'DM Sans',sans-serif;color:var(--text);resize:vertical;"></textarea>
       </div>
-      <!-- MULTITASKING SECTION -->
-      <div class="multitask-section" style="margin-bottom:16px;">
-        <label style="display:flex;align-items:center;gap:8px;font-size:13px;font-weight:600;color:var(--text);cursor:pointer;user-select:none;">
-          <input type="checkbox" id="multitask_toggle" onchange="toggleMultitask(this)" style="accent-color:var(--blue);width:16px;height:16px;">
-          I also did another task today (multitasking)
-        </label>
-        <div id="multitask_panel" style="display:none;margin-top:12px;padding:16px;background:rgba(245,243,255,0.8);border:1.5px solid #ddd6fe;border-radius:13px;">
-          <div style="font-size:11px;font-weight:700;color:#6d28d9;text-transform:uppercase;letter-spacing:.8px;margin-bottom:10px;">Secondary Task Details</div>
-          <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
-            <div class="field" style="margin:0;">
-              <label>Secondary Role</label>
-              <select name="multitask_role" id="multitask_role" style="padding:9px 12px;border:1.5px solid var(--border);border-radius:9px;font-size:13px;font-family:inherit;background:rgba(255,255,255,0.9);width:100%;">
-                <option value="">-- Select Role --</option>
-                {% if staff_type != 'picker' %}<option value="picker">Picker</option>{% endif %}
-                {% if staff_type != 'checker' %}<option value="checker">Checker</option>{% endif %}
-                {% if staff_type != 'purchaser' %}<option value="purchaser">Purchaser</option>{% endif %}
-                <option value="delivery">Delivery</option>
-                <option value="billing">Billing</option>
-                <option value="packing">Packing</option>
-                <option value="other">Other</option>
-              </select>
-            </div>
-            <div class="field" style="margin:0;">
-              <label>Qty / Items Done</label>
-              <input type="number" name="multitask_qty" min="0" value="0" style="padding:9px 12px;border:1.5px solid var(--border);border-radius:9px;font-size:13px;width:100%;background:rgba(255,255,255,0.9);">
-            </div>
-            <div class="field" style="margin:0;grid-column:span 2;">
-              <label>Brief Note (optional)</label>
-              <input type="text" name="multitask_note" maxlength="300" placeholder="e.g. Helped with checking from 2pm-4pm" style="padding:9px 12px;border:1.5px solid var(--border);border-radius:9px;font-size:13px;width:100%;background:rgba(255,255,255,0.9);">
-            </div>
-          </div>
-        </div>
-      </div>
-
       <button type="submit" class="btn-submit">Submit Today's Metrics</button>
     </form>
     {% endif %}
+  </div>
 
-    <!-- MULTITASK ENTRIES TODAY -->
+  {% if staff_type not in ('delivery', 'biller') %}
+  <!-- ════ MULTITASK (ROLE 2) REPORT — fill default role above, second role here ════ -->
+  <div class="card multitask-section" style="margin-bottom:20px;border-left:4px solid #7c3aed;">
+    <div class="section-label" style="display:flex;align-items:center;gap:10px;">
+      Multitask Role (Role 2) — Optional
+      <span style="font-size:10px;font-weight:700;padding:3px 9px;border-radius:20px;background:#ede9fe;color:#6d28d9;text-transform:uppercase;letter-spacing:.5px;">Changeable Daily</span>
+    </div>
+    <p style="font-size:12px;color:var(--muted);margin:-4px 0 14px;">Your default role is <strong>{{ (primary_staff_type or staff_type)|title }}</strong>. If you also worked a second role today, pick it and fill its numbers. You can choose a different Role 2 each day.</p>
+
     {% if today_multitask %}
-    <div style="margin-top:16px;padding:14px 16px;background:rgba(245,243,255,0.7);border:1.5px solid #ddd6fe;border-radius:13px;">
-      <div style="font-size:11px;font-weight:700;color:#6d28d9;text-transform:uppercase;letter-spacing:.8px;margin-bottom:8px;">Also Worked Today (Multitasking)</div>
+    <div style="margin-bottom:14px;padding:12px 14px;background:rgba(240,253,244,0.7);border:1.5px solid #bbf7d0;border-radius:11px;">
+      <div style="font-size:11px;font-weight:700;color:#15803d;text-transform:uppercase;letter-spacing:.7px;margin-bottom:6px;">Already logged today</div>
       {% for mt in today_multitask %}
-      <div style="display:flex;align-items:center;gap:10px;padding:8px 0;{% if not loop.last %}border-bottom:1px solid rgba(221,214,254,0.5);{% endif %}">
+      <div style="display:flex;align-items:center;gap:10px;padding:6px 0;{% if not loop.last %}border-bottom:1px solid rgba(187,247,208,0.6);{% endif %}">
         <span style="padding:3px 10px;background:#ede9fe;color:#6d28d9;border-radius:20px;font-size:11px;font-weight:700;text-transform:uppercase;">{{ mt.secondary_type }}</span>
-        <span style="font-size:13px;font-weight:600;color:var(--text);">{{ mt.quantity }} items</span>
+        <span style="font-size:13px;color:var(--text);">{{ mt.summary }}</span>
         {% if mt.note %}<span style="font-size:12px;color:var(--muted);">— {{ mt.note }}</span>{% endif %}
       </div>
       {% endfor %}
+      <div style="font-size:11px;color:var(--muted);margin-top:6px;">Re-submitting the same role below will update its numbers.</div>
     </div>
     {% endif %}
+
+    <form method="POST" autocomplete="off">
+      <input type="hidden" name="multitask_only" value="1">
+      <div class="field" style="margin-bottom:14px;max-width:320px;">
+        <label>Role 2 — Which role did you also work?</label>
+        <select name="multitask_role" id="multitask_role" onchange="showMultitaskFields(this.value)"
+          style="padding:9px 12px;border:1.5px solid var(--border);border-radius:9px;font-size:13px;font-family:inherit;background:rgba(255,255,255,0.9);width:100%;">
+          <option value="">— Select Role 2 —</option>
+          {% set sec = secondary_staff_type %}
+          {% if (primary_staff_type or staff_type) != 'picker' %}<option value="picker" {% if sec=='picker' %}selected{% endif %}>Picker</option>{% endif %}
+          {% if (primary_staff_type or staff_type) != 'checker' %}<option value="checker" {% if sec=='checker' %}selected{% endif %}>Checker</option>{% endif %}
+          {% if (primary_staff_type or staff_type) != 'purchaser' %}<option value="purchaser" {% if sec=='purchaser' %}selected{% endif %}>Purchaser</option>{% endif %}
+          <option value="delivery" {% if sec=='delivery' %}selected{% endif %}>Delivery</option>
+          <option value="billing" {% if sec=='billing' %}selected{% endif %}>Billing</option>
+          <option value="packing">Packing</option>
+          <option value="other">Other</option>
+        </select>
+      </div>
+
+      <!-- PICKER params -->
+      <div class="mt-fields" id="mt_picker" style="display:none;">
+        <div class="form-grid">
+          <div class="field"><label>Total Bills Received to Pick</label><input type="number" name="mt_p_total_bills" min="0" value="0"></div>
+          <div class="field"><label>Sales Bill Picked</label><input type="number" name="mt_p_sbo" min="0" value="0"></div>
+          <div class="field"><label>Items Picked</label><input type="number" name="mt_p_picked" min="0" value="0"></div>
+          <div class="field"><label>Items Missed</label><input type="number" name="mt_p_missed" min="0" value="0"></div>
+          <div class="field"><label>CS Sales Open</label><input type="number" name="mt_p_cso" min="0" value="0"></div>
+          <div class="field"><label>Packing Done</label><input type="number" name="mt_p_packing" min="0" value="0"></div>
+        </div>
+      </div>
+
+      <!-- CHECKER params -->
+      <div class="mt-fields" id="mt_checker" style="display:none;">
+        <div class="form-grid">
+          <div class="field"><label>Total Bills Received</label><input type="number" name="mt_c_bills_received" min="0" value="0"></div>
+          <div class="field"><label>Pending Bills (not checked)</label><input type="number" name="mt_c_pending" min="0" value="0"></div>
+          <div class="field"><label>Sales Bill Checked (Normal)</label><input type="number" name="mt_c_sbo" min="0" value="0"></div>
+          <div class="field"><label>SB Checked Urgent</label><input type="number" name="mt_c_cso" min="0" value="0"></div>
+          <div class="field"><label>Item Checked (Normal)</label><input type="number" name="mt_c_checked" min="0" value="0"></div>
+          <div class="field"><label>Urgent Item Checked</label><input type="number" name="mt_c_errors" min="0" value="0"></div>
+        </div>
+      </div>
+
+      <!-- PURCHASER params -->
+      <div class="mt-fields" id="mt_purchaser" style="display:none;">
+        <div class="form-grid">
+          <div class="field"><label>Total PO Bills Received</label><input type="number" name="mt_pu_sbo" min="0" value="0"></div>
+          <div class="field"><label>PO Bills Checked</label><input type="number" name="mt_pu_checked" min="0" value="0"></div>
+          <div class="field"><label>Purchase Bill Entry</label><input type="number" name="mt_pu_picked" min="0" value="0"></div>
+          <div class="field"><label>Number of Items</label><input type="number" name="mt_pu_items" min="0" value="0"></div>
+          <div class="field"><label>CS in Purchase Open</label><input type="number" name="mt_pu_cso" min="0" value="0"></div>
+          <div class="field"><label>CS in Purchase Received</label><input type="number" name="mt_pu_packing" min="0" value="0"></div>
+        </div>
+      </div>
+
+      <!-- SIMPLE (delivery/billing/packing/other) params -->
+      <div class="mt-fields" id="mt_simple" style="display:none;">
+        <div class="form-grid">
+          <div class="field"><label>Quantity Done (deliveries / bills / items)</label><input type="number" name="mt_s_quantity" min="0" value="0"></div>
+        </div>
+      </div>
+
+      <div class="field" style="margin-top:6px;">
+        <label>Note (optional)</label>
+        <input type="text" name="multitask_note" maxlength="300" placeholder="e.g. Helped with checking 2pm–4pm"
+          style="padding:9px 12px;border:1.5px solid var(--border);border-radius:9px;font-size:13px;width:100%;background:rgba(255,255,255,0.9);">
+      </div>
+
+      <button type="submit" class="btn-submit" style="margin-top:14px;background:linear-gradient(135deg,#7c3aed,#6d28d9);">Save Role 2 Report</button>
+    </form>
   </div>
+  {% endif %}
 
   <!-- DELIVERY / BILLER RECENT NOTES -->
   {% if staff_type in ('delivery', 'biller') and recent %}
@@ -1178,20 +1219,24 @@ document.addEventListener('DOMContentLoaded', function(){
   });
 });
 
-// Empty field warning before submit + disable button to prevent double-submit
-function toggleMultitask(cb) {
-  var panel = document.getElementById('multitask_panel');
-  if (!panel) return;
-  panel.style.display = cb.checked ? 'block' : 'none';
-  if (!cb.checked) {
-    var sel = document.getElementById('multitask_role');
-    if (sel) sel.value = '';
-    var qty = panel.querySelector('[name="multitask_qty"]');
-    if (qty) qty.value = '0';
-    var note = panel.querySelector('[name="multitask_note"]');
-    if (note) note.value = '';
+// Show the parameter block matching the selected Role 2
+function showMultitaskFields(role) {
+  document.querySelectorAll('.mt-fields').forEach(function(el){ el.style.display = 'none'; });
+  var target = null;
+  if (role === 'picker') target = 'mt_picker';
+  else if (role === 'checker') target = 'mt_checker';
+  else if (role === 'purchaser') target = 'mt_purchaser';
+  else if (role) target = 'mt_simple';
+  if (target) {
+    var el = document.getElementById(target);
+    if (el) el.style.display = 'block';
   }
 }
+// On load, reveal fields if a role is pre-selected (admin default secondary)
+document.addEventListener('DOMContentLoaded', function(){
+  var sel = document.getElementById('multitask_role');
+  if (sel && sel.value) showMultitaskFields(sel.value);
+});
 
 function validateAndSubmit(e){
   var form = e.target.tagName === 'FORM' ? e.target : document.querySelector('form[method="POST"]');

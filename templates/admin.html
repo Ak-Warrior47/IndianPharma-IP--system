@@ -602,6 +602,40 @@ var NOTES_BY_EMP = {
   </div>
   {% endif %}
 
+  <!-- MULTITASK (ROLE 2) REPORTS PANEL -->
+  {% if recent_multitask %}
+  <div class="card anim-fade-in" style="margin-bottom:20px;border-left:4px solid #7c3aed;">
+    <div class="card-header">
+      <div class="card-title">Multitask (Role 2) Reports
+        <span class="cnt" style="background:#f5f3ff;color:#7c3aed;border-color:#ddd6fe;">{{ recent_multitask|length }} (30 days)</span>
+      </div>
+    </div>
+    <div style="overflow-x:auto;">
+      <table class="ptable" style="width:100%;">
+        <thead>
+          <tr>
+            <th>Staff</th><th>Date</th><th>Role 2</th><th>Report</th><th>Note</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for mt in recent_multitask %}
+          {% set me = emp_map.get(mt.emp_id) %}
+          <tr>
+            <td><strong>{{ me.name if me else 'Employee #' ~ mt.emp_id }}</strong>
+              {% if me %}<div style="font-size:11px;color:var(--muted);">Default: {{ me.staff_type|title }}</div>{% endif %}
+            </td>
+            <td>{{ mt.entry_date.strftime('%d %b %Y') }}</td>
+            <td><span style="padding:3px 10px;background:#ede9fe;color:#6d28d9;border-radius:20px;font-size:11px;font-weight:700;text-transform:uppercase;">{{ mt.secondary_type }}</span></td>
+            <td style="font-size:12px;color:var(--text);">{{ mt.summary }}</td>
+            <td style="font-size:12px;color:var(--muted);">{{ mt.note or '—' }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+  {% endif %}
+
   <!-- FEATURE 5: BADGE MANAGEMENT -->
   <div class="card" style="margin-bottom:20px;">
     <div class="card-header">
