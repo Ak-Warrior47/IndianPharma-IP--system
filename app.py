@@ -4306,10 +4306,27 @@ def _haversine_m(lat1, lng1, lat2, lng2):
     return 2 * R * math.asin(math.sqrt(a))
 
 
+def geocode_address(address):
+    """Convert a text address to (lat, lng) using Nominatim (free, no API key)."""
+    try:
+        resp = _requests.get(
+            "https://nominatim.openstreetmap.org/search",
+            params={"q": address, "format": "json", "limit": 1},
+            headers={"User-Agent": "IndianPharmaKPI/1.0 (delivery-geocoder)"},
+            timeout=6,
+        )
+        results = resp.json()
+        if results:
+            return float(results[0]["lat"]), float(results[0]["lon"])
+    except Exception as e:
+        logger.warning(f"geocode_address failed for '{address}': {e}")
+    return None, None
+
+
 @app.route("/delivery/assign", methods=["POST"])
 @login_required
 def delivery_assign():
-    """Purchaser creates a delivery assignment for a delivery employee."""
+    """Purchaser creates a delivery assignment — auto-geocodes the destination address."""
     emp_id = session.get("user_id")
     staff_type = session.get("staff_type", "")
     if staff_type not in ("purchaser",) and not session.get("is_admin"):
@@ -4323,8 +4340,6 @@ def delivery_assign():
         recipient_name   = request.form.get("recipient_name", "").strip()
         company_name     = request.form.get("company_name", "").strip()
         notes            = request.form.get("notes", "").strip()[:500]
-        dest_lat_s       = request.form.get("dest_lat", "").strip()
-        dest_lng_s       = request.form.get("dest_lng", "").strip()
 
         if not delivery_emp_id or not destination_addr or not package_desc:
             flash("Please fill in delivery employee, destination, and package description.", "warning")
@@ -4335,8 +4350,8 @@ def delivery_assign():
             flash("Selected employee is not a delivery staff member.", "warning")
             return redirect(url_for("dashboard"))
 
-        dest_lat = float(dest_lat_s) if dest_lat_s else None
-        dest_lng = float(dest_lng_s) if dest_lng_s else None
+        # Auto-geocode — runs in background; if it fails the assignment still saves
+        dest_lat, dest_lng = geocode_address(destination_addr)
 
         assignment = DeliveryAssignment(
             purchaser_id=emp_id,
@@ -4354,7 +4369,8 @@ def delivery_assign():
         db.session.add(assignment)
         db.session.commit()
         log_audit("delivery_assign", delivery_emp.name, f"Package: {package_desc[:50]}")
-        flash(f"✅ Delivery assigned to {delivery_emp.name}.", "success")
+        geo_note = " (map location set)" if dest_lat else " (map will use address text)"
+        flash(f"✅ Delivery assigned to {delivery_emp.name}.{geo_note}", "success")
     except Exception as e:
         db.session.rollback()
         logger.error(f"delivery_assign: {e}")
