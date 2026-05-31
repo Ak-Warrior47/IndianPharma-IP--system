@@ -1,5 +1,5 @@
 app = "indian-pharma-ip"
-primary_region = "sin"
+primary_region = "bom"
 
 [build]
 
