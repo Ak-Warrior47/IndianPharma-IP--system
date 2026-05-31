@@ -194,6 +194,10 @@ table.htable tbody tr:hover td { background: var(--bg); }
 .btn-submit:hover { transform:translateY(-2px); box-shadow:0 6px 16px rgba(29,78,216,0.22); }
 .multitask-section { animation: fadeSlideUp 0.35s cubic-bezier(.22,.68,0,1.2) both; }
 </style>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+      integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="">
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+        integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV/XN/WLs=" crossorigin=""></script>
 </head>
 <body>
 
@@ -700,7 +704,7 @@ table.htable tbody tr:hover td { background: var(--bg); }
         Delivered to <strong>{{ trip.delivered_to_name or 'N/A' }}</strong>
         {% if trip.delivered_to_company %} at {{ trip.delivered_to_company }}{% endif %}
         {% if trip.duration_minutes %} · {{ trip.duration_minutes }} min{% endif %}
-        {% if trip.is_on_time %}<span style="color:#16a34a;font-weight:700;"> On-time</span>{% else %}<span style="color:#dc2626;font-weight:700;"> Late</span>{% endif %}
+        {% if trip.is_on_time is none %}{% elif trip.is_on_time %}<span style="color:#16a34a;font-weight:700;"> On-time</span>{% else %}<span style="color:#dc2626;font-weight:700;"> Late</span>{% endif %}
       </div>
       {% endfor %}
     </div>
@@ -724,8 +728,41 @@ table.htable tbody tr:hover td { background: var(--bg); }
           <span style="font-size:11px;font-weight:700;padding:3px 10px;background:#dbeafe;color:#1e40af;border-radius:6px;border:1px solid #93c5fd;">In Transit</span>
           {% endif %}
         </div>
-        <div style="font-size:12px;color:var(--muted);margin-bottom:6px;">
-          <strong>Destination:</strong> {{ assignment.destination_addr }}
+        <!-- Destination + Google Maps link -->
+        <div style="margin-bottom:10px;">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;flex-wrap:wrap;gap:6px;">
+            <div style="font-size:12px;color:var(--muted);"><strong>Destination:</strong> {{ assignment.destination_addr }}</div>
+            {% if assignment.destination_lat and assignment.destination_lng %}
+            <a href="https://www.google.com/maps/dir/?api=1&destination={{ assignment.destination_lat }},{{ assignment.destination_lng }}"
+               target="_blank" rel="noopener"
+               style="display:inline-flex;align-items:center;gap:5px;padding:5px 14px;background:#1d4ed8;color:#fff;border-radius:8px;font-size:12px;font-weight:700;text-decoration:none;white-space:nowrap;">
+              🗺️ Open in Google Maps
+            </a>
+            {% else %}
+            <a href="https://www.google.com/maps/dir/?api=1&destination={{ assignment.destination_addr | urlencode }}"
+               target="_blank" rel="noopener"
+               style="display:inline-flex;align-items:center;gap:5px;padding:5px 14px;background:#1d4ed8;color:#fff;border-radius:8px;font-size:12px;font-weight:700;text-decoration:none;white-space:nowrap;">
+              🗺️ Open in Google Maps
+            </a>
+            {% endif %}
+          </div>
+          <!-- Live route info bar -->
+          {% if assignment.destination_lat and assignment.destination_lng %}
+          <div id="route-info-{{ assignment.id }}" style="display:none;align-items:center;gap:14px;margin-bottom:6px;padding:8px 12px;background:#eff6ff;border:1px solid #bfdbfe;border-radius:9px;flex-wrap:wrap;">
+            <span style="font-size:13px;font-weight:700;color:#1e40af;">⏱️ <span id="route-eta-{{ assignment.id }}">—</span></span>
+            <span style="font-size:13px;font-weight:700;color:#1e40af;">📏 <span id="route-dist-{{ assignment.id }}">—</span></span>
+            <span id="live-badge-{{ assignment.id }}" style="display:none;font-size:11px;font-weight:700;color:#16a34a;padding:2px 9px;background:#dcfce7;border-radius:20px;">🟢 LIVE TRACKING</span>
+          </div>
+          <!-- Leaflet embedded map -->
+          <div id="dlmap-{{ assignment.id }}"
+               style="height:260px;border-radius:10px;border:1.5px solid var(--border);overflow:hidden;z-index:0;"
+               data-lat="{{ assignment.destination_lat }}"
+               data-lng="{{ assignment.destination_lng }}"
+               data-addr="{{ assignment.destination_addr | e }}"
+               data-status="{{ assignment.status }}"
+               data-arrival-radius="200">
+          </div>
+          {% endif %}
         </div>
         {% if assignment.recipient_name %}
         <div style="font-size:12px;color:var(--muted);margin-bottom:6px;">
@@ -815,21 +852,11 @@ table.htable tbody tr:hover td { background: var(--bg); }
         </div>
       </div>
       <div>
-        <label style="font-size:12px;font-weight:600;color:var(--muted);display:block;margin-bottom:4px;">Destination Address *</label>
+        <label style="font-size:12px;font-weight:600;color:var(--muted);display:block;margin-bottom:4px;">Shop Name / Destination Address *</label>
         <input type="text" name="destination_addr" required maxlength="500"
+          placeholder="e.g. Sharma Medical Store, MG Road, Pune"
           style="width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:9px;font-size:13px;font-family:inherit;">
-      </div>
-      <div style="display:flex;gap:12px;flex-wrap:wrap;">
-        <div style="flex:1;min-width:140px;">
-          <label style="font-size:12px;font-weight:600;color:var(--muted);display:block;margin-bottom:4px;">Dest. Latitude (optional)</label>
-          <input type="number" name="dest_lat" step="any"
-            style="width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:9px;font-size:13px;font-family:inherit;">
-        </div>
-        <div style="flex:1;min-width:140px;">
-          <label style="font-size:12px;font-weight:600;color:var(--muted);display:block;margin-bottom:4px;">Dest. Longitude (optional)</label>
-          <input type="number" name="dest_lng" step="any"
-            style="width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:9px;font-size:13px;font-family:inherit;">
-        </div>
+        <div style="font-size:11px;color:var(--muted);margin-top:3px;">Map location is found automatically from this name/address.</div>
       </div>
       <div>
         <label style="font-size:12px;font-weight:600;color:var(--muted);display:block;margin-bottom:4px;">Package Description *</label>
@@ -1423,6 +1450,169 @@ function _doConfirm(assignmentId, lat, lng, name, company, note, btn) {
     .catch(function(){ alert('Network error'); if (btn) { btn.textContent = 'Confirm Delivery'; btn.disabled = false; } });
 }
 // ─── End Delivery GPS tracking ───────────────────────────────────────────────
+
+// ─── Leaflet live delivery maps (route + ETA + live tracking) ─────────────────
+var TOMTOM_KEY = "{{ tomtom_key }}";
+var ROUTE_REFRESH_MS = 30000;
+var _deliveryMaps = {};
+
+function _fmtDuration(sec) {
+  if (sec == null) return '—';
+  var m = Math.round(sec / 60);
+  if (m < 60) return m + ' min';
+  var h = Math.floor(m / 60); var r = m % 60;
+  return h + 'h ' + r + 'm';
+}
+function _fmtDist(m) {
+  if (m == null) return '—';
+  if (m < 1000) return Math.round(m) + ' m';
+  return (m / 1000).toFixed(1) + ' km';
+}
+
+function _applyRoute(assignmentId, coords, durationSec, distM, withTraffic) {
+  var ctx = _deliveryMaps[assignmentId];
+  if (!ctx) return;
+  var infoBar = document.getElementById('route-info-' + assignmentId);
+  if (infoBar) infoBar.style.display = 'flex';
+  var etaEl  = document.getElementById('route-eta-'  + assignmentId);
+  var distEl = document.getElementById('route-dist-' + assignmentId);
+  if (etaEl)  etaEl.textContent  = _fmtDuration(durationSec) + (withTraffic ? ' (traffic)' : '');
+  if (distEl) distEl.textContent = _fmtDist(distM);
+  if (ctx.routeLine) ctx.map.removeLayer(ctx.routeLine);
+  ctx.routeLine = L.polyline(coords, {color: '#1d4ed8', weight: 5, opacity: 0.78}).addTo(ctx.map);
+  ctx.map.fitBounds(ctx.routeLine.getBounds(), {padding: [30, 30]});
+}
+
+function _routeTomTom(assignmentId, fromLat, fromLng) {
+  var ctx = _deliveryMaps[assignmentId];
+  var url = 'https://api.tomtom.com/routing/1/calculateRoute/' +
+            fromLat + ',' + fromLng + ':' + ctx.destLat + ',' + ctx.destLng +
+            '/json?key=' + encodeURIComponent(TOMTOM_KEY) +
+            '&traffic=true&travelMode=car&routeType=fastest';
+  return fetch(url).then(function(r){ return r.json(); }).then(function(data) {
+    if (!data.routes || !data.routes.length) throw new Error('no route');
+    var route = data.routes[0];
+    var summary = route.summary || {};
+    var coords = [];
+    (route.legs || []).forEach(function(leg) {
+      (leg.points || []).forEach(function(p){ coords.push([p.latitude, p.longitude]); });
+    });
+    _applyRoute(assignmentId, coords, summary.travelTimeInSeconds, summary.lengthInMeters, true);
+  });
+}
+
+function _routeOSRM(assignmentId, fromLat, fromLng) {
+  var ctx = _deliveryMaps[assignmentId];
+  var url = 'https://router.project-osrm.org/route/v1/driving/' +
+            fromLng + ',' + fromLat + ';' + ctx.destLng + ',' + ctx.destLat +
+            '?overview=full&geometries=geojson';
+  return fetch(url).then(function(r){ return r.json(); }).then(function(data) {
+    if (!data.routes || !data.routes.length) throw new Error('no route');
+    var route = data.routes[0];
+    var coords = route.geometry.coordinates.map(function(c){ return [c[1], c[0]]; });
+    _applyRoute(assignmentId, coords, route.duration, route.distance, false);
+  });
+}
+
+function updateDeliveryRoute(assignmentId, fromLat, fromLng, force) {
+  var ctx = _deliveryMaps[assignmentId];
+  if (!ctx) return;
+  var now = Date.now();
+  if (!force && ctx.lastRouteAt && (now - ctx.lastRouteAt) < ROUTE_REFRESH_MS) return;
+  ctx.lastRouteAt = now;
+  var routePromise = (TOMTOM_KEY && TOMTOM_KEY.length > 5)
+      ? _routeTomTom(assignmentId, fromLat, fromLng).catch(function(){ return _routeOSRM(assignmentId, fromLat, fromLng); })
+      : _routeOSRM(assignmentId, fromLat, fromLng);
+  routePromise.catch(function(){
+    var infoBar = document.getElementById('route-info-' + assignmentId);
+    if (infoBar) infoBar.style.display = 'flex';
+    if (ctx.routeLine) ctx.map.removeLayer(ctx.routeLine);
+    ctx.routeLine = L.polyline([[fromLat, fromLng], [ctx.destLat, ctx.destLng]],
+                               {color: '#1d4ed8', weight: 3, opacity: 0.6, dashArray: '6,6'}).addTo(ctx.map);
+    ctx.map.fitBounds(ctx.routeLine.getBounds(), {padding: [30, 30]});
+  });
+}
+
+function startLiveTracking(assignmentId) {
+  var ctx = _deliveryMaps[assignmentId];
+  if (!ctx || !navigator.geolocation) return;
+  var badge = document.getElementById('live-badge-' + assignmentId);
+  if (badge) badge.style.display = 'inline-block';
+  ctx.watchId = navigator.geolocation.watchPosition(function(pos) {
+    var myLat = pos.coords.latitude, myLng = pos.coords.longitude;
+    if (!ctx.myMarker) {
+      var myIcon = L.divIcon({
+        html: '<div style="background:#1d4ed8;width:16px;height:16px;border-radius:50%;border:3px solid #fff;box-shadow:0 0 0 6px rgba(29,78,216,0.25);"></div>',
+        iconSize: [16, 16], iconAnchor: [8, 8], className: ''
+      });
+      ctx.myMarker = L.marker([myLat, myLng], {icon: myIcon}).addTo(ctx.map).bindPopup('<strong>You are here</strong>');
+    } else {
+      ctx.myMarker.setLatLng([myLat, myLng]);
+    }
+    updateDeliveryRoute(assignmentId, myLat, myLng);
+    var dist = _haversineJS(myLat, myLng, ctx.destLat, ctx.destLng);
+    var radius = ctx.arrivalRadius || 200;
+    if (dist <= radius && !ctx.arrived) {
+      ctx.arrived = true;
+      if (badge) { badge.textContent = '✅ ARRIVED'; badge.style.color = '#16a34a'; }
+      unlockDeliveryForm(assignmentId);
+      if (ctx.watchId != null) { navigator.geolocation.clearWatch(ctx.watchId); ctx.watchId = null; }
+    }
+  }, function(){}, {enableHighAccuracy: true, maximumAge: 5000, timeout: 20000});
+}
+
+function _haversineJS(lat1, lng1, lat2, lng2) {
+  var R = 6371000, toRad = function(d){ return d * Math.PI / 180; };
+  var dLat = toRad(lat2 - lat1), dLng = toRad(lng2 - lng1);
+  var a = Math.sin(dLat/2)*Math.sin(dLat/2) +
+          Math.cos(toRad(lat1))*Math.cos(toRad(lat2))*Math.sin(dLng/2)*Math.sin(dLng/2);
+  return 2 * R * Math.asin(Math.sqrt(a));
+}
+
+document.addEventListener('DOMContentLoaded', function() {
+  var mapDivs = document.querySelectorAll('[id^="dlmap-"]');
+  mapDivs.forEach(function(div) {
+    var lat  = parseFloat(div.dataset.lat);
+    var lng  = parseFloat(div.dataset.lng);
+    var addr = div.dataset.addr || 'Destination';
+    var status = div.dataset.status || 'pending';
+    var arrivalRadius = parseInt(div.dataset.arrivalRadius || '200', 10);
+    if (isNaN(lat) || isNaN(lng)) return;
+    var assignmentId = div.id.replace('dlmap-', '');
+    var map = L.map(div.id, {zoomControl: true, scrollWheelZoom: false}).setView([lat, lng], 14);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>', maxZoom: 19
+    }).addTo(map);
+    var destIcon = L.divIcon({
+      html: '<div style="background:#dc2626;width:16px;height:16px;border-radius:50%;border:3px solid #fff;box-shadow:0 2px 6px rgba(0,0,0,0.4);"></div>',
+      iconSize: [16, 16], iconAnchor: [8, 8], className: ''
+    });
+    L.marker([lat, lng], {icon: destIcon}).addTo(map)
+      .bindPopup('<strong>Destination</strong><br><span style="font-size:12px;">' + addr + '</span>');
+    _deliveryMaps[assignmentId] = {
+      map: map, destLat: lat, destLng: lng, arrivalRadius: arrivalRadius,
+      myMarker: null, routeLine: null, watchId: null, arrived: false, lastRouteAt: null
+    };
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(function(pos) {
+        updateDeliveryRoute(assignmentId, pos.coords.latitude, pos.coords.longitude, true);
+      }, function(){}, {enableHighAccuracy: true, timeout: 8000});
+    }
+    if (status === 'in_transit') {
+      startLiveTracking(assignmentId);
+    }
+  });
+});
+
+window.addEventListener('pagehide', function() {
+  Object.values(_deliveryMaps).forEach(function(ctx) {
+    if (ctx.watchId != null) {
+      navigator.geolocation.clearWatch(ctx.watchId);
+      ctx.watchId = null;
+    }
+  });
+});
+// ─── End Leaflet live delivery maps ───────────────────────────────────────────
 
 function validateAndSubmit(e){
   var form = e.target.tagName === 'FORM' ? e.target : document.querySelector('form[method="POST"]');

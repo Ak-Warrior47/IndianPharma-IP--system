@@ -1890,6 +1890,7 @@ def dashboard():
             trip_map=trip_map,
             store_lat=STORE_LAT,
             store_lng=STORE_LNG,
+            tomtom_key=TOMTOM_API_KEY,
         )
     except Exception as e:
         logger.error(f"Dashboard error: {e}")
@@ -1905,7 +1906,7 @@ def dashboard():
             today_multitask=[], today_db_note=None,
             primary_staff_type="picker", secondary_staff_type=None,
             my_assignments=[], purchaser_delivery_staff=[], my_deliveries_today=[], trip_map={},
-            store_lat=0.0, store_lng=0.0)
+            store_lat=0.0, store_lng=0.0, tomtom_key="")
 
 
 @app.route("/admin_dashboard")
@@ -3628,8 +3629,9 @@ def api_analytics_range():
 
 STORE_LAT = float(os.environ.get("STORE_LAT", "0.0"))
 STORE_LNG = float(os.environ.get("STORE_LNG", "0.0"))
-STORE_RADIUS_M = 400   # meters — must be within this to start trip
-ARRIVAL_RADIUS_M = 200 # meters — must be within this to unlock delivery form
+STORE_RADIUS_M = 400    # meters — must be within this to start trip
+ARRIVAL_RADIUS_M = 200  # meters — must be within this to unlock delivery form
+TOMTOM_API_KEY = os.environ.get("TOMTOM_API_KEY", "")  # free 2500/day → live-traffic routing
 
 
 def _haversine_m(lat1, lng1, lat2, lng2):
@@ -3643,24 +3645,40 @@ def _haversine_m(lat1, lng1, lat2, lng2):
     return 2 * R * math.asin(math.sqrt(a))
 
 
+def geocode_address(address):
+    """Convert a text address to (lat, lng) using Nominatim (free, India-biased)."""
+    try:
+        resp = _requests.get(
+            "https://nominatim.openstreetmap.org/search",
+            params={"q": address, "format": "json", "limit": 1, "countrycodes": "in"},
+            headers={"User-Agent": "IndianPharmaKPI/1.0 (delivery-geocoder)"},
+            timeout=6,
+        )
+        results = resp.json()
+        if results:
+            return float(results[0]["lat"]), float(results[0]["lon"])
+    except Exception as e:
+        logger.warning(f"geocode_address failed for '{address}': {e}")
+    return None, None
+
+
 @app.route("/delivery/assign", methods=["POST"])
 @login_required
 def delivery_assign():
-    """Purchaser creates a delivery assignment."""
+    """Purchaser creates a delivery assignment — auto-geocodes the destination address."""
     emp_id = session.get("user_id")
     staff_type = session.get("staff_type", "")
     if staff_type not in ("purchaser",) and not session.get("is_admin"):
-        return jsonify({"ok": False, "error": "Only purchasers can assign deliveries"}), 403
+        flash("Only purchasers can assign deliveries.", "danger")
+        return redirect(url_for("dashboard"))
     try:
-        delivery_emp_id = int(request.form.get("delivery_emp_id", 0))
+        delivery_emp_id  = int(request.form.get("delivery_emp_id", 0))
         destination_addr = request.form.get("destination_addr", "").strip()
         package_desc     = request.form.get("package_desc", "").strip()
         bills_count      = int(request.form.get("bills_count", 0) or 0)
         recipient_name   = request.form.get("recipient_name", "").strip()
         company_name     = request.form.get("company_name", "").strip()
         notes            = request.form.get("notes", "").strip()[:500]
-        dest_lat_s       = request.form.get("dest_lat", "").strip()
-        dest_lng_s       = request.form.get("dest_lng", "").strip()
 
         if not delivery_emp_id or not destination_addr or not package_desc:
             flash("Please fill in delivery employee, destination, and package description.", "warning")
@@ -3671,8 +3689,8 @@ def delivery_assign():
             flash("Selected employee is not a delivery staff member.", "warning")
             return redirect(url_for("dashboard"))
 
-        dest_lat = float(dest_lat_s) if dest_lat_s else None
-        dest_lng = float(dest_lng_s) if dest_lng_s else None
+        # Auto-geocode — if it fails the assignment still saves (map falls back to address text)
+        dest_lat, dest_lng = geocode_address(destination_addr)
 
         assignment = DeliveryAssignment(
             purchaser_id=emp_id,
@@ -3690,7 +3708,8 @@ def delivery_assign():
         db.session.add(assignment)
         db.session.commit()
         log_audit("delivery_assign", delivery_emp.name, f"Package: {package_desc[:50]}")
-        flash(f"Delivery assigned to {delivery_emp.name}.", "success")
+        geo_note = " (map location set)" if dest_lat else " (map will use address text)"
+        flash(f"✅ Delivery assigned to {delivery_emp.name}.{geo_note}", "success")
     except Exception as e:
         db.session.rollback()
         logger.error(f"delivery_assign: {e}")
@@ -3755,6 +3774,10 @@ def delivery_check_arrival(assignment_id):
         if not assignment.destination_lat or not assignment.destination_lng:
             return jsonify({"ok": True, "unlock": True, "dist": 0})
 
+        # Skip GPS check if device sent zero coords (GPS unavailable on device)
+        if curr_lat == 0 and curr_lng == 0:
+            return jsonify({"ok": True, "unlock": True, "dist": 0})
+
         dist = _haversine_m(curr_lat, curr_lng, assignment.destination_lat, assignment.destination_lng)
         unlock = dist <= ARRIVAL_RADIUS_M
         return jsonify({"ok": True, "unlock": unlock, "dist": int(dist), "radius": ARRIVAL_RADIUS_M})
@@ -3784,8 +3807,8 @@ def delivery_confirm(assignment_id):
         if not delivered_to:
             return jsonify({"ok": False, "error": "Please enter the name of the person who received the package"}), 400
 
-        # GPS check (if coords configured)
-        if assignment.destination_lat and assignment.destination_lng:
+        # GPS check (if coords configured and device supplied a real position)
+        if assignment.destination_lat and assignment.destination_lng and not (curr_lat == 0 and curr_lng == 0):
             dist = _haversine_m(curr_lat, curr_lng, assignment.destination_lat, assignment.destination_lng)
             if dist > ARRIVAL_RADIUS_M:
                 return jsonify({"ok": False, "error": f"You must be at the destination to confirm delivery ({int(dist)}m away, max {ARRIVAL_RADIUS_M}m)."}), 400
@@ -3807,7 +3830,7 @@ def delivery_confirm(assignment_id):
                 is_on_time = duration <= 60.0  # on-time = within 60 minutes
                 trip.is_on_time = is_on_time
         else:
-            # Trip wasn't started via GPS (manual confirm)
+            # Trip wasn't started via GPS (manual confirm) — duration unknown, on-time unknown
             trip = DeliveryTrip(
                 assignment_id=assignment_id,
                 emp_id=emp_id,
@@ -3817,7 +3840,7 @@ def delivery_confirm(assignment_id):
                 delivered_to_company=company,
                 delivery_note=delivery_note,
                 status="completed",
-                is_on_time=True,
+                is_on_time=None,
             )
             db.session.add(trip)
 
