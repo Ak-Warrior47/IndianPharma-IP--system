@@ -986,7 +986,15 @@ tbody tr:hover { background: rgba(165,180,252,0.18) !important; }
         {% elif assignment.status == 'in_transit' %}
         <div style="margin-top:6px;">
           {% if trip and trip.departure_time %}
-          <div style="font-size:12px;color:var(--muted);margin-bottom:8px;">Trip started. Departed at {{ trip.departure_time.strftime('%H:%M') }} UTC.</div>
+          <div class="delivery-timer-box" style="display:flex;align-items:center;gap:10px;margin-bottom:10px;padding:10px 14px;background:linear-gradient(135deg,#ecfeff,#cffafe);border:1.5px solid #67e8f9;border-radius:10px;">
+            <span style="font-size:20px;">⏱️</span>
+            <div>
+              <div style="font-size:10px;font-weight:700;color:#0e7490;text-transform:uppercase;letter-spacing:.6px;">Time since accepted</div>
+              <div class="delivery-timer" data-departure="{{ trip.departure_time.strftime('%Y-%m-%dT%H:%M:%S') }}Z"
+                   style="font-size:22px;font-weight:800;color:#0891b2;font-variant-numeric:tabular-nums;letter-spacing:1px;">00:00</div>
+            </div>
+            <span style="margin-left:auto;font-size:11px;color:#155e75;">Departed {{ trip.departure_time.strftime('%H:%M') }} UTC</span>
+          </div>
           {% endif %}
           <button id="check-arrival-btn-{{ assignment.id }}"
             onclick="checkArrivalAndUnlock({{ assignment.id }})"
@@ -1857,6 +1865,37 @@ function validateAndSubmit(e){
   }
   return true;
 }
+</script>
+
+<script>
+// ═══ LIVE DELIVERY TIMER — counts up from when the trip was accepted ═══
+(function(){
+  function pad(n){ return (n < 10 ? '0' : '') + n; }
+  function fmt(totalSec){
+    if(totalSec < 0) totalSec = 0;
+    var h = Math.floor(totalSec / 3600);
+    var m = Math.floor((totalSec % 3600) / 60);
+    var s = totalSec % 60;
+    return h > 0 ? (h + ':' + pad(m) + ':' + pad(s)) : (pad(m) + ':' + pad(s));
+  }
+  function tick(){
+    var els = document.querySelectorAll('.delivery-timer');
+    var now = Date.now();
+    els.forEach(function(el){
+      var dep = el.getAttribute('data-departure');
+      if(!dep) return;
+      var t = Date.parse(dep);
+      if(isNaN(t)) return;
+      var secs = Math.floor((now - t) / 1000);
+      el.textContent = fmt(secs);
+      // Turn red/amber as the delivery drags on
+      if(secs > 5400){ el.style.color = '#dc2626'; }        // > 90 min
+      else if(secs > 2700){ el.style.color = '#d97706'; }   // > 45 min
+    });
+  }
+  tick();
+  setInterval(tick, 1000);
+})();
 </script>
 
 <script>
