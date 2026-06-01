@@ -817,7 +817,7 @@ var NOTES_BY_EMP = {
             </td>
             <td>
               <span class="type-badge {% if r.emp.staff_type == 'picker' %}type-picker{% else %}type-checker{% endif %}">
-                {{ r.emp.staff_type }}
+                {{ r.emp.staff_type }}{% if r.emp.secondary_staff_type %} (+ {{ r.emp.secondary_staff_type }}){% endif %}
               </span>
             </td>
             <td>{{ r.count }}</td>

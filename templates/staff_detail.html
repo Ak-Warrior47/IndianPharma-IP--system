@@ -388,6 +388,7 @@ body{
           <div class="hero-chips">
             {% if a_stats %}<span class="chip grade-{{ a_stats.grade }}">{{ a_stats.grade }}</span>{% endif %}
             <span class="chip">{{ emp.staff_type | title }}</span>
+            {% if emp.secondary_staff_type %}<span class="chip" style="background:rgba(99,102,241,0.2);border-color:rgba(167,139,250,0.4);color:#c4b5fd;">+ {{ emp.secondary_staff_type | title }}</span>{% endif %}
             {% if a_stats %}
               <span class="chip">{{ a_stats.days }} days logged</span>
               {% if a_stats.trend == 'improving' %}<span class="chip trend-up">↑ Improving</span>

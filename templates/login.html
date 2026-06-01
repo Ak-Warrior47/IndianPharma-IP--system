@@ -235,7 +235,7 @@ body {
 .autocomplete-item:hover, .autocomplete-item.selected { background: rgba(29,78,216,0.25); }
 .autocomplete-item .at-domain { color: #60a5fa; font-weight: 700; }
 
-.role-wrap { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 7px; }
+.role-wrap { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-top: 7px; }
 .role-opt { position: relative; }
 .role-opt input[type="radio"] { position: absolute; opacity: 0; pointer-events: none; }
 .role-opt label {
@@ -382,6 +382,14 @@ body {
               <div class="role-opt">
                 <input type="radio" id="r-checker" name="staff_type" value="checker">
                 <label for="r-checker">🔍 Checker</label>
+              </div>
+              <div class="role-opt">
+                <input type="radio" id="r-delivery" name="staff_type" value="delivery">
+                <label for="r-delivery">🚚 Delivery</label>
+              </div>
+              <div class="role-opt">
+                <input type="radio" id="r-biller" name="staff_type" value="biller">
+                <label for="r-biller">🧾 Biller</label>
               </div>
             </div>
           </div>

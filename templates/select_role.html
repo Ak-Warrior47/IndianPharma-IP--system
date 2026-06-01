@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Choose Role | Pharma IP</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&family=DM+Serif+Display&display=swap" rel="stylesheet">
+<style>
+*, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+  font-family: 'DM Sans', sans-serif;
+  min-height: 100vh;
+  background: linear-gradient(135deg, #060d1f 0%, #0e1f45 55%, #060d1f 100%);
+  display: flex; align-items: center; justify-content: center;
+  padding: 24px;
+}
+.card {
+  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 20px;
+  padding: 40px 36px;
+  width: 100%; max-width: 460px;
+  backdrop-filter: blur(12px);
+  box-shadow: 0 24px 64px rgba(0,0,0,0.5);
+}
+.title {
+  font-family: 'DM Serif Display', serif;
+  font-size: 26px; color: #fff;
+  text-align: center; margin-bottom: 6px;
+}
+.sub {
+  font-size: 13px; color: rgba(255,255,255,0.5);
+  text-align: center; margin-bottom: 32px;
+}
+.roles { display: flex; flex-direction: column; gap: 14px; }
+.role-btn {
+  display: flex; align-items: center; gap: 16px;
+  padding: 18px 22px;
+  background: rgba(255,255,255,0.05);
+  border: 1.5px solid rgba(255,255,255,0.12);
+  border-radius: 14px;
+  cursor: pointer;
+  transition: background .18s, border-color .18s, transform .15s;
+  text-decoration: none;
+}
+.role-btn:hover {
+  background: rgba(29,78,216,0.25);
+  border-color: rgba(99,179,237,0.4);
+  transform: translateY(-2px);
+}
+.role-icon { font-size: 32px; line-height: 1; }
+.role-info { flex: 1; }
+.role-name {
+  font-size: 16px; font-weight: 700; color: #fff;
+  text-transform: capitalize; margin-bottom: 2px;
+}
+.role-tag {
+  font-size: 11px; font-weight: 600;
+  color: rgba(255,255,255,0.45);
+  text-transform: uppercase; letter-spacing: .5px;
+}
+.role-arrow { font-size: 18px; color: rgba(255,255,255,0.3); }
+.skip {
+  display: block; text-align: center;
+  margin-top: 22px; font-size: 12px;
+  color: rgba(255,255,255,0.3);
+  text-decoration: none;
+}
+.skip:hover { color: rgba(255,255,255,0.6); }
+</style>
+</head>
+<body>
+<div class="card">
+  <div class="title">Good day, {{ user_name.split()[0] }}!</div>
+  <div class="sub">Which role are you working as today?</div>
+
+  <div class="roles">
+    {% set icons = {'picker': '📦', 'checker': '🔍', 'purchaser': '🛒', 'delivery': '🚚', 'biller': '🧾', 'packing': '📫', 'other': '⚙️'} %}
+
+    <form method="POST" action="{{ url_for('switch_role') }}">
+      <input type="hidden" name="role" value="{{ primary_role }}">
+      <button type="submit" class="role-btn" style="width:100%;font-family:inherit;">
+        <span class="role-icon">{{ icons.get(primary_role, '👤') }}</span>
+        <span class="role-info">
+          <div class="role-name">{{ primary_role }}</div>
+          <div class="role-tag">Primary Role</div>
+        </span>
+        <span class="role-arrow">→</span>
+      </button>
+    </form>
+
+    <form method="POST" action="{{ url_for('switch_role') }}">
+      <input type="hidden" name="role" value="{{ secondary_role }}">
+      <button type="submit" class="role-btn" style="width:100%;font-family:inherit;border-color:rgba(167,139,250,0.35);">
+        <span class="role-icon">{{ icons.get(secondary_role, '👤') }}</span>
+        <span class="role-info">
+          <div class="role-name">{{ secondary_role }}</div>
+          <div class="role-tag">Secondary Role</div>
+        </span>
+        <span class="role-arrow">→</span>
+      </button>
+    </form>
+  </div>
+
+  <a href="{{ url_for('dashboard') }}" class="skip">Skip — go to dashboard →</a>
+</div>
+</body>
+</html>

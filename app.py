@@ -1715,11 +1715,31 @@ def login():
             session["is_admin"] = bool(user.is_admin)
 
             logger.info(f"User login successful: {email}")
-            return redirect(url_for("admin_dashboard") if user.is_admin else url_for("dashboard"))
+            if user.is_admin:
+                return redirect(url_for("admin_dashboard"))
+            # If staff has a secondary role, let them choose which role to work as today
+            if user.secondary_staff_type and user.secondary_staff_type.strip():
+                return redirect(url_for("select_role"))
+            return redirect(url_for("dashboard"))
         except Exception as e:
             logger.error(f"Login error: {e}")
             flash("System error. Please try again.", "danger")
     return render_template("login.html")
+
+
+@app.route("/select_role", methods=["GET"])
+@login_required
+def select_role():
+    """After login, multitasking staff choose which role to work as today."""
+    primary = session.get("primary_staff_type") or session.get("staff_type", "picker")
+    secondary = session.get("secondary_staff_type")
+    if not secondary:
+        return redirect(url_for("dashboard"))
+    return render_template("select_role.html",
+        user_name=session.get("user_name", "User"),
+        primary_role=primary,
+        secondary_role=secondary,
+    )
 
 
 @app.route("/logout", methods=["GET", "POST"])
@@ -2115,6 +2135,12 @@ def dashboard():
         except Exception:
             today_multitask = []
 
+        # Multitasker bonus: +15 to daily score when secondary role work was also submitted today
+        if today_multitask and d_stats:
+            d_stats = dict(d_stats)
+            d_stats["eff_score"] = min(round(d_stats["eff_score"] + 15, 1), 100.0)
+            d_stats["multitask_bonus"] = 15
+
         # Delivery module data
         try:
             my_assignments = []
@@ -2500,6 +2526,13 @@ def staff_detail(emp_id):
         except Exception:
             emp_badges = []
 
+        # Multitask entries for this staff member (for admin view)
+        try:
+            from sqlalchemy import desc as _desc
+            multitask_entries = MultitaskEntry.query.filter_by(emp_id=emp_id).order_by(MultitaskEntry.entry_date.desc()).limit(30).all()
+        except Exception:
+            multitask_entries = []
+
         return render_template("staff_detail.html",
             emp=emp,
             emp_overall_rank=emp_overall_rank,
@@ -2518,6 +2551,7 @@ def staff_detail(emp_id):
             prev_month_score=prev_month_score,
             monthly_scores=monthly_scores,
             emp_badges=emp_badges,
+            multitask_entries=multitask_entries,
         )
     except Exception as e:
         import traceback
