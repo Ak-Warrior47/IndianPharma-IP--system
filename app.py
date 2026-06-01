@@ -2143,6 +2143,7 @@ def dashboard():
             d_stats["multitask_bonus"] = 15
 
         # Delivery module data
+        delivery_diag = None
         try:
             my_assignments = []
             purchaser_delivery_staff = []
@@ -2167,15 +2168,24 @@ def dashboard():
                 # Filter in Python to avoid NULL/ORM edge cases (is_admin, missing secondary col)
                 all_emps = Employee.query.all()
                 purchaser_delivery_staff = []
+                _role_breakdown = {}
                 for _e in all_emps:
                     if getattr(_e, "is_admin", False):
                         continue
                     primary = (getattr(_e, "staff_type", "") or "").lower()
                     secondary = (getattr(_e, "secondary_staff_type", "") or "").lower()
+                    _role_breakdown[primary] = _role_breakdown.get(primary, 0) + 1
                     if primary == "delivery" or secondary == "delivery":
                         purchaser_delivery_staff.append(_e)
-                logger.info(f"Biller dashboard: found {len(purchaser_delivery_staff)} delivery staff "
-                            f"(scanned {len(all_emps)} employees)")
+                _emp_total = len(all_emps)
+                _del_total = len(purchaser_delivery_staff)
+                logger.info(f"Biller dashboard: found {_del_total} delivery staff "
+                            f"(scanned {_emp_total} employees, breakdown={_role_breakdown})")
+                delivery_diag = {
+                    "total_emps": _emp_total,
+                    "del_total": _del_total,
+                    "breakdown": _role_breakdown,
+                }
             if my_assignments:
                 aid_list = [a.id for a in my_assignments]
                 trips = DeliveryTrip.query.filter(DeliveryTrip.assignment_id.in_(aid_list)).all()
@@ -2223,6 +2233,7 @@ def dashboard():
             store_lat=STORE_LAT,
             store_lng=STORE_LNG,
             tomtom_key=TOMTOM_API_KEY,
+            delivery_diag=delivery_diag,
         )
     except Exception as e:
         logger.error(f"Dashboard error: {e}")
@@ -2238,7 +2249,7 @@ def dashboard():
             today_multitask=[], today_db_note=None,
             primary_staff_type="picker", secondary_staff_type=None,
             my_assignments=[], purchaser_delivery_staff=[], my_deliveries_today=[],
-            trip_map={}, store_lat=0.0, store_lng=0.0, tomtom_key="")
+            trip_map={}, store_lat=0.0, store_lng=0.0, tomtom_key="", delivery_diag=None)
 
 
 @app.route("/admin_dashboard")
@@ -4654,6 +4665,35 @@ def delivery_leaderboard():
         logger.error(f"delivery_leaderboard: {e}")
         flash("Error loading leaderboard.", "danger")
         return redirect(url_for("dashboard"))
+
+
+@app.route("/admin/debug_delivery_staff")
+@admin_required
+def admin_debug_delivery_staff():
+    """Diagnostic — lists every employee and their primary/secondary roles."""
+    try:
+        emps = Employee.query.all()
+        rows = []
+        delivery_count = 0
+        for e in emps:
+            primary = (getattr(e, "staff_type", "") or "").lower()
+            secondary = (getattr(e, "secondary_staff_type", "") or "").lower()
+            is_delivery = (primary == "delivery" or secondary == "delivery") and not getattr(e, "is_admin", False)
+            if is_delivery:
+                delivery_count += 1
+            rows.append({
+                "id": e.id, "name": e.name, "email": e.email,
+                "is_admin": bool(getattr(e, "is_admin", False)),
+                "primary": primary, "secondary": secondary,
+                "is_delivery_eligible": is_delivery,
+            })
+        return jsonify({
+            "total_employees": len(emps),
+            "delivery_eligible_count": delivery_count,
+            "employees": rows,
+        })
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 
 @app.route("/admin/delivery")

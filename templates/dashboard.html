@@ -1034,6 +1034,16 @@ tbody tr:hover { background: rgba(165,180,252,0.18) !important; }
     {% if not purchaser_delivery_staff %}
     <div style="padding:14px;background:#fef3c7;border:1.5px solid #fbbf24;border-radius:9px;font-size:13px;color:#92400e;margin-bottom:12px;">
       ⚠️ No delivery staff found. Ask admin to set at least one employee's role to <strong>Delivery</strong>.
+      {% if delivery_diag %}
+      <div style="margin-top:8px;padding-top:8px;border-top:1px dashed #d97706;font-size:11px;color:#78350f;">
+        <strong>Diagnostic:</strong> {{ delivery_diag.total_emps }} employees scanned, {{ delivery_diag.del_total }} eligible.
+        Role breakdown:
+        {% for role, count in delivery_diag.breakdown.items() %}
+          <span style="display:inline-block;margin:2px 4px;padding:1px 7px;background:#fde68a;border-radius:10px;">{{ role or 'unset' }}: {{ count }}</span>
+        {% endfor %}
+        <br><small>If you see no "delivery" entry above, admin must open <strong>Edit Employee</strong> → set <strong>Staff Type = Delivery</strong> → Save. (Setting only secondary role also works.)</small>
+      </div>
+      {% endif %}
     </div>
     {% endif %}
     <form method="POST" action="{{ url_for('delivery_assign') }}" style="display:flex;flex-direction:column;gap:12px;">
