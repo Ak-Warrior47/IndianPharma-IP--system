@@ -968,6 +968,46 @@ body{
     </div>
   </section>
   {% endif %}
+
+  <!-- ── MULTITASK ENTRIES ── -->
+  {% if multitask_entries %}
+  <section class="card" style="margin-top:20px;">
+    <div class="card-title"><span class="ico">▸</span>Recent Multitask (Secondary Role) Entries</div>
+    <div class="card-sub">Work logged under a secondary role by this staff member (last 30 entries).</div>
+    <div style="overflow-x:auto;">
+      <table style="width:100%;border-collapse:collapse;font-size:13px;">
+        <thead>
+          <tr style="border-bottom:1px solid var(--border);color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:0.05em;">
+            <th style="padding:8px 10px;text-align:left;">Date</th>
+            <th style="padding:8px 10px;text-align:left;">Role</th>
+            <th style="padding:8px 10px;text-align:right;">Picked</th>
+            <th style="padding:8px 10px;text-align:right;">Checked</th>
+            <th style="padding:8px 10px;text-align:right;">Bills</th>
+            <th style="padding:8px 10px;text-align:right;">Qty</th>
+            <th style="padding:8px 10px;text-align:left;">Note</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for mt in multitask_entries %}
+          <tr style="border-bottom:1px solid var(--border-2);{% if loop.last %}border-bottom:none;{% endif %}">
+            <td style="padding:8px 10px;color:var(--navy);font-weight:600;">{{ mt.entry_date.strftime('%d %b %Y') }}</td>
+            <td style="padding:8px 10px;">
+              <span style="background:rgba(99,102,241,0.12);color:#6d28d9;border:1px solid rgba(99,102,241,0.2);border-radius:6px;padding:2px 8px;font-size:11px;font-weight:600;text-transform:capitalize;">
+                {{ mt.secondary_type }}
+              </span>
+            </td>
+            <td style="padding:8px 10px;text-align:right;">{{ mt.picked or '—' }}</td>
+            <td style="padding:8px 10px;text-align:right;">{{ mt.checked or '—' }}</td>
+            <td style="padding:8px 10px;text-align:right;">{{ mt.bills_received or mt.total_bills_received or '—' }}</td>
+            <td style="padding:8px 10px;text-align:right;">{{ mt.quantity or '—' }}</td>
+            <td style="padding:8px 10px;color:var(--muted);max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">{{ mt.note or '' }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </section>
+  {% endif %}
 </main>
 
 <script>
