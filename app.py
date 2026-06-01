@@ -4600,38 +4600,80 @@ def delivery_leaderboard():
 @app.route("/admin/delivery")
 @admin_required
 def admin_delivery():
-    """Admin panel: all delivery assignments and trips."""
+    """Admin panel: all delivery assignments and trips with analysis."""
     try:
-        today      = date.today()
-        cutoff_30  = today - timedelta(days=30)
+        today       = date.today()
+        month_start = today.replace(day=1)
+        cutoff_30   = today - timedelta(days=30)
+
         assignments = (
             DeliveryAssignment.query
             .order_by(DeliveryAssignment.assigned_at.desc())
-            .limit(100).all()
+            .limit(200).all()
         )
-        trips = (
-            DeliveryTrip.query
-            .filter(DeliveryTrip.trip_date >= cutoff_30)
-            .order_by(DeliveryTrip.created_at.desc())
-            .all()
-        )
-        trip_map  = {t.assignment_id: t for t in trips}
-        all_emp   = Employee.query.all()
-        emp_map   = {e.id: e for e in all_emp}
+        all_trips = DeliveryTrip.query.order_by(DeliveryTrip.trip_date.desc()).all()
+        trip_map  = {t.assignment_id: t for t in all_trips}
+
+        all_emp        = Employee.query.all()
+        emp_map        = {e.id: e for e in all_emp}
         delivery_staff = [e for e in all_emp if e.staff_type == "delivery"]
 
+        # ── Per-staff leaderboard with month + all-time stats ──
         leaderboard = []
         for emp in delivery_staff:
-            total    = DeliveryTrip.query.filter_by(emp_id=emp.id, status="completed").count()
-            on_time  = DeliveryTrip.query.filter_by(emp_id=emp.id, status="completed", is_on_time=True).count()
-            leaderboard.append({"emp": emp, "total": total, "on_time": on_time,
-                                 "on_time_pct": round(on_time / max(total, 1) * 100, 1)})
-        leaderboard.sort(key=lambda x: x["total"], reverse=True)
+            emp_trips   = [t for t in all_trips if t.emp_id == emp.id and t.status == "completed"]
+            month_trips = [t for t in emp_trips if t.trip_date and t.trip_date >= month_start]
+            total       = len(emp_trips)
+            on_time     = sum(1 for t in emp_trips if t.is_on_time)
+            month_total = len(month_trips)
+            month_score = sum(score_delivery_trip(t) for t in month_trips)
+            all_durs    = [t.duration_minutes for t in emp_trips if t.duration_minutes]
+            avg_dur     = round(sum(all_durs) / len(all_durs), 1) if all_durs else None
+            today_trips = [t for t in emp_trips if t.trip_date == today]
+            leaderboard.append({
+                "emp": emp, "total": total, "on_time": on_time,
+                "on_time_pct": round(on_time / max(total, 1) * 100, 1),
+                "month_total": month_total, "month_score": month_score,
+                "avg_dur": avg_dur, "today_count": len(today_trips),
+            })
+        leaderboard.sort(key=lambda x: x["month_score"], reverse=True)
+
+        # ── Daily delivery counts for last 14 days (chart data) ──
+        from collections import defaultdict
+        daily_counts = defaultdict(int)
+        daily_ontime = defaultdict(int)
+        for t in all_trips:
+            if t.status == "completed" and t.trip_date and t.trip_date >= (today - timedelta(days=13)):
+                day_str = t.trip_date.strftime("%d %b")
+                daily_counts[day_str] += 1
+                if t.is_on_time:
+                    daily_ontime[day_str] += 1
+        chart_labels = [(today - timedelta(days=i)).strftime("%d %b") for i in range(13, -1, -1)]
+        chart_total  = [daily_counts.get(d, 0) for d in chart_labels]
+        chart_ontime = [daily_ontime.get(d, 0) for d in chart_labels]
+
+        # ── Overall summary stats ──
+        completed_trips = [t for t in all_trips if t.status == "completed"]
+        total_completed = len(completed_trips)
+        total_on_time   = sum(1 for t in completed_trips if t.is_on_time)
+        today_completed = sum(1 for t in completed_trips if t.trip_date == today)
+        month_completed = sum(1 for t in completed_trips if t.trip_date and t.trip_date >= month_start)
+        pending_count   = sum(1 for a in assignments if a.status == "pending")
+        in_transit_count= sum(1 for a in assignments if a.status == "in_transit")
 
         return render_template("admin_delivery.html",
                                assignments=assignments, trip_map=trip_map,
                                emp_map=emp_map, leaderboard=leaderboard,
-                               today=today, current_month=today.strftime("%B %Y"))
+                               today=today, current_month=today.strftime("%B %Y"),
+                               chart_labels=chart_labels,
+                               chart_total=chart_total,
+                               chart_ontime=chart_ontime,
+                               total_completed=total_completed,
+                               total_on_time=total_on_time,
+                               today_completed=today_completed,
+                               month_completed=month_completed,
+                               pending_count=pending_count,
+                               in_transit_count=in_transit_count)
     except Exception as e:
         logger.error(f"admin_delivery: {e}")
         flash("Error loading delivery dashboard.", "danger")

@@ -3,210 +3,125 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Delivery Dashboard | Admin | Pharma IP System</title>
+<title>Delivery Dashboard | Admin</title>
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&family=DM+Serif+Display&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <style>
 *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
 :root {
-  --blue:      #1d4ed8;
-  --blue-dark: #1e3a8a;
-  --blue-lite: #dbeafe;
-  --text:      #0f172a;
-  --muted:     #64748b;
-  --border:    #c7d9f5;
-  --bg:        #f8fafc;
+  --blue: #1d4ed8; --blue-dark: #1e3a8a; --blue-lite: #dbeafe;
+  --text: #0f172a; --muted: #64748b; --border: #c7d9f5; --bg: #f8fafc;
 }
-body {
-  font-family: 'DM Sans', sans-serif;
-  background: var(--bg);
-  min-height: 100vh;
-  color: var(--text);
-}
+body { font-family: 'DM Sans', sans-serif; background: var(--bg); min-height: 100vh; color: var(--text); }
 .hero {
   background: linear-gradient(135deg, #060d1f 0%, #0e1f45 55%, #060d1f 100%);
-  padding: 36px 32px 32px;
-  position: relative;
-  overflow: hidden;
-  border-bottom: 1px solid rgba(99,179,237,0.15);
+  padding: 32px 32px 28px; border-bottom: 1px solid rgba(99,179,237,0.15);
 }
-.hero::before {
-  content: ''; position: absolute; inset: 0; pointer-events: none;
-  background:
-    radial-gradient(ellipse 60% 80% at 0% 50%, rgba(29,78,216,0.35) 0%, transparent 60%),
-    radial-gradient(ellipse 40% 60% at 100% 30%, rgba(14,165,233,0.2) 0%, transparent 55%);
-}
-.hero-content { position: relative; z-index: 1; }
-.hero-title {
-  font-family: 'DM Serif Display', serif;
-  font-size: 28px;
-  color: #fff;
-  margin-bottom: 6px;
-}
-.hero-sub { font-size: 14px; color: rgba(255,255,255,0.6); }
-.back-link {
-  display: inline-block;
-  margin-top: 14px;
-  font-size: 13px;
-  color: #93c5fd;
-  text-decoration: none;
-  font-weight: 600;
-}
-.back-link:hover { color: #bfdbfe; }
-.container {
-  max-width: 1100px;
-  margin: 0 auto;
-  padding: 28px 20px 60px;
-}
-.stats-row {
-  display: flex;
-  gap: 16px;
-  flex-wrap: wrap;
-  margin-bottom: 24px;
-}
+.hero-title { font-family: 'DM Serif Display', serif; font-size: 26px; color: #fff; margin-bottom: 4px; }
+.hero-sub { font-size: 13px; color: rgba(255,255,255,0.55); }
+.back-link { display:inline-block; margin-top:12px; font-size:13px; color:#93c5fd; text-decoration:none; font-weight:600; }
+.container { max-width: 1200px; margin: 0 auto; padding: 28px 20px 60px; }
+.stats-row { display: flex; gap: 14px; flex-wrap: wrap; margin-bottom: 24px; }
 .stat-card {
-  flex: 1;
-  min-width: 160px;
-  background: #fff;
-  border-radius: 12px;
-  border: 1px solid var(--border);
-  padding: 18px 20px;
+  flex: 1; min-width: 140px; background: #fff; border-radius: 12px;
+  border: 1px solid var(--border); padding: 16px 18px;
   box-shadow: 0 1px 4px rgba(29,78,216,0.06);
 }
-.stat-num {
-  font-size: 32px;
-  font-weight: 700;
-  color: var(--blue);
-  line-height: 1;
-  margin-bottom: 6px;
-}
-.stat-label {
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--muted);
-  text-transform: uppercase;
-  letter-spacing: .5px;
-}
+.stat-num { font-size: 30px; font-weight: 700; color: var(--blue); line-height: 1; margin-bottom: 5px; }
+.stat-label { font-size: 11px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: .5px; }
 .card {
-  background: #fff;
-  border-radius: 14px;
-  border: 1px solid var(--border);
-  box-shadow: 0 1px 4px rgba(29,78,216,0.06);
-  padding: 24px;
-  margin-bottom: 24px;
+  background: #fff; border-radius: 14px; border: 1px solid var(--border);
+  box-shadow: 0 1px 4px rgba(29,78,216,0.06); padding: 22px; margin-bottom: 22px;
 }
-.section-label {
-  font-size: 11px;
-  font-weight: 700;
-  color: var(--muted);
-  text-transform: uppercase;
-  letter-spacing: 1px;
-  margin-bottom: 16px;
-}
+.section-label { font-size: 11px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: 1px; margin-bottom: 16px; }
+.two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 22px; margin-bottom: 22px; }
+@media(max-width:720px){ .two-col { grid-template-columns: 1fr; } }
 table { width: 100%; border-collapse: collapse; }
-th {
-  font-size: 11px;
-  font-weight: 700;
-  color: var(--muted);
-  text-transform: uppercase;
-  letter-spacing: .5px;
-  padding: 8px 12px;
-  background: #f8fafc;
-  border-bottom: 1.5px solid var(--border);
-  text-align: left;
-  white-space: nowrap;
-}
-td {
-  padding: 10px 12px;
-  font-size: 12px;
-  color: var(--text);
-  border-bottom: 1px solid rgba(199,217,245,0.4);
-  vertical-align: middle;
-}
+th { font-size: 11px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: .5px; padding: 8px 10px; background: #f8fafc; border-bottom: 1.5px solid var(--border); text-align: left; white-space: nowrap; }
+td { padding: 10px 10px; font-size: 12px; color: var(--text); border-bottom: 1px solid rgba(199,217,245,0.4); vertical-align: middle; }
 tr:last-child td { border-bottom: none; }
-tr:hover td { background: rgba(219,234,254,0.12); }
-.status-badge {
-  display: inline-block;
-  padding: 3px 9px;
-  border-radius: 6px;
-  font-size: 11px;
-  font-weight: 700;
-  white-space: nowrap;
-}
-.status-pending  { background: #fef9c3; color: #854d0e; border: 1px solid #fde047; }
-.status-transit  { background: #dbeafe; color: #1e40af; border: 1px solid #93c5fd; }
-.status-delivered { background: #dcfce7; color: #166534; border: 1px solid #86efac; }
-.status-failed   { background: #fee2e2; color: #991b1b; border: 1px solid #fca5a5; }
-.on-time-yes { color: #16a34a; font-weight: 700; }
-.on-time-no  { color: #dc2626; font-weight: 700; }
-.empty-state {
-  padding: 40px 20px;
-  text-align: center;
-  color: var(--muted);
-  font-size: 13px;
-}
-.pct-badge {
-  display: inline-block;
-  padding: 3px 9px;
-  border-radius: 6px;
-  font-size: 11px;
-  font-weight: 700;
-}
-.pct-green  { background: #dcfce7; color: #166534; }
-.pct-yellow { background: #fef9c3; color: #854d0e; }
-.pct-red    { background: #fee2e2; color: #991b1b; }
-.rank-cell  { text-align: center; width: 48px; font-size: 16px; }
+tr:hover td { background: rgba(219,234,254,0.1); }
+.badge { display:inline-block; padding:3px 9px; border-radius:6px; font-size:11px; font-weight:700; white-space:nowrap; }
+.badge-pending  { background:#fef9c3; color:#854d0e; border:1px solid #fde047; }
+.badge-transit  { background:#dbeafe; color:#1e40af; border:1px solid #93c5fd; }
+.badge-delivered{ background:#dcfce7; color:#166534; border:1px solid #86efac; }
+.badge-failed   { background:#fee2e2; color:#991b1b; border:1px solid #fca5a5; }
+.on-time  { color:#16a34a; font-weight:700; }
+.late     { color:#dc2626; font-weight:700; }
+.pct-badge { display:inline-block; padding:3px 9px; border-radius:6px; font-size:11px; font-weight:700; }
+.pct-green { background:#dcfce7; color:#166534; }
+.pct-yellow{ background:#fef9c3; color:#854d0e; }
+.pct-red   { background:#fee2e2; color:#991b1b; }
+.rank-cell { text-align:center; width:44px; font-size:15px; }
+.empty-state { padding:36px 20px; text-align:center; color:var(--muted); font-size:13px; }
+.chart-wrap { position:relative; height:220px; }
+.today-badge { display:inline-block; padding:2px 8px; background:#0ea5e9; color:#fff; border-radius:20px; font-size:10px; font-weight:700; margin-left:6px; vertical-align:middle; }
 </style>
 </head>
 <body>
 
 <div class="hero">
-  <div class="hero-content">
-    <div class="hero-title">Delivery Dashboard</div>
-    <div class="hero-sub">All delivery activity — {{ current_month }}</div>
-    <a href="{{ url_for('admin_dashboard') }}" class="back-link">← Back to Admin Dashboard</a>
-  </div>
+  <div class="hero-title">🚚 Delivery Dashboard</div>
+  <div class="hero-sub">Full delivery analysis — {{ current_month }}</div>
+  <a href="{{ url_for('admin_dashboard') }}" class="back-link">← Back to Admin</a>
 </div>
 
 <div class="container">
 
-  <!-- Quick Stats -->
-  {% set total_assigned = assignments | length %}
-  {% set pending_count = assignments | selectattr('status', 'equalto', 'pending') | list | length %}
-  {% set in_transit_count = assignments | selectattr('status', 'equalto', 'in_transit') | list | length %}
-  {% set delivered_count = assignments | selectattr('status', 'equalto', 'delivered') | list | length %}
-
+  <!-- ── Quick Stats ── -->
   <div class="stats-row">
     <div class="stat-card">
-      <div class="stat-num">{{ total_assigned }}</div>
-      <div class="stat-label">Total (last 100)</div>
+      <div class="stat-num">{{ today_completed }}</div>
+      <div class="stat-label">Delivered Today</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-num" style="color:#0ea5e9;">{{ in_transit_count }}</div>
+      <div class="stat-label">In Transit Now</div>
     </div>
     <div class="stat-card">
       <div class="stat-num" style="color:#854d0e;">{{ pending_count }}</div>
       <div class="stat-label">Pending</div>
     </div>
     <div class="stat-card">
-      <div class="stat-num" style="color:#1e40af;">{{ in_transit_count }}</div>
-      <div class="stat-label">In Transit</div>
+      <div class="stat-num" style="color:#166534;">{{ month_completed }}</div>
+      <div class="stat-label">This Month</div>
     </div>
     <div class="stat-card">
-      <div class="stat-num" style="color:#166534;">{{ delivered_count }}</div>
-      <div class="stat-label">Delivered</div>
+      <div class="stat-num">{{ total_completed }}</div>
+      <div class="stat-label">All Time</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-num" style="color:#16a34a;">
+        {{ (total_on_time / total_completed * 100) | round(1) if total_completed else 0 }}%
+      </div>
+      <div class="stat-label">On-Time Rate</div>
     </div>
   </div>
 
-  <!-- Leaderboard -->
-  <div class="card">
-    <div class="section-label">Delivery Staff Leaderboard — All Time</div>
-    {% if leaderboard %}
-    <div style="overflow-x:auto;">
+  <!-- ── Chart + Leaderboard ── -->
+  <div class="two-col">
+
+    <!-- 14-day chart -->
+    <div class="card">
+      <div class="section-label">Last 14 Days — Deliveries</div>
+      <div class="chart-wrap">
+        <canvas id="deliveryChart"></canvas>
+      </div>
+    </div>
+
+    <!-- Monthly Leaderboard -->
+    <div class="card">
+      <div class="section-label">This Month's Leaderboard</div>
+      {% if leaderboard %}
       <table>
         <thead>
           <tr>
             <th style="text-align:center;">Rank</th>
-            <th>Employee</th>
-            <th>Total Deliveries</th>
-            <th>On-Time</th>
+            <th>Staff</th>
+            <th>Today</th>
+            <th>Month</th>
             <th>On-Time %</th>
+            <th>Score</th>
           </tr>
         </thead>
         <tbody>
@@ -219,99 +134,158 @@ tr:hover td { background: rgba(219,234,254,0.12); }
               {% else %}<span style="font-size:12px;color:var(--muted);">{{ loop.index }}</span>
               {% endif %}
             </td>
-            <td><strong>{{ row.emp.name }}</strong></td>
-            <td><strong>{{ row.total }}</strong></td>
-            <td>{{ row.on_time }}</td>
+            <td>
+              <strong>{{ row.emp.name }}</strong>
+              {% if row.today_count > 0 %}<span class="today-badge">{{ row.today_count }} today</span>{% endif %}
+            </td>
+            <td>{{ row.today_count }}</td>
+            <td><strong>{{ row.month_total }}</strong></td>
             <td>
               {% set pct = row.on_time_pct %}
-              <span class="pct-badge {% if pct >= 90 %}pct-green{% elif pct >= 70 %}pct-yellow{% else %}pct-red{% endif %}">
-                {{ pct }}%
-              </span>
+              <span class="pct-badge {% if pct >= 90 %}pct-green{% elif pct >= 70 %}pct-yellow{% else %}pct-red{% endif %}">{{ pct }}%</span>
             </td>
+            <td><strong style="color:var(--blue);">{{ row.month_score }}</strong></td>
           </tr>
           {% endfor %}
         </tbody>
       </table>
+      {% else %}
+      <div class="empty-state">No delivery staff found.</div>
+      {% endif %}
+    </div>
+  </div>
+
+  <!-- ── Per-Staff Analysis ── -->
+  <div class="card">
+    <div class="section-label">Staff Performance — All Time</div>
+    {% if leaderboard %}
+    <div style="overflow-x:auto;">
+    <table>
+      <thead>
+        <tr>
+          <th>Employee</th>
+          <th>Total Delivered</th>
+          <th>On-Time</th>
+          <th>On-Time %</th>
+          <th>Month Deliveries</th>
+          <th>Month Score</th>
+          <th>Avg Duration</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for row in leaderboard %}
+        <tr>
+          <td><strong>{{ row.emp.name }}</strong></td>
+          <td>{{ row.total }}</td>
+          <td>{{ row.on_time }}</td>
+          <td>
+            {% set pct = row.on_time_pct %}
+            <span class="pct-badge {% if pct >= 90 %}pct-green{% elif pct >= 70 %}pct-yellow{% else %}pct-red{% endif %}">{{ pct }}%</span>
+          </td>
+          <td>{{ row.month_total }}</td>
+          <td><strong style="color:var(--blue);">{{ row.month_score }} pts</strong></td>
+          <td>{% if row.avg_dur %}{{ row.avg_dur }} min{% else %}<span style="color:var(--muted);">—</span>{% endif %}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
     </div>
     {% else %}
     <div class="empty-state">No delivery staff found.</div>
     {% endif %}
   </div>
 
-  <!-- All Assignments -->
+  <!-- ── All Assignments Table ── -->
   <div class="card">
-    <div class="section-label">Recent Delivery Assignments (last 100)</div>
+    <div class="section-label">Recent Assignments (last 200)</div>
     {% if assignments %}
     <div style="overflow-x:auto;">
-      <table>
-        <thead>
-          <tr>
-            <th>ID</th>
-            <th>Assigned</th>
-            <th>Delivery Staff</th>
-            <th>Purchaser</th>
-            <th>Destination</th>
-            <th>Package</th>
-            <th>Bills</th>
-            <th>Status</th>
-            <th>Trip Info</th>
-          </tr>
-        </thead>
-        <tbody>
-          {% for a in assignments %}
-          {% set trip = trip_map.get(a.id) %}
-          {% set delivery_emp = emp_map.get(a.delivery_emp_id) %}
-          {% set purchaser_emp = emp_map.get(a.purchaser_id) %}
-          <tr>
-            <td style="color:var(--muted);">#{{ a.id }}</td>
-            <td style="white-space:nowrap;">{{ a.assigned_at.strftime('%d %b %y %H:%M') if a.assigned_at else '—' }}</td>
-            <td><strong>{{ delivery_emp.name if delivery_emp else a.delivery_emp_id }}</strong></td>
-            <td>{{ purchaser_emp.name if purchaser_emp else a.purchaser_id }}</td>
-            <td style="max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="{{ a.destination_addr }}">{{ a.destination_addr }}</td>
-            <td style="max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="{{ a.package_desc }}">{{ a.package_desc[:60] }}{% if a.package_desc|length > 60 %}...{% endif %}</td>
-            <td>{{ a.bills_count or 0 }}</td>
-            <td>
-              {% if a.status == 'pending' %}
-              <span class="status-badge status-pending">Pending</span>
-              {% elif a.status == 'in_transit' %}
-              <span class="status-badge status-transit">In Transit</span>
-              {% elif a.status == 'delivered' %}
-              <span class="status-badge status-delivered">Delivered</span>
-              {% else %}
-              <span class="status-badge status-failed">{{ a.status | capitalize }}</span>
-              {% endif %}
-            </td>
-            <td>
-              {% if trip %}
-                {% if trip.status == 'completed' %}
-                  <div>To: <strong>{{ trip.delivered_to_name or '—' }}</strong></div>
-                  {% if trip.duration_minutes %}
-                  <div style="color:var(--muted);">{{ trip.duration_minutes }} min
-                    {% if trip.is_on_time is none %}<span style="color:var(--muted);"> —</span>
-                    {% elif trip.is_on_time %}<span class="on-time-yes"> On-time</span>
-                    {% else %}<span class="on-time-no"> Late</span>{% endif %}
-                  </div>
-                  {% endif %}
-                  {% if trip.arrival_time %}
-                  <div style="color:var(--muted);font-size:11px;">{{ trip.arrival_time.strftime('%d %b %H:%M') }}</div>
-                  {% endif %}
-                {% elif trip.status == 'active' %}
-                  <span style="color:#1e40af;font-size:11px;font-weight:600;">Active since {{ trip.departure_time.strftime('%H:%M') if trip.departure_time else '?' }}</span>
-                {% endif %}
-              {% else %}
-                <span style="color:var(--muted);">—</span>
-              {% endif %}
-            </td>
-          </tr>
-          {% endfor %}
-        </tbody>
-      </table>
+    <table>
+      <thead>
+        <tr>
+          <th>#</th>
+          <th>Date</th>
+          <th>Delivery Staff</th>
+          <th>Assigned By</th>
+          <th>Destination</th>
+          <th>Package</th>
+          <th>Bills</th>
+          <th>Status</th>
+          <th>Delivered To</th>
+          <th>Duration</th>
+          <th>On-Time</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for a in assignments %}
+        {% set trip = trip_map.get(a.id) %}
+        {% set dstaff = emp_map.get(a.delivery_emp_id) %}
+        {% set purchaser = emp_map.get(a.purchaser_id) %}
+        <tr>
+          <td style="color:var(--muted);">#{{ a.id }}</td>
+          <td style="white-space:nowrap;">{{ a.assigned_at.strftime('%d %b %y') if a.assigned_at else '—' }}</td>
+          <td><strong>{{ dstaff.name if dstaff else '—' }}</strong></td>
+          <td style="color:var(--muted);">{{ purchaser.name if purchaser else '—' }}</td>
+          <td style="max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="{{ a.destination_addr }}">{{ a.destination_addr }}</td>
+          <td style="max-width:130px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="{{ a.package_desc }}">{{ a.package_desc[:50] }}{% if a.package_desc|length > 50 %}…{% endif %}</td>
+          <td>{{ a.bills_count or 0 }}</td>
+          <td>
+            {% if a.status == 'pending' %}<span class="badge badge-pending">Pending</span>
+            {% elif a.status == 'in_transit' %}<span class="badge badge-transit">In Transit</span>
+            {% elif a.status == 'delivered' %}<span class="badge badge-delivered">Delivered</span>
+            {% else %}<span class="badge badge-failed">{{ a.status }}</span>{% endif %}
+          </td>
+          <td>
+            {% if trip and trip.delivered_to_name %}
+              {{ trip.delivered_to_name }}{% if trip.delivered_to_company %}<br><span style="color:var(--muted);font-size:11px;">{{ trip.delivered_to_company }}</span>{% endif %}
+            {% else %}<span style="color:var(--muted);">—</span>{% endif %}
+          </td>
+          <td>
+            {% if trip and trip.duration_minutes %}{{ trip.duration_minutes }} min
+            {% else %}<span style="color:var(--muted);">—</span>{% endif %}
+          </td>
+          <td>
+            {% if trip %}
+              {% if trip.is_on_time is none %}<span style="color:var(--muted);">—</span>
+              {% elif trip.is_on_time %}<span class="on-time">✓ Yes</span>
+              {% else %}<span class="late">✗ Late</span>{% endif %}
+            {% else %}<span style="color:var(--muted);">—</span>{% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
     </div>
     {% else %}
-    <div class="empty-state">No delivery assignments found.</div>
+    <div class="empty-state">No delivery assignments yet.</div>
     {% endif %}
   </div>
 
 </div>
+
+<script>
+var labels  = {{ chart_labels | tojson }};
+var totals  = {{ chart_total | tojson }};
+var ontimes = {{ chart_ontime | tojson }};
+
+new Chart(document.getElementById('deliveryChart'), {
+  type: 'bar',
+  data: {
+    labels: labels,
+    datasets: [
+      { label: 'Total', data: totals, backgroundColor: 'rgba(29,78,216,0.75)', borderRadius: 5 },
+      { label: 'On-Time', data: ontimes, backgroundColor: 'rgba(22,163,74,0.75)', borderRadius: 5 }
+    ]
+  },
+  options: {
+    responsive: true, maintainAspectRatio: false,
+    plugins: { legend: { labels: { font: { family: 'DM Sans', size: 12 } } } },
+    scales: {
+      x: { ticks: { font: { family: 'DM Sans', size: 10 } }, grid: { display: false } },
+      y: { beginAtZero: true, ticks: { stepSize: 1, font: { family: 'DM Sans', size: 11 } } }
+    }
+  }
+});
+</script>
 </body>
 </html>
