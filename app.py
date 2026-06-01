@@ -2164,16 +2164,24 @@ def dashboard():
                     .all()
                 )
             elif staff_type == "biller" or session.get("is_admin"):
-                purchaser_delivery_staff = Employee.query.filter(
-                    Employee.is_admin == False,
-                    or_(Employee.staff_type == "delivery",
-                        Employee.secondary_staff_type == "delivery")
-                ).all()
+                try:
+                    purchaser_delivery_staff = Employee.query.filter(
+                        Employee.is_admin == False,
+                        or_(Employee.staff_type == "delivery",
+                            Employee.secondary_staff_type == "delivery")
+                    ).all()
+                except Exception as _qe:
+                    logger.warning(f"delivery staff or_() query failed ({_qe}), falling back to primary only")
+                    purchaser_delivery_staff = Employee.query.filter(
+                        Employee.is_admin == False,
+                        Employee.staff_type == "delivery"
+                    ).all()
             if my_assignments:
                 aid_list = [a.id for a in my_assignments]
                 trips = DeliveryTrip.query.filter(DeliveryTrip.assignment_id.in_(aid_list)).all()
                 trip_map = {t.assignment_id: t for t in trips}
-        except Exception:
+        except Exception as _de:
+            logger.error(f"Delivery module data load failed: {_de}")
             my_assignments = []
             purchaser_delivery_staff = []
             my_deliveries_today = []
