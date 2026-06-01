@@ -2162,7 +2162,7 @@ def dashboard():
                     .filter_by(emp_id=emp_id, trip_date=today, status="completed")
                     .all()
                 )
-            elif staff_type == "purchaser" or session.get("is_admin"):
+            elif staff_type == "biller" or session.get("is_admin"):
                 purchaser_delivery_staff = Employee.query.filter_by(staff_type="delivery", is_admin=False).all()
             if my_assignments:
                 aid_list = [a.id for a in my_assignments]
@@ -4365,8 +4365,8 @@ def delivery_assign():
     """Purchaser creates a delivery assignment — auto-geocodes the destination address."""
     emp_id = session.get("user_id")
     staff_type = session.get("staff_type", "")
-    if staff_type not in ("purchaser",) and not session.get("is_admin"):
-        flash("Only purchasers can assign deliveries.", "danger")
+    if staff_type not in ("biller",) and not session.get("is_admin"):
+        flash("Only billers can assign deliveries.", "danger")
         return redirect(url_for("dashboard"))
     try:
         delivery_emp_id  = int(request.form.get("delivery_emp_id", 0))
