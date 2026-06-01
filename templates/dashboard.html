@@ -937,9 +937,13 @@ table.htable tbody tr:hover td { background: var(--bg); }
   </div>
 
   {% elif staff_type == 'biller' %}
-  {% if purchaser_delivery_staff %}
   <div class="card" style="margin-bottom:20px;border-left:4px solid #0ea5e9;">
-    <div class="section-label" style="margin-bottom:16px;">Assign New Delivery</div>
+    <div class="section-label" style="margin-bottom:16px;">🚚 Assign New Delivery</div>
+    {% if not purchaser_delivery_staff %}
+    <div style="padding:14px;background:#fef3c7;border:1.5px solid #fbbf24;border-radius:9px;font-size:13px;color:#92400e;margin-bottom:12px;">
+      ⚠️ No delivery staff found. Ask admin to set at least one employee's role to <strong>Delivery</strong>.
+    </div>
+    {% endif %}
     <form method="POST" action="{{ url_for('delivery_assign') }}" style="display:flex;flex-direction:column;gap:12px;">
       <div style="display:flex;gap:12px;flex-wrap:wrap;">
         <div style="flex:1;min-width:200px;">
@@ -993,7 +997,6 @@ table.htable tbody tr:hover td { background: var(--bg); }
       </button>
     </form>
   </div>
-  {% endif %}
   {% endif %}
   <!-- ════ END DELIVERY GPS TRACKING MODULE ════ -->
 
