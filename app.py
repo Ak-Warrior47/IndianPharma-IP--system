@@ -2164,18 +2164,18 @@ def dashboard():
                     .all()
                 )
             elif staff_type == "biller" or session.get("is_admin"):
-                try:
-                    purchaser_delivery_staff = Employee.query.filter(
-                        Employee.is_admin == False,
-                        or_(Employee.staff_type == "delivery",
-                            Employee.secondary_staff_type == "delivery")
-                    ).all()
-                except Exception as _qe:
-                    logger.warning(f"delivery staff or_() query failed ({_qe}), falling back to primary only")
-                    purchaser_delivery_staff = Employee.query.filter(
-                        Employee.is_admin == False,
-                        Employee.staff_type == "delivery"
-                    ).all()
+                # Filter in Python to avoid NULL/ORM edge cases (is_admin, missing secondary col)
+                all_emps = Employee.query.all()
+                purchaser_delivery_staff = []
+                for _e in all_emps:
+                    if getattr(_e, "is_admin", False):
+                        continue
+                    primary = (getattr(_e, "staff_type", "") or "").lower()
+                    secondary = (getattr(_e, "secondary_staff_type", "") or "").lower()
+                    if primary == "delivery" or secondary == "delivery":
+                        purchaser_delivery_staff.append(_e)
+                logger.info(f"Biller dashboard: found {len(purchaser_delivery_staff)} delivery staff "
+                            f"(scanned {len(all_emps)} employees)")
             if my_assignments:
                 aid_list = [a.id for a in my_assignments]
                 trips = DeliveryTrip.query.filter(DeliveryTrip.assignment_id.in_(aid_list)).all()
@@ -4395,7 +4395,9 @@ def delivery_assign():
             return redirect(url_for("dashboard"))
 
         delivery_emp = db.session.get(Employee, delivery_emp_id)
-        if not delivery_emp or (delivery_emp.staff_type != "delivery" and delivery_emp.secondary_staff_type != "delivery"):
+        _p = (getattr(delivery_emp, "staff_type", "") or "").lower() if delivery_emp else ""
+        _s = (getattr(delivery_emp, "secondary_staff_type", "") or "").lower() if delivery_emp else ""
+        if not delivery_emp or (_p != "delivery" and _s != "delivery"):
             flash("Selected employee is not a delivery staff member.", "warning")
             return redirect(url_for("dashboard"))
 
