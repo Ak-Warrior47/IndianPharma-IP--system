@@ -818,7 +818,7 @@ table.htable tbody tr:hover td { background: var(--bg); }
         Delivered to <strong>{{ trip.delivered_to_name or 'N/A' }}</strong>
         {% if trip.delivered_to_company %} at {{ trip.delivered_to_company }}{% endif %}
         {% if trip.duration_minutes %} · {{ trip.duration_minutes }} min{% endif %}
-        {% if trip.is_on_time %}<span style="color:#16a34a;font-weight:700;"> On-time</span>{% else %}<span style="color:#dc2626;font-weight:700;"> Late</span>{% endif %}
+        {% if trip.is_on_time is none %}{% elif trip.is_on_time %}<span style="color:#16a34a;font-weight:700;"> On-time</span>{% else %}<span style="color:#dc2626;font-weight:700;"> Late</span>{% endif %}
       </div>
       {% endfor %}
     </div>
@@ -1684,6 +1684,15 @@ document.addEventListener('DOMContentLoaded', function() {
     // If trip is already in transit, begin live tracking automatically
     if (status === 'in_transit') {
       startLiveTracking(assignmentId);
+    }
+  });
+});
+// Stop all GPS watchers on page unload to avoid leaked browser GPS listeners
+window.addEventListener('pagehide', function() {
+  Object.values(_deliveryMaps).forEach(function(ctx) {
+    if (ctx.watchId != null) {
+      navigator.geolocation.clearWatch(ctx.watchId);
+      ctx.watchId = null;
     }
   });
 });

@@ -4439,6 +4439,10 @@ def delivery_check_arrival(assignment_id):
         if not assignment.destination_lat or not assignment.destination_lng:
             return jsonify({"ok": True, "unlock": True, "dist": 0})
 
+        # Skip GPS check if device sent null/zero coords (GPS unavailable)
+        if curr_lat == 0 and curr_lng == 0:
+            return jsonify({"ok": True, "unlock": True, "dist": 0})
+
         dist = _haversine_m(curr_lat, curr_lng, assignment.destination_lat, assignment.destination_lng)
         unlock = dist <= ARRIVAL_RADIUS_M
         return jsonify({"ok": True, "unlock": unlock, "dist": int(dist), "radius": ARRIVAL_RADIUS_M})
@@ -4469,7 +4473,8 @@ def delivery_confirm(assignment_id):
         if not delivered_to:
             return jsonify({"ok": False, "error": "Please enter the name of the person who received the package"}), 400
 
-        if assignment.destination_lat and assignment.destination_lng:
+        # Only enforce GPS geofence when the device actually sent a valid position
+        if assignment.destination_lat and assignment.destination_lng and not (curr_lat == 0 and curr_lng == 0):
             dist = _haversine_m(curr_lat, curr_lng, assignment.destination_lat, assignment.destination_lng)
             if dist > ARRIVAL_RADIUS_M:
                 return jsonify({"ok": False, "error": f"You must be at the destination to confirm delivery ({int(dist)}m away, max {ARRIVAL_RADIUS_M}m)."}), 400
@@ -4499,10 +4504,10 @@ def delivery_confirm(assignment_id):
                 delivered_to_company=company,
                 delivery_note=delivery_note,
                 status="completed",
-                is_on_time=True,
+                is_on_time=None,
             )
             db.session.add(trip)
-            is_on_time = True
+            is_on_time = None
 
         assignment.status = "delivered"
         db.session.commit()

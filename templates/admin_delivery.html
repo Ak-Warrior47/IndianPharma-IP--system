@@ -287,7 +287,9 @@ tr:hover td { background: rgba(219,234,254,0.12); }
                   <div>To: <strong>{{ trip.delivered_to_name or '—' }}</strong></div>
                   {% if trip.duration_minutes %}
                   <div style="color:var(--muted);">{{ trip.duration_minutes }} min
-                    {% if trip.is_on_time %}<span class="on-time-yes"> On-time</span>{% else %}<span class="on-time-no"> Late</span>{% endif %}
+                    {% if trip.is_on_time is none %}<span style="color:var(--muted);"> —</span>
+                    {% elif trip.is_on_time %}<span class="on-time-yes"> On-time</span>
+                    {% else %}<span class="on-time-no"> Late</span>{% endif %}
                   </div>
                   {% endif %}
                   {% if trip.arrival_time %}
