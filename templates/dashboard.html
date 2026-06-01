@@ -1056,10 +1056,27 @@ tbody tr:hover { background: rgba(165,180,252,0.18) !important; }
       </div>
       <div>
         <label style="font-size:12px;font-weight:600;color:var(--muted);display:block;margin-bottom:4px;">Shop Name / Destination Address *</label>
-        <input type="text" name="destination_addr" required maxlength="500"
-          placeholder="e.g. Sharma Medical Store, MG Road, Pune"
+        <input type="text" name="destination_addr" id="dest-addr-input" required maxlength="500"
+          placeholder="e.g. Sharma Medical Store, Link Road, Cuttack"
           style="width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:9px;font-size:13px;font-family:inherit;">
-        <div style="font-size:11px;color:var(--muted);margin-top:3px;">The map location is found automatically from this name/address.</div>
+        <div style="font-size:11px;color:var(--muted);margin-top:3px;">
+          Location is auto-found inside Odisha. If shop isn't on the map, or many shops share the name,
+          <a href="#" onclick="toggleManualPin(event)" style="color:var(--blue);font-weight:600;">📍 pin it on the map manually</a>.
+        </div>
+        <div id="manual-pin-section" style="display:none;margin-top:10px;padding:10px;background:rgba(14,165,233,0.06);border:1.5px dashed #0ea5e9;border-radius:9px;">
+          <div style="font-size:11px;font-weight:700;color:#0369a1;text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px;">Pick exact shop location (Odisha)</div>
+          <div style="font-size:11px;color:var(--muted);margin-bottom:6px;">Search the area, OR tap directly on the map to drop a pin.</div>
+          <div style="display:flex;gap:6px;margin-bottom:6px;">
+            <input type="text" id="pin-search-box" placeholder="Search area / landmark in Odisha..."
+              style="flex:1;padding:7px 10px;border:1px solid var(--border);border-radius:7px;font-size:12px;">
+            <button type="button" onclick="pinSearch()" style="padding:7px 14px;background:var(--blue);color:#fff;border:none;border-radius:7px;font-size:12px;font-weight:600;cursor:pointer;">Search</button>
+          </div>
+          <div id="pin-results" style="font-size:11px;margin-bottom:6px;"></div>
+          <div id="pin-map" style="height:240px;border-radius:9px;border:1px solid var(--border);"></div>
+          <div id="pin-coords" style="font-size:11px;color:var(--muted);margin-top:6px;">No pin yet — tap the map to drop one.</div>
+          <input type="hidden" name="manual_lat" id="manual_lat" value="">
+          <input type="hidden" name="manual_lng" id="manual_lng" value="">
+        </div>
       </div>
       <div>
         <label style="font-size:12px;font-weight:600;color:var(--muted);display:block;margin-bottom:4px;">Package Description *</label>
@@ -1856,6 +1873,71 @@ function validateAndSubmit(e){
   }
   requestAnimationFrame(draw);
 })();
+</script>
+
+<script>
+// ═══ MANUAL PIN PICKER (biller delivery assign) ═══
+var __pinMap = null, __pinMarker = null;
+var ODISHA_CENTER = [{{ store_lat or 20.4634 }}, {{ store_lng or 85.8844 }}];
+function toggleManualPin(ev){
+  if(ev) ev.preventDefault();
+  var sec = document.getElementById('manual-pin-section');
+  if(!sec) return;
+  var open = sec.style.display !== 'none';
+  sec.style.display = open ? 'none' : 'block';
+  if(open) return;
+  setTimeout(initPinMap, 80);
+}
+function initPinMap(){
+  if(__pinMap){ __pinMap.invalidateSize(); return; }
+  if(typeof L === 'undefined'){ return; }
+  __pinMap = L.map('pin-map').setView(ODISHA_CENTER, 11);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    maxZoom: 19, attribution: '© OpenStreetMap'
+  }).addTo(__pinMap);
+  // Show store as reference
+  L.circleMarker(ODISHA_CENTER, {radius:6,color:'#16a34a',fillColor:'#22c55e',fillOpacity:.9}).addTo(__pinMap).bindTooltip('🏪 Store',{permanent:false});
+  __pinMap.on('click', function(e){ setPin(e.latlng.lat, e.latlng.lng); });
+}
+function setPin(lat, lng){
+  // sanity: Odisha bbox
+  if(lat < 17.7 || lat > 22.6 || lng < 81.3 || lng > 87.5){
+    document.getElementById('pin-coords').innerHTML = '<span style="color:#dc2626;">⚠ Outside Odisha — pin ignored.</span>';
+    return;
+  }
+  if(__pinMarker) __pinMap.removeLayer(__pinMarker);
+  __pinMarker = L.marker([lat,lng]).addTo(__pinMap);
+  __pinMap.panTo([lat,lng]);
+  document.getElementById('manual_lat').value = lat.toFixed(6);
+  document.getElementById('manual_lng').value = lng.toFixed(6);
+  document.getElementById('pin-coords').innerHTML = '✅ Pinned at <strong>' + lat.toFixed(5) + ', ' + lng.toFixed(5) + '</strong>';
+}
+function pinSearch(){
+  var q = (document.getElementById('pin-search-box').value || '').trim();
+  if(!q){ return; }
+  if(!/odisha|orissa/i.test(q)) q = q + ', Odisha, India';
+  var box = '81.3,22.6,87.5,17.7';
+  var url = 'https://nominatim.openstreetmap.org/search?format=json&limit=5&countrycodes=in&bounded=1&viewbox=' + box + '&q=' + encodeURIComponent(q);
+  document.getElementById('pin-results').innerHTML = '<span style="color:var(--muted);">Searching...</span>';
+  fetch(url, {headers:{'Accept':'application/json'}})
+    .then(function(r){ return r.json(); })
+    .then(function(arr){
+      if(!arr || !arr.length){
+        document.getElementById('pin-results').innerHTML = '<span style="color:#b45309;">No matches in Odisha. Tap the map directly to drop a pin.</span>';
+        return;
+      }
+      var html = '<div style="display:flex;flex-direction:column;gap:4px;max-height:130px;overflow-y:auto;">';
+      arr.forEach(function(r, i){
+        var nm = (r.display_name || '').replace(/'/g,'&#39;');
+        html += '<button type="button" onclick="setPin(' + r.lat + ',' + r.lon + ')" style="text-align:left;padding:6px 8px;background:#fff;border:1px solid var(--border);border-radius:6px;font-size:11px;cursor:pointer;">📍 ' + nm + '</button>';
+      });
+      html += '</div>';
+      document.getElementById('pin-results').innerHTML = html;
+    })
+    .catch(function(){
+      document.getElementById('pin-results').innerHTML = '<span style="color:#dc2626;">Search failed. Tap the map directly.</span>';
+    });
+}
 </script>
 </body>
 </html>

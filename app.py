@@ -4356,17 +4356,43 @@ def _haversine_m(lat1, lng1, lat2, lng2):
 
 
 def geocode_address(address):
-    """Convert a text address to (lat, lng) using Nominatim (free, no API key)."""
+    """Convert an Odisha address to (lat, lng) using Nominatim, biased to Odisha state.
+    Tries hard: appends ', Odisha, India' if missing, then falls back to a wider search.
+    """
+    if not address or not address.strip():
+        return None, None
+    q = address.strip()
+    if "odisha" not in q.lower() and "orissa" not in q.lower():
+        q_biased = f"{q}, Odisha, India"
+    else:
+        q_biased = q
+    # Odisha bounding box: roughly lon 81.3..87.5, lat 17.7..22.6
+    viewbox = "81.3,22.6,87.5,17.7"  # left,top,right,bottom
+    headers = {"User-Agent": "IndianPharmaKPI/1.0 (delivery-geocoder)"}
     try:
+        # 1st attempt: strict to Odisha viewbox
         resp = _requests.get(
             "https://nominatim.openstreetmap.org/search",
-            params={"q": address, "format": "json", "limit": 1, "countrycodes": "in"},
-            headers={"User-Agent": "IndianPharmaKPI/1.0 (delivery-geocoder)"},
-            timeout=6,
+            params={"q": q_biased, "format": "json", "limit": 1,
+                    "countrycodes": "in", "viewbox": viewbox, "bounded": 1},
+            headers=headers, timeout=6,
         )
         results = resp.json()
         if results:
             return float(results[0]["lat"]), float(results[0]["lon"])
+        # 2nd: relax bounded, keep viewbox as preference
+        resp = _requests.get(
+            "https://nominatim.openstreetmap.org/search",
+            params={"q": q_biased, "format": "json", "limit": 1,
+                    "countrycodes": "in", "viewbox": viewbox},
+            headers=headers, timeout=6,
+        )
+        results = resp.json()
+        if results:
+            lat, lng = float(results[0]["lat"]), float(results[0]["lon"])
+            # sanity check: stay inside Odisha bbox
+            if 17.7 <= lat <= 22.6 and 81.3 <= lng <= 87.5:
+                return lat, lng
     except Exception as e:
         logger.warning(f"geocode_address failed for '{address}': {e}")
     return None, None
@@ -4401,8 +4427,22 @@ def delivery_assign():
             flash("Selected employee is not a delivery staff member.", "warning")
             return redirect(url_for("dashboard"))
 
-        # Auto-geocode — runs in background; if it fails the assignment still saves
-        dest_lat, dest_lng = geocode_address(destination_addr)
+        # Manual pin overrides geocoding (for shops not on OSM / ambiguous names)
+        dest_lat = dest_lng = None
+        m_lat_raw = (request.form.get("manual_lat") or "").strip()
+        m_lng_raw = (request.form.get("manual_lng") or "").strip()
+        if m_lat_raw and m_lng_raw:
+            try:
+                ml, mn = float(m_lat_raw), float(m_lng_raw)
+                # Sanity: inside Odisha bbox
+                if 17.7 <= ml <= 22.6 and 81.3 <= mn <= 87.5:
+                    dest_lat, dest_lng = ml, mn
+                else:
+                    flash("Manual pin must be inside Odisha. Ignoring.", "warning")
+            except (ValueError, TypeError):
+                pass
+        if dest_lat is None:
+            dest_lat, dest_lng = geocode_address(destination_addr)
 
         assignment = DeliveryAssignment(
             purchaser_id=emp_id,
