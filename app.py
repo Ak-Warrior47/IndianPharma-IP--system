@@ -15,6 +15,7 @@ from typing import List, Optional, Dict, Any
 
 from flask import Flask, render_template, request, redirect, url_for, flash, session, Response, jsonify
 from flask_sqlalchemy import SQLAlchemy
+from sqlalchemy import or_
 from flask_socketio import SocketIO, emit
 from flask_mail import Mail, Message as MailMessage
 from werkzeug.security import generate_password_hash, check_password_hash
@@ -2163,7 +2164,11 @@ def dashboard():
                     .all()
                 )
             elif staff_type == "biller" or session.get("is_admin"):
-                purchaser_delivery_staff = Employee.query.filter_by(staff_type="delivery", is_admin=False).all()
+                purchaser_delivery_staff = Employee.query.filter(
+                    Employee.is_admin == False,
+                    or_(Employee.staff_type == "delivery",
+                        Employee.secondary_staff_type == "delivery")
+                ).all()
             if my_assignments:
                 aid_list = [a.id for a in my_assignments]
                 trips = DeliveryTrip.query.filter(DeliveryTrip.assignment_id.in_(aid_list)).all()
@@ -4382,7 +4387,7 @@ def delivery_assign():
             return redirect(url_for("dashboard"))
 
         delivery_emp = db.session.get(Employee, delivery_emp_id)
-        if not delivery_emp or delivery_emp.staff_type != "delivery":
+        if not delivery_emp or (delivery_emp.staff_type != "delivery" and delivery_emp.secondary_staff_type != "delivery"):
             flash("Selected employee is not a delivery staff member.", "warning")
             return redirect(url_for("dashboard"))
 
@@ -4566,7 +4571,11 @@ def delivery_leaderboard():
     try:
         today = date.today()
         month_start = today.replace(day=1)
-        delivery_staff = Employee.query.filter_by(staff_type="delivery", is_admin=False).all()
+        delivery_staff = Employee.query.filter(
+            Employee.is_admin == False,
+            or_(Employee.staff_type == "delivery",
+                Employee.secondary_staff_type == "delivery")
+        ).all()
         leaderboard = []
         for emp in delivery_staff:
             all_trips   = DeliveryTrip.query.filter_by(emp_id=emp.id, status="completed").all()
@@ -4616,7 +4625,7 @@ def admin_delivery():
 
         all_emp        = Employee.query.all()
         emp_map        = {e.id: e for e in all_emp}
-        delivery_staff = [e for e in all_emp if e.staff_type == "delivery"]
+        delivery_staff = [e for e in all_emp if e.staff_type == "delivery" or e.secondary_staff_type == "delivery"]
 
         # ── Per-staff leaderboard with month + all-time stats ──
         leaderboard = []
