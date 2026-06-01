@@ -1856,6 +1856,54 @@ def dashboard():
                         db.session.rollback()
                         logger.error(f"DeliveryBillerNote save: {dbe}")
                         flash("Error saving note.", "danger")
+
+            # ── Delivery module data (assignments for delivery staff, staff list for biller) ──
+            my_assignments = []
+            purchaser_delivery_staff = []
+            my_deliveries_today = []
+            trip_map = {}
+            delivery_diag = None
+            try:
+                if staff_type == "delivery":
+                    my_assignments = (
+                        DeliveryAssignment.query
+                        .filter(
+                            DeliveryAssignment.delivery_emp_id == emp_id,
+                            DeliveryAssignment.status.in_(["pending", "in_transit"])
+                        )
+                        .order_by(DeliveryAssignment.assigned_at.desc())
+                        .all()
+                    )
+                    my_deliveries_today = (
+                        DeliveryTrip.query
+                        .filter_by(emp_id=emp_id, trip_date=today, status="completed")
+                        .all()
+                    )
+                    if my_assignments:
+                        aid_list = [a.id for a in my_assignments]
+                        trips = DeliveryTrip.query.filter(DeliveryTrip.assignment_id.in_(aid_list)).all()
+                        trip_map = {t.assignment_id: t for t in trips}
+                elif staff_type == "biller":
+                    all_emps = Employee.query.all()
+                    _role_breakdown = {}
+                    for _e in all_emps:
+                        if getattr(_e, "is_admin", False):
+                            continue
+                        primary = (getattr(_e, "staff_type", "") or "").lower()
+                        secondary = (getattr(_e, "secondary_staff_type", "") or "").lower()
+                        _role_breakdown[primary] = _role_breakdown.get(primary, 0) + 1
+                        if primary == "delivery" or secondary == "delivery":
+                            purchaser_delivery_staff.append(_e)
+                    delivery_diag = {
+                        "total_emps": len(all_emps),
+                        "del_total": len(purchaser_delivery_staff),
+                        "breakdown": _role_breakdown,
+                    }
+                    logger.info(f"Biller dashboard (note path): {len(purchaser_delivery_staff)} delivery staff "
+                                f"of {len(all_emps)} employees, breakdown={_role_breakdown}")
+            except Exception as _de:
+                logger.error(f"Delivery module (note path) failed: {_de}")
+
             return render_template("dashboard.html",
                 user_name=session.get("user_name", "User"),
                 user_id=emp_id,
@@ -1875,6 +1923,14 @@ def dashboard():
                 today_multitask=[],
                 primary_staff_type=session.get("primary_staff_type") or staff_type,
                 secondary_staff_type=session.get("secondary_staff_type"),
+                my_assignments=my_assignments,
+                purchaser_delivery_staff=purchaser_delivery_staff,
+                my_deliveries_today=my_deliveries_today,
+                trip_map=trip_map,
+                delivery_diag=delivery_diag,
+                store_lat=STORE_LAT,
+                store_lng=STORE_LNG,
+                tomtom_key=TOMTOM_API_KEY,
             )
 
         # ── Independent multitask submission (Role 2 can be filled/changed any time) ──
