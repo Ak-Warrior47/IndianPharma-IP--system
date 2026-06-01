@@ -4724,10 +4724,9 @@ def delivery_leaderboard():
 
 
 @app.route("/admin/debug_delivery_staff")
-@login_required
+@admin_required
 def admin_debug_delivery_staff():
-    """Diagnostic — lists every employee and their primary/secondary roles.
-    Temporarily open to any logged-in user for troubleshooting."""
+    """Diagnostic — lists every employee and their primary/secondary roles."""
     try:
         emps = Employee.query.all()
         rows = []
