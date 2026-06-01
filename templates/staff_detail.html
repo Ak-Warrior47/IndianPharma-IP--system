@@ -334,6 +334,98 @@ body{
   .hero-feedback{margin-left:0;}
   .two-col{gap:12px;}
 }
+
+/* ════════ APPLE-STYLE GLASSMORPHISM OVERLAY ════════ */
+:root {
+  --glass-bg: rgba(255,255,255,0.55);
+  --glass-bg-strong: rgba(255,255,255,0.7);
+  --glass-border: rgba(255,255,255,0.45);
+  --glass-shadow: 0 8px 32px rgba(31,38,135,0.12);
+  --glass-blur: blur(20px) saturate(180%);
+  --glass-blur-strong: blur(28px) saturate(200%);
+  --bg-blob-1: #a5b4fc;
+  --bg-blob-2: #f9a8d4;
+  --bg-blob-3: #93c5fd;
+  --glass-text: #0f172a;
+  --glass-muted: #475569;
+}
+html, body {
+  background: linear-gradient(135deg, #eff6ff 0%, #fdf2f8 50%, #f5f3ff 100%) !important;
+  min-height: 100vh;
+  color: var(--glass-text);
+}
+body::before, body::after {
+  content: ''; position: fixed; border-radius: 50%;
+  filter: blur(90px); opacity: 0.55; pointer-events: none; z-index: -1;
+  animation: floatBlob 18s ease-in-out infinite alternate;
+}
+body::before { width: 480px; height: 480px; background: var(--bg-blob-1); top: -120px; left: -120px; }
+body::after  { width: 520px; height: 520px; background: var(--bg-blob-2); bottom: -150px; right: -150px; animation-delay: -8s; }
+@keyframes floatBlob { from { transform: translate(0,0) scale(1); } to { transform: translate(60px,80px) scale(1.15); } }
+
+.card, .glass-card, .stat-card, .kpi-card, .sc-card, .panel, .box {
+  background: var(--glass-bg) !important;
+  -webkit-backdrop-filter: var(--glass-blur);
+  backdrop-filter: var(--glass-blur);
+  border: 1px solid var(--glass-border) !important;
+  border-radius: 18px !important;
+  box-shadow: var(--glass-shadow) !important;
+}
+input:not([type=checkbox]):not([type=radio]):not([type=submit]):not([type=hidden]),
+select, textarea {
+  background: rgba(255,255,255,0.65) !important;
+  -webkit-backdrop-filter: blur(10px);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(255,255,255,0.55) !important;
+  border-radius: 12px !important;
+  transition: all .2s ease;
+}
+input:focus, select:focus, textarea:focus {
+  outline: none !important;
+  background: rgba(255,255,255,0.85) !important;
+  border-color: rgba(99,102,241,0.55) !important;
+  box-shadow: 0 0 0 4px rgba(165,180,252,0.25) !important;
+}
+button, .btn, .btn-submit, .btn-sm, .btn-view, .btn-export, .btn-dl, .btn-nav, .btn-back, .btn-fill-past, .role-btn {
+  border-radius: 12px !important;
+  transition: transform .2s ease, box-shadow .2s ease, background .2s ease !important;
+}
+button:hover, .btn:hover, .btn-submit:hover, .btn-sm:hover, .btn-view:hover, .btn-export:hover, .btn-dl:hover, .btn-nav:hover, .btn-back:hover, .btn-fill-past:hover, .role-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px rgba(99,102,241,0.25) !important;
+}
+.nav, .navbar, .top-nav, .sidebar, header {
+  background: rgba(255,255,255,0.6) !important;
+  -webkit-backdrop-filter: blur(24px) saturate(180%);
+  backdrop-filter: blur(24px) saturate(180%);
+  border-color: var(--glass-border) !important;
+}
+table {
+  border-radius: 14px;
+  overflow: hidden;
+  background: rgba(255,255,255,0.4);
+  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(12px);
+}
+thead, table thead tr { background: rgba(255,255,255,0.55) !important; }
+tbody tr:nth-child(even) { background: rgba(255,255,255,0.25); }
+tbody tr:hover { background: rgba(165,180,252,0.18) !important; }
+.badge, .chip, .pill, .status-badge {
+  border-radius: 999px !important;
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
+  border: 1px solid rgba(255,255,255,0.4) !important;
+}
+.flash, .alert, .flash-message { 
+  background: var(--glass-bg-strong) !important;
+  -webkit-backdrop-filter: var(--glass-blur);
+  backdrop-filter: var(--glass-blur);
+  border: 1px solid var(--glass-border) !important;
+  border-radius: 14px !important;
+  box-shadow: var(--glass-shadow) !important;
+}
+/* ════════ END GLASSMORPHISM OVERLAY ════════ */
+
 </style>
 </head>
 <body>
@@ -374,6 +466,16 @@ body{
   {% else %}
     <a href="/dashboard" class="back-btn">← Back to Dashboard</a>
   {% endif %}
+
+  {% with messages = get_flashed_messages(with_categories=true) %}
+    {% if messages %}
+      <div style="display:flex;flex-direction:column;gap:8px;margin:10px 0 16px;">
+      {% for cat, msg in messages %}
+        <div class="flash" style="padding:12px 16px;color:#0f172a;font-weight:600;">{{ msg }}</div>
+      {% endfor %}
+      </div>
+    {% endif %}
+  {% endwith %}
 
   <!-- ── HERO ── -->
   <section class="hero">
