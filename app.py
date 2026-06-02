@@ -1595,7 +1595,12 @@ def run_migrations():
         else:
             # SQLite doesn't support IF NOT EXISTS on ALTER TABLE
             import sqlite3
-            db_path = app.config["SQLALCHEMY_DATABASE_URI"].replace("sqlite:///", "")
+            _raw = app.config["SQLALCHEMY_DATABASE_URI"].replace("sqlite:///", "")
+            # Flask-SQLAlchemy resolves relative paths against the instance folder
+            if not os.path.isabs(_raw):
+                db_path = os.path.join(app.instance_path, _raw)
+            else:
+                db_path = _raw
             conn = sqlite3.connect(db_path)
             cursor = conn.cursor()
             cursor.execute("PRAGMA table_info(employees)")
@@ -2047,8 +2052,8 @@ def dashboard():
                         )
                         db.session.add(db_note)
                         db.session.commit()
-                        today_db_note = db_note
                         flash("✅ Daily note recorded successfully.", "success")
+                        return redirect(url_for("dashboard"))
                     except Exception as dbe:
                         db.session.rollback()
                         logger.error(f"DeliveryBillerNote save: {dbe}")

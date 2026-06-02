@@ -1424,8 +1424,8 @@ tbody tr:hover { background: rgba(165,180,252,0.18) !important; }
   </div>
   {% endif %}
 
-  <!-- RECENT HISTORY -->
-  {% if recent %}
+  <!-- RECENT HISTORY (KPI entries only — delivery/biller/packer have their own note history above) -->
+  {% if recent and staff_type not in ('delivery', 'biller', 'packer') %}
   <div class="card">
     <div class="section-label">Recent History (last {{ recent|length }} entries)</div>
     <div class="table-wrap">
@@ -1609,15 +1609,7 @@ function updateCheckerTotals(){
   if(tPD){ tPD.textContent = pd; tPD.style.color = pd > 0 ? '#dc2626' : '#16a34a'; }
   if(tCL){ tCL.textContent = clearance + '%'; tCL.style.color = clearance >= 90 ? '#16a34a' : clearance >= 75 ? '#d97706' : '#dc2626'; }
 }
-function setYN(f,v){
-  // alias for consistency — same behaviour as setYN above
-  var valEl = document.getElementById(f+'_val');
-  var yesEl = document.getElementById(f+'_yes');
-  var noEl  = document.getElementById(f+'_no');
-  if(valEl) valEl.value = v;
-  if(yesEl) yesEl.classList.toggle('active', v==='1');
-  if(noEl)  noEl.classList.toggle('active', v==='0');
-}
+// setYN already defined above
 </script>
 
 <script>
