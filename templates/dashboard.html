@@ -6,6 +6,8 @@
 <title>Dashboard | Pharma IP System</title>
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&family=DM+Serif+Display&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV/XN/WLEg=" crossorigin=""></script>
 <style>
 *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
 :root {
@@ -16,8 +18,8 @@
   --text:      #0f172a;
   --muted:     #64748b;
   --border:    #c7d9f5;
-  --bg:        #eef4ff;
-  --page-bg:   #e8f0fe;
+  --bg:        #f8fafc;
+  --page-bg:   #ffffff;
   --white:     #ffffff;
   --success:   #16a34a;
   --danger:    #dc2626;
@@ -31,6 +33,46 @@ body {
   background: var(--page-bg);
   min-height: 100vh;
   color: var(--text);
+}
+
+/* DASH HERO BANNER */
+.dash-hero {
+  background: linear-gradient(135deg, #060d1f 0%, #0e1f45 55%, #060d1f 100%);
+  position: relative; overflow: hidden;
+  padding: 32px 28px;
+  border-bottom: 1px solid rgba(99,179,237,0.15);
+}
+.dash-hero::before {
+  content: ''; position: absolute; inset: 0; pointer-events: none;
+  background:
+    radial-gradient(ellipse 60% 80% at 0% 50%, rgba(29,78,216,0.4) 0%, transparent 60%),
+    radial-gradient(ellipse 40% 60% at 100% 30%, rgba(14,165,233,0.25) 0%, transparent 55%);
+  animation: dashMesh 10s ease-in-out infinite alternate;
+}
+@keyframes dashMesh { 0%{transform:scale(1);} 100%{transform:scale(1.06);} }
+.dash-hero::after {
+  content: ''; position: absolute; top: 0; left: -80%; width: 50%; height: 100%;
+  background: linear-gradient(105deg, transparent, rgba(255,255,255,0.04), transparent);
+  animation: dashGlare 8s ease-in-out infinite; pointer-events: none;
+}
+@keyframes dashGlare { 0%{left:-80%;} 60%{left:160%;} 100%{left:160%;} }
+.dash-hero-orb { position: absolute; border-radius: 50%; filter: blur(70px); pointer-events: none; animation: orbFloat linear infinite; }
+.dash-orb1 { width:260px;height:260px;background:rgba(29,78,216,0.18);top:-80px;right:200px;animation-duration:18s; }
+.dash-orb2 { width:180px;height:180px;background:rgba(14,165,233,0.14);bottom:-60px;right:20px;animation-duration:22s;animation-direction:reverse; }
+.dash-hero-canvas { position: absolute; inset: 0; pointer-events: none; opacity: 0.6; }
+.dash-hero-content { position: relative; z-index: 2; display: flex; align-items: center; justify-content: space-between; max-width: 1200px; margin: 0 auto; }
+.dash-hero-left {}
+.dash-hello { font-size: 12px; font-weight: 600; color: rgba(148,163,184,0.7); text-transform: uppercase; letter-spacing: 1.5px; margin-bottom: 6px; }
+.dash-name { font-family: 'DM Serif Display', serif; font-size: 30px; color: #fff; letter-spacing: -0.3px; line-height: 1.1; text-shadow: 0 2px 16px rgba(29,78,216,0.4); margin-bottom: 12px; }
+.dash-role-chip { display: inline-block; padding: 5px 16px; border-radius: 20px; font-size: 11px; font-weight: 700; background: rgba(29,78,216,0.3); border: 1px solid rgba(99,179,237,0.4); color: #93c5fd; letter-spacing: 0.8px; text-transform: uppercase; backdrop-filter: blur(8px); }
+.dash-hero-right { display: flex; align-items: center; gap: 20px; }
+.dash-stat-ring { position: relative; display: flex; align-items: center; justify-content: center; }
+.dash-ring-label { position: absolute; font-size: 9px; font-weight: 700; color: rgba(148,163,184,0.7); text-transform: uppercase; letter-spacing: 0.8px; }
+@keyframes orbFloat {
+  0%  { transform: translate(0,0) scale(1); }
+  33% { transform: translate(20px,-15px) scale(1.04); }
+  66% { transform: translate(-15px,20px) scale(0.97); }
+  100%{ transform: translate(0,0) scale(1); }
 }
 
 /* NAV */
@@ -171,57 +213,175 @@ table.htable tbody tr:hover td { background: var(--bg); }
 .btn-fill-past:hover { transform: translateY(-1px); }
 
 /* ── ANIMATIONS ── */
-@keyframes fadeSlideUp {
-  from { opacity:0; transform:translateY(16px); }
-  to   { opacity:1; transform:translateY(0); }
-}
-@keyframes popIn {
-  from { opacity:0; transform:scale(0.88); }
-  to   { opacity:1; transform:scale(1); }
-}
-@keyframes shimmerBar {
-  0%   { background-position:-200% center; }
-  100% { background-position: 200% center; }
-}
-.card {
-  animation: fadeSlideUp 0.38s cubic-bezier(.22,.68,0,1.2) both;
-  transition: box-shadow .22s, transform .22s;
-}
+@keyframes fadeSlideUp { from{opacity:0;transform:translateY(16px)} to{opacity:1;transform:translateY(0)} }
+@keyframes popIn { from{opacity:0;transform:scale(0.88)} to{opacity:1;transform:scale(1)} }
+.card { animation:fadeSlideUp 0.38s cubic-bezier(.22,.68,0,1.2) both; transition:box-shadow .22s,transform .22s; }
 .card:hover { box-shadow:0 5px 22px rgba(29,78,216,0.09); transform:translateY(-1px); }
-.kpi-card { animation: popIn 0.42s cubic-bezier(.22,.68,0,1.2) both; transition:transform .2s,box-shadow .2s; }
+.kpi-card { animation:popIn 0.42s cubic-bezier(.22,.68,0,1.2) both; transition:transform .2s,box-shadow .2s; }
 .kpi-card:hover { transform:translateY(-2px) scale(1.015); box-shadow:0 6px 18px rgba(29,78,216,0.11); }
 .btn-submit { transition:transform .18s,box-shadow .18s; }
 .btn-submit:hover { transform:translateY(-2px); box-shadow:0 6px 16px rgba(29,78,216,0.22); }
-.multitask-section { animation: fadeSlideUp 0.35s cubic-bezier(.22,.68,0,1.2) both; }
+.multitask-section { animation:fadeSlideUp 0.35s cubic-bezier(.22,.68,0,1.2) both; }
+
+/* ════════ APPLE-STYLE GLASSMORPHISM OVERLAY ════════ */
+:root {
+  --glass-bg: rgba(255,255,255,0.55);
+  --glass-bg-strong: rgba(255,255,255,0.7);
+  --glass-border: rgba(255,255,255,0.45);
+  --glass-shadow: 0 8px 32px rgba(31,38,135,0.12);
+  --glass-blur: blur(20px) saturate(180%);
+  --glass-blur-strong: blur(28px) saturate(200%);
+  --bg-blob-1: #a5b4fc;
+  --bg-blob-2: #f9a8d4;
+  --bg-blob-3: #93c5fd;
+  --glass-text: #0f172a;
+  --glass-muted: #475569;
+}
+html, body {
+  background: linear-gradient(135deg, #eff6ff 0%, #fdf2f8 50%, #f5f3ff 100%) !important;
+  min-height: 100vh;
+  color: var(--glass-text);
+}
+body::before, body::after {
+  content: ''; position: fixed; border-radius: 50%;
+  filter: blur(90px); opacity: 0.55; pointer-events: none; z-index: -1;
+  animation: floatBlob 18s ease-in-out infinite alternate;
+}
+body::before { width: 480px; height: 480px; background: var(--bg-blob-1); top: -120px; left: -120px; }
+body::after  { width: 520px; height: 520px; background: var(--bg-blob-2); bottom: -150px; right: -150px; animation-delay: -8s; }
+@keyframes floatBlob { from { transform: translate(0,0) scale(1); } to { transform: translate(60px,80px) scale(1.15); } }
+
+.card, .glass-card, .stat-card, .kpi-card, .sc-card, .panel, .box {
+  background: var(--glass-bg) !important;
+  -webkit-backdrop-filter: var(--glass-blur);
+  backdrop-filter: var(--glass-blur);
+  border: 1px solid var(--glass-border) !important;
+  border-radius: 18px !important;
+  box-shadow: var(--glass-shadow) !important;
+}
+input:not([type=checkbox]):not([type=radio]):not([type=submit]):not([type=hidden]),
+select, textarea {
+  background: rgba(255,255,255,0.65) !important;
+  -webkit-backdrop-filter: blur(10px);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(255,255,255,0.55) !important;
+  border-radius: 12px !important;
+  transition: all .2s ease;
+}
+input:focus, select:focus, textarea:focus {
+  outline: none !important;
+  background: rgba(255,255,255,0.85) !important;
+  border-color: rgba(99,102,241,0.55) !important;
+  box-shadow: 0 0 0 4px rgba(165,180,252,0.25) !important;
+}
+button, .btn, .btn-submit, .btn-sm, .btn-view, .btn-export, .btn-dl, .btn-nav, .btn-back, .btn-fill-past, .role-btn {
+  border-radius: 12px !important;
+  transition: transform .2s ease, box-shadow .2s ease, background .2s ease !important;
+}
+button:hover, .btn:hover, .btn-submit:hover, .btn-sm:hover, .btn-view:hover, .btn-export:hover, .btn-dl:hover, .btn-nav:hover, .btn-back:hover, .btn-fill-past:hover, .role-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px rgba(99,102,241,0.25) !important;
+}
+.nav, .navbar, .top-nav, .sidebar, header {
+  background: rgba(255,255,255,0.6) !important;
+  -webkit-backdrop-filter: blur(24px) saturate(180%);
+  backdrop-filter: blur(24px) saturate(180%);
+  border-color: var(--glass-border) !important;
+}
+table {
+  border-radius: 14px;
+  overflow: hidden;
+  background: rgba(255,255,255,0.4);
+  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(12px);
+}
+thead, table thead tr { background: rgba(255,255,255,0.55) !important; }
+tbody tr:nth-child(even) { background: rgba(255,255,255,0.25); }
+tbody tr:hover { background: rgba(165,180,252,0.18) !important; }
+.badge, .chip, .pill, .status-badge {
+  border-radius: 999px !important;
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
+  border: 1px solid rgba(255,255,255,0.4) !important;
+}
+.flash, .alert, .flash-message { 
+  background: var(--glass-bg-strong) !important;
+  -webkit-backdrop-filter: var(--glass-blur);
+  backdrop-filter: var(--glass-blur);
+  border: 1px solid var(--glass-border) !important;
+  border-radius: 14px !important;
+  box-shadow: var(--glass-shadow) !important;
+}
+/* ════════ END GLASSMORPHISM OVERLAY ════════ */
+
 </style>
-<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
-      integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="">
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
-        integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV/XN/WLs=" crossorigin=""></script>
 </head>
 <body>
 
 <nav class="nav">
   <div class="nav-brand">
-    🔬 Pharma IP System
+    Pharma IP System
     <span class="nav-pill">{{ staff_type|title }}</span>
   </div>
   <div class="nav-right">
+    <span class="nav-pill" style="background:#ede9fe;color:#6d28d9;border-color:#ddd6fe;">Role 1: {{ (primary_staff_type or staff_type)|title }}</span>
     <span class="nav-user">{{ user_name }}</span>
+    <!-- In-app notification bell -->
+    <span style="position:relative;display:inline-block;">
+      <button type="button" id="notif-bell" title="Notifications"
+        style="position:relative;padding:7px 11px;background:#eff6ff;color:var(--blue);border:1px solid var(--blue-mid);border-radius:8px;font-size:14px;cursor:pointer;">🔔
+        <span id="notif-count" style="display:none;position:absolute;top:-6px;right:-6px;background:#dc2626;color:#fff;border-radius:999px;font-size:10px;font-weight:700;padding:1px 5px;">0</span>
+      </button>
+      <div id="notif-dropdown" style="display:none;position:absolute;top:42px;right:0;width:290px;max-height:360px;overflow-y:auto;background:#fff;border:1px solid var(--border);border-radius:12px;box-shadow:0 12px 32px rgba(15,23,42,0.18);z-index:1000;">
+        <div style="padding:10px 13px;font-size:11px;font-weight:800;color:var(--muted);text-transform:uppercase;letter-spacing:.6px;border-bottom:1px solid #eef2f7;">Notifications</div>
+        <div id="notif-list"></div>
+      </div>
+    </span>
     {% if unread_count and unread_count > 0 %}
     <span style="position:relative;display:inline-block;">
-      <a href="#announcements-section" style="padding:7px 14px;background:#fef3c7;color:#b45309;border:1px solid #fbbf24;border-radius:8px;font-size:12px;font-weight:600;text-decoration:none;">📢 Notices</a>
+      <a href="#announcements-section" style="padding:7px 14px;background:#fef3c7;color:#b45309;border:1px solid #fbbf24;border-radius:8px;font-size:12px;font-weight:600;text-decoration:none;">Notices</a>
       <span style="position:absolute;top:-5px;right:-5px;background:#dc2626;color:#fff;border-radius:999px;font-size:10px;font-weight:700;padding:1px 5px;">{{ unread_count }}</span>
     </span>
     {% endif %}
-    <a href="/staff/{{ user_id }}" style="padding:7px 14px;background:var(--blue-lite);color:var(--blue);border:1px solid var(--blue-mid);border-radius:8px;font-size:12px;font-weight:600;text-decoration:none;">👤 My Profile</a>
-    <a href="/validations" style="padding:7px 14px;background:#fef3c7;color:#b45309;border:1px solid #fbbf24;border-radius:8px;font-size:12px;font-weight:600;text-decoration:none;">⚖️ Validations</a>
-    <a href="/export_pdf" style="padding:7px 14px;background:var(--green-bg);color:var(--success);border:1px solid #bbf7d0;border-radius:8px;font-size:12px;font-weight:600;text-decoration:none;">📄 PDF Report</a>
+    <a href="/staff/{{ user_id }}" style="padding:7px 14px;background:var(--blue-lite);color:var(--blue);border:1px solid var(--blue-mid);border-radius:8px;font-size:12px;font-weight:600;text-decoration:none;">My Profile</a>
+    <a href="/validations" style="padding:7px 14px;background:#fef3c7;color:#b45309;border:1px solid #fbbf24;border-radius:8px;font-size:12px;font-weight:600;text-decoration:none;">Validations</a>
+    <a href="/export_pdf" style="padding:7px 14px;background:var(--green-bg);color:var(--success);border:1px solid #bbf7d0;border-radius:8px;font-size:12px;font-weight:600;text-decoration:none;">PDF Report</a>
     <form method="POST" action="/logout" style="display:inline;">
-      <button type="submit" class="btn-logout">🚪 Logout</button>
+      <button type="submit" class="btn-logout">Logout</button>
     </form>
   </div>
 </nav>
+
+<!-- ANIMATED DARK HERO BANNER -->
+<div class="dash-hero">
+  <div class="dash-hero-orb dash-orb1"></div>
+  <div class="dash-hero-orb dash-orb2"></div>
+  <canvas class="dash-hero-canvas" id="dashCanvas"></canvas>
+  <div class="dash-hero-content">
+    <div class="dash-hero-left">
+      <div class="dash-hello">Welcome back</div>
+      <div class="dash-name">{{ user_name }}</div>
+      <div class="dash-role-chip">{{ staff_type|title }}</div>
+    </div>
+    <div class="dash-hero-right">
+      <div class="dash-stat-ring">
+        <svg viewBox="0 0 80 80" width="80" height="80">
+          <circle cx="40" cy="40" r="34" fill="none" stroke="rgba(99,179,237,0.15)" stroke-width="6"/>
+          <circle cx="40" cy="40" r="34" fill="none" stroke="url(#ringGrad)" stroke-width="6"
+            stroke-dasharray="213" stroke-dashoffset="53" stroke-linecap="round"
+            transform="rotate(-90 40 40)"/>
+          <defs>
+            <linearGradient id="ringGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+              <stop offset="0%" stop-color="#60a5fa"/>
+              <stop offset="100%" stop-color="#22d3ee"/>
+            </linearGradient>
+          </defs>
+        </svg>
+        <div class="dash-ring-label">Active</div>
+      </div>
+    </div>
+  </div>
+</div>
 
 <div class="main">
 
@@ -230,14 +390,14 @@ table.htable tbody tr:hover td { background: var(--bg); }
   <div id="announcements-section">
     {% for ann in active_announcements %}
     <div style="background:linear-gradient(135deg,#eff6ff,#dbeafe);border:1.5px solid var(--blue-mid);border-radius:13px;padding:14px 18px;margin-bottom:12px;display:flex;align-items:flex-start;gap:14px;">
-      <div style="font-size:20px;">📢</div>
+      
       <div style="flex:1;">
         <div style="font-size:14px;font-weight:700;color:var(--blue-dark);">{{ ann.title }}</div>
         <div style="font-size:13px;color:var(--text);margin-top:4px;line-height:1.5;">{{ ann.body }}</div>
         <div style="font-size:11px;color:var(--muted);margin-top:5px;">{{ ann.created_at.strftime('%d %b %Y') }}</div>
       </div>
       <form method="POST" action="/announcement/{{ ann.id }}/dismiss" style="margin:0;">
-        <button type="submit" style="padding:5px 12px;background:rgba(255,255,255,0.7);border:1px solid var(--blue-mid);border-radius:7px;font-size:11px;font-weight:700;color:var(--muted);cursor:pointer;font-family:inherit;">✕ Dismiss</button>
+        <button type="submit" style="padding:5px 12px;background:rgba(255,255,255,0.7);border:1px solid var(--blue-mid);border-radius:7px;font-size:11px;font-weight:700;color:var(--muted);cursor:pointer;font-family:inherit;">Dismiss</button>
       </form>
     </div>
     {% endfor %}
@@ -254,12 +414,12 @@ table.htable tbody tr:hover td { background: var(--bg); }
   <!-- PENDING PAST ENTRY WINDOWS -->
   {% if pending_windows %}
   <div class="pending-banner">
-    <div class="pending-banner-title">📅 Admin has opened past date entry — fill your missing data!</div>
+    <div class="pending-banner-title">Admin has opened past date entry — fill your missing data!</div>
     <div class="pending-cards">
       {% for w in pending_windows %}
       <div class="pending-card">
         <div class="pending-date">{{ w.past_date.strftime('%d %b %Y') }}</div>
-        <a href="/past_entry/{{ w.past_date.strftime('%Y-%m-%d') }}" class="btn-fill-past">✏️ Fill Now</a>
+        <a href="/past_entry/{{ w.past_date.strftime('%Y-%m-%d') }}" class="btn-fill-past">Fill Now</a>
       </div>
       {% endfor %}
     </div>
@@ -267,7 +427,7 @@ table.htable tbody tr:hover td { background: var(--bg); }
   {% endif %}
 
   {% if new_personal_best %}
-  <div class="alert alert-success">🏆 New personal best score! Keep it up!</div>
+  <div class="alert alert-success">New personal best score! Keep it up!</div>
   {% endif %}
 
   <!-- TOP KPI CARDS -->
@@ -327,8 +487,8 @@ table.htable tbody tr:hover td { background: var(--bg); }
   <!-- POTENTIAL BAR — hard-level target tracker -->
   {% if w_stats and w_stats.hard_target_items %}
   <div class="card">
-    <div class="section-label">🎯 Hard-Level Target (weekly view)
-      {% if w_stats.is_efficient %}<span style="margin-left:10px;padding:3px 9px;border-radius:6px;background:#dcfce7;color:#15803d;font-size:11px;font-weight:700;">✓ EFFICIENT</span>{% endif %}
+    <div class="section-label">Hard-Level Target (weekly view)
+      {% if w_stats.is_efficient %}<span style="margin-left:10px;padding:3px 9px;border-radius:6px;background:#dcfce7;color:#15803d;font-size:11px;font-weight:700;">EFFICIENT</span>{% endif %}
     </div>
     {% set items_pct = ((w_stats.items_daily or 0) / (w_stats.hard_target_items or 200) * 100)|round(1) %}
     {% set bills_pct = ((w_stats.bills_daily or 0) / (w_stats.hard_target_bills or 50) * 100)|round(1) %}
@@ -356,7 +516,7 @@ table.htable tbody tr:hover td { background: var(--bg); }
     </div>
     {% if w_stats.auto_suggest %}
     <div style="margin-top:12px;padding:9px 13px;background:rgba(219,234,254,0.6);border-left:3px solid var(--blue);border-radius:8px;font-size:12px;color:var(--text);">
-      <b>💡 System:</b> {{ w_stats.auto_suggest }}
+      <b>Note:</b> {{ w_stats.auto_suggest }}
     </div>
     {% endif %}
   </div>
@@ -367,8 +527,8 @@ table.htable tbody tr:hover td { background: var(--bg); }
   <div class="card">
     <div class="section-label">Today's Metrics — {{ today.strftime('%A, %d %b %Y') }}</div>
 
-    {% if staff_type in ('delivery', 'biller') %}
-    <!-- DELIVERY / BILLER NOTE FORM -->
+    {% if staff_type in ('delivery', 'biller', 'packer') %}
+    <!-- DELIVERY / ASSIGNER / PACKER NOTE FORM -->
     {% if today_db_note %}
     <div class="submitted-box">Note submitted for today. See you tomorrow!</div>
     <div style="background:linear-gradient(135deg,#f5f3ff,#ede9fe);border:1.5px solid #ddd6fe;border-radius:13px;padding:16px 20px;margin-top:12px;">
@@ -383,12 +543,12 @@ table.htable tbody tr:hover td { background: var(--bg); }
     <form method="POST" autocomplete="off">
       <div class="form-grid">
         <div class="field" style="grid-column:span 2;">
-          <label>{{ 'Deliveries Made' if staff_type == 'delivery' else 'Bills Processed' }}</label>
+          <label>{% if staff_type == 'delivery' %}Deliveries Made{% elif staff_type == 'packer' %}No. of Bills Packed{% else %}Bills Processed{% endif %}</label>
           <input type="number" name="delivery_qty" min="0" value="0" placeholder="Count for today">
         </div>
         <div class="field" style="grid-column:span 2;">
-          <label>Issues / Complaints Today</label>
-          <input type="number" name="delivery_issues" min="0" value="0" placeholder="Number of issues or 0">
+          <label>{% if staff_type == 'packer' %}No. of Bills Opened{% else %}Issues / Complaints Today{% endif %}</label>
+          <input type="number" name="delivery_issues" min="0" value="0" placeholder="{% if staff_type == 'packer' %}Bills opened{% else %}Number of issues or 0{% endif %}">
         </div>
         <div class="field" style="grid-column:span 2;">
           <label>Daily Note <span style="color:var(--danger);">*</span></label>
@@ -400,7 +560,6 @@ table.htable tbody tr:hover td { background: var(--bg); }
       <button type="submit" class="btn-submit">Submit Daily Note</button>
     </form>
     {% endif %}
-
     {% elif today_entry %}
     <div class="submitted-box">Already submitted today. See you tomorrow!</div>
     <div class="kpi-grid">
@@ -422,12 +581,12 @@ table.htable tbody tr:hover td { background: var(--bg); }
       <div class="form-grid">
         {% if staff_type == 'checker' %}
         <div class="field">
-          <label>★ Total Bills Received Today</label>
+          <label>Total Bills Received Today</label>
           <input type="number" name="bills_received" id="f_bills_received" min="0" value="0" required oninput="updateCheckerTotals()">
           <small>All bills given to you today</small>
         </div>
         <div class="field">
-          <label>★ Pending Bills (not checked yet)</label>
+          <label>Pending Bills (not checked yet)</label>
           <input type="number" name="pending_bills_manual" id="f_pending" min="0" value="0" oninput="updateCheckerTotals()">
           <small>Bills you could not complete today</small>
         </div>
@@ -478,16 +637,16 @@ table.htable tbody tr:hover td { background: var(--bg); }
           <label>Table Clean</label>
           <input type="hidden" name="table_clean" id="ck_table_clean_val" value="1">
           <div class="yn-group">
-            <button type="button" class="yn-btn yes active" id="ck_tc_yes" onclick="document.getElementById('ck_table_clean_val').value='1';this.classList.add('active');document.getElementById('ck_tc_no').classList.remove('active')">✅ Yes</button>
-            <button type="button" class="yn-btn no" id="ck_tc_no" onclick="document.getElementById('ck_table_clean_val').value='0';this.classList.add('active');document.getElementById('ck_tc_yes').classList.remove('active')">❌ No</button>
+            <button type="button" class="yn-btn yes active" id="ck_tc_yes" onclick="document.getElementById('ck_table_clean_val').value='1';this.classList.add('active');document.getElementById('ck_tc_no').classList.remove('active')">Yes</button>
+            <button type="button" class="yn-btn no" id="ck_tc_no" onclick="document.getElementById('ck_table_clean_val').value='0';this.classList.add('active');document.getElementById('ck_tc_yes').classList.remove('active')">No</button>
           </div>
         </div>
         <div class="field">
           <label>Sweeping Done</label>
           <input type="hidden" name="sweep_done" id="ck_sweep_done_val" value="1">
           <div class="yn-group">
-            <button type="button" class="yn-btn yes active" id="ck_sd_yes" onclick="document.getElementById('ck_sweep_done_val').value='1';this.classList.add('active');document.getElementById('ck_sd_no').classList.remove('active')">✅ Yes</button>
-            <button type="button" class="yn-btn no" id="ck_sd_no" onclick="document.getElementById('ck_sweep_done_val').value='0';this.classList.add('active');document.getElementById('ck_sd_yes').classList.remove('active')">❌ No</button>
+            <button type="button" class="yn-btn yes active" id="ck_sd_yes" onclick="document.getElementById('ck_sweep_done_val').value='1';this.classList.add('active');document.getElementById('ck_sd_no').classList.remove('active')">Yes</button>
+            <button type="button" class="yn-btn no" id="ck_sd_no" onclick="document.getElementById('ck_sweep_done_val').value='0';this.classList.add('active');document.getElementById('ck_sd_yes').classList.remove('active')">No</button>
           </div>
         </div>
         {% elif staff_type == 'purchaser' %}
@@ -548,20 +707,20 @@ table.htable tbody tr:hover td { background: var(--bg); }
           <label>Table Clean</label>
           <input type="hidden" name="table_clean" id="pur_table_val" value="1">
           <div class="yn-group">
-            <button type="button" class="yn-btn yes active" id="pur_table_yes" onclick="setYN('pur_table','1')">✅ Yes</button>
-            <button type="button" class="yn-btn no" id="pur_table_no" onclick="setYN('pur_table','0')">❌ No</button>
+            <button type="button" class="yn-btn yes active" id="pur_table_yes" onclick="setYN('pur_table','1')">Yes</button>
+            <button type="button" class="yn-btn no" id="pur_table_no" onclick="setYN('pur_table','0')">No</button>
           </div>
         </div>
         <div class="field">
           <label>Sweeping Done</label>
           <input type="hidden" name="sweep_done" id="pur_sweep_val" value="1">
           <div class="yn-group">
-            <button type="button" class="yn-btn yes active" id="pur_sweep_yes" onclick="setYN('pur_sweep','1')">✅ Yes</button>
-            <button type="button" class="yn-btn no" id="pur_sweep_no" onclick="setYN('pur_sweep','0')">❌ No</button>
+            <button type="button" class="yn-btn yes active" id="pur_sweep_yes" onclick="setYN('pur_sweep','1')">Yes</button>
+            <button type="button" class="yn-btn no" id="pur_sweep_no" onclick="setYN('pur_sweep','0')">No</button>
           </div>
         </div>
         <div class="field" style="grid-column:span 2;background:rgba(238,244,255,0.5);border:1px solid var(--border);border-radius:10px;padding:12px;font-size:12px;color:var(--muted);">
-          ⏱️ Working time is fixed at <strong>9 hours</strong> per day
+          Working time is fixed at <strong>9 hours</strong> per day
         </div>
         {% else %}
         <!-- PICKER LIVE BANNER -->
@@ -578,7 +737,7 @@ table.htable tbody tr:hover td { background: var(--bg); }
           </div>
         </div>
         <div class="field">
-          <label>★ Total Bills Received to Pick</label>
+          <label>Total Bills Received to Pick</label>
           <input type="number" name="total_bills_received" id="f_total_bills" min="0" value="0" required oninput="updatePickerFulfilment()">
           <small>Total bills given to you today to pick</small>
         </div>
@@ -612,89 +771,147 @@ table.htable tbody tr:hover td { background: var(--bg); }
           <label>Table Clean</label>
           <input type="hidden" name="table_clean" id="table_clean_val" value="1">
           <div class="yn-group">
-            <button type="button" class="yn-btn yes active" id="table_clean_yes" onclick="setYN('table_clean','1')">✅ Yes</button>
-            <button type="button" class="yn-btn no" id="table_clean_no" onclick="setYN('table_clean','0')">❌ No</button>
+            <button type="button" class="yn-btn yes active" id="table_clean_yes" onclick="setYN('table_clean','1')">Yes</button>
+            <button type="button" class="yn-btn no" id="table_clean_no" onclick="setYN('table_clean','0')">No</button>
           </div>
         </div>
         <div class="field">
           <label>Sweeping Done</label>
           <input type="hidden" name="sweep_done" id="sweep_done_val" value="1">
           <div class="yn-group">
-            <button type="button" class="yn-btn yes active" id="sweep_done_yes" onclick="setYN('sweep_done','1')">✅ Yes</button>
-            <button type="button" class="yn-btn no" id="sweep_done_no" onclick="setYN('sweep_done','0')">❌ No</button>
+            <button type="button" class="yn-btn yes active" id="sweep_done_yes" onclick="setYN('sweep_done','1')">Yes</button>
+            <button type="button" class="yn-btn no" id="sweep_done_no" onclick="setYN('sweep_done','0')">No</button>
           </div>
         </div>
         {% endif %}
         {% endif %}
       </div>
-      <p style="font-size:12px;color:var(--muted);margin-bottom:14px;padding:10px 14px;background:rgba(240,253,244,0.8);border-radius:9px;border:1px solid rgba(22,163,74,0.2);">⏱ Working time is fixed at <strong>9 hours</strong> per day for all speed calculations.</p>
+      <p style="font-size:12px;color:var(--muted);margin-bottom:14px;padding:10px 14px;background:rgba(240,253,244,0.8);border-radius:9px;border:1px solid rgba(22,163,74,0.2);">Working time is fixed at <strong>9 hours</strong> per day for all speed calculations.</p>
       <!-- FEATURE 1: SHIFT NOTE -->
       <div class="field" style="margin-bottom:16px;">
-        <label>📝 Shift Note (optional, max 300 chars)</label>
+        <label>Shift Note (optional, max 300 chars)</label>
         <textarea name="shift_note" maxlength="300" rows="2"
           placeholder="Any notes about today's shift — issues, highlights, etc."
           style="padding:10px 13px;border:1.5px solid var(--border);border-radius:9px;background:rgba(255,255,255,0.8);font-size:13px;font-family:'DM Sans',sans-serif;color:var(--text);resize:vertical;"></textarea>
       </div>
-      <!-- MULTITASKING SECTION -->
-      <div class="multitask-section" style="margin-bottom:16px;">
-        <label style="display:flex;align-items:center;gap:8px;font-size:13px;font-weight:600;color:var(--text);cursor:pointer;user-select:none;">
-          <input type="checkbox" id="multitask_toggle" onchange="toggleMultitask(this)" style="accent-color:var(--blue);width:16px;height:16px;">
-          I also did another task today (multitasking)
-        </label>
-        <div id="multitask_panel" style="display:none;margin-top:12px;padding:16px;background:rgba(245,243,255,0.8);border:1.5px solid #ddd6fe;border-radius:13px;animation:fadeSlideUp .3s cubic-bezier(.22,.68,0,1.2) both;">
-          <div style="font-size:11px;font-weight:700;color:#6d28d9;text-transform:uppercase;letter-spacing:.8px;margin-bottom:10px;">Secondary Task Details</div>
-          <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
-            <div class="field" style="margin:0;">
-              <label>Secondary Role</label>
-              <select name="multitask_role" id="multitask_role" style="padding:9px 12px;border:1.5px solid var(--border);border-radius:9px;font-size:13px;font-family:inherit;background:rgba(255,255,255,0.9);width:100%;">
-                <option value="">-- Select Role --</option>
-                {% if staff_type != 'picker' %}<option value="picker">Picker</option>{% endif %}
-                {% if staff_type != 'checker' %}<option value="checker">Checker</option>{% endif %}
-                {% if staff_type != 'purchaser' %}<option value="purchaser">Purchaser</option>{% endif %}
-                <option value="delivery">Delivery</option>
-                <option value="billing">Billing</option>
-                <option value="packing">Packing</option>
-                <option value="other">Other</option>
-              </select>
-            </div>
-            <div class="field" style="margin:0;">
-              <label>Qty / Items Done</label>
-              <input type="number" name="multitask_qty" min="0" value="0" style="padding:9px 12px;border:1.5px solid var(--border);border-radius:9px;font-size:13px;width:100%;background:rgba(255,255,255,0.9);">
-            </div>
-            <div class="field" style="margin:0;grid-column:span 2;">
-              <label>Brief Note (optional)</label>
-              <input type="text" name="multitask_note" maxlength="300" placeholder="e.g. Helped with checking from 2pm-4pm" style="padding:9px 12px;border:1.5px solid var(--border);border-radius:9px;font-size:13px;width:100%;background:rgba(255,255,255,0.9);">
-            </div>
-          </div>
-        </div>
-      </div>
-
       <button type="submit" class="btn-submit">Submit Today's Metrics</button>
     </form>
     {% endif %}
+  </div>
 
-    <!-- MULTITASK ENTRIES TODAY (shown after submission) -->
+  {% if staff_type not in ('delivery', 'biller') %}
+  <!-- ════ MULTITASK (ROLE 2) REPORT — fill default role above, second role here ════ -->
+  <div class="card multitask-section" style="margin-bottom:20px;border-left:4px solid #7c3aed;">
+    <div class="section-label" style="display:flex;align-items:center;gap:10px;">
+      Multitask Role (Role 2) — Optional
+      <span style="font-size:10px;font-weight:700;padding:3px 9px;border-radius:20px;background:#ede9fe;color:#6d28d9;text-transform:uppercase;letter-spacing:.5px;">Changeable Daily</span>
+    </div>
+    <p style="font-size:12px;color:var(--muted);margin:-4px 0 14px;">Your default role is <strong>{{ (primary_staff_type or staff_type)|title }}</strong>. If you also worked a second role today, pick it and fill its numbers. You can choose a different Role 2 each day.</p>
+
     {% if today_multitask %}
-    <div style="margin-top:16px;padding:14px 16px;background:rgba(245,243,255,0.7);border:1.5px solid #ddd6fe;border-radius:13px;">
-      <div style="font-size:11px;font-weight:700;color:#6d28d9;text-transform:uppercase;letter-spacing:.8px;margin-bottom:8px;">Also Worked Today (Multitasking)</div>
+    <div style="margin-bottom:14px;padding:12px 14px;background:rgba(240,253,244,0.7);border:1.5px solid #bbf7d0;border-radius:11px;">
+      <div style="font-size:11px;font-weight:700;color:#15803d;text-transform:uppercase;letter-spacing:.7px;margin-bottom:6px;">Already logged today</div>
       {% for mt in today_multitask %}
-      <div style="display:flex;align-items:center;gap:10px;padding:8px 0;{% if not loop.last %}border-bottom:1px solid rgba(221,214,254,0.5);{% endif %}">
+      <div style="display:flex;align-items:center;gap:10px;padding:6px 0;{% if not loop.last %}border-bottom:1px solid rgba(187,247,208,0.6);{% endif %}">
         <span style="padding:3px 10px;background:#ede9fe;color:#6d28d9;border-radius:20px;font-size:11px;font-weight:700;text-transform:uppercase;">{{ mt.secondary_type }}</span>
-        <span style="font-size:13px;font-weight:600;color:var(--text);">{{ mt.quantity }} items</span>
+        <span style="font-size:13px;color:var(--text);">{{ mt.summary }}</span>
         {% if mt.note %}<span style="font-size:12px;color:var(--muted);">— {{ mt.note }}</span>{% endif %}
       </div>
       {% endfor %}
+      <div style="font-size:11px;color:var(--muted);margin-top:6px;">Re-submitting the same role below will update its numbers.</div>
     </div>
     {% endif %}
+
+    <form method="POST" autocomplete="off">
+      <input type="hidden" name="multitask_only" value="1">
+      <div class="field" style="margin-bottom:14px;max-width:320px;">
+        <label>Role 2 — Which role did you also work?</label>
+        <select name="multitask_role" id="multitask_role" onchange="showMultitaskFields(this.value)"
+          style="padding:9px 12px;border:1.5px solid var(--border);border-radius:9px;font-size:13px;font-family:inherit;background:rgba(255,255,255,0.9);width:100%;">
+          <option value="">— Select Role 2 —</option>
+          {% set sec = secondary_staff_type %}
+          {% if (primary_staff_type or staff_type) != 'picker' %}<option value="picker" {% if sec=='picker' %}selected{% endif %}>Picker</option>{% endif %}
+          {% if (primary_staff_type or staff_type) != 'checker' %}<option value="checker" {% if sec=='checker' %}selected{% endif %}>Checker</option>{% endif %}
+          {% if (primary_staff_type or staff_type) != 'purchaser' %}<option value="purchaser" {% if sec=='purchaser' %}selected{% endif %}>Purchaser</option>{% endif %}
+          <option value="delivery" {% if sec=='delivery' %}selected{% endif %}>Delivery</option>
+          <option value="billing" {% if sec=='billing' %}selected{% endif %}>Billing</option>
+          <option value="packing">Packing</option>
+          <option value="other">Other</option>
+        </select>
+      </div>
+
+      <!-- PICKER params -->
+      <div class="mt-fields" id="mt_picker" style="display:none;">
+        <div class="form-grid">
+          <div class="field"><label>Total Bills Received to Pick</label><input type="number" name="mt_p_total_bills" min="0" value="0"></div>
+          <div class="field"><label>Sales Bill Picked</label><input type="number" name="mt_p_sbo" min="0" value="0"></div>
+          <div class="field"><label>Items Picked</label><input type="number" name="mt_p_picked" min="0" value="0"></div>
+          <div class="field"><label>Items Missed</label><input type="number" name="mt_p_missed" min="0" value="0"></div>
+          <div class="field"><label>CS Sales Open</label><input type="number" name="mt_p_cso" min="0" value="0"></div>
+          <div class="field"><label>Packing Done</label><input type="number" name="mt_p_packing" min="0" value="0"></div>
+        </div>
+      </div>
+
+      <!-- CHECKER params -->
+      <div class="mt-fields" id="mt_checker" style="display:none;">
+        <div class="form-grid">
+          <div class="field"><label>Total Bills Received</label><input type="number" name="mt_c_bills_received" min="0" value="0"></div>
+          <div class="field"><label>Pending Bills (not checked)</label><input type="number" name="mt_c_pending" min="0" value="0"></div>
+          <div class="field"><label>Sales Bill Checked (Normal)</label><input type="number" name="mt_c_sbo" min="0" value="0"></div>
+          <div class="field"><label>SB Checked Urgent</label><input type="number" name="mt_c_cso" min="0" value="0"></div>
+          <div class="field"><label>Item Checked (Normal)</label><input type="number" name="mt_c_checked" min="0" value="0"></div>
+          <div class="field"><label>Urgent Item Checked</label><input type="number" name="mt_c_errors" min="0" value="0"></div>
+        </div>
+      </div>
+
+      <!-- PURCHASER params -->
+      <div class="mt-fields" id="mt_purchaser" style="display:none;">
+        <div class="form-grid">
+          <div class="field"><label>Total PO Bills Received</label><input type="number" name="mt_pu_sbo" min="0" value="0"></div>
+          <div class="field"><label>PO Bills Checked</label><input type="number" name="mt_pu_checked" min="0" value="0"></div>
+          <div class="field"><label>Purchase Bill Entry</label><input type="number" name="mt_pu_picked" min="0" value="0"></div>
+          <div class="field"><label>Number of Items</label><input type="number" name="mt_pu_items" min="0" value="0"></div>
+          <div class="field"><label>CS in Purchase Open</label><input type="number" name="mt_pu_cso" min="0" value="0"></div>
+          <div class="field"><label>CS in Purchase Received</label><input type="number" name="mt_pu_packing" min="0" value="0"></div>
+        </div>
+      </div>
+
+      <!-- SIMPLE (delivery/billing/packing/other) params -->
+      <div class="mt-fields" id="mt_simple" style="display:none;">
+        <div class="form-grid">
+          <div class="field"><label>Quantity Done (deliveries / bills / items)</label><input type="number" name="mt_s_quantity" min="0" value="0"></div>
+        </div>
+      </div>
+
+      <div class="field" style="margin-top:6px;">
+        <label>Note (optional)</label>
+        <input type="text" name="multitask_note" maxlength="300" placeholder="e.g. Helped with checking 2pm–4pm"
+          style="padding:9px 12px;border:1.5px solid var(--border);border-radius:9px;font-size:13px;width:100%;background:rgba(255,255,255,0.9);">
+      </div>
+
+      <button type="submit" class="btn-submit" style="margin-top:14px;background:linear-gradient(135deg,#7c3aed,#6d28d9);">Save Role 2 Report</button>
+    </form>
   </div>
+  {% endif %}
 
   <!-- ════ DELIVERY GPS TRACKING MODULE ════ -->
   {% if staff_type == 'delivery' %}
   <div class="card" style="margin-bottom:20px;border-left:4px solid #0ea5e9;">
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:10px;">
-      <div class="section-label" style="margin-bottom:0;">My Delivery Assignments</div>
+      <div class="section-label" style="margin-bottom:0;">
+        My Delivery Assignments
+        {% if my_assignments %}
+        <span style="margin-left:8px;font-size:11px;font-weight:700;padding:2px 9px;background:#dc2626;color:#fff;border-radius:20px;vertical-align:middle;">{{ my_assignments|length }} NEW</span>
+        {% endif %}
+      </div>
       <a href="{{ url_for('delivery_leaderboard') }}" style="font-size:12px;font-weight:700;color:var(--blue);text-decoration:none;padding:6px 14px;border:1.5px solid var(--blue);border-radius:8px;">View Leaderboard</a>
     </div>
+
+    {% if my_assignments %}
+    <div style="margin-bottom:16px;padding:11px 14px;background:#eff6ff;border:1px solid #bfdbfe;border-radius:10px;font-size:13px;color:#1e40af;font-weight:600;">
+      🔔 You have <strong>{{ my_assignments|length }}</strong> delivery{{ 'task' if my_assignments|length == 1 else ' tasks' }} assigned. Tap <strong>Start Trip</strong> to begin live navigation.
+    </div>
+    {% endif %}
 
     {% if my_deliveries_today %}
     <div style="margin-bottom:16px;padding:12px 14px;background:#f0fdf4;border:1px solid #86efac;border-radius:10px;">
@@ -728,7 +945,7 @@ table.htable tbody tr:hover td { background: var(--bg); }
           <span style="font-size:11px;font-weight:700;padding:3px 10px;background:#dbeafe;color:#1e40af;border-radius:6px;border:1px solid #93c5fd;">In Transit</span>
           {% endif %}
         </div>
-        <!-- Destination + Google Maps link -->
+        <!-- Embedded map + navigate -->
         <div style="margin-bottom:10px;">
           <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;flex-wrap:wrap;gap:6px;">
             <div style="font-size:12px;color:var(--muted);"><strong>Destination:</strong> {{ assignment.destination_addr }}</div>
@@ -765,12 +982,35 @@ table.htable tbody tr:hover td { background: var(--bg); }
           {% endif %}
         </div>
         {% if assignment.recipient_name %}
-        <div style="font-size:12px;color:var(--muted);margin-bottom:6px;">
-          <strong>Recipient:</strong> {{ assignment.recipient_name }}{% if assignment.company_name %} — {{ assignment.company_name }}{% endif %}
-        </div>
+        <div style="font-size:12px;color:var(--muted);margin-bottom:6px;"><strong>Recipient:</strong> {{ assignment.recipient_name }}{% if assignment.company_name %} — {{ assignment.company_name }}{% endif %}</div>
         {% endif %}
         {% if assignment.notes %}
         <div style="font-size:12px;color:var(--muted);margin-bottom:10px;padding:8px 10px;background:#f1f5f9;border-radius:6px;">{{ assignment.notes }}</div>
+        {% endif %}
+
+        {# Multi-store checklist — rider logs each store as reached #}
+        {% set astops = stops_map.get(assignment.id, []) %}
+        {% if astops %}
+        <div style="margin-bottom:10px;padding:10px 12px;background:#fff;border:1px solid var(--border);border-radius:10px;">
+          <div style="font-size:11px;font-weight:800;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px;">
+            Stores ({{ astops|length }}) · {{ assignment.no_of_tasks or assignment.bills_count }} packet(s){% if assignment.packet_type %} · {{ assignment.packet_type }}{% endif %}
+          </div>
+          <div style="display:flex;flex-direction:column;gap:7px;">
+            {% for st in astops %}
+            <div id="stop-{{ st.id }}" style="display:flex;align-items:center;gap:9px;padding:7px 10px;border-radius:8px;background:{{ '#f0fdf4' if st.reached_at else '#f8fafc' }};border:1px solid {{ '#86efac' if st.reached_at else 'var(--border)' }};">
+              <span style="font-size:14px;">{{ '✅' if st.reached_at else '📍' }}</span>
+              <div style="flex:1;">
+                <div style="font-size:13px;font-weight:700;color:var(--text);">{{ st.place_name }}</div>
+                <div style="font-size:11px;color:var(--muted);">{{ st.packages }} packet(s){% if st.reached_at %} · reached {{ st.reached_at.strftime('%H:%M') }}{% if st.minutes_from_prev %} · {{ st.minutes_from_prev }} min{% endif %}{% endif %}</div>
+              </div>
+              {% if assignment.status == 'in_transit' and not st.reached_at %}
+              <button type="button" onclick="logStop({{ st.id }}, this)"
+                style="padding:5px 12px;background:#16a34a;color:#fff;border:none;border-radius:7px;font-size:12px;font-weight:700;cursor:pointer;">Reached</button>
+              {% endif %}
+            </div>
+            {% endfor %}
+          </div>
+        </div>
         {% endif %}
 
         {% if assignment.status == 'pending' %}
@@ -782,8 +1022,14 @@ table.htable tbody tr:hover td { background: var(--bg); }
         {% elif assignment.status == 'in_transit' %}
         <div style="margin-top:6px;">
           {% if trip and trip.departure_time %}
-          <div style="font-size:12px;color:var(--muted);margin-bottom:8px;">
-            Trip started. Departed at {{ trip.departure_time.strftime('%H:%M') }} UTC.
+          <div class="delivery-timer-box" style="display:flex;align-items:center;gap:10px;margin-bottom:10px;padding:10px 14px;background:linear-gradient(135deg,#ecfeff,#cffafe);border:1.5px solid #67e8f9;border-radius:10px;">
+            <span style="font-size:20px;">⏱️</span>
+            <div>
+              <div style="font-size:10px;font-weight:700;color:#0e7490;text-transform:uppercase;letter-spacing:.6px;">Time since accepted</div>
+              <div class="delivery-timer" data-departure="{{ trip.departure_time.strftime('%Y-%m-%dT%H:%M:%S') }}Z"
+                   style="font-size:22px;font-weight:800;color:#0891b2;font-variant-numeric:tabular-nums;letter-spacing:1px;">00:00</div>
+            </div>
+            <span style="margin-left:auto;font-size:11px;color:#155e75;">Departed {{ trip.departure_time.strftime('%H:%M') }} UTC</span>
           </div>
           {% endif %}
           <button id="check-arrival-btn-{{ assignment.id }}"
@@ -822,17 +1068,36 @@ table.htable tbody tr:hover td { background: var(--bg); }
       {% endfor %}
     </div>
     {% else %}
-    <div style="padding:20px;text-align:center;color:var(--muted);font-size:13px;">
-      No pending delivery assignments. Check back later.
-    </div>
+    <div style="padding:20px;text-align:center;color:var(--muted);font-size:13px;">No pending delivery assignments. Check back later.</div>
     {% endif %}
   </div>
 
-  {% elif staff_type == 'purchaser' or is_admin %}
-  <!-- PURCHASER: Assign New Delivery -->
-  {% if purchaser_delivery_staff %}
+  {% elif staff_type == 'biller' %}
   <div class="card" style="margin-bottom:20px;border-left:4px solid #0ea5e9;">
-    <div class="section-label" style="margin-bottom:16px;">Assign New Delivery</div>
+    <div class="section-label" style="margin-bottom:16px;">🚚 Assign New Delivery</div>
+    {% if not purchaser_delivery_staff %}
+    <div style="padding:14px;background:#fef3c7;border:1.5px solid #fbbf24;border-radius:9px;font-size:13px;color:#92400e;margin-bottom:12px;">
+      ⚠️ No delivery staff found. Ask admin to set at least one employee's role to <strong>Delivery</strong>.
+      {% if delivery_diag %}
+      <div style="margin-top:8px;padding-top:8px;border-top:1px dashed #d97706;font-size:11px;color:#78350f;">
+        <strong>Diagnostic:</strong> {{ delivery_diag.total_emps }} employees scanned, {{ delivery_diag.del_total }} eligible.
+        Role breakdown:
+        {% for role, count in delivery_diag.breakdown.items() %}
+          <span style="display:inline-block;margin:2px 4px;padding:1px 7px;background:#fde68a;border-radius:10px;">{{ role or 'unset' }}: {{ count }}</span>
+        {% endfor %}
+        <br><small>If you see no "delivery" entry above, admin must open <strong>Edit Employee</strong> → set <strong>Staff Type = Delivery</strong> → Save. (Setting only secondary role also works.)</small>
+      </div>
+      {% endif %}
+    </div>
+    {% endif %}
+    <!-- datalists for recommendations -->
+    <datalist id="route-options">
+      {% for r in known_routes %}<option value="{{ r }}">{% endfor %}
+    </datalist>
+    <datalist id="packet-options">
+      {% for p in packet_types %}<option value="{{ p }}">{% endfor %}
+    </datalist>
+
     <form method="POST" action="{{ url_for('delivery_assign') }}" style="display:flex;flex-direction:column;gap:12px;">
       <div style="display:flex;gap:12px;flex-wrap:wrap;">
         <div style="flex:1;min-width:200px;">
@@ -845,55 +1110,106 @@ table.htable tbody tr:hover td { background: var(--bg); }
             {% endfor %}
           </select>
         </div>
-        <div style="flex:1;min-width:120px;">
-          <label style="font-size:12px;font-weight:600;color:var(--muted);display:block;margin-bottom:4px;">Bills Count</label>
-          <input type="number" name="bills_count" min="0" value="0"
+        <div style="flex:1;min-width:150px;">
+          <label style="font-size:12px;font-weight:600;color:var(--muted);display:block;margin-bottom:4px;">Packet Type</label>
+          <input list="packet-options" name="packet_type" placeholder="Poly Bag / Box / Carton..."
             style="width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:9px;font-size:13px;font-family:inherit;">
         </div>
       </div>
+
+      <!-- Multi-store line items -->
       <div>
-        <label style="font-size:12px;font-weight:600;color:var(--muted);display:block;margin-bottom:4px;">Shop Name / Destination Address *</label>
-        <input type="text" name="destination_addr" required maxlength="500"
-          placeholder="e.g. Sharma Medical Store, MG Road, Pune"
-          style="width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:9px;font-size:13px;font-family:inherit;">
-        <div style="font-size:11px;color:var(--muted);margin-top:3px;">Map location is found automatically from this name/address.</div>
-      </div>
-      <div>
-        <label style="font-size:12px;font-weight:600;color:var(--muted);display:block;margin-bottom:4px;">Package Description *</label>
-        <textarea name="package_desc" required rows="2" maxlength="500"
-          style="width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:9px;font-size:13px;font-family:inherit;resize:vertical;"></textarea>
-      </div>
-      <div style="display:flex;gap:12px;flex-wrap:wrap;">
-        <div style="flex:1;min-width:180px;">
-          <label style="font-size:12px;font-weight:600;color:var(--muted);display:block;margin-bottom:4px;">Expected Recipient Name</label>
-          <input type="text" name="recipient_name" maxlength="150"
-            style="width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:9px;font-size:13px;font-family:inherit;">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+          <label style="font-size:12px;font-weight:700;color:var(--text);">Stores in this route *</label>
+          <span style="font-size:12px;color:var(--muted);">Total packets: <strong id="total-packets" style="color:var(--blue);">0</strong></span>
         </div>
-        <div style="flex:1;min-width:180px;">
-          <label style="font-size:12px;font-weight:600;color:var(--muted);display:block;margin-bottom:4px;">Company</label>
-          <input type="text" name="company_name" maxlength="150"
-            style="width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:9px;font-size:13px;font-family:inherit;">
+        <div id="store-rows" style="display:flex;flex-direction:column;gap:8px;">
+          <!-- one row injected by JS on load -->
         </div>
+        <button type="button" onclick="addStoreRow()"
+          style="margin-top:8px;padding:7px 16px;background:#eff6ff;color:var(--blue);border:1.5px solid #bfdbfe;border-radius:8px;font-size:13px;font-weight:700;font-family:inherit;cursor:pointer;">
+          ➕ Add Store
+        </button>
+        <div style="font-size:11px;color:var(--muted);margin-top:4px;">Each store's location is auto-found inside Odisha from its name.</div>
       </div>
+
       <div>
         <label style="font-size:12px;font-weight:600;color:var(--muted);display:block;margin-bottom:4px;">Notes (optional)</label>
         <textarea name="notes" rows="2" maxlength="500"
           style="width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:9px;font-size:13px;font-family:inherit;resize:vertical;"></textarea>
       </div>
-      <div>
-        <button type="submit"
-          style="padding:10px 24px;background:linear-gradient(135deg,var(--blue-dark),var(--blue));color:#fff;border:none;border-radius:9px;font-size:14px;font-weight:700;font-family:inherit;cursor:pointer;">
-          Assign Delivery
-        </button>
-      </div>
+      <button type="submit"
+        style="padding:10px 24px;background:linear-gradient(135deg,var(--blue-dark),var(--blue));color:#fff;border:none;border-radius:9px;font-size:14px;font-weight:700;font-family:inherit;cursor:pointer;">
+        Assign Delivery & Notify Rider
+      </button>
     </form>
+  </div>
+
+  <!-- Assigner's active dispatches (edit / delete) -->
+  {% if my_dispatches %}
+  <div class="card" style="margin-bottom:20px;">
+    <div class="section-label" style="margin-bottom:12px;">📋 Active Dispatches</div>
+    <div style="display:flex;flex-direction:column;gap:10px;">
+      {% for d in my_dispatches %}
+      <div style="padding:11px 14px;background:#f8fafc;border:1px solid var(--border);border-radius:10px;">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;flex-wrap:wrap;">
+          <div>
+            <div style="font-size:13px;font-weight:700;">{{ d.route or d.destination_addr }}</div>
+            <div style="font-size:11px;color:var(--muted);margin-top:2px;">
+              {{ d.no_of_tasks or d.bills_count }} packet(s)
+              {% if d.packet_type %} · {{ d.packet_type }}{% endif %}
+              · <span style="font-weight:700;color:{{ '#1e40af' if d.status=='in_transit' else '#854d0e' }};">{{ d.status|replace('_',' ')|title }}</span>
+            </div>
+          </div>
+          {% if d.status == 'pending' %}
+          <div style="display:flex;gap:6px;">
+            <button type="button" onclick="toggleEdit({{ d.id }})"
+              style="padding:5px 12px;background:#fef9c3;color:#854d0e;border:1px solid #fde047;border-radius:7px;font-size:12px;font-weight:700;cursor:pointer;">Edit</button>
+            <form method="POST" action="{{ url_for('delivery_dispatch_delete', assignment_id=d.id) }}"
+                  onsubmit="return confirm('Delete this dispatch?');" style="margin:0;">
+              <button type="submit" style="padding:5px 12px;background:#fee2e2;color:#991b1b;border:1px solid #fca5a5;border-radius:7px;font-size:12px;font-weight:700;cursor:pointer;">Delete</button>
+            </form>
+          </div>
+          {% endif %}
+        </div>
+        {% set dstops = stops_map.get(d.id, []) %}
+        {% if dstops %}
+        <div style="margin-top:7px;display:flex;flex-wrap:wrap;gap:5px;">
+          {% for st in dstops %}
+          <span style="font-size:11px;padding:2px 9px;background:#e0e7ff;color:#3730a3;border-radius:20px;">{{ st.place_name }} · {{ st.packages }}</span>
+          {% endfor %}
+        </div>
+        {% endif %}
+        {% if d.status == 'pending' %}
+        <form method="POST" action="{{ url_for('delivery_dispatch_edit', assignment_id=d.id) }}"
+              id="edit-form-{{ d.id }}" style="display:none;margin-top:10px;padding:10px;background:#fffbeb;border:1px dashed #fbbf24;border-radius:9px;">
+          <div style="font-size:11px;font-weight:700;color:#92400e;margin-bottom:6px;">Edit stores</div>
+          <div id="edit-rows-{{ d.id }}" style="display:flex;flex-direction:column;gap:6px;">
+            {% for st in dstops %}
+            <div style="display:flex;gap:6px;">
+              <input list="route-options" name="store_name[]" value="{{ st.place_name }}" placeholder="Store name"
+                style="flex:2;padding:7px 10px;border:1px solid var(--border);border-radius:7px;font-size:12px;">
+              <input type="number" name="store_packages[]" value="{{ st.packages }}" min="0" placeholder="Pkts"
+                style="width:70px;padding:7px 10px;border:1px solid var(--border);border-radius:7px;font-size:12px;">
+            </div>
+            {% endfor %}
+          </div>
+          <button type="button" onclick="addEditRow({{ d.id }})"
+            style="margin-top:6px;padding:5px 12px;background:#fff;color:var(--blue);border:1px solid #bfdbfe;border-radius:7px;font-size:12px;font-weight:700;cursor:pointer;">➕ Add store</button>
+          <button type="submit"
+            style="margin-top:6px;margin-left:6px;padding:5px 14px;background:var(--blue);color:#fff;border:none;border-radius:7px;font-size:12px;font-weight:700;cursor:pointer;">Save changes</button>
+        </form>
+        {% endif %}
+      </div>
+      {% endfor %}
+    </div>
   </div>
   {% endif %}
   {% endif %}
   <!-- ════ END DELIVERY GPS TRACKING MODULE ════ -->
 
   <!-- DELIVERY / BILLER RECENT NOTES -->
-  {% if staff_type in ('delivery', 'biller') and recent %}
+  {% if staff_type in ('delivery', 'biller', 'packer') and recent %}
   <div class="card" style="margin-bottom:20px;">
     <div class="section-label">Recent Daily Notes</div>
     <div style="display:flex;flex-direction:column;gap:8px;max-height:300px;overflow-y:auto;">
@@ -909,8 +1225,6 @@ table.htable tbody tr:hover td { background: var(--bg); }
     </div>
   </div>
   {% endif %}
-
-
 
   <!-- CHART + PERIOD SUMMARY -->
   {% if trend_labels %}
@@ -978,7 +1292,7 @@ table.htable tbody tr:hover td { background: var(--bg); }
 
   <!-- FEATURE 3: PERSONAL GOAL -->
   <div class="card">
-    <div class="section-label">🎯 My Goal — {{ current_month }}</div>
+    <div class="section-label">My Goal — {{ current_month }}</div>
     {% if current_goal %}
       {% set m_score = m_stats.eff_score if m_stats else 0 %}
       {% set pct = ((m_score / current_goal.target_score) * 100)|round(1) if current_goal.target_score > 0 else 0 %}
@@ -992,7 +1306,7 @@ table.htable tbody tr:hover td { background: var(--bg); }
           <div style="height:100%;width:{{ disp_pct }}%;background:linear-gradient(90deg,{% if pct >= 90 %}#16a34a,#10b981{% elif pct >= 70 %}#d97706,#f59e0b{% else %}#dc2626,#ef4444{% endif %});border-radius:8px;transition:width 0.6s;"></div>
         </div>
         {% if pct >= 100 %}
-        <div style="margin-top:8px;font-size:12px;color:#16a34a;font-weight:700;">🏆 Goal achieved! Excellent work!</div>
+        <div style="margin-top:8px;font-size:12px;color:#16a34a;font-weight:700;">Goal achieved! Excellent work!</div>
         {% endif %}
       </div>
     {% else %}
@@ -1012,7 +1326,7 @@ table.htable tbody tr:hover td { background: var(--bg); }
   <!-- FEATURE 10: TARGET ACHIEVEMENT PROGRESS BARS -->
   {% if d_stats or w_stats or m_stats %}
   <div class="card">
-    <div class="section-label">📊 Target Achievement</div>
+    <div class="section-label">Target Achievement</div>
     {% set ref_stats = d_stats or w_stats or m_stats %}
     <div style="display:flex;flex-direction:column;gap:14px;margin-top:6px;">
       {% if staff_type == 'picker' %}
@@ -1053,7 +1367,7 @@ table.htable tbody tr:hover td { background: var(--bg); }
 
   <!-- FEATURE 4: PAST ENTRY REQUEST -->
   <div class="card">
-    <div class="section-label">📅 Request Past Entry</div>
+    <div class="section-label">Request Past Entry</div>
     {% if pending_requests %}
     <div style="margin-bottom:14px;">
       <div style="font-size:12px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px;">Pending Requests</div>
@@ -1061,7 +1375,7 @@ table.htable tbody tr:hover td { background: var(--bg); }
       <div style="display:flex;align-items:center;justify-content:space-between;padding:9px 13px;background:#fef3c7;border:1px solid #fbbf24;border-radius:10px;margin-bottom:6px;font-size:12px;">
         <span style="font-weight:700;color:#92400e;">{{ r.requested_date.strftime('%d %b %Y') }}</span>
         <span style="color:var(--muted);">{{ r.reason[:50] }}{% if r.reason|length > 50 %}...{% endif %}</span>
-        <span style="padding:3px 9px;border-radius:6px;background:#fde68a;color:#92400e;font-weight:700;">⏳ Pending</span>
+        <span style="padding:3px 9px;border-radius:6px;background:#fde68a;color:#92400e;font-weight:700;">Pending</span>
       </div>
       {% endfor %}
     </div>
@@ -1077,18 +1391,18 @@ table.htable tbody tr:hover td { background: var(--bg); }
         <input type="text" name="reason" maxlength="200" placeholder="Why you couldn't submit on that day"
           style="padding:9px 12px;border:1.5px solid var(--border);border-radius:9px;font-size:13px;font-family:inherit;" required>
       </div>
-      <button type="submit" style="padding:10px 20px;background:linear-gradient(135deg,#7c3aed,#6d28d9);color:#fff;border:none;border-radius:9px;font-size:13px;font-weight:700;font-family:inherit;cursor:pointer;white-space:nowrap;">📨 Submit Request</button>
+      <button type="submit" style="padding:10px 20px;background:linear-gradient(135deg,#7c3aed,#6d28d9);color:#fff;border:none;border-radius:9px;font-size:13px;font-weight:700;font-family:inherit;cursor:pointer;white-space:nowrap;">Submit Request</button>
     </form>
   </div>
 
   <!-- FEATURE 5: MY BADGES -->
   {% if all_auto_badges %}
   <div class="card">
-    <div class="section-label">🏅 My Badges</div>
+    <div class="section-label">My Badges</div>
     <div style="display:flex;flex-wrap:wrap;gap:10px;margin-bottom:16px;">
       {% for sb, badge in my_staff_badges %}
-      <div style="display:flex;align-items:center;gap:8px;padding:10px 14px;background:linear-gradient(135deg,#ede9fe,#ddd6fe);border:1.5px solid #c4b5fd;border-radius:12px;">
-        <span style="font-size:22px;">{{ badge.icon }}</span>
+      <div style="display:flex;align-items:center;gap:10px;padding:10px 14px;background:linear-gradient(135deg,#ede9fe,#ddd6fe);border:1.5px solid #c4b5fd;border-radius:12px;">
+        <div style="width:34px;height:34px;border-radius:9px;background:linear-gradient(135deg,#6d28d9,#7c3aed);color:#fff;display:flex;align-items:center;justify-content:center;font-family:'DM Serif Display',serif;font-size:14px;font-weight:700;flex-shrink:0;">{{ badge.name[0]|upper }}</div>
         <div>
           <div style="font-size:12px;font-weight:700;color:#4c1d95;">{{ badge.name }}</div>
           <div style="font-size:10px;color:#6d28d9;">{{ badge.description }}</div>
@@ -1100,8 +1414,8 @@ table.htable tbody tr:hover td { background: var(--bg); }
     <div style="display:flex;flex-wrap:wrap;gap:8px;">
       {% for badge in all_auto_badges %}
         {% if badge.id not in earned_badge_ids %}
-        <div title="{{ badge.description }}" style="display:flex;align-items:center;gap:6px;padding:8px 12px;background:rgba(241,245,249,0.7);border:1.5px solid var(--border);border-radius:10px;opacity:0.55;cursor:help;">
-          <span style="font-size:18px;filter:grayscale(1);">{{ badge.icon }}</span>
+        <div title="{{ badge.description }}" style="display:flex;align-items:center;gap:8px;padding:8px 12px;background:rgba(241,245,249,0.7);border:1.5px solid var(--border);border-radius:10px;opacity:0.55;cursor:help;">
+          <div style="width:24px;height:24px;border-radius:6px;background:#cbd5e1;color:#64748b;display:flex;align-items:center;justify-content:center;font-family:'DM Serif Display',serif;font-size:11px;font-weight:700;flex-shrink:0;">{{ badge.name[0]|upper }}</div>
           <span style="font-size:11px;color:var(--muted);font-weight:600;">{{ badge.name }}</span>
         </div>
         {% endif %}
@@ -1151,7 +1465,7 @@ table.htable tbody tr:hover td { background: var(--bg); }
             <td>{{ e.sales_bills_open }}</td>
             <td>{{ e.packing_done }}</td>
             <td>{{ e.rack_organized or 0 }}/10</td>
-            <td>{% if e.table_clean %}✅{% else %}❌{% endif %}</td>
+            <td>{% if e.table_clean %}Yes{% else %}No{% endif %}</td>
             {% endif %}
             <td>{{ "%.1f" | format(e.total_time or 0) }}</td>
           </tr>
@@ -1324,137 +1638,99 @@ document.addEventListener('DOMContentLoaded', function(){
   });
 });
 
-// Multitask toggle
-function toggleMultitask(cb) {
-  var panel = document.getElementById('multitask_panel');
-  if (!panel) return;
-  if (cb.checked) {
-    panel.style.display = 'block';
-  } else {
-    panel.style.display = 'none';
-    // Clear fields when hidden so they don't accidentally submit
-    var sel = document.getElementById('multitask_role');
-    if (sel) sel.value = '';
-    var qty = panel.querySelector('[name="multitask_qty"]');
-    if (qty) qty.value = '0';
-    var note = panel.querySelector('[name="multitask_note"]');
-    if (note) note.value = '';
+// Show the parameter block matching the selected Role 2
+function showMultitaskFields(role) {
+  document.querySelectorAll('.mt-fields').forEach(function(el){ el.style.display = 'none'; });
+  var target = null;
+  if (role === 'picker') target = 'mt_picker';
+  else if (role === 'checker') target = 'mt_checker';
+  else if (role === 'purchaser') target = 'mt_purchaser';
+  else if (role) target = 'mt_simple';
+  if (target) {
+    var el = document.getElementById(target);
+    if (el) el.style.display = 'block';
   }
 }
+// On load, reveal fields if a role is pre-selected (admin default secondary)
+document.addEventListener('DOMContentLoaded', function(){
+  var sel = document.getElementById('multitask_role');
+  if (sel && sel.value) showMultitaskFields(sel.value);
+});
 
 // ─── Delivery GPS tracking ───────────────────────────────────────────────────
 function startDeliveryTrip(assignmentId) {
-    if (!navigator.geolocation) {
-        alert('GPS is not supported on this device.');
-        return;
-    }
-    var btn = document.getElementById('start-trip-btn-' + assignmentId);
-    if (btn) { btn.textContent = 'Getting location...'; btn.disabled = true; }
-
-    navigator.geolocation.getCurrentPosition(function(pos) {
-        fetch('/delivery/start_trip/' + assignmentId, {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({lat: pos.coords.latitude, lng: pos.coords.longitude})
-        })
-        .then(function(r){ return r.json(); })
-        .then(function(d) {
-            if (d.ok) {
-                location.reload();
-            } else {
-                alert('Cannot start trip: ' + d.error);
-                if (btn) { btn.textContent = 'Start Trip'; btn.disabled = false; }
-            }
-        })
-        .catch(function(){ alert('Network error'); if (btn) { btn.textContent = 'Start Trip'; btn.disabled = false; } });
-    }, function(err) {
-        alert('GPS error: ' + err.message + '. Please enable location access.');
-        if (btn) { btn.textContent = 'Start Trip'; btn.disabled = false; }
-    }, {enableHighAccuracy: true, timeout: 15000});
+  if (!navigator.geolocation) { alert('GPS is not supported on this device.'); return; }
+  var btn = document.getElementById('start-trip-btn-' + assignmentId);
+  if (btn) { btn.textContent = 'Getting location...'; btn.disabled = true; }
+  navigator.geolocation.getCurrentPosition(function(pos) {
+    fetch('/delivery/start_trip/' + assignmentId, {
+      method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({lat: pos.coords.latitude, lng: pos.coords.longitude})
+    }).then(function(r){ return r.json(); }).then(function(d) {
+      if (d.ok) { location.reload(); }
+      else { alert('Cannot start trip: ' + d.error); if (btn) { btn.textContent = 'Start Trip'; btn.disabled = false; } }
+    }).catch(function(){ alert('Network error'); if (btn) { btn.textContent = 'Start Trip'; btn.disabled = false; } });
+  }, function(err) {
+    alert('GPS error: ' + err.message + '. Please enable location access.');
+    if (btn) { btn.textContent = 'Start Trip'; btn.disabled = false; }
+  }, {enableHighAccuracy: true, timeout: 15000});
 }
 
 function checkArrivalAndUnlock(assignmentId) {
-    if (!navigator.geolocation) {
-        unlockDeliveryForm(assignmentId);
-        return;
-    }
-    var btn = document.getElementById('check-arrival-btn-' + assignmentId);
-    if (btn) { btn.textContent = 'Checking GPS...'; btn.disabled = true; }
-
-    navigator.geolocation.getCurrentPosition(function(pos) {
-        fetch('/delivery/check_arrival/' + assignmentId, {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({lat: pos.coords.latitude, lng: pos.coords.longitude})
-        })
-        .then(function(r){ return r.json(); })
-        .then(function(d) {
-            if (d.ok && d.unlock) {
-                unlockDeliveryForm(assignmentId);
-            } else if (d.ok && !d.unlock) {
-                alert('You are ' + d.dist + 'm away from the destination. You need to be within ' + d.radius + 'm to confirm delivery.');
-                if (btn) { btn.textContent = 'Check Arrival'; btn.disabled = false; }
-            } else {
-                alert('Error: ' + (d.error || 'Unknown'));
-                if (btn) { btn.textContent = 'Check Arrival'; btn.disabled = false; }
-            }
-        })
-        .catch(function(){ unlockDeliveryForm(assignmentId); });
-    }, function() {
-        unlockDeliveryForm(assignmentId);
-    }, {enableHighAccuracy: true, timeout: 15000});
+  if (!navigator.geolocation) { unlockDeliveryForm(assignmentId); return; }
+  var btn = document.getElementById('check-arrival-btn-' + assignmentId);
+  if (btn) { btn.textContent = 'Checking GPS...'; btn.disabled = true; }
+  navigator.geolocation.getCurrentPosition(function(pos) {
+    fetch('/delivery/check_arrival/' + assignmentId, {
+      method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({lat: pos.coords.latitude, lng: pos.coords.longitude})
+    }).then(function(r){ return r.json(); }).then(function(d) {
+      if (d.ok && d.unlock) { unlockDeliveryForm(assignmentId); }
+      else if (d.ok && !d.unlock) {
+        alert('You are ' + d.dist + 'm away. You need to be within ' + d.radius + 'm to confirm delivery.');
+        if (btn) { btn.textContent = 'Check Arrival'; btn.disabled = false; }
+      } else { alert('Error: ' + (d.error || 'Unknown')); if (btn) { btn.textContent = 'Check Arrival'; btn.disabled = false; } }
+    }).catch(function(){ unlockDeliveryForm(assignmentId); });
+  }, function() { unlockDeliveryForm(assignmentId); }, {enableHighAccuracy: true, timeout: 15000});
 }
 
 function unlockDeliveryForm(assignmentId) {
-    var form = document.getElementById('delivery-form-' + assignmentId);
-    var btn  = document.getElementById('check-arrival-btn-' + assignmentId);
-    if (form) { form.style.display = 'block'; }
-    if (btn)  { btn.style.display = 'none'; }
+  var form = document.getElementById('delivery-form-' + assignmentId);
+  var btn  = document.getElementById('check-arrival-btn-' + assignmentId);
+  if (form) { form.style.display = 'block'; }
+  if (btn)  { btn.style.display = 'none'; }
 }
 
 function confirmDelivery(assignmentId) {
-    var name    = document.getElementById('del-to-name-'    + assignmentId).value.trim();
-    var company = document.getElementById('del-to-company-' + assignmentId).value.trim();
-    var note    = document.getElementById('del-note-'       + assignmentId).value.trim();
-    if (!name) { alert('Please enter the name of the person who received the package.'); return; }
-
-    var btn = document.getElementById('del-submit-btn-' + assignmentId);
-    if (btn) { btn.textContent = 'Confirming...'; btn.disabled = true; }
-
-    if (!navigator.geolocation) {
-        _doConfirm(assignmentId, 0, 0, name, company, note, btn);
-        return;
-    }
-    navigator.geolocation.getCurrentPosition(function(pos) {
-        _doConfirm(assignmentId, pos.coords.latitude, pos.coords.longitude, name, company, note, btn);
-    }, function() {
-        _doConfirm(assignmentId, 0, 0, name, company, note, btn);
-    }, {enableHighAccuracy: true, timeout: 15000});
+  var name    = document.getElementById('del-to-name-'    + assignmentId).value.trim();
+  var company = document.getElementById('del-to-company-' + assignmentId).value.trim();
+  var note    = document.getElementById('del-note-'       + assignmentId).value.trim();
+  if (!name) { alert('Please enter the name of the person who received the package.'); return; }
+  var btn = document.getElementById('del-submit-btn-' + assignmentId);
+  if (btn) { btn.textContent = 'Confirming...'; btn.disabled = true; }
+  if (!navigator.geolocation) { _doConfirm(assignmentId, 0, 0, name, company, note, btn); return; }
+  navigator.geolocation.getCurrentPosition(
+    function(pos) { _doConfirm(assignmentId, pos.coords.latitude, pos.coords.longitude, name, company, note, btn); },
+    function()    { _doConfirm(assignmentId, 0, 0, name, company, note, btn); },
+    {enableHighAccuracy: true, timeout: 15000}
+  );
 }
 
 function _doConfirm(assignmentId, lat, lng, name, company, note, btn) {
-    fetch('/delivery/confirm/' + assignmentId, {
-        method: 'POST',
-        headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({lat: lat, lng: lng, delivered_to: name, company: company, note: note})
-    })
-    .then(function(r){ return r.json(); })
-    .then(function(d) {
-        if (d.ok) {
-            location.reload();
-        } else {
-            alert('Cannot confirm: ' + d.error);
-            if (btn) { btn.textContent = 'Confirm Delivery'; btn.disabled = false; }
-        }
-    })
-    .catch(function(){ alert('Network error'); if (btn) { btn.textContent = 'Confirm Delivery'; btn.disabled = false; } });
+  fetch('/delivery/confirm/' + assignmentId, {
+    method: 'POST', headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({lat: lat, lng: lng, delivered_to: name, company: company, note: note})
+  }).then(function(r){ return r.json(); }).then(function(d) {
+    if (d.ok) { location.reload(); }
+    else { alert('Cannot confirm: ' + d.error); if (btn) { btn.textContent = 'Confirm Delivery'; btn.disabled = false; } }
+  }).catch(function(){ alert('Network error'); if (btn) { btn.textContent = 'Confirm Delivery'; btn.disabled = false; } });
 }
 // ─── End Delivery GPS tracking ───────────────────────────────────────────────
 
 // ─── Leaflet live delivery maps (route + ETA + live tracking) ─────────────────
-var TOMTOM_KEY = "{{ tomtom_key }}";
-var ROUTE_REFRESH_MS = 30000;
-var _deliveryMaps = {};
+var TOMTOM_KEY = "{{ tomtom_key }}";   // empty → falls back to free OSRM (no traffic)
+var ROUTE_REFRESH_MS = 30000;          // throttle traffic recalcs to 1 per 30s (saves quota)
+var _deliveryMaps = {};   // assignmentId -> { map, myMarker, routeLine, destLat, destLng, watchId, arrived, lastRouteAt }
 
 function _fmtDuration(sec) {
   if (sec == null) return '—';
@@ -1483,6 +1759,7 @@ function _applyRoute(assignmentId, coords, durationSec, distM, withTraffic) {
   ctx.map.fitBounds(ctx.routeLine.getBounds(), {padding: [30, 30]});
 }
 
+// TomTom routing (live traffic). Throttled by ROUTE_REFRESH_MS to conserve free quota.
 function _routeTomTom(assignmentId, fromLat, fromLng) {
   var ctx = _deliveryMaps[assignmentId];
   var url = 'https://api.tomtom.com/routing/1/calculateRoute/' +
@@ -1497,10 +1774,12 @@ function _routeTomTom(assignmentId, fromLat, fromLng) {
     (route.legs || []).forEach(function(leg) {
       (leg.points || []).forEach(function(p){ coords.push([p.latitude, p.longitude]); });
     });
+    // travelTimeInSeconds already includes live traffic delay
     _applyRoute(assignmentId, coords, summary.travelTimeInSeconds, summary.lengthInMeters, true);
   });
 }
 
+// OSRM routing (free, no key, no live traffic) — fallback
 function _routeOSRM(assignmentId, fromLat, fromLng) {
   var ctx = _deliveryMaps[assignmentId];
   var url = 'https://router.project-osrm.org/route/v1/driving/' +
@@ -1514,16 +1793,20 @@ function _routeOSRM(assignmentId, fromLat, fromLng) {
   });
 }
 
+// Update the route + ETA. force=true bypasses the throttle (initial load / arrival).
 function updateDeliveryRoute(assignmentId, fromLat, fromLng, force) {
   var ctx = _deliveryMaps[assignmentId];
   if (!ctx) return;
   var now = Date.now();
   if (!force && ctx.lastRouteAt && (now - ctx.lastRouteAt) < ROUTE_REFRESH_MS) return;
   ctx.lastRouteAt = now;
+
   var routePromise = (TOMTOM_KEY && TOMTOM_KEY.length > 5)
       ? _routeTomTom(assignmentId, fromLat, fromLng).catch(function(){ return _routeOSRM(assignmentId, fromLat, fromLng); })
       : _routeOSRM(assignmentId, fromLat, fromLng);
+
   routePromise.catch(function(){
+    // Both failed — straight dashed line fallback
     var infoBar = document.getElementById('route-info-' + assignmentId);
     if (infoBar) infoBar.style.display = 'flex';
     if (ctx.routeLine) ctx.map.removeLayer(ctx.routeLine);
@@ -1533,11 +1816,13 @@ function updateDeliveryRoute(assignmentId, fromLat, fromLng, force) {
   });
 }
 
+// Begin continuous live GPS tracking for an in-transit assignment
 function startLiveTracking(assignmentId) {
   var ctx = _deliveryMaps[assignmentId];
   if (!ctx || !navigator.geolocation) return;
   var badge = document.getElementById('live-badge-' + assignmentId);
   if (badge) badge.style.display = 'inline-block';
+
   ctx.watchId = navigator.geolocation.watchPosition(function(pos) {
     var myLat = pos.coords.latitude, myLng = pos.coords.longitude;
     if (!ctx.myMarker) {
@@ -1549,13 +1834,16 @@ function startLiveTracking(assignmentId) {
     } else {
       ctx.myMarker.setLatLng([myLat, myLng]);
     }
+    // Refresh route every update
     updateDeliveryRoute(assignmentId, myLat, myLng);
+
+    // Auto-detect arrival
     var dist = _haversineJS(myLat, myLng, ctx.destLat, ctx.destLng);
     var radius = ctx.arrivalRadius || 200;
     if (dist <= radius && !ctx.arrived) {
       ctx.arrived = true;
       if (badge) { badge.textContent = '✅ ARRIVED'; badge.style.color = '#16a34a'; }
-      unlockDeliveryForm(assignmentId);
+      unlockDeliveryForm(assignmentId);  // open confirm form automatically
       if (ctx.watchId != null) { navigator.geolocation.clearWatch(ctx.watchId); ctx.watchId = null; }
     }
   }, function(){}, {enableHighAccuracy: true, maximumAge: 5000, timeout: 20000});
@@ -1578,32 +1866,39 @@ document.addEventListener('DOMContentLoaded', function() {
     var status = div.dataset.status || 'pending';
     var arrivalRadius = parseInt(div.dataset.arrivalRadius || '200', 10);
     if (isNaN(lat) || isNaN(lng)) return;
+
     var assignmentId = div.id.replace('dlmap-', '');
     var map = L.map(div.id, {zoomControl: true, scrollWheelZoom: false}).setView([lat, lng], 14);
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
       attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>', maxZoom: 19
     }).addTo(map);
+
     var destIcon = L.divIcon({
       html: '<div style="background:#dc2626;width:16px;height:16px;border-radius:50%;border:3px solid #fff;box-shadow:0 2px 6px rgba(0,0,0,0.4);"></div>',
       iconSize: [16, 16], iconAnchor: [8, 8], className: ''
     });
     L.marker([lat, lng], {icon: destIcon}).addTo(map)
       .bindPopup('<strong>Destination</strong><br><span style="font-size:12px;">' + addr + '</span>');
+
     _deliveryMaps[assignmentId] = {
       map: map, destLat: lat, destLng: lng, arrivalRadius: arrivalRadius,
-      myMarker: null, routeLine: null, watchId: null, arrived: false, lastRouteAt: null
+      myMarker: null, routeLine: null, watchId: null, arrived: false
     };
+
+    // Initial route from current position (one-shot, force a fresh route)
     if (navigator.geolocation) {
       navigator.geolocation.getCurrentPosition(function(pos) {
         updateDeliveryRoute(assignmentId, pos.coords.latitude, pos.coords.longitude, true);
       }, function(){}, {enableHighAccuracy: true, timeout: 8000});
     }
+
+    // If trip is already in transit, begin live tracking automatically
     if (status === 'in_transit') {
       startLiveTracking(assignmentId);
     }
   });
 });
-
+// Stop all GPS watchers on page unload to avoid leaked browser GPS listeners
 window.addEventListener('pagehide', function() {
   Object.values(_deliveryMaps).forEach(function(ctx) {
     if (ctx.watchId != null) {
@@ -1623,7 +1918,7 @@ function validateAndSubmit(e){
   form.querySelectorAll('input[required]:not([type="hidden"])').forEach(function(inp){
     if(inp.value === '' || inp.value === null){
       var label = inp.closest('.field')?.querySelector('label')?.textContent || inp.name;
-      empty.push(label.trim().replace(/^★\s*/, ''));
+      empty.push(label.trim());
     }
   });
 
@@ -1640,7 +1935,7 @@ function validateAndSubmit(e){
   if(btn){
     btn.disabled = true;
     btn.dataset.origText = btn.innerHTML;
-    btn.innerHTML = '⏳ Submitting...';
+    btn.innerHTML = 'Submitting...';
     // Re-enable after 10s in case of network failure
     setTimeout(function(){
       if(btn.disabled){
@@ -1650,6 +1945,237 @@ function validateAndSubmit(e){
     }, 10000);
   }
   return true;
+}
+</script>
+
+<script>
+// ═══ ASSIGNER MULTI-STORE LINE ITEMS ═══
+function _storeRowHTML(){
+  return '<div class="store-row" style="display:flex;gap:8px;align-items:center;">' +
+    '<input list="route-options" name="store_name[]" placeholder="Store / area name" ' +
+      'style="flex:2;padding:8px 11px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;">' +
+    '<input type="number" name="store_packages[]" min="0" value="1" placeholder="Pkts" oninput="recalcTotal()" ' +
+      'style="width:80px;padding:8px 11px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;">' +
+    '<input type="hidden" name="store_lat[]" value=""><input type="hidden" name="store_lng[]" value="">' +
+    '<button type="button" onclick="this.closest(\'.store-row\').remove();recalcTotal();" ' +
+      'style="padding:7px 11px;background:#fee2e2;color:#991b1b;border:1px solid #fca5a5;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;">✕</button>' +
+    '</div>';
+}
+function addStoreRow(){
+  var box = document.getElementById('store-rows');
+  if(!box) return;
+  box.insertAdjacentHTML('beforeend', _storeRowHTML());
+  recalcTotal();
+}
+function recalcTotal(){
+  var inputs = document.querySelectorAll('#store-rows input[name="store_packages[]"]');
+  var total = 0;
+  inputs.forEach(function(i){ total += parseInt(i.value || 0, 10) || 0; });
+  var el = document.getElementById('total-packets');
+  if(el) el.textContent = total;
+}
+function addEditRow(id){
+  var box = document.getElementById('edit-rows-' + id);
+  if(!box) return;
+  box.insertAdjacentHTML('beforeend',
+    '<div style="display:flex;gap:6px;">' +
+    '<input list="route-options" name="store_name[]" placeholder="Store name" style="flex:2;padding:7px 10px;border:1px solid var(--border);border-radius:7px;font-size:12px;">' +
+    '<input type="number" name="store_packages[]" min="0" value="1" style="width:70px;padding:7px 10px;border:1px solid var(--border);border-radius:7px;font-size:12px;"></div>');
+}
+function toggleEdit(id){
+  var f = document.getElementById('edit-form-' + id);
+  if(f) f.style.display = (f.style.display === 'none' || !f.style.display) ? 'block' : 'none';
+}
+// Rider marks a store reached (captures GPS if available)
+function logStop(stopId, btn){
+  if(btn){ btn.disabled = true; btn.textContent = '...'; }
+  function send(lat, lng){
+    fetch('/delivery/log_stop/' + stopId, {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({lat:lat||0, lng:lng||0})
+    }).then(function(r){return r.json();}).then(function(d){
+      if(d.ok){
+        var row = document.getElementById('stop-' + stopId);
+        if(row){ row.style.background='#f0fdf4'; row.style.borderColor='#86efac';
+          var b = row.querySelector('button'); if(b) b.remove();
+          var icon = row.querySelector('span'); if(icon) icon.textContent='✅';
+        }
+      } else { if(btn){ btn.disabled=false; btn.textContent='Reached'; } alert(d.error||'Failed'); }
+    }).catch(function(){ if(btn){ btn.disabled=false; btn.textContent='Reached'; } });
+  }
+  if(navigator.geolocation){
+    navigator.geolocation.getCurrentPosition(
+      function(p){ send(p.coords.latitude, p.coords.longitude); },
+      function(){ send(0,0); }, {enableHighAccuracy:true, timeout:6000}
+    );
+  } else { send(0,0); }
+}
+// seed first store row on load
+document.addEventListener('DOMContentLoaded', function(){
+  if(document.getElementById('store-rows') && document.querySelectorAll('#store-rows .store-row').length === 0){
+    addStoreRow();
+  }
+});
+</script>
+
+<script>
+// ═══ IN-APP NOTIFICATION BELL ═══
+(function(){
+  var bell = document.getElementById('notif-bell');
+  if(!bell) return;
+  function refresh(){
+    fetch('/notifications').then(function(r){return r.json();}).then(function(d){
+      if(!d.ok) return;
+      var badge = document.getElementById('notif-count');
+      if(badge){
+        if(d.unread > 0){ badge.textContent = d.unread; badge.style.display='inline-block'; }
+        else { badge.style.display='none'; }
+      }
+      var list = document.getElementById('notif-list');
+      if(list){
+        if(!d.items.length){ list.innerHTML = '<div style="padding:14px;color:#64748b;font-size:13px;text-align:center;">No notifications</div>'; }
+        else {
+          list.innerHTML = d.items.map(function(n){
+            return '<div style="padding:10px 13px;border-bottom:1px solid #eef2f7;'+(n.is_read?'':'background:#eff6ff;')+'">'+
+              '<div style="font-size:13px;font-weight:700;color:#0f172a;">'+n.title+'</div>'+
+              (n.body?'<div style="font-size:12px;color:#475569;margin-top:2px;">'+n.body+'</div>':'')+
+              '<div style="font-size:10px;color:#94a3b8;margin-top:3px;">'+n.ago+'</div></div>';
+          }).join('');
+        }
+      }
+    }).catch(function(){});
+  }
+  bell.addEventListener('click', function(){
+    var dd = document.getElementById('notif-dropdown');
+    if(!dd) return;
+    var open = dd.style.display === 'block';
+    dd.style.display = open ? 'none' : 'block';
+    if(!open){ fetch('/notifications/read',{method:'POST'}).then(refresh).catch(function(){}); }
+  });
+  refresh();
+  setInterval(refresh, 60000);
+})();
+</script>
+
+<script>
+// ═══ LIVE DELIVERY TIMER — counts up from when the trip was accepted ═══
+(function(){
+  function pad(n){ return (n < 10 ? '0' : '') + n; }
+  function fmt(totalSec){
+    if(totalSec < 0) totalSec = 0;
+    var h = Math.floor(totalSec / 3600);
+    var m = Math.floor((totalSec % 3600) / 60);
+    var s = totalSec % 60;
+    return h > 0 ? (h + ':' + pad(m) + ':' + pad(s)) : (pad(m) + ':' + pad(s));
+  }
+  function tick(){
+    var els = document.querySelectorAll('.delivery-timer');
+    var now = Date.now();
+    els.forEach(function(el){
+      var dep = el.getAttribute('data-departure');
+      if(!dep) return;
+      var t = Date.parse(dep);
+      if(isNaN(t)) return;
+      var secs = Math.floor((now - t) / 1000);
+      el.textContent = fmt(secs);
+      // Turn red/amber as the delivery drags on
+      if(secs > 5400){ el.style.color = '#dc2626'; }        // > 90 min
+      else if(secs > 2700){ el.style.color = '#d97706'; }   // > 45 min
+    });
+  }
+  tick();
+  setInterval(tick, 1000);
+})();
+</script>
+
+<script>
+(function(){
+  const c=document.getElementById('dashCanvas');
+  if(!c)return;
+  const ctx=c.getContext('2d');
+  let W,H,pts=[];
+  function resize(){
+    const hero=c.parentElement;
+    W=c.width=hero.offsetWidth; H=c.height=hero.offsetHeight;
+  }
+  resize(); window.addEventListener('resize',resize);
+  for(let i=0;i<60;i++) pts.push({x:Math.random()*2000,y:Math.random()*2000,a:Math.random()*0.5+0.05,s:Math.random()*0.25+0.04,ts:Math.random()*0.015+0.004,td:Math.random()>0.5?1:-1,c:Math.random()<0.6?'#60a5fa':Math.random()<0.5?'#a5f3fc':'#fff'});
+  function draw(){
+    ctx.clearRect(0,0,W,H);
+    for(const p of pts){
+      p.a+=p.ts*p.td; if(p.a>0.6||p.a<0.04)p.td*=-1;
+      p.y-=p.s; if(p.y<0){p.y=H;p.x=Math.random()*W;}
+      ctx.globalAlpha=p.a; ctx.fillStyle=p.c;
+      ctx.fillRect(Math.floor(p.x%W),Math.floor(p.y),1,1);
+    }
+    ctx.globalAlpha=1; requestAnimationFrame(draw);
+  }
+  requestAnimationFrame(draw);
+})();
+</script>
+
+<script>
+// ═══ MANUAL PIN PICKER (biller delivery assign) ═══
+var __pinMap = null, __pinMarker = null;
+var ODISHA_CENTER = [{{ store_lat or 20.4634 }}, {{ store_lng or 85.8844 }}];
+function toggleManualPin(ev){
+  if(ev) ev.preventDefault();
+  var sec = document.getElementById('manual-pin-section');
+  if(!sec) return;
+  var open = sec.style.display !== 'none';
+  sec.style.display = open ? 'none' : 'block';
+  if(open) return;
+  setTimeout(initPinMap, 80);
+}
+function initPinMap(){
+  if(__pinMap){ __pinMap.invalidateSize(); return; }
+  if(typeof L === 'undefined'){ return; }
+  __pinMap = L.map('pin-map').setView(ODISHA_CENTER, 11);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    maxZoom: 19, attribution: '© OpenStreetMap'
+  }).addTo(__pinMap);
+  // Show store as reference
+  L.circleMarker(ODISHA_CENTER, {radius:6,color:'#16a34a',fillColor:'#22c55e',fillOpacity:.9}).addTo(__pinMap).bindTooltip('🏪 Store',{permanent:false});
+  __pinMap.on('click', function(e){ setPin(e.latlng.lat, e.latlng.lng); });
+}
+function setPin(lat, lng){
+  // sanity: Odisha bbox
+  if(lat < 17.7 || lat > 22.6 || lng < 81.3 || lng > 87.5){
+    document.getElementById('pin-coords').innerHTML = '<span style="color:#dc2626;">⚠ Outside Odisha — pin ignored.</span>';
+    return;
+  }
+  if(__pinMarker) __pinMap.removeLayer(__pinMarker);
+  __pinMarker = L.marker([lat,lng]).addTo(__pinMap);
+  __pinMap.panTo([lat,lng]);
+  document.getElementById('manual_lat').value = lat.toFixed(6);
+  document.getElementById('manual_lng').value = lng.toFixed(6);
+  document.getElementById('pin-coords').innerHTML = '✅ Pinned at <strong>' + lat.toFixed(5) + ', ' + lng.toFixed(5) + '</strong>';
+}
+function pinSearch(){
+  var q = (document.getElementById('pin-search-box').value || '').trim();
+  if(!q){ return; }
+  if(!/odisha|orissa/i.test(q)) q = q + ', Odisha, India';
+  var box = '81.3,22.6,87.5,17.7';
+  var url = 'https://nominatim.openstreetmap.org/search?format=json&limit=5&countrycodes=in&bounded=1&viewbox=' + box + '&q=' + encodeURIComponent(q);
+  document.getElementById('pin-results').innerHTML = '<span style="color:var(--muted);">Searching...</span>';
+  fetch(url, {headers:{'Accept':'application/json'}})
+    .then(function(r){ return r.json(); })
+    .then(function(arr){
+      if(!arr || !arr.length){
+        document.getElementById('pin-results').innerHTML = '<span style="color:#b45309;">No matches in Odisha. Tap the map directly to drop a pin.</span>';
+        return;
+      }
+      var html = '<div style="display:flex;flex-direction:column;gap:4px;max-height:130px;overflow-y:auto;">';
+      arr.forEach(function(r, i){
+        var nm = (r.display_name || '').replace(/'/g,'&#39;');
+        html += '<button type="button" onclick="setPin(' + r.lat + ',' + r.lon + ')" style="text-align:left;padding:6px 8px;background:#fff;border:1px solid var(--border);border-radius:6px;font-size:11px;cursor:pointer;">📍 ' + nm + '</button>';
+      });
+      html += '</div>';
+      document.getElementById('pin-results').innerHTML = html;
+    })
+    .catch(function(){
+      document.getElementById('pin-results').innerHTML = '<span style="color:#dc2626;">Search failed. Tap the map directly.</span>';
+    });
 }
 </script>
 </body>

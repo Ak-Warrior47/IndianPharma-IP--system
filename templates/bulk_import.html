@@ -9,7 +9,7 @@
 *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
 :root {
   --blue: #1d4ed8; --blue-dark: #1e3a8a; --blue-lite: #dbeafe; --blue-mid: #bfdbfe;
-  --text: #0f172a; --muted: #64748b; --border: #c7d9f5; --bg: #eef4ff; --page-bg: #e8f0fe;
+  --text: #0f172a; --muted: #64748b; --border: #c7d9f5; --bg: #f8fafc; --page-bg: #ffffff;
   --white: #ffffff; --success: #16a34a; --danger: #dc2626; --warn: #d97706;
   --green-bg: #f0fdf4; --red-bg: #fef2f2;
 }
@@ -52,13 +52,13 @@ body { font-family: 'DM Sans', sans-serif; background: var(--page-bg); min-heigh
 
 <nav class="nav">
   <div class="nav-brand">
-    🔬 Pharma IP System
+    Pharma IP System
     <span class="pill-admin">Admin</span>
   </div>
   <div class="nav-right">
     <a href="/admin_dashboard" class="btn-back">← Back to Admin</a>
     <form method="POST" action="/logout" style="display:inline;">
-      <button type="submit" class="btn-logout">🚪 Logout</button>
+      <button type="submit" class="btn-logout">Logout</button>
     </form>
   </div>
 </nav>
@@ -72,7 +72,7 @@ body { font-family: 'DM Sans', sans-serif; background: var(--page-bg); min-heigh
   {% endwith %}
 
   <div class="card">
-    <div class="card-title">📥 Bulk CSV Employee Import</div>
+    <div class="card-title">Bulk CSV Employee Import</div>
     <div class="card-sub">Upload a CSV file to add multiple employees at once. Rows with errors are skipped and reported.</div>
 
     <form method="POST" action="/admin/bulk_import" enctype="multipart/form-data">
@@ -80,12 +80,12 @@ body { font-family: 'DM Sans', sans-serif; background: var(--page-bg); min-heigh
         <label>CSV File</label>
         <input type="file" name="csv_file" accept=".csv" required>
       </div>
-      <button type="submit" class="btn-import">📤 Import Employees</button>
+      <button type="submit" class="btn-import">Import Employees</button>
     </form>
   </div>
 
   <div class="card">
-    <div class="card-title" style="font-size:15px;">📋 CSV Format</div>
+    <div class="card-title" style="font-size:15px;">CSV Format</div>
     <div class="format-box">
       <div style="font-size:12px;font-weight:700;color:var(--muted);margin-bottom:6px;">Required columns (header row):</div>
       <pre>name,email,password,staff_type

@@ -15,8 +15,8 @@
   --text:      #0f172a;
   --muted:     #64748b;
   --border:    #c7d9f5;
-  --bg:        #eef4ff;
-  --page-bg:   #e8f0fe;
+  --bg:        #f8fafc;
+  --page-bg:   #ffffff;
   --white:     #ffffff;
   --success:   #16a34a;
   --danger:    #dc2626;
@@ -138,7 +138,7 @@ body {
 
 <nav class="nav">
   <div class="nav-brand">
-    🔬 Pharma IP System
+    Pharma IP System
     <span class="nav-pill">Past Entry</span>
   </div>
   <div class="nav-right">
@@ -157,7 +157,7 @@ body {
 
   <!-- DATE BANNER -->
   <div class="date-banner">
-    <div class="date-banner-icon">📅</div>
+    <div class="date-banner-icon" style="font-size:20px;font-weight:700;color:#6d28d9;">Date</div>
     <div class="date-banner-text">
       <div class="label">Submitting Past Data For</div>
       <div class="value">{{ past_date.strftime('%A, %d %B %Y') }}</div>
@@ -166,23 +166,23 @@ body {
 
   <div class="card">
     <div class="info-box">
-      ℹ️ &nbsp;This window was opened by the admin for a date you missed. Fill your actual numbers for that day and submit. You can only submit once.
+      Note: This window was opened by the admin for a date you missed. Fill your actual numbers for that day and submit. You can only submit once.
     </div>
 
     <form method="POST" autocomplete="off">
 
       <!-- SECTION 1: Core picking metrics -->
-      <div class="section-title">📦 Picking & Bills</div>
+      <div class="section-title">Picking &amp; Bills</div>
       <div class="form-grid">
 
         {% if staff_type == 'checker' %}
         <div class="field">
-          <label>★ Total Bills Received That Day</label>
+          <label>Total Bills Received That Day</label>
           <input type="number" name="bills_received" id="pe_bills_received" min="0" value="0" oninput="updatePeTotals()">
           <small>All bills given to you that day</small>
         </div>
         <div class="field">
-          <label>★ Pending Bills (not checked)</label>
+          <label>Pending Bills (not checked)</label>
           <input type="number" name="pending_bills_manual" id="pe_pending_manual" min="0" value="0" oninput="updatePeTotals()">
           <small>Bills you could not complete that day</small>
         </div>
@@ -279,21 +279,21 @@ body {
           <label>Table Clean</label>
           <input type="hidden" name="table_clean" id="pe_ck_table_val" value="1">
           <div class="yn-group">
-            <button type="button" class="yn-btn yes active" id="pe_ck_table_yes" onclick="document.getElementById('pe_ck_table_val').value='1';this.classList.add('active');document.getElementById('pe_ck_table_no').classList.remove('active')">✅ Yes</button>
-            <button type="button" class="yn-btn no" id="pe_ck_table_no" onclick="document.getElementById('pe_ck_table_val').value='0';this.classList.add('active');document.getElementById('pe_ck_table_yes').classList.remove('active')">❌ No</button>
+            <button type="button" class="yn-btn yes active" id="pe_ck_table_yes" onclick="document.getElementById('pe_ck_table_val').value='1';this.classList.add('active');document.getElementById('pe_ck_table_no').classList.remove('active')">Yes</button>
+            <button type="button" class="yn-btn no" id="pe_ck_table_no" onclick="document.getElementById('pe_ck_table_val').value='0';this.classList.add('active');document.getElementById('pe_ck_table_yes').classList.remove('active')">No</button>
           </div>
         </div>
         <div class="field">
           <label>Sweeping Done</label>
           <input type="hidden" name="sweep_done" id="pe_ck_sweep_val" value="1">
           <div class="yn-group">
-            <button type="button" class="yn-btn yes active" id="pe_ck_sweep_yes" onclick="document.getElementById('pe_ck_sweep_val').value='1';this.classList.add('active');document.getElementById('pe_ck_sweep_no').classList.remove('active')">✅ Yes</button>
-            <button type="button" class="yn-btn no" id="pe_ck_sweep_no" onclick="document.getElementById('pe_ck_sweep_val').value='0';this.classList.add('active');document.getElementById('pe_ck_sweep_yes').classList.remove('active')">❌ No</button>
+            <button type="button" class="yn-btn yes active" id="pe_ck_sweep_yes" onclick="document.getElementById('pe_ck_sweep_val').value='1';this.classList.add('active');document.getElementById('pe_ck_sweep_no').classList.remove('active')">Yes</button>
+            <button type="button" class="yn-btn no" id="pe_ck_sweep_no" onclick="document.getElementById('pe_ck_sweep_val').value='0';this.classList.add('active');document.getElementById('pe_ck_sweep_yes').classList.remove('active')">No</button>
           </div>
         </div>
         {% else %}
         <div class="field">
-          <label>★ Total Bills Received to Pick</label>
+          <label>Total Bills Received to Pick</label>
           <input type="number" name="total_bills_received" min="0" value="0">
           <small>Total bills given to you that day</small>
         </div>
@@ -325,26 +325,26 @@ body {
           <label>Table Clean</label>
           <input type="hidden" name="table_clean" id="pe_table_val" value="1">
           <div class="yn-group">
-            <button type="button" class="yn-btn yes active" id="pe_table_yes" onclick="setPeYN('table','1')">✅ Yes</button>
-            <button type="button" class="yn-btn no" id="pe_table_no" onclick="setPeYN('table','0')">❌ No</button>
+            <button type="button" class="yn-btn yes active" id="pe_table_yes" onclick="setPeYN('table','1')">Yes</button>
+            <button type="button" class="yn-btn no" id="pe_table_no" onclick="setPeYN('table','0')">No</button>
           </div>
         </div>
         <div class="field">
           <label>Sweeping Done</label>
           <input type="hidden" name="sweep_done" id="pe_sweep_val" value="1">
           <div class="yn-group">
-            <button type="button" class="yn-btn yes active" id="pe_sweep_yes" onclick="setPeYN('sweep','1')">✅ Yes</button>
-            <button type="button" class="yn-btn no" id="pe_sweep_no" onclick="setPeYN('sweep','0')">❌ No</button>
+            <button type="button" class="yn-btn yes active" id="pe_sweep_yes" onclick="setPeYN('sweep','1')">Yes</button>
+            <button type="button" class="yn-btn no" id="pe_sweep_no" onclick="setPeYN('sweep','0')">No</button>
           </div>
         </div>
         {% endif %}
       </div>
 
       <div style="background:rgba(240,253,244,0.85);border:1px solid rgba(22,163,74,0.2);border-radius:11px;padding:12px 16px;margin-bottom:20px;font-size:12px;color:#15803a;font-weight:600;">
-        ⏱ Working time is automatically set to <strong>9 hours</strong> for all calculations.
+        Working time is automatically set to <strong>9 hours</strong> for all calculations.
       </div>
 
-      <button type="submit" class="btn-submit" onclick="return validatePeSubmit(event)">✅ Submit Past Entry for {{ past_date.strftime('%d %b %Y') }}</button>
+      <button type="submit" class="btn-submit" onclick="return validatePeSubmit(event)">Submit Past Entry for {{ past_date.strftime('%d %b %Y') }}</button>
     </form>
   </div>
 

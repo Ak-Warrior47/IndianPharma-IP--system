@@ -17,8 +17,8 @@
   --text:      #0f172a;
   --muted:     #64748b;
   --border:    #c7d9f5;
-  --bg:        #eef4ff;
-  --page-bg:   #e8f0fe;
+  --bg:        #f8fafc;
+  --page-bg:   #ffffff;
   --white:     #ffffff;
   --success:   #16a34a;
   --danger:    #dc2626;
@@ -325,34 +325,110 @@ tbody tr:hover td { background: rgba(219,234,254,0.3); }
 .lb-tab:not(.active):hover{background:var(--blue-lite);color:var(--blue);}
 
 /* ── ANIMATIONS ── */
-@keyframes fadeSlideUp {
-  from { opacity:0; transform:translateY(18px); }
-  to   { opacity:1; transform:translateY(0); }
-}
-@keyframes countUp {
-  from { opacity:0; transform:scale(0.85); }
-  to   { opacity:1; transform:scale(1); }
-}
-@keyframes shimmer {
-  0%   { background-position: -200% center; }
-  100% { background-position:  200% center; }
-}
-@keyframes pulseGlow {
-  0%,100% { box-shadow:0 0 0 0 rgba(29,78,216,0); }
-  50%      { box-shadow:0 0 0 6px rgba(29,78,216,0.12); }
-}
-.anim-fade-in {
-  animation: fadeSlideUp 0.45s cubic-bezier(.22,.68,0,1.2) both;
-}
-.card { animation: fadeSlideUp 0.4s cubic-bezier(.22,.68,0,1.2) both; }
+@keyframes fadeSlideUp { from{opacity:0;transform:translateY(18px)} to{opacity:1;transform:translateY(0)} }
+@keyframes popIn { from{opacity:0;transform:scale(0.85)} to{opacity:1;transform:scale(1)} }
+.card { animation:fadeSlideUp 0.4s cubic-bezier(.22,.68,0,1.2) both; }
 .card:hover { box-shadow:0 4px 24px rgba(29,78,216,0.10); transform:translateY(-1px); transition:box-shadow .25s,transform .25s; }
-.overview-stat { animation: countUp 0.5s cubic-bezier(.22,.68,0,1.2) both; transition:transform .2s,box-shadow .2s; }
+.overview-stat { animation:popIn 0.5s cubic-bezier(.22,.68,0,1.2) both; transition:transform .2s,box-shadow .2s; }
 .overview-stat:hover { transform:translateY(-2px) scale(1.02); box-shadow:0 6px 20px rgba(29,78,216,0.12); }
 .btn-sm, .btn-delete { transition:transform .18s,box-shadow .18s; }
 .btn-sm:hover { transform:translateY(-1px); box-shadow:0 3px 10px rgba(29,78,216,0.15); }
 .btn-delete:hover { transform:translateY(-1px); box-shadow:0 3px 10px rgba(220,38,38,0.18); }
-.emp-row { animation: fadeSlideUp 0.35s cubic-bezier(.22,.68,0,1.2) both; transition:background .2s,box-shadow .2s; }
+.emp-row { animation:fadeSlideUp 0.35s cubic-bezier(.22,.68,0,1.2) both; transition:background .2s,box-shadow .2s; }
 .emp-row:hover { background:rgba(219,234,254,0.18) !important; }
+.anim-fade-in { animation:fadeSlideUp 0.45s cubic-bezier(.22,.68,0,1.2) both; }
+
+/* ════════ APPLE-STYLE GLASSMORPHISM OVERLAY ════════ */
+:root {
+  --glass-bg: rgba(255,255,255,0.55);
+  --glass-bg-strong: rgba(255,255,255,0.7);
+  --glass-border: rgba(255,255,255,0.45);
+  --glass-shadow: 0 8px 32px rgba(31,38,135,0.12);
+  --glass-blur: blur(20px) saturate(180%);
+  --glass-blur-strong: blur(28px) saturate(200%);
+  --bg-blob-1: #a5b4fc;
+  --bg-blob-2: #f9a8d4;
+  --bg-blob-3: #93c5fd;
+  --glass-text: #0f172a;
+  --glass-muted: #475569;
+}
+html, body {
+  background: linear-gradient(135deg, #eff6ff 0%, #fdf2f8 50%, #f5f3ff 100%) !important;
+  min-height: 100vh;
+  color: var(--glass-text);
+}
+body::before, body::after {
+  content: ''; position: fixed; border-radius: 50%;
+  filter: blur(90px); opacity: 0.55; pointer-events: none; z-index: -1;
+  animation: floatBlob 18s ease-in-out infinite alternate;
+}
+body::before { width: 480px; height: 480px; background: var(--bg-blob-1); top: -120px; left: -120px; }
+body::after  { width: 520px; height: 520px; background: var(--bg-blob-2); bottom: -150px; right: -150px; animation-delay: -8s; }
+@keyframes floatBlob { from { transform: translate(0,0) scale(1); } to { transform: translate(60px,80px) scale(1.15); } }
+
+.card, .glass-card, .stat-card, .kpi-card, .sc-card, .panel, .box {
+  background: var(--glass-bg) !important;
+  -webkit-backdrop-filter: var(--glass-blur);
+  backdrop-filter: var(--glass-blur);
+  border: 1px solid var(--glass-border) !important;
+  border-radius: 18px !important;
+  box-shadow: var(--glass-shadow) !important;
+}
+input:not([type=checkbox]):not([type=radio]):not([type=submit]):not([type=hidden]),
+select, textarea {
+  background: rgba(255,255,255,0.65) !important;
+  -webkit-backdrop-filter: blur(10px);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(255,255,255,0.55) !important;
+  border-radius: 12px !important;
+  transition: all .2s ease;
+}
+input:focus, select:focus, textarea:focus {
+  outline: none !important;
+  background: rgba(255,255,255,0.85) !important;
+  border-color: rgba(99,102,241,0.55) !important;
+  box-shadow: 0 0 0 4px rgba(165,180,252,0.25) !important;
+}
+button, .btn, .btn-submit, .btn-sm, .btn-view, .btn-export, .btn-dl, .btn-nav, .btn-back, .btn-fill-past, .role-btn {
+  border-radius: 12px !important;
+  transition: transform .2s ease, box-shadow .2s ease, background .2s ease !important;
+}
+button:hover, .btn:hover, .btn-submit:hover, .btn-sm:hover, .btn-view:hover, .btn-export:hover, .btn-dl:hover, .btn-nav:hover, .btn-back:hover, .btn-fill-past:hover, .role-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px rgba(99,102,241,0.25) !important;
+}
+.nav, .navbar, .top-nav, .sidebar, header {
+  background: rgba(255,255,255,0.6) !important;
+  -webkit-backdrop-filter: blur(24px) saturate(180%);
+  backdrop-filter: blur(24px) saturate(180%);
+  border-color: var(--glass-border) !important;
+}
+table {
+  border-radius: 14px;
+  overflow: hidden;
+  background: rgba(255,255,255,0.4);
+  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(12px);
+}
+thead, table thead tr { background: rgba(255,255,255,0.55) !important; }
+tbody tr:nth-child(even) { background: rgba(255,255,255,0.25); }
+tbody tr:hover { background: rgba(165,180,252,0.18) !important; }
+.badge, .chip, .pill, .status-badge {
+  border-radius: 999px !important;
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
+  border: 1px solid rgba(255,255,255,0.4) !important;
+}
+.flash, .alert, .flash-message { 
+  background: var(--glass-bg-strong) !important;
+  -webkit-backdrop-filter: var(--glass-blur);
+  backdrop-filter: var(--glass-blur);
+  border: 1px solid var(--glass-border) !important;
+  border-radius: 14px !important;
+  box-shadow: var(--glass-shadow) !important;
+}
+/* ════════ END GLASSMORPHISM OVERLAY ════════ */
+
 </style>
 </head>
 <body>
@@ -360,7 +436,7 @@ tbody tr:hover td { background: rgba(219,234,254,0.3); }
 <!-- EDIT MODAL -->
 <div class="modal-backdrop" id="editModal">
   <div class="modal">
-    <div class="modal-title">✏️ Edit Employee</div>
+    <div class="modal-title">Edit Employee</div>
     <form method="POST" id="editForm" autocomplete="off">
       <div class="modal-grid">
         <div class="field" style="grid-column: span 2;">
@@ -378,10 +454,26 @@ tbody tr:hover td { background: rgba(219,234,254,0.3); }
             <option value="checker">Checker</option>
             <option value="purchaser">Purchaser</option>
             <option value="delivery">Delivery</option>
-            <option value="biller">Biller</option>
+            <option value="biller">Assigner</option>
+            <option value="packer">Packer</option>
+            <option value="supervisor">Supervisor (hidden)</option>
           </select>
         </div>
         <div class="field">
+          <label>Secondary Role (multitasking)</label>
+          <select name="secondary_staff_type" id="edit-secondary">
+            <option value="">— None —</option>
+            <option value="picker">Picker</option>
+            <option value="checker">Checker</option>
+            <option value="purchaser">Purchaser</option>
+            <option value="delivery">Delivery</option>
+            <option value="biller">Assigner</option>
+            <option value="packer">Packer</option>
+            <option value="supervisor">Supervisor</option>
+          </select>
+          <small style="font-size:11px;color:var(--muted);">Optional. Lets staff switch role from the nav bar.</small>
+        </div>
+        <div class="field" style="grid-column: span 2;">
           <label>New Password (optional)</label>
           <input type="password" name="new_password" placeholder="Leave blank to keep">
         </div>
@@ -391,7 +483,7 @@ tbody tr:hover td { background: rgba(219,234,254,0.3); }
           <small style="font-size:11px;color:var(--muted);margin-top:3px;display:block;">Used for OTP-based password reset.</small>
         </div>
         <div class="field" style="grid-column: span 2;background:linear-gradient(135deg,rgba(29,78,216,0.06),rgba(5,150,105,0.04));padding:12px;border-radius:10px;border:1px dashed rgba(29,78,216,0.25);margin-top:4px;">
-          <label style="color:var(--blue);font-weight:700;">⚡ Admin Adjustment (ongoing ±30 pts)</label>
+          <label style="color:var(--blue);font-weight:700;">Admin Adjustment (ongoing ±30 pts)</label>
           <div style="display:flex;gap:10px;align-items:center;">
             <input type="number" name="admin_adjustment" id="edit-adj" min="-30" max="30" step="0.5" placeholder="0" style="width:90px;">
             <input type="text" name="admin_adjustment_note" id="edit-adj-note" maxlength="200" placeholder="Reason (e.g. trained new staff, low attendance)" style="flex:1;">
@@ -401,7 +493,7 @@ tbody tr:hover td { background: rgba(219,234,254,0.3); }
       </div>
       <div class="modal-actions">
         <button type="button" class="btn-cancel" onclick="closeEdit()">Cancel</button>
-        <button type="submit" class="btn-save">💾 Save Changes</button>
+        <button type="submit" class="btn-save">Save Changes</button>
       </div>
     </form>
   </div>
@@ -410,7 +502,7 @@ tbody tr:hover td { background: rgba(219,234,254,0.3); }
 <!-- Feature 14: Notes Modal -->
 <div class="modal-backdrop" id="notesModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.45);z-index:300;align-items:center;justify-content:center;">
   <div class="modal" style="max-width:520px;width:95%;max-height:85vh;overflow-y:auto;">
-    <div class="modal-title" id="notesModalTitle">📋 Notes</div>
+    <div class="modal-title" id="notesModalTitle">Notes</div>
     <div id="notesHistoryList" style="margin-bottom:16px;"></div>
     <form method="POST" id="noteForm" autocomplete="off">
       <div class="field">
@@ -421,7 +513,7 @@ tbody tr:hover td { background: rgba(219,234,254,0.3); }
       </div>
       <div class="modal-actions">
         <button type="button" onclick="closeNotesModal()" class="btn-cancel">Cancel</button>
-        <button type="submit" class="btn-save">💾 Save Note</button>
+        <button type="submit" class="btn-save">Save Note</button>
       </div>
     </form>
   </div>
@@ -443,18 +535,21 @@ var NOTES_BY_EMP = {
 <!-- NAV -->
 <nav class="nav">
   <div class="nav-brand">
-    🔬 Pharma IP System
+    Pharma IP System
     <span class="pill-admin">Admin</span>
   </div>
   <div class="nav-right">
-    <a href="/validations" class="btn-export" style="background:#fef3c7;color:#b45309;border-color:#fbbf24;">⚖️ Validations</a>
-    <a href="/admin/reports" class="btn-export" style="background:#f0fdf4;color:#16a34a;border-color:#bbf7d0;">📊 Reports Archive</a>
-    <a href="/admin/bulk_import" class="btn-export" style="background:#f5f3ff;color:#6d28d9;border-color:#ddd6fe;">📥 Bulk Import</a>
-    <a href="/admin/export_csv" class="btn-export">📥 Export CSV</a>
-    <a href="/admin/export_full" class="btn-export" style="background:#16a34a;color:#fff;">💾 Full Data Export (JSON)</a>
-    <a href="/admin/export_all_pdf" class="btn-export" style="background:linear-gradient(135deg,#6d28d9,#4c1d95);color:#fff;">📄 All Staff PDFs (ZIP)</a>
+    <a href="/validations" class="btn-export" style="background:#fef3c7;color:#b45309;border-color:#fbbf24;">Validations</a>
+    <a href="/admin/delivery" class="btn-export" style="background:#dbeafe;color:#1e40af;border-color:#93c5fd;">🚚 Delivery</a>
+    <a href="/delivery/leaderboard" class="btn-export" style="background:#dcfce7;color:#166534;border-color:#86efac;">🏆 Delivery LB</a>
+    <a href="/supervisor" class="btn-export" style="background:#ede9fe;color:#6d28d9;border-color:#ddd6fe;">🧮 Supervisor</a>
+    <a href="/admin/reports" class="btn-export" style="background:#f0fdf4;color:#16a34a;border-color:#bbf7d0;">Reports Archive</a>
+    <a href="/admin/bulk_import" class="btn-export" style="background:#f5f3ff;color:#6d28d9;border-color:#ddd6fe;">Bulk Import</a>
+    <a href="/admin/export_csv" class="btn-export">Export CSV</a>
+    <a href="/admin/export_full" class="btn-export" style="background:#16a34a;color:#fff;">Full Data Export (JSON)</a>
+    <a href="/admin/export_all_pdf" class="btn-export" style="background:#1e3a8a;color:#fff;">All Staff PDFs (ZIP)</a>
     <form method="POST" action="/logout">
-      <button type="submit" class="btn-logout">🚪 Logout</button>
+      <button type="submit" class="btn-logout">Logout</button>
     </form>
   </div>
 </nav>
@@ -471,7 +566,7 @@ var NOTES_BY_EMP = {
   <!-- Feature 17: Stale Validations Alert -->
   {% if stale_validations_count and stale_validations_count > 0 %}
   <div class="alert alert-danger" style="display:flex;align-items:center;justify-content:space-between;font-size:14px;">
-    <span>⚠️ <strong>{{ stale_validations_count }}</strong> bill validation(s) pending for over 24 hours</span>
+    <span>Alert: <strong>{{ stale_validations_count }}</strong> bill validation(s) pending for over 24 hours</span>
     <a href="/validations" style="background:#dc2626;color:#fff;padding:5px 14px;border-radius:7px;font-size:12px;font-weight:700;text-decoration:none;">View Validations →</a>
   </div>
   {% endif %}
@@ -503,12 +598,12 @@ var NOTES_BY_EMP = {
   <!-- FEATURE 2: ANNOUNCEMENT / NOTICE BOARD -->
   <div class="card" style="margin-bottom:20px;border-left:4px solid var(--blue);">
     <div class="card-header">
-      <div class="card-title">📢 Announcements / Notice Board
+      <div class="card-title">Announcements / Notice Board
         {% if all_announcements %}<span class="cnt">{{ all_announcements|length }} notices</span>{% endif %}
       </div>
-      <a href="/admin/send_monthly_report" class="btn-sm btn-view" style="font-size:12px;padding:7px 14px;" onclick="return confirm('Send monthly PDF reports now?')">📧 Send Monthly Reports</a>
+      <a href="/admin/send_monthly_report" class="btn-sm btn-view" style="font-size:12px;padding:7px 14px;" onclick="return confirm('Send monthly PDF reports now?')">Send Monthly Reports</a>
     </div>
-    <form method="POST" action="/admin/announcements/create" autocomplete="off" style="display:grid;grid-template-columns:1fr 1fr auto;gap:12px;align-items:flex-end;margin-bottom:16px;">
+    <form method="POST" action="/admin/announcement/create" autocomplete="off" style="display:grid;grid-template-columns:1fr 1fr auto;gap:12px;align-items:flex-end;margin-bottom:16px;">
       <div class="field" style="margin:0;">
         <label>Title</label>
         <input type="text" name="title" placeholder="Announcement title" required maxlength="120">
@@ -517,7 +612,7 @@ var NOTES_BY_EMP = {
         <label>Body</label>
         <input type="text" name="body" placeholder="Details (optional)" maxlength="500">
       </div>
-      <button type="submit" class="btn-add" style="white-space:nowrap;">📢 Post</button>
+      <button type="submit" class="btn-add" style="white-space:nowrap;">Post</button>
     </form>
     {% if all_announcements %}
     <div style="display:flex;flex-direction:column;gap:8px;">
@@ -534,8 +629,8 @@ var NOTES_BY_EMP = {
           </div>
         </div>
         {% if ann.is_active %}
-        <form method="POST" action="/admin/announcements/{{ ann.id }}/deactivate" style="margin:0;">
-          <button type="submit" class="btn-sm btn-delete" style="white-space:nowrap;font-size:11px;">✕ Archive</button>
+        <form method="POST" action="/admin/announcement/{{ ann.id }}/deactivate" style="margin:0;">
+          <button type="submit" class="btn-sm btn-delete" style="white-space:nowrap;font-size:11px;">&times; Archive</button>
         </form>
         {% endif %}
       </div>
@@ -550,7 +645,7 @@ var NOTES_BY_EMP = {
   {% if pending_past_requests %}
   <div class="card" style="margin-bottom:20px;border-left:4px solid #d97706;">
     <div class="card-header">
-      <div class="card-title">📅 Pending Past Entry Requests
+      <div class="card-title">Pending Past Entry Requests
         <span class="cnt" style="background:#fffbeb;color:#b45309;border-color:#fcd34d;">{{ pending_past_requests|length }} pending</span>
       </div>
     </div>
@@ -567,11 +662,11 @@ var NOTES_BY_EMP = {
           {% if req.reason %}<div style="font-size:12px;color:var(--muted);margin-top:2px;">Reason: {{ req.reason }}</div>{% endif %}
         </div>
         <div style="display:flex;gap:8px;">
-          <form method="POST" action="/admin/past_entry_request/{{ req.id }}/approve" style="margin:0;">
-            <button type="submit" class="btn-sm" style="background:#f0fdf4;color:#16a34a;border:1px solid #bbf7d0;">✅ Approve</button>
+          <form method="POST" action="/admin/past_request/{{ req.id }}/approve" style="margin:0;">
+            <button type="submit" class="btn-sm" style="background:#f0fdf4;color:#16a34a;border:1px solid #bbf7d0;">Approve</button>
           </form>
-          <form method="POST" action="/admin/past_entry_request/{{ req.id }}/reject" style="margin:0;">
-            <button type="submit" class="btn-sm btn-delete">✕ Reject</button>
+          <form method="POST" action="/admin/past_request/{{ req.id }}/reject" style="margin:0;">
+            <button type="submit" class="btn-sm btn-delete">Reject</button>
           </form>
         </div>
       </div>
@@ -592,9 +687,7 @@ var NOTES_BY_EMP = {
       {% for note in recent_db_notes %}
       {% set ne = emp_map.get(note.emp_id) %}
       <div style="display:flex;align-items:flex-start;gap:12px;padding:10px 13px;background:{% if note.note_type == 'delivery' %}#f5f3ff{% else %}#eff6ff{% endif %};border:1px solid {% if note.note_type == 'delivery' %}#ddd6fe{% else %}#bfdbfe{% endif %};border-radius:10px;">
-        <div style="flex:0 0 auto;width:36px;height:36px;border-radius:50%;background:{% if note.note_type == 'delivery' %}#7c3aed{% else %}#1d4ed8{% endif %};color:#fff;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;">
-          {{ (ne.name[0] if ne else '?')|upper }}
-        </div>
+        <div style="flex:0 0 auto;width:36px;height:36px;border-radius:50%;background:{% if note.note_type == 'delivery' %}#7c3aed{% else %}#1d4ed8{% endif %};color:#fff;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;">{{ (ne.name[0] if ne else '?')|upper }}</div>
         <div style="flex:1;min-width:0;">
           <div style="font-size:13px;font-weight:700;color:var(--text);">{{ ne.name if ne else 'Unknown' }}
             <span style="font-size:10px;font-weight:600;padding:2px 8px;border-radius:20px;background:{% if note.note_type == 'delivery' %}#ede9fe{% else %}#dbeafe{% endif %};color:{% if note.note_type == 'delivery' %}#6d28d9{% else %}#1d4ed8{% endif %};text-transform:uppercase;letter-spacing:.5px;">{{ note.note_type|title }}</span>
@@ -608,10 +701,44 @@ var NOTES_BY_EMP = {
   </div>
   {% endif %}
 
+  <!-- MULTITASK (ROLE 2) REPORTS PANEL -->
+  {% if recent_multitask %}
+  <div class="card anim-fade-in" style="margin-bottom:20px;border-left:4px solid #7c3aed;">
+    <div class="card-header">
+      <div class="card-title">Multitask (Role 2) Reports
+        <span class="cnt" style="background:#f5f3ff;color:#7c3aed;border-color:#ddd6fe;">{{ recent_multitask|length }} (30 days)</span>
+      </div>
+    </div>
+    <div style="overflow-x:auto;">
+      <table class="ptable" style="width:100%;">
+        <thead>
+          <tr>
+            <th>Staff</th><th>Date</th><th>Role 2</th><th>Report</th><th>Note</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for mt in recent_multitask %}
+          {% set me = emp_map.get(mt.emp_id) %}
+          <tr>
+            <td><strong>{{ me.name if me else 'Employee #' ~ mt.emp_id }}</strong>
+              {% if me %}<div style="font-size:11px;color:var(--muted);">Default: {{ me.staff_type|title }}</div>{% endif %}
+            </td>
+            <td>{{ mt.entry_date.strftime('%d %b %Y') }}</td>
+            <td><span style="padding:3px 10px;background:#ede9fe;color:#6d28d9;border-radius:20px;font-size:11px;font-weight:700;text-transform:uppercase;">{{ mt.secondary_type }}</span></td>
+            <td style="font-size:12px;color:var(--text);">{{ mt.summary }}</td>
+            <td style="font-size:12px;color:var(--muted);">{{ mt.note or '—' }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+  {% endif %}
+
   <!-- FEATURE 5: BADGE MANAGEMENT -->
   <div class="card" style="margin-bottom:20px;">
     <div class="card-header">
-      <div class="card-title">🏅 Badge Management
+      <div class="card-title">Badge Management
         {% if all_badges %}<span class="cnt">{{ all_badges|length }} badges</span>{% endif %}
       </div>
     </div>
@@ -619,7 +746,7 @@ var NOTES_BY_EMP = {
       <!-- Award Badge Form -->
       <div>
         <div style="font-size:12px;font-weight:700;color:var(--muted);text-transform:uppercase;margin-bottom:8px;">Award Badge to Staff</div>
-        <form method="POST" action="/admin/badges/award" autocomplete="off" style="display:grid;gap:10px;">
+        <form method="POST" action="/admin/badge/award" autocomplete="off" style="display:grid;gap:10px;">
           <div class="field" style="margin:0;">
             <label>Badge</label>
             <select name="badge_id" required style="padding:9px 12px;border:1.5px solid var(--border);border-radius:9px;font-size:13px;font-family:inherit;">
@@ -636,17 +763,17 @@ var NOTES_BY_EMP = {
               {% endfor %}
             </select>
           </div>
-          <button type="submit" class="btn-add" style="width:fit-content;">🏅 Award Badge</button>
+          <button type="submit" class="btn-add" style="width:fit-content;">Award Badge</button>
         </form>
       </div>
       <!-- Create Custom Badge Form -->
       <div>
         <div style="font-size:12px;font-weight:700;color:var(--muted);text-transform:uppercase;margin-bottom:8px;">Create Custom Badge</div>
-        <form method="POST" action="/admin/badges/create" autocomplete="off" style="display:grid;gap:10px;">
+        <form method="POST" action="/admin/badge/create" autocomplete="off" style="display:grid;gap:10px;">
           <div style="display:grid;grid-template-columns:60px 1fr;gap:10px;">
             <div class="field" style="margin:0;">
               <label>Icon</label>
-              <input type="text" name="icon" placeholder="🌟" maxlength="4" required style="padding:9px;border:1.5px solid var(--border);border-radius:9px;font-size:16px;text-align:center;">
+              <input type="text" name="icon" placeholder="*" maxlength="4" required style="padding:9px;border:1.5px solid var(--border);border-radius:9px;font-size:16px;text-align:center;">
             </div>
             <div class="field" style="margin:0;">
               <label>Name</label>
@@ -657,7 +784,7 @@ var NOTES_BY_EMP = {
             <label>Description</label>
             <input type="text" name="description" placeholder="How to earn this badge" required maxlength="200">
           </div>
-          <button type="submit" class="btn-add" style="background:linear-gradient(135deg,#7c3aed,#6d28d9);width:fit-content;">✨ Create Badge</button>
+          <button type="submit" class="btn-add" style="background:linear-gradient(135deg,#7c3aed,#6d28d9);width:fit-content;">Create Badge</button>
         </form>
       </div>
     </div>
@@ -678,7 +805,7 @@ var NOTES_BY_EMP = {
   <!-- ADD EMPLOYEE -->
   <div class="card">
     <div class="card-header">
-      <div class="card-title">➕ Add New Employee</div>
+      <div class="card-title">Add New Employee</div>
     </div>
     <form method="POST" action="/admin/add_user" autocomplete="off">
       <div class="add-form-grid">
@@ -700,16 +827,18 @@ var NOTES_BY_EMP = {
         <div class="field">
           <label>Staff Type</label>
           <select name="staff_type" required>
-            <option value="picker">📦 Picker</option>
-            <option value="checker">🔍 Checker</option>
-            <option value="purchaser">🛒 Purchaser</option>
-            <option value="delivery">🚚 Delivery</option>
-            <option value="biller">🧾 Biller</option>
+            <option value="picker">Picker</option>
+            <option value="checker">Checker</option>
+            <option value="purchaser">Purchaser</option>
+            <option value="delivery">Delivery</option>
+            <option value="biller">Assigner</option>
+            <option value="packer">Packer</option>
+            <option value="supervisor">Supervisor (hidden)</option>
           </select>
         </div>
       </div>
       <div style="display:flex;justify-content:flex-end;margin-top:12px;">
-        <button type="submit" class="btn-add" id="saveDetailsBtn" disabled style="min-width:180px;padding:12px 24px;">💾 Save Details →</button>
+        <button type="submit" class="btn-add" id="saveDetailsBtn" disabled style="min-width:180px;padding:12px 24px;">Save Details →</button>
       </div>
     </form>
   </div>
@@ -717,7 +846,7 @@ var NOTES_BY_EMP = {
   <!-- PAST DATE ENTRY WINDOW -->
   <div class="card past-window-section">
     <div class="card-header">
-      <div class="card-title">📅 Open Past Date Entry</div>
+      <div class="card-title">Open Past Date Entry</div>
     </div>
     <p style="font-size:13px;color:var(--muted);margin-bottom:16px;">
       Select any past date and open an entry window. All staff who have <strong>not yet submitted</strong> data for that day will be able to enter it from their dashboard.
@@ -730,20 +859,20 @@ var NOTES_BY_EMP = {
           <input type="date" name="past_date" id="pastDatePicker" required
                  max="{{ today.strftime('%Y-%m-%d') }}">
         </div>
-        <button type="submit" class="btn-open-win">📂 Open Entry Window</button>
+        <button type="submit" class="btn-open-win">Open Entry Window</button>
       </div>
     </form>
 
     {% if open_windows %}
     <div class="pw-active-list">
-      <div class="pw-active-title">🟢 Currently Open Windows</div>
+      <div class="pw-active-title">Currently Open Windows</div>
       {% for w in open_windows %}
       <span class="pw-chip">
-        📅 {{ w.past_date.strftime('%d %b %Y') }}
+        {{ w.past_date.strftime('%d %b %Y') }}
         <form method="POST" action="/admin/past_window" style="display:inline;margin:0;">
           <input type="hidden" name="action" value="close">
           <input type="hidden" name="past_date" value="{{ w.past_date.strftime('%Y-%m-%d') }}">
-          <button type="submit" class="pw-close" title="Close this window">✕</button>
+          <button type="submit" class="pw-close" title="Close this window">&times;</button>
         </form>
       </span>
       {% endfor %}
@@ -757,10 +886,10 @@ var NOTES_BY_EMP = {
   <div class="card">
     <div class="card-header">
       <div class="card-title">
-        👥 Staff Management
+        Staff Management
         <span class="cnt">{{ rows|length }} employees</span>
       </div>
-      <input class="search-input" type="text" id="searchBox" placeholder="🔍 Search name or email…" oninput="filterTable()">
+      <input class="search-input" type="text" id="searchBox" placeholder="Search name or email..." oninput="filterTable()">
     </div>
 
     {% if rows %}
@@ -789,7 +918,7 @@ var NOTES_BY_EMP = {
             </td>
             <td>
               <span class="type-badge {% if r.emp.staff_type == 'picker' %}type-picker{% else %}type-checker{% endif %}">
-                {{ r.emp.staff_type }}
+                {{ r.emp.staff_type }}{% if r.emp.secondary_staff_type %} (+ {{ r.emp.secondary_staff_type }}){% endif %}
               </span>
             </td>
             <td>{{ r.count }}</td>
@@ -813,7 +942,7 @@ var NOTES_BY_EMP = {
             </td>
             <td>
               <div class="actions">
-                <a href="/staff/{{ r.emp.id }}" class="btn-sm btn-view">👤 View</a>
+                <a href="/staff/{{ r.emp.id }}" class="btn-sm btn-view">View</a>
                 <button class="btn-sm btn-edit"
                   data-emp-id="{{ r.emp.id }}"
                   data-name="{{ r.emp.name | e }}"
@@ -822,23 +951,24 @@ var NOTES_BY_EMP = {
                   data-adj="{{ (r.emp.admin_adjustment or 0) }}"
                   data-adj-note="{{ (r.emp.admin_adjustment_note or '') | e }}"
                   data-phone="{{ (r.emp.phone or '') | e }}"
+                  data-secondary="{{ (r.emp.secondary_staff_type or '') | e }}"
                   onclick="openEditFromBtn(this)">
-                  ✏️ Edit
+                  Edit
                 </button>
                 <button class="btn-sm" style="background:#fef3c7;color:#b45309;border:1px solid #fcd34d;"
                   onclick="openNotesModal({{ r.emp.id }}, {{ r.emp.name|tojson }})">
-                  📋 Notes
+                  Notes
                 </button>
                 <form method="POST" action="/admin/delete_user/{{ r.emp.id }}" style="display:inline;">
                   <button type="submit" class="btn-sm btn-delete"
                     onclick="return confirmDelete({{ r.emp.name|tojson }})">
-                    🗑️
+                    Delete
                   </button>
                 </form>
                 <form method="POST" action="/admin/toggle_sunday/{{ r.emp.id }}" style="display:inline;">
                   <button type="submit" class="btn-sm btn-sunday {% if r.emp.sunday_override %}sun-on{% endif %}"
                     title="Sunday data entry override">
-                    {% if r.emp.sunday_override %}☀️ Sun ON{% else %}☀️ Off{% endif %}
+                    {% if r.emp.sunday_override %}Sun ON{% else %}Sun Off{% endif %}
                   </button>
                 </form>
               </div>
@@ -858,17 +988,17 @@ var NOTES_BY_EMP = {
   <!-- COMPLAINT / MINUS MARKING SECTION -->
   <div class="card" style="margin-bottom:20px;border-left:4px solid #dc2626;">
     <div class="card-header">
-      <div class="card-title">⚠️ Post-Delivery Complaint — Minus Marking</div>
+      <div class="card-title">Post-Delivery Complaint — Minus Marking</div>
     </div>
     <form method="POST" action="/admin/complaint" autocomplete="off" id="complaintForm">
       <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-bottom:12px;">
         <div class="field">
           <label>Complaint Type</label>
           <select name="complaint_type" id="cmp_type" required onchange="calcSuggestions()">
-            <option value="delivery">🚚 Wrong Delivery</option>
-            <option value="missing">📦 Missing Items</option>
-            <option value="quality">⚕️ Quality Issue</option>
-            <option value="damage">💥 Damage</option>
+            <option value="delivery">Wrong Delivery</option>
+            <option value="missing">Missing Items</option>
+            <option value="quality">Quality Issue</option>
+            <option value="damage">Damage</option>
           </select>
         </div>
         <div class="field">
@@ -896,23 +1026,23 @@ var NOTES_BY_EMP = {
       <!-- AUTO-SUGGESTION BOX -->
       <div style="background:rgba(254,242,242,0.7);border:1.5px solid #fecaca;border-radius:12px;padding:14px;margin-bottom:12px;">
         <div style="font-size:11px;font-weight:800;color:#dc2626;text-transform:uppercase;margin-bottom:10px;">
-          ⚡ System Suggested Deductions (based on mistake type & count)
+          System Suggested Deductions (based on mistake type &amp; count)
         </div>
         <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:12px;">
           <div style="background:#fff;border:1px solid #fecaca;border-radius:10px;padding:10px;text-align:center;">
-            <div style="font-size:10px;font-weight:800;color:#1d4ed8;margin-bottom:4px;">📦 PICKER</div>
+            <div style="font-size:10px;font-weight:800;color:#1d4ed8;margin-bottom:4px;">PICKER</div>
             <div style="font-size:24px;font-weight:900;color:#dc2626;" id="sug_picker">0</div>
             <div style="font-size:9px;color:var(--muted);">suggested pts</div>
             <div style="font-size:9px;color:#6b7280;margin-top:4px;" id="sug_picker_reason">—</div>
           </div>
           <div style="background:#fff;border:1px solid #fecaca;border-radius:10px;padding:10px;text-align:center;">
-            <div style="font-size:10px;font-weight:800;color:#6d28d9;margin-bottom:4px;">🔍 CHECKER</div>
+            <div style="font-size:10px;font-weight:800;color:#6d28d9;margin-bottom:4px;">CHECKER</div>
             <div style="font-size:24px;font-weight:900;color:#dc2626;" id="sug_checker">0</div>
             <div style="font-size:9px;color:var(--muted);">suggested pts</div>
             <div style="font-size:9px;color:#6b7280;margin-top:4px;" id="sug_checker_reason">—</div>
           </div>
           <div style="background:#fff;border:1px solid #fecaca;border-radius:10px;padding:10px;text-align:center;">
-            <div style="font-size:10px;font-weight:800;color:#16a34a;margin-bottom:4px;">🛒 PURCHASER</div>
+            <div style="font-size:10px;font-weight:800;color:#16a34a;margin-bottom:4px;">PURCHASER</div>
             <div style="font-size:24px;font-weight:900;color:#dc2626;" id="sug_purchaser">0</div>
             <div style="font-size:9px;color:var(--muted);">suggested pts</div>
             <div style="font-size:9px;color:#6b7280;margin-top:4px;" id="sug_purchaser_reason">—</div>
@@ -921,21 +1051,21 @@ var NOTES_BY_EMP = {
         <div style="font-size:10px;font-weight:800;color:#374151;margin-bottom:8px;">Admin Final Deductions (override if needed):</div>
         <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;">
           <div class="field">
-            <label style="color:#1d4ed8;font-size:11px;">📦 Picker (pts)</label>
+            <label style="color:#1d4ed8;font-size:11px;">Picker (pts)</label>
             <input type="number" name="picker_final" id="inp_picker" min="0" max="30" step="0.5" placeholder="Use suggestion">
           </div>
           <div class="field">
-            <label style="color:#6d28d9;font-size:11px;">🔍 Checker (pts)</label>
+            <label style="color:#6d28d9;font-size:11px;">Checker (pts)</label>
             <input type="number" name="checker_final" id="inp_checker" min="0" max="30" step="0.5" placeholder="Use suggestion">
           </div>
           <div class="field">
-            <label style="color:#16a34a;font-size:11px;">🛒 Purchaser (pts)</label>
+            <label style="color:#16a34a;font-size:11px;">Purchaser (pts)</label>
             <input type="number" name="purchaser_final" id="inp_purchaser" min="0" max="30" step="0.5" placeholder="Use suggestion">
           </div>
         </div>
       </div>
       <div style="display:flex;justify-content:flex-end;">
-        <button type="submit" style="background:#dc2626;color:#fff;border:none;padding:10px 28px;border-radius:10px;font-weight:700;cursor:pointer;font-size:13px;">⚠️ Record Complaint & Apply Minus Points</button>
+        <button type="submit" style="background:#dc2626;color:#fff;border:none;padding:10px 28px;border-radius:10px;font-weight:700;cursor:pointer;font-size:13px;">Record Complaint &amp; Apply Minus Points</button>
       </div>
     </form>
 
@@ -992,7 +1122,7 @@ var NOTES_BY_EMP = {
           </div>
         </div>
         <form method="POST" action="/admin/complaint/{{ c.id }}/resolve" style="margin:0;">
-          <button type="submit" style="background:#16a34a;color:#fff;border:none;padding:6px 12px;border-radius:7px;font-size:11px;font-weight:700;cursor:pointer;">✅ Resolve</button>
+          <button type="submit" style="background:#16a34a;color:#fff;border:none;padding:6px 12px;border-radius:7px;font-size:11px;font-weight:700;cursor:pointer;">Resolve</button>
         </form>
       </div>
       {% endfor %}
@@ -1003,7 +1133,7 @@ var NOTES_BY_EMP = {
   <!-- SCORECARD & LEADERBOARD — POINT SYSTEM -->
   <div class="card" style="margin-bottom:20px;">
     <div class="card-header">
-      <div class="card-title">🏆 Scorecard & Leaderboard — Point System</div>
+      <div class="card-title">Scorecard &amp; Leaderboard — Point System</div>
       <div style="display:flex;gap:8px;">
         <button onclick="switchLB('alltime')" id="lb-alltime" class="lb-tab active">All Time</button>
         <button onclick="switchLB('week')" id="lb-week" class="lb-tab">This Week</button>
@@ -1011,7 +1141,7 @@ var NOTES_BY_EMP = {
     </div>
     <p style="font-size:11px;color:var(--muted);margin:0 0 14px 0;">
       Hard difficulty scoring — ELITE≥88pts · PROFICIENT≥72pts · SATISFACTORY≥50pts · RE-TRAINING&lt;50pts<br>
-      <span style="color:#dc2626;font-weight:700;">⚠️ Minus marking active — complaints deducted from scores</span>
+      <span style="color:#dc2626;font-weight:700;">Minus marking active — complaints deducted from scores</span>
     </p>
 
     <!-- ALL TIME PANEL -->
@@ -1020,12 +1150,12 @@ var NOTES_BY_EMP = {
 
         <!-- PICKER SCORECARD -->
         <div>
-          <div style="font-size:11px;font-weight:800;color:var(--blue);text-transform:uppercase;letter-spacing:.7px;margin-bottom:10px;">📦 Picker Scorecard</div>
+          <div style="font-size:11px;font-weight:800;color:var(--blue);text-transform:uppercase;letter-spacing:.7px;margin-bottom:10px;">Picker Scorecard</div>
           <div style="font-size:9px;color:var(--muted);margin-bottom:8px;">VWCR×25 + Fulfilment×18 + Speed÷250×15 + EffRatio×10 + Workspace×10 + CS×8 + Cleaner×7 + LogCons×7</div>
           {% if picker_lb %}{% for r in picker_lb %}
           <div style="background:{% if loop.index0==0 %}rgba(255,215,0,0.12){% elif loop.index0==1 %}rgba(192,192,192,0.12){% elif loop.index0==2 %}rgba(205,127,50,0.1){% else %}rgba(238,244,255,0.4){% endif %};border:1px solid {% if loop.index0==0 %}rgba(255,215,0,0.4){% elif loop.index0==1 %}rgba(192,192,192,0.4){% elif loop.index0==2 %}rgba(205,127,50,0.25){% else %}var(--border){% endif %};border-radius:12px;padding:10px 12px;margin-bottom:6px;">
             <div style="display:flex;align-items:center;gap:8px;">
-              <div style="font-size:18px;width:24px;">{% if loop.index0==0 %}🥇{% elif loop.index0==1 %}🥈{% elif loop.index0==2 %}🥉{% else %}{{ loop.index }}{% endif %}</div>
+              <div style="font-size:18px;width:24px;">{{ loop.index }}</div>
               <div style="flex:1;">
                 <div style="font-size:13px;font-weight:700;">{{ r.emp.name }}</div>
                 <div style="font-size:10px;color:var(--muted);">{{ r.stats.days }}d · Acc {{ r.stats.pick_acc }}% · Fulfilment {{ r.stats.bill_fulfilment or 0 }}%</div>
@@ -1049,12 +1179,12 @@ var NOTES_BY_EMP = {
 
         <!-- CHECKER SCORECARD -->
         <div>
-          <div style="font-size:11px;font-weight:800;color:#6d28d9;text-transform:uppercase;letter-spacing:.7px;margin-bottom:10px;">🔍 Checker Scorecard</div>
+          <div style="font-size:11px;font-weight:800;color:#6d28d9;text-transform:uppercase;letter-spacing:.7px;margin-bottom:10px;">Checker Scorecard</div>
           <div style="font-size:9px;color:var(--muted);margin-bottom:8px;">Speed×22 + Clearance×22 + VWCR×20 + Cleaner×8 + EffRatio×8 + LogCons×8 + PotEff×5 + Workspace×4 + Sweep×3</div>
           {% if checker_lb %}{% for r in checker_lb %}
           <div style="background:{% if loop.index0==0 %}rgba(255,215,0,0.12){% elif loop.index0==1 %}rgba(192,192,192,0.12){% elif loop.index0==2 %}rgba(205,127,50,0.1){% else %}rgba(245,243,255,0.4){% endif %};border:1px solid {% if loop.index0==0 %}rgba(255,215,0,0.4){% elif loop.index0==1 %}rgba(192,192,192,0.4){% elif loop.index0==2 %}rgba(205,127,50,0.25){% else %}rgba(167,139,250,0.2){% endif %};border-radius:12px;padding:10px 12px;margin-bottom:6px;">
             <div style="display:flex;align-items:center;gap:8px;">
-              <div style="font-size:18px;width:24px;">{% if loop.index0==0 %}🥇{% elif loop.index0==1 %}🥈{% elif loop.index0==2 %}🥉{% else %}{{ loop.index }}{% endif %}</div>
+              <div style="font-size:18px;width:24px;">{{ loop.index }}</div>
               <div style="flex:1;">
                 <div style="font-size:13px;font-weight:700;">{{ r.emp.name }}</div>
                 <div style="font-size:10px;color:var(--muted);">{{ r.stats.days }}d · {{ r.stats.check_speed or r.stats.ck_speed }}/hr · Clr {{ r.stats.clearance_rate or 100 }}%</div>
@@ -1071,7 +1201,7 @@ var NOTES_BY_EMP = {
               <div style="background:rgba(109,40,217,0.07);border-radius:5px;padding:3px;"><div style="color:var(--muted);">Pending</div><div style="font-weight:700;">{{ r.stats.pending_bills or 0 }}</div></div>
             </div>
             {% if r.stats.complaint_deduction and r.stats.complaint_deduction > 0 %}
-            <div style="margin-top:4px;font-size:9px;color:#dc2626;font-weight:700;">⚠️ -{{ r.stats.complaint_deduction }} pts minus marking</div>
+            <div style="margin-top:4px;font-size:9px;color:#dc2626;font-weight:700;">-{{ r.stats.complaint_deduction }} pts minus marking</div>
             {% endif %}
             {% set g = r.stats.grade %}
             <div style="margin-top:6px;text-align:right;"><span style="font-size:10px;font-weight:800;padding:2px 8px;border-radius:5px;background:{% if g=='ELITE' %}#ede9fe{% elif g=='PROFICIENT' %}#dcfce7{% elif g=='SATISFACTORY' %}#fef3c7{% else %}#fee2e2{% endif %};color:{% if g=='ELITE' %}#6d28d9{% elif g=='PROFICIENT' %}#16a34a{% elif g=='SATISFACTORY' %}#d97706{% else %}#dc2626{% endif %};">{{ g }}</span></div>
@@ -1081,12 +1211,12 @@ var NOTES_BY_EMP = {
 
         <!-- PURCHASER SCORECARD -->
         <div>
-          <div style="font-size:11px;font-weight:800;color:#16a34a;text-transform:uppercase;letter-spacing:.7px;margin-bottom:10px;">🛒 Purchaser Scorecard</div>
+          <div style="font-size:11px;font-weight:800;color:#16a34a;text-transform:uppercase;letter-spacing:.7px;margin-bottom:10px;">Purchaser Scorecard</div>
           <div style="font-size:9px;color:var(--muted);margin-bottom:8px;">BillRate×25 + CS×20 + Racking×15 + Speed÷60×10 + Entry×8 + VWCR×8 + Pending×5 + EffRatio×4 + Workspace×3 + LogCons×2</div>
           {% if purchaser_lb is defined and purchaser_lb %}{% for r in purchaser_lb %}
           <div style="background:{% if loop.index0==0 %}rgba(255,215,0,0.12){% else %}rgba(240,253,244,0.4){% endif %};border:1px solid {% if loop.index0==0 %}rgba(255,215,0,0.4){% else %}rgba(22,163,74,0.15){% endif %};border-radius:12px;padding:10px 12px;margin-bottom:6px;">
             <div style="display:flex;align-items:center;gap:8px;">
-              <div style="font-size:18px;width:24px;">{% if loop.index0==0 %}🥇{% elif loop.index0==1 %}🥈{% elif loop.index0==2 %}🥉{% else %}{{ loop.index }}{% endif %}</div>
+              <div style="font-size:18px;width:24px;">{{ loop.index }}</div>
               <div style="flex:1;">
                 <div style="font-size:13px;font-weight:700;">{{ r.emp.name }}</div>
                 <div style="font-size:10px;color:var(--muted);">{{ r.stats.days }}d · BillRate {{ r.stats.pur_bill_rate or 0 }}%</div>
@@ -1111,11 +1241,11 @@ var NOTES_BY_EMP = {
 
       <!-- OVERALL TOP 5 -->
       <div style="margin-top:16px;border-top:1px solid var(--border);padding-top:14px;">
-        <div style="font-size:11px;font-weight:800;color:#374151;text-transform:uppercase;letter-spacing:.7px;margin-bottom:10px;">⭐ Overall Top 5 — All Roles</div>
+        <div style="font-size:11px;font-weight:800;color:#374151;text-transform:uppercase;letter-spacing:.7px;margin-bottom:10px;">Overall Top 5 — All Roles</div>
         <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:8px;">
           {% for r in mixed_lb %}
           <div style="background:{% if loop.index0==0 %}rgba(255,215,0,0.15){% else %}rgba(248,250,252,0.8){% endif %};border:1.5px solid {% if loop.index0==0 %}rgba(255,215,0,0.5){% else %}var(--border){% endif %};border-radius:12px;padding:10px;text-align:center;">
-            <div style="font-size:22px;">{% if loop.index0==0 %}🥇{% elif loop.index0==1 %}🥈{% elif loop.index0==2 %}🥉{% else %}{{ loop.index }}{% endif %}</div>
+            <div style="font-size:22px;">{{ loop.index }}</div>
             <div style="font-size:12px;font-weight:700;margin:4px 0;">{{ r.emp.name.split()[0] }}</div>
             <div style="font-size:9px;background:{% if r.emp.staff_type=='picker' %}var(--blue-lite){% elif r.emp.staff_type=='checker' %}#ede9fe{% else %}#dcfce7{% endif %};color:{% if r.emp.staff_type=='picker' %}var(--blue){% elif r.emp.staff_type=='checker' %}#6d28d9{% else %}#16a34a{% endif %};padding:1px 5px;border-radius:4px;font-weight:700;display:inline-block;margin-bottom:4px;">{{ r.emp.staff_type }}</div>
             <div style="font-size:20px;font-weight:800;color:{% if loop.index0==0 %}#b45309{% else %}var(--text){% endif %};">{{ r.stats.eff_score }}</div>
@@ -1130,30 +1260,30 @@ var NOTES_BY_EMP = {
     <div id="lb-week-panel" style="display:none;">
       <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px;">
         <div>
-          <div style="font-size:11px;font-weight:800;color:var(--blue);text-transform:uppercase;margin-bottom:10px;">📦 Pickers — This Week</div>
+          <div style="font-size:11px;font-weight:800;color:var(--blue);text-transform:uppercase;margin-bottom:10px;">Pickers — This Week</div>
           {% for r in picker_week_lb %}
           <div style="display:flex;align-items:center;gap:8px;padding:8px 10px;background:rgba(238,244,255,0.5);border:1px solid var(--border);border-radius:10px;margin-bottom:5px;">
-            <div style="font-size:16px;">{% if loop.index0==0 %}🥇{% elif loop.index0==1 %}🥈{% elif loop.index0==2 %}🥉{% else %}{{ loop.index }}{% endif %}</div>
+            <div style="font-size:16px;">{{ loop.index }}</div>
             <div style="flex:1;font-size:12px;font-weight:700;">{{ r.emp.name }}</div>
             <div style="font-size:15px;font-weight:800;color:var(--blue);">{{ r.week_stats.eff_score }}<span style="font-size:9px;color:var(--muted);">pts</span></div>
           </div>
           {% else %}<div style="font-size:12px;color:var(--muted);">No data this week.</div>{% endfor %}
         </div>
         <div>
-          <div style="font-size:11px;font-weight:800;color:#6d28d9;text-transform:uppercase;margin-bottom:10px;">🔍 Checkers — This Week</div>
+          <div style="font-size:11px;font-weight:800;color:#6d28d9;text-transform:uppercase;margin-bottom:10px;">Checkers — This Week</div>
           {% for r in checker_week_lb %}
           <div style="display:flex;align-items:center;gap:8px;padding:8px 10px;background:rgba(245,243,255,0.5);border:1px solid rgba(167,139,250,0.2);border-radius:10px;margin-bottom:5px;">
-            <div style="font-size:16px;">{% if loop.index0==0 %}🥇{% elif loop.index0==1 %}🥈{% elif loop.index0==2 %}🥉{% else %}{{ loop.index }}{% endif %}</div>
+            <div style="font-size:16px;">{{ loop.index }}</div>
             <div style="flex:1;font-size:12px;font-weight:700;">{{ r.emp.name }}</div>
             <div style="font-size:15px;font-weight:800;color:#6d28d9;">{{ r.week_stats.eff_score }}<span style="font-size:9px;color:var(--muted);">pts</span></div>
           </div>
           {% else %}<div style="font-size:12px;color:var(--muted);">No data this week.</div>{% endfor %}
         </div>
         <div>
-          <div style="font-size:11px;font-weight:800;color:#374151;text-transform:uppercase;margin-bottom:10px;">⭐ Overall — This Week</div>
+          <div style="font-size:11px;font-weight:800;color:#374151;text-transform:uppercase;margin-bottom:10px;">Overall — This Week</div>
           {% for r in mixed_week_lb %}
           <div style="display:flex;align-items:center;gap:8px;padding:8px 10px;background:rgba(248,250,252,0.8);border:1px solid var(--border);border-radius:10px;margin-bottom:5px;">
-            <div style="font-size:16px;">{% if loop.index0==0 %}🥇{% elif loop.index0==1 %}🥈{% elif loop.index0==2 %}🥉{% else %}{{ loop.index }}{% endif %}</div>
+            <div style="font-size:16px;">{{ loop.index }}</div>
             <div style="flex:1;">
               <div style="font-size:12px;font-weight:700;">{{ r.emp.name }}</div>
               <div style="font-size:9px;color:var(--muted);">{{ r.emp.staff_type }}</div>
@@ -1171,7 +1301,7 @@ var NOTES_BY_EMP = {
   {% if rows %}
   <div class="card">
     <div class="card-header">
-      <div class="card-title">📊 Performance Summary — All Time</div>
+      <div class="card-title">Performance Summary — All Time</div>
     </div>
     <div class="table-wrap">
       <table>
@@ -1217,7 +1347,7 @@ var NOTES_BY_EMP = {
   {% if grade_counts %}
   <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:20px;">
     <div class="card">
-      <div class="card-header"><div class="card-title">📊 Team Health</div></div>
+      <div class="card-header"><div class="card-title">Team Health</div></div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px;">
         <div style="background:rgba(238,244,255,0.7);border:1px solid var(--border);border-radius:10px;padding:12px;text-align:center;">
           <div style="font-size:10px;font-weight:800;color:var(--muted);text-transform:uppercase;margin-bottom:3px;">Avg Score</div>
@@ -1243,10 +1373,10 @@ var NOTES_BY_EMP = {
       {% endfor %}
     </div>
     <div class="card">
-      <div class="card-header"><div class="card-title">💡 Recommendations</div></div>
+      <div class="card-header"><div class="card-title">Recommendations</div></div>
       {% if needs_attention %}
       <div style="margin-bottom:12px;">
-        <div style="font-size:10px;font-weight:800;color:#dc2626;text-transform:uppercase;margin-bottom:6px;">⚠️ Needs Attention</div>
+        <div style="font-size:10px;font-weight:800;color:#dc2626;text-transform:uppercase;margin-bottom:6px;">Needs Attention</div>
         {% for r in needs_attention %}
         <div style="display:flex;align-items:center;justify-content:space-between;padding:7px 10px;background:#fef2f2;border:1px solid #fecaca;border-radius:8px;margin-bottom:4px;">
           <div><div style="font-size:12px;font-weight:700;">{{ r.emp.name }}</div><div style="font-size:10px;color:var(--muted);">{{ r.emp.staff_type|title }} · {{ r.stats.eff_score }}pts</div></div>
@@ -1256,7 +1386,7 @@ var NOTES_BY_EMP = {
       </div>
       {% endif %}
       {% if improving %}
-      <div style="font-size:10px;font-weight:800;color:#16a34a;text-transform:uppercase;margin-bottom:6px;">📈 Improving</div>
+      <div style="font-size:10px;font-weight:800;color:#16a34a;text-transform:uppercase;margin-bottom:6px;">Improving</div>
       {% for r in improving %}
       <div style="padding:7px 10px;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;margin-bottom:4px;">
         <div style="font-size:12px;font-weight:700;">{{ r.emp.name }} ↑</div>
@@ -1264,7 +1394,7 @@ var NOTES_BY_EMP = {
       {% endfor %}
       {% endif %}
       {% if not needs_attention and not improving %}
-      <div style="text-align:center;padding:20px;color:var(--muted);font-size:12px;">✅ All staff performing well!</div>
+      <div style="text-align:center;padding:20px;color:var(--muted);font-size:12px;">All staff performing well.</div>
       {% endif %}
       <div style="padding-top:10px;border-top:1px solid var(--border);display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;text-align:center;margin-top:10px;">
         <div><div style="font-size:18px;font-weight:800;color:var(--blue);">{{ active_today }}</div><div style="font-size:9px;color:var(--muted);">Active Today</div></div>
@@ -1314,7 +1444,7 @@ function handleAddEmail(input) {
   const list = document.getElementById('addAcList');
   if (val.length > 0 && !val.includes('@')) {
     const sug = val + '@pharmaip.com';
-    list.innerHTML = `<div class="ac-item" onclick="pickAddEmail('${escHtml(sug)}')" onmouseover="this.classList.add('sel')" onmouseout="this.classList.remove('sel')">📧 <span>${escHtml(val)}<span class="ac-domain">@pharmaip.com</span></span></div>`;
+    list.innerHTML = `<div class="ac-item" onclick="pickAddEmail('${escHtml(sug)}')" onmouseover="this.classList.add('sel')" onmouseout="this.classList.remove('sel')"><span>${escHtml(val)}<span class="ac-domain">@pharmaip.com</span></span></div>`;
     list.classList.add('show');
     addAcIdx = -1;
   } else {
@@ -1357,10 +1487,11 @@ function openEditFromBtn(btn) {
   var adj     = parseFloat(btn.dataset.adj) || 0;
   var adjNote = btn.dataset.adjNote || '';
   var phone   = btn.dataset.phone   || '';
-  openEdit(id, name, email, stype, adj, adjNote, phone);
+  var secondary = btn.dataset.secondary || '';
+  openEdit(id, name, email, stype, adj, adjNote, phone, secondary);
 }
 
-function openEdit(id, name, email, stype, adj, adjNote, phone) {
+function openEdit(id, name, email, stype, adj, adjNote, phone, secondary) {
   var f = document.getElementById('editForm');
   if(!f){ console.error("editForm not found"); return; }
   f.action = '/admin/edit_user/' + id;
@@ -1368,6 +1499,8 @@ function openEdit(id, name, email, stype, adj, adjNote, phone) {
   document.getElementById('edit-email').value = email;
   var sel = document.getElementById('edit-type');
   if(sel) sel.value = stype;
+  var sec = document.getElementById('edit-secondary');
+  if(sec) sec.value = secondary || '';
   var adjEl = document.getElementById('edit-adj');
   if(adjEl) adjEl.value = (adj === undefined || adj === null) ? 0 : adj;
   var adjNoteEl = document.getElementById('edit-adj-note');
@@ -1380,7 +1513,7 @@ function openEdit(id, name, email, stype, adj, adjNote, phone) {
 
 // Feature 14: Notes modal
 function openNotesModal(empId, empName) {
-  document.getElementById('notesModalTitle').textContent = '📋 Notes — ' + empName;
+  document.getElementById('notesModalTitle').textContent = 'Notes — ' + empName;
   var noteForm = document.getElementById('noteForm');
   noteForm.action = '/admin/staff_note/' + empId;
   // Render notes history
@@ -1442,7 +1575,7 @@ if (typeof io !== 'undefined') {
     const el = document.createElement('div');
     el.className = 'alert alert-warning';
     el.style.cssText = 'position:fixed;top:70px;right:20px;z-index:999;max-width:340px;animation:slideIn 0.3s ease;';
-    el.textContent = '⚠️ ' + msg.name + ' — ' + msg.eff + '% accuracy';
+    el.textContent = 'Alert: ' + msg.name + ' — ' + msg.eff + '% accuracy';
     document.body.appendChild(el);
     setTimeout(() => el.remove(), 5000);
   });
@@ -1452,7 +1585,7 @@ if (typeof io !== 'undefined') {
     const el = document.createElement('div');
     el.className = 'alert alert-success';
     el.style.cssText = 'position:fixed;top:70px;right:20px;z-index:999;max-width:340px;box-shadow:0 8px 24px rgba(0,0,0,0.15);animation:slideIn 0.3s ease;';
-    el.innerHTML = '📝 <strong>' + (msg.user || 'Someone') + '</strong> just submitted ('
+    el.innerHTML = '<strong>' + (msg.user || 'Someone') + '</strong> just submitted ('
                  + (msg.staff_type || '') + ') · ' + (msg.last_entry_time || '');
     document.body.appendChild(el);
     setTimeout(() => el.remove(), 4000);
@@ -1463,7 +1596,7 @@ if (typeof io !== 'undefined') {
     const el = document.createElement('div');
     el.className = 'alert alert-danger';
     el.style.cssText = 'position:fixed;top:70px;right:20px;z-index:999;max-width:360px;box-shadow:0 8px 24px rgba(0,0,0,0.15);animation:slideIn 0.3s ease;';
-    el.innerHTML = '⚠ <strong>Bill count mismatch</strong> — ' + (data.date || '') + '<br>'
+    el.innerHTML = '<strong>Bill count mismatch</strong> — ' + (data.date || '') + '<br>'
                  + 'Flagged: ' + ((data.wrong_names || []).join(', ') || 'check validations page')
                  + '<br><a href="/validations" style="color:#dc2626;font-weight:700;">View validations →</a>';
     document.body.appendChild(el);

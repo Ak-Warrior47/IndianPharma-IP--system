@@ -15,6 +15,7 @@ from typing import List, Optional, Dict, Any
 
 from flask import Flask, render_template, request, redirect, url_for, flash, session, Response, jsonify
 from flask_sqlalchemy import SQLAlchemy
+from sqlalchemy import or_
 from flask_socketio import SocketIO, emit
 from flask_mail import Mail, Message as MailMessage
 from werkzeug.security import generate_password_hash, check_password_hash
@@ -65,6 +66,28 @@ db = SQLAlchemy(app)
 mail = Mail(app)
 socketio = SocketIO(app, cors_allowed_origins="*", async_mode="eventlet")
 
+# ─── ROLES ───────────────────────────────────────────────────────────────────
+# "biller" is internally kept but displayed as "Assigner". "supervisor" is a
+# hidden role (admin-assigned only, never on the login screen).
+VALID_STAFF_TYPES = ("picker", "checker", "purchaser", "delivery", "biller", "packer", "supervisor")
+ROLE_DISPLAY_NAMES = {
+    "picker": "Operations Picker",
+    "checker": "Operations Checker",
+    "purchaser": "Operations Purchaser",
+    "delivery": "Delivery Staff",
+    "biller": "Assigner",
+    "packer": "Packer",
+    "supervisor": "Supervisor",
+}
+# Recommended Cuttack delivery areas (from the delivery-CRM Excel) + packet types
+KNOWN_ROUTES = [
+    "RANIHAT", "MANGALABAG", "COLLEGE SQUARE", "BADAMBADI", "LINK ROAD",
+    "B.K ROAD", "JOBRA", "CHAULIGANJ", "JAGATPUR", "BUXI BAZAR", "BALU BAZAR",
+    "BUS STAND", "PURIGHAT", "GANDARPUR", "KANIKA CHAK", "THOTIA SAHI",
+    "SUBHADRA", "BIDANASI", "NAYA SARAK", "TULSIPUR", "SUTAHAT", "DOLAMUNDAI",
+]
+PACKET_TYPES = ["Poly Bag", "Box", "Carton", "Envelope", "Fragile", "Cold Chain", "Bulk"]
+
 
 # ─── MODELS ──────────────────────────────────────────────────────────────────
 
@@ -84,6 +107,7 @@ class Employee(db.Model):
     admin_adjustment_note = db.Column(db.String(200), default="")  # Reason/notes
     custom_hourly_target = db.Column(db.Float, nullable=True)  # Override default role target (Phase 1 auto-raise)
     phone         = db.Column(db.String(20), nullable=True)   # Feature 15: phone for OTP reset
+    secondary_staff_type = db.Column(db.String(20), nullable=True)  # optional 2nd role for multitasking
     created_at    = db.Column(db.DateTime, default=datetime.utcnow)
     entries = db.relationship("KPIEntry", backref="owner", lazy="select", cascade="all, delete-orphan")
 
@@ -392,16 +416,45 @@ class MonthlyReportArchive(db.Model):
 
 
 class MultitaskEntry(db.Model):
-    """Secondary-role work logged by staff on the same day (multitasking)."""
+    """Secondary-role work logged by staff on the same day (multitasking).
+    Captures the chosen Role-2's own KPI parameters so the admin sees a full
+    report for both the default role (KPIEntry) and the multitask role."""
     __tablename__ = "multitask_entries"
     id             = db.Column(db.Integer, primary_key=True)
     emp_id         = db.Column(db.Integer, db.ForeignKey("employees.id", ondelete="CASCADE"), nullable=False)
     entry_date     = db.Column(db.Date, nullable=False)
     secondary_type = db.Column(db.String(20), nullable=False)  # picker/checker/purchaser/delivery/billing
+    # Role-specific KPI parameters (mirror KPIEntry fields; only relevant ones used per role)
+    sales_bills_open     = db.Column(db.Integer, default=0)
+    picked               = db.Column(db.Integer, default=0)
+    missed               = db.Column(db.Integer, default=0)
+    checked              = db.Column(db.Integer, default=0)
+    errors_found         = db.Column(db.Integer, default=0)
+    packing_done         = db.Column(db.Integer, default=0)
+    cs_sales_open        = db.Column(db.Integer, default=0)
+    total_bills_received = db.Column(db.Integer, default=0)
+    bills_received       = db.Column(db.Integer, default=0)
+    pending_bills_manual = db.Column(db.Integer, default=0)
     quantity       = db.Column(db.Integer, default=0)
     note           = db.Column(db.String(300), nullable=True)
     created_at     = db.Column(db.DateTime, default=datetime.utcnow)
-    __table_args__ = (db.Index("idx_mt_emp_date", "emp_id", "entry_date"),)
+    __table_args__ = (
+        db.UniqueConstraint("emp_id", "entry_date", "secondary_type", name="_mt_emp_date_role_uc"),
+        db.Index("idx_mt_emp_date", "emp_id", "entry_date"),
+    )
+
+    @property
+    def summary(self):
+        """Short human-readable summary of the multitask role's parameters."""
+        st = self.secondary_type
+        if st == "picker":
+            return f"{self.picked or 0} picked / {self.missed or 0} missed · {self.sales_bills_open or 0} bills"
+        if st == "checker":
+            return f"{self.checked or 0} checked / {self.errors_found or 0} urgent · {self.bills_received or 0} bills"
+        if st == "purchaser":
+            return f"{self.checked or 0} PO checked · {self.sales_bills_open or 0} PO bills · {self.errors_found or 0} items"
+        # delivery / billing / packing / other
+        return f"{self.quantity or 0} done"
 
 
 class DeliveryBillerNote(db.Model):
@@ -418,6 +471,104 @@ class DeliveryBillerNote(db.Model):
     __table_args__ = (
         db.UniqueConstraint("emp_id", "entry_date", name="_dbnote_emp_date_uc"),
         db.Index("idx_dbn_date", "entry_date"),
+    )
+
+
+class DeliveryAssignment(db.Model):
+    """Assigner dispatches a route (one or more areas) to a delivery employee.
+    Mirrors the real delivery-CRM Excel: ROUTE, NO OF TASK, DISPATCH TIME, returns, etc."""
+    __tablename__ = "delivery_assignments"
+    id               = db.Column(db.Integer, primary_key=True)
+    purchaser_id     = db.Column(db.Integer, db.ForeignKey("employees.id"), nullable=False)
+    delivery_emp_id  = db.Column(db.Integer, db.ForeignKey("employees.id"), nullable=False)
+    destination_addr = db.Column(db.Text, nullable=False)
+    destination_lat  = db.Column(db.Float, nullable=True)   # null if address-only
+    destination_lng  = db.Column(db.Float, nullable=True)
+    package_desc     = db.Column(db.Text, nullable=False)
+    bills_count      = db.Column(db.Integer, default=0)
+    recipient_name   = db.Column(db.String(150), nullable=True)
+    company_name     = db.Column(db.String(150), nullable=True)
+    # status: pending | in_transit | delivered | failed
+    status           = db.Column(db.String(20), default="pending", index=True)
+    assigned_at      = db.Column(db.DateTime, default=datetime.utcnow)
+    notes            = db.Column(db.Text, nullable=True)
+    # ── Excel-CRM fields ──
+    route            = db.Column(db.String(300), nullable=True)   # comma-separated areas e.g. "RANIHAT,MANGALABAG"
+    no_of_tasks      = db.Column(db.Integer, default=1)            # NO OF TASK (packets in this dispatch)
+    packet_type      = db.Column(db.String(50), nullable=True)    # Poly Bag / Box / Carton / Fragile ...
+    dispatch_time    = db.Column(db.DateTime, nullable=True)       # DISPATCH TIME (defaults to assigned_at)
+    no_of_task_return= db.Column(db.Integer, default=0)           # NO OF TASK RETURN
+    return_reason    = db.Column(db.String(200), nullable=True)   # RETURN REASON (e.g. CLOSE)
+    __table_args__ = (
+        db.Index("idx_da_delivery_emp", "delivery_emp_id"),
+        db.Index("idx_da_status", "status"),
+    )
+
+
+class DeliveryStop(db.Model):
+    """A single stop within a delivery trip — the delivery boy logs each place reached.
+    Packages across all stops sum to the trip's delivered total; per-stop timestamps give timing."""
+    __tablename__ = "delivery_stops"
+    id            = db.Column(db.Integer, primary_key=True)
+    assignment_id = db.Column(db.Integer, db.ForeignKey("delivery_assignments.id", ondelete="CASCADE"), nullable=False, index=True)
+    emp_id        = db.Column(db.Integer, db.ForeignKey("employees.id", ondelete="CASCADE"), nullable=False)
+    place_name    = db.Column(db.String(150), nullable=False)
+    packages      = db.Column(db.Integer, default=0)          # packets delivered at this stop
+    reached_at    = db.Column(db.DateTime, nullable=True)     # NULL until the rider logs arrival
+    minutes_from_prev = db.Column(db.Float, nullable=True)    # time since previous stop / departure
+    lat           = db.Column(db.Float, nullable=True)
+    lng           = db.Column(db.Float, nullable=True)
+    note          = db.Column(db.String(300), nullable=True)
+
+
+class Notification(db.Model):
+    """In-app notification (bell). Used to alert delivery staff of new assignments, etc."""
+    __tablename__ = "notifications"
+    id         = db.Column(db.Integer, primary_key=True)
+    emp_id     = db.Column(db.Integer, db.ForeignKey("employees.id", ondelete="CASCADE"), nullable=False, index=True)
+    title      = db.Column(db.String(150), nullable=False)
+    body       = db.Column(db.String(400), nullable=True)
+    link       = db.Column(db.String(200), nullable=True)
+    is_read    = db.Column(db.Boolean, default=False, index=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+
+class SupervisorBill(db.Model):
+    """Authoritative ('super') bill count entered by a supervisor for a staff member on a date.
+    Admin-validated source of truth; staff self-reports are checked against this."""
+    __tablename__ = "supervisor_bills"
+    id            = db.Column(db.Integer, primary_key=True)
+    staff_id      = db.Column(db.Integer, db.ForeignKey("employees.id", ondelete="CASCADE"), nullable=False, index=True)
+    entry_date    = db.Column(db.Date, nullable=False, index=True)
+    super_bills   = db.Column(db.Integer, default=0)        # authoritative count
+    supervisor_id = db.Column(db.Integer, db.ForeignKey("employees.id"), nullable=True)
+    admin_validated = db.Column(db.Boolean, default=False)  # admin confirmed it's true
+    note          = db.Column(db.String(200), nullable=True)
+    created_at    = db.Column(db.DateTime, default=datetime.utcnow)
+    __table_args__ = (db.UniqueConstraint("staff_id", "entry_date", name="_supbill_staff_date_uc"),)
+
+
+class DeliveryTrip(db.Model):
+    """GPS-tracked delivery trip for a DeliveryAssignment."""
+    __tablename__ = "delivery_trips"
+    id                   = db.Column(db.Integer, primary_key=True)
+    assignment_id        = db.Column(db.Integer, db.ForeignKey("delivery_assignments.id", ondelete="CASCADE"), nullable=False, unique=True)
+    emp_id               = db.Column(db.Integer, db.ForeignKey("employees.id", ondelete="CASCADE"), nullable=False)
+    trip_date            = db.Column(db.Date, nullable=False, default=date.today)
+    departure_lat        = db.Column(db.Float, nullable=True)
+    departure_lng        = db.Column(db.Float, nullable=True)
+    departure_time       = db.Column(db.DateTime, nullable=True)
+    arrival_time         = db.Column(db.DateTime, nullable=True)
+    delivered_to_name    = db.Column(db.String(150), nullable=True)
+    delivered_to_company = db.Column(db.String(150), nullable=True)
+    delivery_note        = db.Column(db.Text, nullable=True)
+    duration_minutes     = db.Column(db.Float, nullable=True)
+    is_on_time           = db.Column(db.Boolean, nullable=True)
+    # status: active | completed | cancelled
+    status               = db.Column(db.String(20), default="active")
+    created_at           = db.Column(db.DateTime, default=datetime.utcnow)
+    __table_args__ = (
+        db.Index("idx_dt_emp_date", "emp_id", "trip_date"),
     )
 
 
@@ -721,7 +872,18 @@ def build_analytics(entries: List[KPIEntry], staff_type: str = "picker", emp_id:
         per_entry_adj = sum(float(e.admin_adjustment or 0) for e in entries if hasattr(e, 'admin_adjustment'))
         total_adjustment = _emp_adj + per_entry_adj
 
-        eff_score = max(round(eff_score - complaint_deduction + total_adjustment, 1), 0.0)
+        # Supervisor mismatch penalty (current month, only after 5 mismatches)
+        supervisor_penalty = 0.0
+        supervisor_mismatches = 0
+        try:
+            if emp_id is not None:
+                _ss = supervisor_strike_summary(emp_id, date.today().strftime("%Y-%m"))
+                supervisor_penalty = float(_ss.get("penalty", 0.0))
+                supervisor_mismatches = int(_ss.get("mismatches", 0))
+        except Exception:
+            supervisor_penalty = 0.0
+
+        eff_score = max(round(eff_score - complaint_deduction + total_adjustment - supervisor_penalty, 1), 0.0)
         eff_score = min(eff_score, 100.0)
 
         # Auto-suggest: if error rate stays <1% over enough days, suggest raising the target
@@ -793,6 +955,8 @@ def build_analytics(entries: List[KPIEntry], staff_type: str = "picker", emp_id:
             pur_speed=pur_speed if staff_type=="purchaser" else 0,
             complaint_deduction=complaint_deduction,
             admin_adjustment=round(total_adjustment, 1),
+            supervisor_penalty=round(supervisor_penalty, 1),
+            supervisor_mismatches=supervisor_mismatches,
             vwcr=vwcr,
             cleaner_rate=cleaner_rate_score,
             efficiency_ratio=efficiency_ratio,
@@ -1035,6 +1199,26 @@ def log_audit(action, target, details=""):
         db.session.rollback()
 
 
+def notify_employee(emp_id, title, body="", link=None, sms=True):
+    """Create an in-app notification and optionally send an SMS (if the employee has a phone).
+    Best-effort — never raises so callers don't break."""
+    try:
+        n = Notification(emp_id=emp_id, title=title[:150], body=(body or "")[:400], link=link)
+        db.session.add(n)
+        db.session.commit()
+    except Exception as e:
+        db.session.rollback()
+        logger.warning(f"notify_employee in-app failed: {e}")
+    if sms:
+        try:
+            emp = db.session.get(Employee, emp_id)
+            if emp and getattr(emp, "phone", None):
+                msg = f"{title}" + (f" — {body}" if body else "")
+                send_sms(emp.phone, msg[:300])
+        except Exception as e:
+            logger.warning(f"notify_employee SMS failed: {e}")
+
+
 def send_sms(to_number: str, body: str) -> bool:
     """Send SMS via Twilio. Returns True on success. No-ops if env vars not set."""
     try:
@@ -1192,6 +1376,34 @@ def run_migrations():
             except Exception as ce:
                 db.session.rollback()
                 logger.warning(f"employees.phone migration skipped: {ce}")
+            # Secondary staff type
+            try:
+                db.session.execute(db.text(
+                    "ALTER TABLE employees ADD COLUMN IF NOT EXISTS secondary_staff_type VARCHAR(20)"
+                ))
+                db.session.commit()
+                logger.info("✅ employees.secondary_staff_type ensured")
+            except Exception as ce:
+                db.session.rollback()
+                logger.warning(f"employees.secondary_staff_type migration skipped: {ce}")
+            # Delivery CRM (Excel-format) columns on delivery_assignments
+            for col, col_type in [
+                ("route", "VARCHAR(300)"),
+                ("no_of_tasks", "INTEGER DEFAULT 1"),
+                ("packet_type", "VARCHAR(50)"),
+                ("dispatch_time", "TIMESTAMP"),
+                ("no_of_task_return", "INTEGER DEFAULT 0"),
+                ("return_reason", "VARCHAR(200)"),
+            ]:
+                try:
+                    db.session.execute(db.text(
+                        f"ALTER TABLE delivery_assignments ADD COLUMN IF NOT EXISTS {col} {col_type}"
+                    ))
+                    db.session.commit()
+                except Exception as ce:
+                    db.session.rollback()
+                    logger.warning(f"delivery_assignments.{col} migration skipped: {ce}")
+            logger.info("✅ delivery_assignments CRM columns ensured")
             # New feature tables
             for tbl_sql in [
                 """CREATE TABLE IF NOT EXISTS announcements (
@@ -1259,6 +1471,16 @@ def run_migrations():
                     emp_id INTEGER NOT NULL REFERENCES employees(id) ON DELETE CASCADE,
                     entry_date DATE NOT NULL,
                     secondary_type VARCHAR(20) NOT NULL,
+                    sales_bills_open INTEGER DEFAULT 0,
+                    picked INTEGER DEFAULT 0,
+                    missed INTEGER DEFAULT 0,
+                    checked INTEGER DEFAULT 0,
+                    errors_found INTEGER DEFAULT 0,
+                    packing_done INTEGER DEFAULT 0,
+                    cs_sales_open INTEGER DEFAULT 0,
+                    total_bills_received INTEGER DEFAULT 0,
+                    bills_received INTEGER DEFAULT 0,
+                    pending_bills_manual INTEGER DEFAULT 0,
                     quantity INTEGER DEFAULT 0,
                     note VARCHAR(300),
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)""",
@@ -1280,6 +1502,96 @@ def run_migrations():
                 except Exception as te:
                     db.session.rollback()
                     logger.warning(f"New table migration skipped: {te}")
+            # Delivery tracking tables
+            for tbl_sql in [
+                """CREATE TABLE IF NOT EXISTS delivery_assignments (
+                    id SERIAL PRIMARY KEY,
+                    purchaser_id INTEGER NOT NULL REFERENCES employees(id),
+                    delivery_emp_id INTEGER NOT NULL REFERENCES employees(id),
+                    destination_addr TEXT NOT NULL,
+                    destination_lat FLOAT,
+                    destination_lng FLOAT,
+                    package_desc TEXT NOT NULL,
+                    bills_count INTEGER DEFAULT 0,
+                    recipient_name VARCHAR(150),
+                    company_name VARCHAR(150),
+                    status VARCHAR(20) DEFAULT 'pending',
+                    assigned_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    notes TEXT)""",
+                """CREATE TABLE IF NOT EXISTS delivery_trips (
+                    id SERIAL PRIMARY KEY,
+                    assignment_id INTEGER NOT NULL REFERENCES delivery_assignments(id) ON DELETE CASCADE,
+                    emp_id INTEGER NOT NULL REFERENCES employees(id) ON DELETE CASCADE,
+                    trip_date DATE NOT NULL DEFAULT CURRENT_DATE,
+                    departure_lat FLOAT,
+                    departure_lng FLOAT,
+                    departure_time TIMESTAMP,
+                    arrival_time TIMESTAMP,
+                    delivered_to_name VARCHAR(150),
+                    delivered_to_company VARCHAR(150),
+                    delivery_note TEXT,
+                    duration_minutes FLOAT,
+                    is_on_time BOOLEAN,
+                    status VARCHAR(20) DEFAULT 'active',
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    CONSTRAINT _dt_assignment_uc UNIQUE(assignment_id))""",
+                """CREATE TABLE IF NOT EXISTS delivery_stops (
+                    id SERIAL PRIMARY KEY,
+                    assignment_id INTEGER NOT NULL REFERENCES delivery_assignments(id) ON DELETE CASCADE,
+                    emp_id INTEGER NOT NULL REFERENCES employees(id) ON DELETE CASCADE,
+                    place_name VARCHAR(150) NOT NULL,
+                    packages INTEGER DEFAULT 0,
+                    reached_at TIMESTAMP,
+                    minutes_from_prev FLOAT,
+                    lat FLOAT,
+                    lng FLOAT,
+                    note VARCHAR(300))""",
+                """CREATE TABLE IF NOT EXISTS notifications (
+                    id SERIAL PRIMARY KEY,
+                    emp_id INTEGER NOT NULL REFERENCES employees(id) ON DELETE CASCADE,
+                    title VARCHAR(150) NOT NULL,
+                    body VARCHAR(400),
+                    link VARCHAR(200),
+                    is_read BOOLEAN DEFAULT FALSE,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)""",
+                """CREATE TABLE IF NOT EXISTS supervisor_bills (
+                    id SERIAL PRIMARY KEY,
+                    staff_id INTEGER NOT NULL REFERENCES employees(id) ON DELETE CASCADE,
+                    entry_date DATE NOT NULL,
+                    super_bills INTEGER DEFAULT 0,
+                    supervisor_id INTEGER REFERENCES employees(id),
+                    admin_validated BOOLEAN DEFAULT FALSE,
+                    note VARCHAR(200),
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    CONSTRAINT _supbill_staff_date_uc UNIQUE(staff_id, entry_date))""",
+            ]:
+                try:
+                    db.session.execute(db.text(tbl_sql))
+                    db.session.commit()
+                except Exception as te:
+                    db.session.rollback()
+                    logger.warning(f"Delivery table migration skipped: {te}")
+            # Add multitask KPI-parameter columns to an existing multitask_entries table
+            for mt_col, mt_type in [
+                ("sales_bills_open", "INTEGER DEFAULT 0"),
+                ("picked", "INTEGER DEFAULT 0"),
+                ("missed", "INTEGER DEFAULT 0"),
+                ("checked", "INTEGER DEFAULT 0"),
+                ("errors_found", "INTEGER DEFAULT 0"),
+                ("packing_done", "INTEGER DEFAULT 0"),
+                ("cs_sales_open", "INTEGER DEFAULT 0"),
+                ("total_bills_received", "INTEGER DEFAULT 0"),
+                ("bills_received", "INTEGER DEFAULT 0"),
+                ("pending_bills_manual", "INTEGER DEFAULT 0"),
+            ]:
+                try:
+                    db.session.execute(db.text(
+                        f"ALTER TABLE multitask_entries ADD COLUMN IF NOT EXISTS {mt_col} {mt_type}"
+                    ))
+                    db.session.commit()
+                except Exception as mce:
+                    db.session.rollback()
+                    logger.warning(f"multitask_entries.{mt_col} migration skipped: {mce}")
         else:
             # SQLite doesn't support IF NOT EXISTS on ALTER TABLE
             import sqlite3
@@ -1296,6 +1608,7 @@ def run_migrations():
                 "admin_adjustment_note": "VARCHAR(200) DEFAULT ''",
                 "custom_hourly_target": "FLOAT",
                 "phone": "VARCHAR(20)",  # Feature 15
+                "secondary_staff_type": "VARCHAR(20)",  # 2nd role for multitasking
             }
             for col, col_type in sqlite_cols.items():
                 if col not in existing:
@@ -1369,9 +1682,27 @@ def run_migrations():
                     emp_id INTEGER NOT NULL REFERENCES employees(id) ON DELETE CASCADE,
                     entry_date DATE NOT NULL,
                     secondary_type VARCHAR(20) NOT NULL,
+                    sales_bills_open INTEGER DEFAULT 0,
+                    picked INTEGER DEFAULT 0,
+                    missed INTEGER DEFAULT 0,
+                    checked INTEGER DEFAULT 0,
+                    errors_found INTEGER DEFAULT 0,
+                    packing_done INTEGER DEFAULT 0,
+                    cs_sales_open INTEGER DEFAULT 0,
+                    total_bills_received INTEGER DEFAULT 0,
+                    bills_received INTEGER DEFAULT 0,
+                    pending_bills_manual INTEGER DEFAULT 0,
                     quantity INTEGER DEFAULT 0,
                     note VARCHAR(300),
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)""")
+                # Add columns to an existing table (older deploys)
+                cursor.execute("PRAGMA table_info(multitask_entries)")
+                mt_existing = [row[1] for row in cursor.fetchall()]
+                for mt_col in ["sales_bills_open", "picked", "missed", "checked",
+                               "errors_found", "packing_done", "cs_sales_open",
+                               "total_bills_received", "bills_received", "pending_bills_manual"]:
+                    if mt_col not in mt_existing:
+                        cursor.execute(f"ALTER TABLE multitask_entries ADD COLUMN {mt_col} INTEGER DEFAULT 0")
                 logger.info("✅ SQLite multitask_entries ensured")
             except Exception as mte:
                 logger.warning(f"SQLite multitask_entries: {mte}")
@@ -1390,6 +1721,82 @@ def run_migrations():
                 logger.info("✅ SQLite delivery_biller_notes ensured")
             except Exception as dbne:
                 logger.warning(f"SQLite delivery_biller_notes: {dbne}")
+            # SQLite: delivery_assignments and delivery_trips
+            try:
+                cursor.execute("""CREATE TABLE IF NOT EXISTS delivery_assignments (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    purchaser_id INTEGER NOT NULL,
+                    delivery_emp_id INTEGER NOT NULL,
+                    destination_addr TEXT NOT NULL,
+                    destination_lat REAL,
+                    destination_lng REAL,
+                    package_desc TEXT NOT NULL,
+                    bills_count INTEGER DEFAULT 0,
+                    recipient_name VARCHAR(150),
+                    company_name VARCHAR(150),
+                    status VARCHAR(20) DEFAULT 'pending',
+                    assigned_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    notes TEXT)""")
+                cursor.execute("""CREATE TABLE IF NOT EXISTS delivery_trips (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    assignment_id INTEGER NOT NULL,
+                    emp_id INTEGER NOT NULL,
+                    trip_date DATE NOT NULL,
+                    departure_lat REAL,
+                    departure_lng REAL,
+                    departure_time TIMESTAMP,
+                    arrival_time TIMESTAMP,
+                    delivered_to_name VARCHAR(150),
+                    delivered_to_company VARCHAR(150),
+                    delivery_note TEXT,
+                    duration_minutes REAL,
+                    is_on_time INTEGER,
+                    status VARCHAR(20) DEFAULT 'active',
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    UNIQUE(assignment_id))""")
+                cursor.execute("""CREATE TABLE IF NOT EXISTS delivery_stops (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    assignment_id INTEGER NOT NULL,
+                    emp_id INTEGER NOT NULL,
+                    place_name VARCHAR(150) NOT NULL,
+                    packages INTEGER DEFAULT 0,
+                    reached_at TIMESTAMP,
+                    minutes_from_prev REAL,
+                    lat REAL,
+                    lng REAL,
+                    note VARCHAR(300))""")
+                cursor.execute("""CREATE TABLE IF NOT EXISTS notifications (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    emp_id INTEGER NOT NULL,
+                    title VARCHAR(150) NOT NULL,
+                    body VARCHAR(400),
+                    link VARCHAR(200),
+                    is_read INTEGER DEFAULT 0,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)""")
+                cursor.execute("""CREATE TABLE IF NOT EXISTS supervisor_bills (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    staff_id INTEGER NOT NULL,
+                    entry_date DATE NOT NULL,
+                    super_bills INTEGER DEFAULT 0,
+                    supervisor_id INTEGER,
+                    admin_validated INTEGER DEFAULT 0,
+                    note VARCHAR(200),
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    UNIQUE(staff_id, entry_date))""")
+                # Add CRM columns to existing SQLite delivery_assignments (ignore if present)
+                for col, col_type in [
+                    ("route", "VARCHAR(300)"), ("no_of_tasks", "INTEGER DEFAULT 1"),
+                    ("packet_type", "VARCHAR(50)"), ("dispatch_time", "TIMESTAMP"),
+                    ("no_of_task_return", "INTEGER DEFAULT 0"), ("return_reason", "VARCHAR(200)"),
+                ]:
+                    try:
+                        cursor.execute(f"ALTER TABLE delivery_assignments ADD COLUMN {col} {col_type}")
+                    except Exception:
+                        pass
+                conn.commit()
+                logger.info("✅ SQLite delivery tables created")
+            except Exception as dte:
+                logger.warning(f"SQLite delivery tables: {dte}")
             conn.commit()
             conn.close()
     except Exception as e:
@@ -1427,6 +1834,10 @@ def init_db():
                         Badge(name="Century Club", description="100+ items picked in a single day", icon="📦", badge_type="auto"),
                         Badge(name="Top Performer", description="#1 score in role for the month", icon="🏆", badge_type="auto"),
                         Badge(name="7-Day Streak", description="Submitted every day for 7 consecutive days", icon="🔥", badge_type="auto"),
+                        Badge(name="First Delivery", description="Completed your very first GPS delivery", icon="🚚", badge_type="auto"),
+                        Badge(name="Speed Rider", description="Completed 3 deliveries faster than the average time", icon="⚡", badge_type="auto"),
+                        Badge(name="Perfect Courier", description="10 consecutive on-time deliveries", icon="🎯", badge_type="auto"),
+                        Badge(name="Veteran Courier", description="50 total deliveries completed", icon="🏆", badge_type="auto"),
                     ]
                     for b in default_badges:
                         db.session.add(b)
@@ -1492,20 +1903,115 @@ def login():
             session["user_id"] = user.id
             session["user_name"] = user.name
             session["staff_type"] = user.staff_type
+            session["primary_staff_type"] = user.staff_type
+            session["secondary_staff_type"] = user.secondary_staff_type
             session["is_admin"] = bool(user.is_admin)
 
             logger.info(f"User login successful: {email}")
-            return redirect(url_for("admin_dashboard") if user.is_admin else url_for("dashboard"))
+            if user.is_admin:
+                return redirect(url_for("admin_dashboard"))
+            # If staff has a secondary role, let them choose which role to work as today
+            if user.secondary_staff_type and user.secondary_staff_type.strip():
+                return redirect(url_for("select_role"))
+            return redirect(url_for("dashboard"))
         except Exception as e:
             logger.error(f"Login error: {e}")
             flash("System error. Please try again.", "danger")
     return render_template("login.html")
 
 
+@app.route("/select_role", methods=["GET"])
+@login_required
+def select_role():
+    """After login, multitasking staff choose which role to work as today."""
+    primary = session.get("primary_staff_type") or session.get("staff_type", "picker")
+    secondary = session.get("secondary_staff_type")
+    if not secondary:
+        return redirect(url_for("dashboard"))
+    return render_template("select_role.html",
+        user_name=session.get("user_name", "User"),
+        primary_role=primary,
+        secondary_role=secondary,
+    )
+
+
 @app.route("/logout", methods=["GET", "POST"])
 def logout():
     session.clear()
     return redirect(url_for("login"))
+
+
+@app.route("/switch_role", methods=["POST"])
+@login_required
+def switch_role():
+    """Toggle session staff_type between primary and secondary role (multitasking)."""
+    target = request.form.get("role", "").strip()
+    primary = session.get("primary_staff_type")
+    secondary = session.get("secondary_staff_type")
+    # Re-fetch from DB if session is missing values (older session pre-feature)
+    if not primary:
+        emp = db.session.get(Employee, session.get("user_id"))
+        if emp:
+            primary = emp.staff_type
+            secondary = emp.secondary_staff_type
+            session["primary_staff_type"] = primary
+            session["secondary_staff_type"] = secondary
+    if target in (primary, secondary) and target:
+        session["staff_type"] = target
+        flash(f"Now working as {target.title()}.", "success")
+    else:
+        flash("Invalid role switch.", "warning")
+    return redirect(url_for("dashboard"))
+
+
+def _save_multitask_entry(emp_id, entry_date, primary_role):
+    """Save (or update) the staff member's multitask Role-2 report for the day.
+    Reads per-role mt_* fields from the request form. The chosen role can differ
+    each day. No-ops cleanly if nothing meaningful was entered."""
+    role = (request.form.get("multitask_role", "") or "").strip()
+    if not role or role == primary_role:
+        return
+    def mi(k):
+        try: return max(0, int(request.form.get(k, 0) or 0))
+        except Exception: return 0
+    note = (request.form.get("multitask_note", "") or "").strip()[:300]
+
+    # Map per-role form fields → unified MultitaskEntry columns
+    vals = dict(sales_bills_open=0, picked=0, missed=0, checked=0, errors_found=0,
+                packing_done=0, cs_sales_open=0, total_bills_received=0,
+                bills_received=0, pending_bills_manual=0, quantity=0)
+    if role == "picker":
+        vals.update(total_bills_received=mi("mt_p_total_bills"),
+                    sales_bills_open=mi("mt_p_sbo"), picked=mi("mt_p_picked"),
+                    missed=mi("mt_p_missed"), cs_sales_open=mi("mt_p_cso"),
+                    packing_done=mi("mt_p_packing"))
+    elif role == "checker":
+        vals.update(bills_received=mi("mt_c_bills_received"),
+                    pending_bills_manual=mi("mt_c_pending"),
+                    sales_bills_open=mi("mt_c_sbo"), cs_sales_open=mi("mt_c_cso"),
+                    checked=mi("mt_c_checked"), errors_found=mi("mt_c_errors"))
+    elif role == "purchaser":
+        vals.update(sales_bills_open=mi("mt_pu_sbo"), checked=mi("mt_pu_checked"),
+                    picked=mi("mt_pu_picked"), errors_found=mi("mt_pu_items"),
+                    cs_sales_open=mi("mt_pu_cso"), packing_done=mi("mt_pu_packing"))
+    else:  # delivery / billing / packing / other
+        vals.update(quantity=mi("mt_s_quantity"))
+
+    # Skip if absolutely nothing was filled in
+    if not any(vals.values()) and not note:
+        return
+
+    # Upsert on (emp, date, role) so re-submitting the same role updates it
+    mt = MultitaskEntry.query.filter_by(
+        emp_id=emp_id, entry_date=entry_date, secondary_type=role
+    ).first()
+    if not mt:
+        mt = MultitaskEntry(emp_id=emp_id, entry_date=entry_date, secondary_type=role)
+        db.session.add(mt)
+    for k, v in vals.items():
+        setattr(mt, k, v)
+    mt.note = note or None
+    db.session.commit()
 
 
 @app.route("/dashboard", methods=["GET", "POST"])
@@ -1515,12 +2021,17 @@ def dashboard():
         emp_id = session.get("user_id")
         staff_type = session.get("staff_type", "picker")
         today = date.today()
+
+        # Supervisor has a dedicated bill-validation console, not the KPI dashboard
+        if staff_type == "supervisor" and not session.get("is_admin"):
+            return redirect(url_for("supervisor_console"))
+
         today_entry = KPIEntry.query.filter_by(emp_id=emp_id, entry_date=today).first()
         new_personal_best = False
 
-        # ── Delivery / Biller: simple note entry (no KPIEntry) ──────────────────
+        # ── Delivery / Assigner / Packer: simple note entry (no KPIEntry) ───────
         today_db_note = None
-        if staff_type in ("delivery", "biller"):
+        if staff_type in ("delivery", "biller", "packer"):
             today_db_note = DeliveryBillerNote.query.filter_by(emp_id=emp_id, entry_date=today).first()
             if request.method == "POST" and not today_db_note:
                 note_text = request.form.get("delivery_note", "").strip()
@@ -1542,6 +2053,69 @@ def dashboard():
                         db.session.rollback()
                         logger.error(f"DeliveryBillerNote save: {dbe}")
                         flash("Error saving note.", "danger")
+
+            # ── Delivery module data (assignments for delivery staff, staff list for biller) ──
+            my_assignments = []
+            purchaser_delivery_staff = []
+            my_deliveries_today = []
+            trip_map = {}
+            delivery_diag = None
+            stops_map = {}
+            my_dispatches = []
+            try:
+                if staff_type == "delivery":
+                    my_assignments = (
+                        DeliveryAssignment.query
+                        .filter(
+                            DeliveryAssignment.delivery_emp_id == emp_id,
+                            DeliveryAssignment.status.in_(["pending", "in_transit"])
+                        )
+                        .order_by(DeliveryAssignment.assigned_at.desc())
+                        .all()
+                    )
+                    my_deliveries_today = (
+                        DeliveryTrip.query
+                        .filter_by(emp_id=emp_id, trip_date=today, status="completed")
+                        .all()
+                    )
+                    if my_assignments:
+                        aid_list = [a.id for a in my_assignments]
+                        trips = DeliveryTrip.query.filter(DeliveryTrip.assignment_id.in_(aid_list)).all()
+                        trip_map = {t.assignment_id: t for t in trips}
+                        stops = DeliveryStop.query.filter(DeliveryStop.assignment_id.in_(aid_list)).order_by(DeliveryStop.id).all()
+                        for st in stops:
+                            stops_map.setdefault(st.assignment_id, []).append(st)
+                elif staff_type == "biller":
+                    all_emps = Employee.query.all()
+                    _role_breakdown = {}
+                    for _e in all_emps:
+                        if getattr(_e, "is_admin", False):
+                            continue
+                        primary = (getattr(_e, "staff_type", "") or "").lower()
+                        secondary = (getattr(_e, "secondary_staff_type", "") or "").lower()
+                        _role_breakdown[primary] = _role_breakdown.get(primary, 0) + 1
+                        if primary == "delivery" or secondary == "delivery":
+                            purchaser_delivery_staff.append(_e)
+                    delivery_diag = {
+                        "total_emps": len(all_emps),
+                        "del_total": len(purchaser_delivery_staff),
+                        "breakdown": _role_breakdown,
+                    }
+                    # Assigner's recent dispatches (so they can edit/delete)
+                    my_dispatches = (DeliveryAssignment.query
+                                     .filter(DeliveryAssignment.purchaser_id == emp_id,
+                                             DeliveryAssignment.status.in_(["pending", "in_transit"]))
+                                     .order_by(DeliveryAssignment.assigned_at.desc()).limit(30).all())
+                    if my_dispatches:
+                        aid_list = [a.id for a in my_dispatches]
+                        stops = DeliveryStop.query.filter(DeliveryStop.assignment_id.in_(aid_list)).order_by(DeliveryStop.id).all()
+                        for st in stops:
+                            stops_map.setdefault(st.assignment_id, []).append(st)
+                    logger.info(f"Biller dashboard (note path): {len(purchaser_delivery_staff)} delivery staff "
+                                f"of {len(all_emps)} employees, breakdown={_role_breakdown}")
+            except Exception as _de:
+                logger.error(f"Delivery module (note path) failed: {_de}")
+
             return render_template("dashboard.html",
                 user_name=session.get("user_name", "User"),
                 user_id=emp_id,
@@ -1559,7 +2133,32 @@ def dashboard():
                 my_staff_badges=[], all_auto_badges=[], earned_badge_ids=set(),
                 current_month=today.strftime("%B %Y"), month_str=today.strftime("%Y-%m"),
                 today_multitask=[],
+                primary_staff_type=session.get("primary_staff_type") or staff_type,
+                secondary_staff_type=session.get("secondary_staff_type"),
+                my_assignments=my_assignments,
+                purchaser_delivery_staff=purchaser_delivery_staff,
+                my_deliveries_today=my_deliveries_today,
+                trip_map=trip_map,
+                delivery_diag=delivery_diag,
+                stops_map=stops_map,
+                my_dispatches=my_dispatches,
+                known_routes=KNOWN_ROUTES,
+                packet_types=PACKET_TYPES,
+                store_lat=STORE_LAT,
+                store_lng=STORE_LNG,
+                tomtom_key=TOMTOM_API_KEY,
             )
+
+        # ── Independent multitask submission (Role 2 can be filled/changed any time) ──
+        if request.method == "POST" and request.form.get("multitask_only") == "1":
+            try:
+                _save_multitask_entry(emp_id, today, staff_type)
+                flash("✅ Multitask role report saved.", "success")
+            except Exception as mte:
+                db.session.rollback()
+                logger.warning(f"Independent multitask save: {mte}")
+                flash("Error saving multitask report.", "danger")
+            return redirect(url_for("dashboard"))
 
         if request.method == "POST" and not today_entry:
             is_sunday = today.weekday() == 6
@@ -1688,21 +2287,9 @@ def dashboard():
                     flash("✅ Metrics recorded successfully.", "success")
                     today_entry = ne
 
-                    # ── Multitask: save secondary role work ───────────────
+                    # ── Multitask: save secondary role work with its own params ──
                     try:
-                        multitask_role = request.form.get("multitask_role", "").strip()
-                        multitask_qty  = max(0, int(request.form.get("multitask_qty", 0) or 0))
-                        multitask_note = request.form.get("multitask_note", "").strip()[:300]
-                        if multitask_role and multitask_role != staff_type and (multitask_qty > 0 or multitask_note):
-                            mt = MultitaskEntry(
-                                emp_id=emp_id,
-                                entry_date=today,
-                                secondary_type=multitask_role,
-                                quantity=multitask_qty,
-                                note=multitask_note or None,
-                            )
-                            db.session.add(mt)
-                            db.session.commit()
+                        _save_multitask_entry(emp_id, today, staff_type)
                     except Exception as mte:
                         db.session.rollback()
                         logger.warning(f"MultitaskEntry save: {mte}")
@@ -1821,11 +2408,19 @@ def dashboard():
         except Exception:
             today_multitask = []
 
+        # Multitasker bonus: +15 to daily score when secondary role work was also submitted today
+        if today_multitask and d_stats:
+            d_stats = dict(d_stats)
+            d_stats["eff_score"] = min(round(d_stats["eff_score"] + 15, 1), 100.0)
+            d_stats["multitask_bonus"] = 15
+
         # Delivery module data
+        delivery_diag = None
         try:
-            my_assignments = []   # delivery staff: pending/in-transit assignments
-            purchaser_delivery_staff = []  # purchaser: list of delivery employees
-            my_deliveries_today = []  # delivery staff: completed trips today
+            my_assignments = []
+            purchaser_delivery_staff = []
+            my_deliveries_today = []
+            trip_map = {}
             if staff_type == "delivery":
                 my_assignments = (
                     DeliveryAssignment.query
@@ -1841,15 +2436,34 @@ def dashboard():
                     .filter_by(emp_id=emp_id, trip_date=today, status="completed")
                     .all()
                 )
-            elif staff_type == "purchaser" or session.get("is_admin"):
-                purchaser_delivery_staff = Employee.query.filter_by(staff_type="delivery", is_admin=False).all()
-            # trip_map: assignment_id -> trip (for delivery staff)
-            trip_map = {}
+            elif staff_type == "biller" or session.get("is_admin"):
+                # Filter in Python to avoid NULL/ORM edge cases (is_admin, missing secondary col)
+                all_emps = Employee.query.all()
+                purchaser_delivery_staff = []
+                _role_breakdown = {}
+                for _e in all_emps:
+                    if getattr(_e, "is_admin", False):
+                        continue
+                    primary = (getattr(_e, "staff_type", "") or "").lower()
+                    secondary = (getattr(_e, "secondary_staff_type", "") or "").lower()
+                    _role_breakdown[primary] = _role_breakdown.get(primary, 0) + 1
+                    if primary == "delivery" or secondary == "delivery":
+                        purchaser_delivery_staff.append(_e)
+                _emp_total = len(all_emps)
+                _del_total = len(purchaser_delivery_staff)
+                logger.info(f"Biller dashboard: found {_del_total} delivery staff "
+                            f"(scanned {_emp_total} employees, breakdown={_role_breakdown})")
+                delivery_diag = {
+                    "total_emps": _emp_total,
+                    "del_total": _del_total,
+                    "breakdown": _role_breakdown,
+                }
             if my_assignments:
                 aid_list = [a.id for a in my_assignments]
                 trips = DeliveryTrip.query.filter(DeliveryTrip.assignment_id.in_(aid_list)).all()
                 trip_map = {t.assignment_id: t for t in trips}
-        except Exception:
+        except Exception as _de:
+            logger.error(f"Delivery module data load failed: {_de}")
             my_assignments = []
             purchaser_delivery_staff = []
             my_deliveries_today = []
@@ -1891,6 +2505,7 @@ def dashboard():
             store_lat=STORE_LAT,
             store_lng=STORE_LNG,
             tomtom_key=TOMTOM_API_KEY,
+            delivery_diag=delivery_diag,
         )
     except Exception as e:
         logger.error(f"Dashboard error: {e}")
@@ -1905,8 +2520,8 @@ def dashboard():
             earned_badge_ids=set(), current_month="", month_str="",
             today_multitask=[], today_db_note=None,
             primary_staff_type="picker", secondary_staff_type=None,
-            my_assignments=[], purchaser_delivery_staff=[], my_deliveries_today=[], trip_map={},
-            store_lat=0.0, store_lng=0.0, tomtom_key="")
+            my_assignments=[], purchaser_delivery_staff=[], my_deliveries_today=[],
+            trip_map={}, store_lat=0.0, store_lng=0.0, tomtom_key="", delivery_diag=None)
 
 
 @app.route("/admin_dashboard")
@@ -2008,6 +2623,18 @@ def admin_dashboard():
         except Exception:
             recent_db_notes = []
 
+        # Multitask (Role 2) reports — recent 30 days
+        try:
+            cutoff_mt = today - timedelta(days=30)
+            recent_multitask = (
+                MultitaskEntry.query
+                .filter(MultitaskEntry.entry_date >= cutoff_mt)
+                .order_by(MultitaskEntry.entry_date.desc(), MultitaskEntry.created_at.desc())
+                .all()
+            )
+        except Exception:
+            recent_multitask = []
+
         # Feature 5: Badges for admin
         try:
             all_badges = Badge.query.all()
@@ -2034,6 +2661,7 @@ def admin_dashboard():
             emp_map=emp_map,
             all_badges=all_badges,
             recent_db_notes=recent_db_notes,
+            recent_multitask=recent_multitask,
         )
     except Exception as e:
         logger.error(f"Admin dashboard error: {e}")
@@ -2049,7 +2677,7 @@ def admin_dashboard():
                                needs_attention=[], stale_validations_count=0, notes_by_emp={},
                                all_announcements=[], ann_read_counts={}, total_staff_count=0,
                                pending_past_requests=[], emp_map={}, all_badges=[],
-                               recent_db_notes=[])
+                               recent_db_notes=[], recent_multitask=[])
 
 
 @app.route("/staff/<int:emp_id>")
@@ -2194,6 +2822,13 @@ def staff_detail(emp_id):
         except Exception:
             emp_badges = []
 
+        # Multitask entries for this staff member (for admin view)
+        try:
+            from sqlalchemy import desc as _desc
+            multitask_entries = MultitaskEntry.query.filter_by(emp_id=emp_id).order_by(MultitaskEntry.entry_date.desc()).limit(30).all()
+        except Exception:
+            multitask_entries = []
+
         return render_template("staff_detail.html",
             emp=emp,
             emp_overall_rank=emp_overall_rank,
@@ -2212,6 +2847,7 @@ def staff_detail(emp_id):
             prev_month_score=prev_month_score,
             monthly_scores=monthly_scores,
             emp_badges=emp_badges,
+            multitask_entries=multitask_entries,
         )
     except Exception as e:
         import traceback
@@ -2257,11 +2893,10 @@ def admin_add_user():
             flash(f"Email '{email}' already exists.", "warning")
             return redirect(url_for("admin_dashboard"))
 
-        _role_names = {"picker": "Operations Picker", "checker": "Operations Checker",
-                       "purchaser": "Operations Purchaser", "delivery": "Delivery Staff",
-                       "biller": "Billing Staff"}
+        if staff_type not in VALID_STAFF_TYPES:
+            staff_type = "picker"
         emp = Employee(name=name, email=email, staff_type=staff_type,
-                       role=_role_names.get(staff_type, f"Operations {staff_type.title()}"))
+                       role=ROLE_DISPLAY_NAMES.get(staff_type, f"Operations {staff_type.title()}"))
         emp.set_password(password)
         db.session.add(emp)
         db.session.commit()
@@ -2296,12 +2931,17 @@ def admin_edit_user(emp_id):
                 flash(f"Email '{email}' already taken.", "warning")
                 return redirect(url_for("admin_dashboard"))
             emp.email = email
-        if staff_type in ("picker", "checker", "purchaser", "delivery", "biller"):
+        if staff_type in VALID_STAFF_TYPES:
             emp.staff_type = staff_type
-            role_names = {"picker": "Operations Picker", "checker": "Operations Checker",
-                          "purchaser": "Operations Purchaser", "delivery": "Delivery Staff",
-                          "biller": "Billing Staff"}
-            emp.role = role_names.get(staff_type, f"Operations {staff_type.title()}")
+            emp.role = ROLE_DISPLAY_NAMES.get(staff_type, f"Operations {staff_type.title()}")
+        # Secondary role (optional; "" = clear)
+        sec_raw = request.form.get("secondary_staff_type", None)
+        if sec_raw is not None:
+            sec = sec_raw.strip()
+            if sec == "" or sec == "none":
+                emp.secondary_staff_type = None
+            elif sec in VALID_STAFF_TYPES and sec != emp.staff_type:
+                emp.secondary_staff_type = sec
         if new_password:
             if len(new_password) < 6:
                 flash("New password must be at least 6 characters.", "danger")
@@ -3478,6 +4118,54 @@ def compute_auto_badges(emp_id):
         logger.error(f"compute_auto_badges: {e}")
 
 
+def compute_delivery_badges(emp_id):
+    """Award delivery-related auto badges based on completed DeliveryTrip records."""
+    try:
+        completed_trips = DeliveryTrip.query.filter_by(emp_id=emp_id, status="completed").all()
+        total = len(completed_trips)
+        on_time_count = sum(1 for t in completed_trips if t.is_on_time)
+
+        badge_checks = [
+            ("First Delivery",     total >= 1),
+            ("Speed Rider",        on_time_count >= 3),
+            ("Veteran Courier",    total >= 50),
+        ]
+        # Perfect Courier: check for 10 consecutive on-time
+        consecutive = 0
+        max_consec = 0
+        for t in sorted(completed_trips, key=lambda x: x.created_at or datetime.min):
+            if t.is_on_time:
+                consecutive += 1
+                max_consec = max(max_consec, consecutive)
+            else:
+                consecutive = 0
+        badge_checks.append(("Perfect Courier", max_consec >= 10))
+
+        for badge_name, earned in badge_checks:
+            if not earned:
+                continue
+            badge = Badge.query.filter_by(name=badge_name).first()
+            if not badge:
+                continue
+            existing = StaffBadge.query.filter_by(emp_id=emp_id, badge_id=badge.id).first()
+            if not existing:
+                db.session.add(StaffBadge(emp_id=emp_id, badge_id=badge.id, note="auto-delivery"))
+        db.session.commit()
+    except Exception as e:
+        db.session.rollback()
+        logger.warning(f"compute_delivery_badges: {e}")
+
+
+def score_delivery_trip(trip):
+    """Return point score for a completed delivery trip."""
+    score = 10  # base completion
+    if trip.is_on_time:
+        score += 20  # on-time bonus
+    if trip.duration_minutes and trip.duration_minutes < 30:
+        score += 5   # speed bonus
+    return score
+
+
 @app.route("/admin/badge/award", methods=["POST"])
 @admin_required
 def admin_award_badge():
@@ -3623,322 +4311,6 @@ def api_analytics_range():
 # ─── FEATURE 11: SMS/WHATSAPP NOTIFICATIONS (TWILIO) ─────────────────────────
 # Note: send_sms is defined earlier in the file (around line 1008); this is a stub
 # reference comment only — no duplicate definition.
-
-
-# ─── DELIVERY TRACKING MODULE ─────────────────────────────────────────────────
-
-STORE_LAT = float(os.environ.get("STORE_LAT", "0.0"))
-STORE_LNG = float(os.environ.get("STORE_LNG", "0.0"))
-STORE_RADIUS_M = 400    # meters — must be within this to start trip
-ARRIVAL_RADIUS_M = 200  # meters — must be within this to unlock delivery form
-TOMTOM_API_KEY = os.environ.get("TOMTOM_API_KEY", "")  # free 2500/day → live-traffic routing
-
-
-def _haversine_m(lat1, lng1, lat2, lng2):
-    """Distance in metres between two lat/lng points."""
-    import math
-    R = 6_371_000
-    phi1, phi2 = math.radians(lat1), math.radians(lat2)
-    dphi = math.radians(lat2 - lat1)
-    dlam = math.radians(lng2 - lng1)
-    a = math.sin(dphi/2)**2 + math.cos(phi1)*math.cos(phi2)*math.sin(dlam/2)**2
-    return 2 * R * math.asin(math.sqrt(a))
-
-
-def geocode_address(address):
-    """Convert a text address to (lat, lng) using Nominatim (free, India-biased)."""
-    try:
-        resp = _requests.get(
-            "https://nominatim.openstreetmap.org/search",
-            params={"q": address, "format": "json", "limit": 1, "countrycodes": "in"},
-            headers={"User-Agent": "IndianPharmaKPI/1.0 (delivery-geocoder)"},
-            timeout=6,
-        )
-        results = resp.json()
-        if results:
-            return float(results[0]["lat"]), float(results[0]["lon"])
-    except Exception as e:
-        logger.warning(f"geocode_address failed for '{address}': {e}")
-    return None, None
-
-
-@app.route("/delivery/assign", methods=["POST"])
-@login_required
-def delivery_assign():
-    """Purchaser creates a delivery assignment — auto-geocodes the destination address."""
-    emp_id = session.get("user_id")
-    staff_type = session.get("staff_type", "")
-    if staff_type not in ("purchaser",) and not session.get("is_admin"):
-        flash("Only purchasers can assign deliveries.", "danger")
-        return redirect(url_for("dashboard"))
-    try:
-        delivery_emp_id  = int(request.form.get("delivery_emp_id", 0))
-        destination_addr = request.form.get("destination_addr", "").strip()
-        package_desc     = request.form.get("package_desc", "").strip()
-        bills_count      = int(request.form.get("bills_count", 0) or 0)
-        recipient_name   = request.form.get("recipient_name", "").strip()
-        company_name     = request.form.get("company_name", "").strip()
-        notes            = request.form.get("notes", "").strip()[:500]
-
-        if not delivery_emp_id or not destination_addr or not package_desc:
-            flash("Please fill in delivery employee, destination, and package description.", "warning")
-            return redirect(url_for("dashboard"))
-
-        delivery_emp = db.session.get(Employee, delivery_emp_id)
-        if not delivery_emp or delivery_emp.staff_type != "delivery":
-            flash("Selected employee is not a delivery staff member.", "warning")
-            return redirect(url_for("dashboard"))
-
-        # Auto-geocode — if it fails the assignment still saves (map falls back to address text)
-        dest_lat, dest_lng = geocode_address(destination_addr)
-
-        assignment = DeliveryAssignment(
-            purchaser_id=emp_id,
-            delivery_emp_id=delivery_emp_id,
-            destination_addr=destination_addr,
-            destination_lat=dest_lat,
-            destination_lng=dest_lng,
-            package_desc=package_desc,
-            bills_count=bills_count,
-            recipient_name=recipient_name,
-            company_name=company_name,
-            notes=notes,
-            status="pending",
-        )
-        db.session.add(assignment)
-        db.session.commit()
-        log_audit("delivery_assign", delivery_emp.name, f"Package: {package_desc[:50]}")
-        geo_note = " (map location set)" if dest_lat else " (map will use address text)"
-        flash(f"✅ Delivery assigned to {delivery_emp.name}.{geo_note}", "success")
-    except Exception as e:
-        db.session.rollback()
-        logger.error(f"delivery_assign: {e}")
-        flash("Error creating delivery assignment.", "danger")
-    return redirect(url_for("dashboard"))
-
-
-@app.route("/delivery/start_trip/<int:assignment_id>", methods=["POST"])
-@login_required
-def delivery_start_trip(assignment_id):
-    """Delivery employee starts a trip (GPS confirmed near store)."""
-    emp_id = session.get("user_id")
-    try:
-        assignment = db.session.get(DeliveryAssignment, assignment_id)
-        if not assignment or assignment.delivery_emp_id != emp_id:
-            return jsonify({"ok": False, "error": "Assignment not found"}), 404
-        if assignment.status != "pending":
-            return jsonify({"ok": False, "error": "Assignment not in pending state"}), 400
-
-        curr_lat = float(request.json.get("lat", 0))
-        curr_lng = float(request.json.get("lng", 0))
-
-        # Only validate if store coords are configured
-        if STORE_LAT != 0.0 and STORE_LNG != 0.0:
-            dist = _haversine_m(curr_lat, curr_lng, STORE_LAT, STORE_LNG)
-            if dist > STORE_RADIUS_M:
-                return jsonify({"ok": False, "error": f"You must be at the store to start a trip (you are {int(dist)}m away)."}), 400
-
-        assignment.status = "in_transit"
-        trip = DeliveryTrip(
-            assignment_id=assignment_id,
-            emp_id=emp_id,
-            trip_date=date.today(),
-            departure_lat=curr_lat,
-            departure_lng=curr_lng,
-            departure_time=datetime.utcnow(),
-            status="active",
-        )
-        db.session.add(trip)
-        db.session.commit()
-        return jsonify({"ok": True, "trip_id": trip.id, "dest_lat": assignment.destination_lat, "dest_lng": assignment.destination_lng})
-    except Exception as e:
-        db.session.rollback()
-        logger.error(f"delivery_start_trip: {e}")
-        return jsonify({"ok": False, "error": "Server error"}), 500
-
-
-@app.route("/delivery/check_arrival/<int:assignment_id>", methods=["POST"])
-@login_required
-def delivery_check_arrival(assignment_id):
-    """Check if delivery employee is at destination. Returns unlock=True if within ARRIVAL_RADIUS_M."""
-    emp_id = session.get("user_id")
-    try:
-        assignment = db.session.get(DeliveryAssignment, assignment_id)
-        if not assignment or assignment.delivery_emp_id != emp_id:
-            return jsonify({"ok": False, "error": "Not found"}), 404
-
-        curr_lat = float(request.json.get("lat", 0))
-        curr_lng = float(request.json.get("lng", 0))
-
-        # If no destination coords, always unlock (address-only mode)
-        if not assignment.destination_lat or not assignment.destination_lng:
-            return jsonify({"ok": True, "unlock": True, "dist": 0})
-
-        # Skip GPS check if device sent zero coords (GPS unavailable on device)
-        if curr_lat == 0 and curr_lng == 0:
-            return jsonify({"ok": True, "unlock": True, "dist": 0})
-
-        dist = _haversine_m(curr_lat, curr_lng, assignment.destination_lat, assignment.destination_lng)
-        unlock = dist <= ARRIVAL_RADIUS_M
-        return jsonify({"ok": True, "unlock": unlock, "dist": int(dist), "radius": ARRIVAL_RADIUS_M})
-    except Exception as e:
-        logger.error(f"delivery_check_arrival: {e}")
-        return jsonify({"ok": False, "error": "Server error"}), 500
-
-
-@app.route("/delivery/confirm/<int:assignment_id>", methods=["POST"])
-@login_required
-def delivery_confirm(assignment_id):
-    """Delivery employee marks package as delivered (GPS confirmed at destination)."""
-    emp_id = session.get("user_id")
-    try:
-        assignment = db.session.get(DeliveryAssignment, assignment_id)
-        if not assignment or assignment.delivery_emp_id != emp_id:
-            return jsonify({"ok": False, "error": "Not found"}), 404
-        if assignment.status not in ("in_transit", "pending"):
-            return jsonify({"ok": False, "error": "Cannot confirm this assignment"}), 400
-
-        curr_lat = float(request.json.get("lat", 0))
-        curr_lng = float(request.json.get("lng", 0))
-        delivered_to  = request.json.get("delivered_to", "").strip()
-        company       = request.json.get("company", "").strip()
-        delivery_note = request.json.get("note", "").strip()[:500]
-
-        if not delivered_to:
-            return jsonify({"ok": False, "error": "Please enter the name of the person who received the package"}), 400
-
-        # GPS check (if coords configured and device supplied a real position)
-        if assignment.destination_lat and assignment.destination_lng and not (curr_lat == 0 and curr_lng == 0):
-            dist = _haversine_m(curr_lat, curr_lng, assignment.destination_lat, assignment.destination_lng)
-            if dist > ARRIVAL_RADIUS_M:
-                return jsonify({"ok": False, "error": f"You must be at the destination to confirm delivery ({int(dist)}m away, max {ARRIVAL_RADIUS_M}m)."}), 400
-
-        trip = DeliveryTrip.query.filter_by(assignment_id=assignment_id).first()
-        now = datetime.utcnow()
-        duration = None
-        is_on_time = None
-
-        if trip:
-            trip.arrival_time = now
-            trip.delivered_to_name = delivered_to
-            trip.delivered_to_company = company
-            trip.delivery_note = delivery_note
-            trip.status = "completed"
-            if trip.departure_time:
-                duration = (now - trip.departure_time).total_seconds() / 60.0
-                trip.duration_minutes = round(duration, 1)
-                is_on_time = duration <= 60.0  # on-time = within 60 minutes
-                trip.is_on_time = is_on_time
-        else:
-            # Trip wasn't started via GPS (manual confirm) — duration unknown, on-time unknown
-            trip = DeliveryTrip(
-                assignment_id=assignment_id,
-                emp_id=emp_id,
-                trip_date=date.today(),
-                arrival_time=now,
-                delivered_to_name=delivered_to,
-                delivered_to_company=company,
-                delivery_note=delivery_note,
-                status="completed",
-                is_on_time=None,
-            )
-            db.session.add(trip)
-
-        assignment.status = "delivered"
-        db.session.commit()
-
-        try:
-            compute_delivery_badges(emp_id)
-        except Exception:
-            pass
-
-        log_audit("delivery_confirm", str(emp_id), f"Delivered to {delivered_to} @ {company}")
-        return jsonify({"ok": True, "message": "Delivery confirmed!", "on_time": is_on_time})
-    except Exception as e:
-        db.session.rollback()
-        logger.error(f"delivery_confirm: {e}")
-        return jsonify({"ok": False, "error": "Server error"}), 500
-
-
-@app.route("/delivery/leaderboard")
-@login_required
-def delivery_leaderboard():
-    """Delivery staff leaderboard page."""
-    try:
-        today = date.today()
-        month_start = today.replace(day=1)
-        delivery_staff = Employee.query.filter_by(staff_type="delivery", is_admin=False).all()
-        leaderboard = []
-        for emp in delivery_staff:
-            trips = DeliveryTrip.query.filter_by(emp_id=emp.id, status="completed").all()
-            month_trips = [t for t in trips if t.trip_date and t.trip_date >= month_start]
-            total = len(trips)
-            on_time = sum(1 for t in trips if t.is_on_time)
-            month_total = len(month_trips)
-            month_on_time = sum(1 for t in month_trips if t.is_on_time)
-            score = sum(score_delivery_trip(t) for t in trips)
-            month_score = sum(score_delivery_trip(t) for t in month_trips)
-            avg_dur = round(sum(t.duration_minutes or 0 for t in trips if t.duration_minutes) / max(len([t for t in trips if t.duration_minutes]),1), 1)
-            leaderboard.append({
-                "emp": emp,
-                "total": total,
-                "on_time": on_time,
-                "on_time_pct": round(on_time / max(total,1) * 100, 1),
-                "month_total": month_total,
-                "month_on_time": month_on_time,
-                "score": score,
-                "month_score": month_score,
-                "avg_dur": avg_dur,
-            })
-        leaderboard.sort(key=lambda x: x["month_score"], reverse=True)
-        return render_template("delivery_leaderboard.html", leaderboard=leaderboard,
-                               current_month=today.strftime("%B %Y"), today=today)
-    except Exception as e:
-        logger.error(f"delivery_leaderboard: {e}")
-        flash("Error loading leaderboard.", "danger")
-        return redirect(url_for("dashboard"))
-
-
-@app.route("/admin/delivery")
-@admin_required
-def admin_delivery():
-    """Admin view: all delivery assignments and trips."""
-    try:
-        today = date.today()
-        cutoff_30 = today - timedelta(days=30)
-        assignments = (
-            DeliveryAssignment.query
-            .order_by(DeliveryAssignment.assigned_at.desc())
-            .limit(100).all()
-        )
-        trips = (
-            DeliveryTrip.query
-            .filter(DeliveryTrip.trip_date >= cutoff_30)
-            .order_by(DeliveryTrip.created_at.desc())
-            .all()
-        )
-        trip_map = {t.assignment_id: t for t in trips}
-        all_emp = Employee.query.all()
-        emp_map = {e.id: e for e in all_emp}
-        delivery_staff = [e for e in all_emp if e.staff_type == "delivery"]
-
-        # Leaderboard
-        leaderboard = []
-        for emp in delivery_staff:
-            total = DeliveryTrip.query.filter_by(emp_id=emp.id, status="completed").count()
-            on_time = DeliveryTrip.query.filter_by(emp_id=emp.id, status="completed", is_on_time=True).count()
-            leaderboard.append({"emp": emp, "total": total, "on_time": on_time,
-                                 "on_time_pct": round(on_time/max(total,1)*100,1)})
-        leaderboard.sort(key=lambda x: x["total"], reverse=True)
-
-        return render_template("admin_delivery.html",
-                               assignments=assignments, trip_map=trip_map,
-                               emp_map=emp_map, leaderboard=leaderboard,
-                               today=today, current_month=today.strftime("%B %Y"))
-    except Exception as e:
-        logger.error(f"admin_delivery: {e}")
-        flash("Error loading delivery dashboard.", "danger")
-        return redirect(url_for("admin_dashboard"))
 
 
 # ─── FEATURE 12: MONTHLY PDF EMAIL (APScheduler) ─────────────────────────────
@@ -4240,6 +4612,770 @@ def stale_validations_sms_job():
                     logger.info(f"Stale validations: {count} pending, ADMIN_PHONE not set")
         except Exception as e:
             logger.error(f"stale_validations_sms_job: {e}")
+
+
+# ─── DELIVERY TRACKING MODULE ─────────────────────────────────────────────────
+
+STORE_LAT = float(os.environ.get("STORE_LAT", "0.0"))
+STORE_LNG = float(os.environ.get("STORE_LNG", "0.0"))
+STORE_RADIUS_M = 400    # meters — must be within this to start a trip
+ARRIVAL_RADIUS_M = 200  # meters — must be within this to confirm delivery
+TOMTOM_API_KEY = os.environ.get("TOMTOM_API_KEY", "")  # free key → live-traffic routing
+
+
+def _haversine_m(lat1, lng1, lat2, lng2):
+    """Distance in metres between two lat/lng points."""
+    import math
+    R = 6_371_000
+    phi1, phi2 = math.radians(lat1), math.radians(lat2)
+    dphi = math.radians(lat2 - lat1)
+    dlam = math.radians(lng2 - lng1)
+    a = math.sin(dphi / 2) ** 2 + math.cos(phi1) * math.cos(phi2) * math.sin(dlam / 2) ** 2
+    return 2 * R * math.asin(math.sqrt(a))
+
+
+def geocode_address(address):
+    """Convert an Odisha address to (lat, lng) using Nominatim, biased to Odisha state.
+    Tries hard: appends ', Odisha, India' if missing, then falls back to a wider search.
+    """
+    if not address or not address.strip():
+        return None, None
+    q = address.strip()
+    if "odisha" not in q.lower() and "orissa" not in q.lower():
+        q_biased = f"{q}, Odisha, India"
+    else:
+        q_biased = q
+    # Odisha bounding box: roughly lon 81.3..87.5, lat 17.7..22.6
+    viewbox = "81.3,22.6,87.5,17.7"  # left,top,right,bottom
+    headers = {"User-Agent": "IndianPharmaKPI/1.0 (delivery-geocoder)"}
+    try:
+        # 1st attempt: strict to Odisha viewbox
+        resp = _requests.get(
+            "https://nominatim.openstreetmap.org/search",
+            params={"q": q_biased, "format": "json", "limit": 1,
+                    "countrycodes": "in", "viewbox": viewbox, "bounded": 1},
+            headers=headers, timeout=6,
+        )
+        results = resp.json()
+        if results:
+            return float(results[0]["lat"]), float(results[0]["lon"])
+        # 2nd: relax bounded, keep viewbox as preference
+        resp = _requests.get(
+            "https://nominatim.openstreetmap.org/search",
+            params={"q": q_biased, "format": "json", "limit": 1,
+                    "countrycodes": "in", "viewbox": viewbox},
+            headers=headers, timeout=6,
+        )
+        results = resp.json()
+        if results:
+            lat, lng = float(results[0]["lat"]), float(results[0]["lon"])
+            # sanity check: stay inside Odisha bbox
+            if 17.7 <= lat <= 22.6 and 81.3 <= lng <= 87.5:
+                return lat, lng
+    except Exception as e:
+        logger.warning(f"geocode_address failed for '{address}': {e}")
+    return None, None
+
+
+@app.route("/delivery/assign", methods=["POST"])
+@login_required
+def delivery_assign():
+    """Assigner dispatches a multi-store route to a delivery employee.
+    Each store row = name + package count; total tasks = sum of packages.
+    Creates one DeliveryAssignment + a DeliveryStop per store, then notifies the rider."""
+    emp_id = session.get("user_id")
+    staff_type = session.get("staff_type", "")
+    if staff_type not in ("biller",) and not session.get("is_admin"):
+        flash("Only the Assigner can assign deliveries.", "danger")
+        return redirect(url_for("dashboard"))
+    try:
+        delivery_emp_id = int(request.form.get("delivery_emp_id", 0) or 0)
+        packet_type     = (request.form.get("packet_type", "") or "").strip()[:50]
+        notes           = (request.form.get("notes", "") or "").strip()[:500]
+
+        # Multi-store line items (parallel arrays from the form)
+        store_names    = request.form.getlist("store_name[]")
+        store_packages = request.form.getlist("store_packages[]")
+        store_lats     = request.form.getlist("store_lat[]")
+        store_lngs     = request.form.getlist("store_lng[]")
+
+        # Build a clean list of (name, packages, lat, lng), dropping blank rows
+        stores = []
+        for i, raw_name in enumerate(store_names):
+            nm = (raw_name or "").strip()
+            if not nm:
+                continue
+            try:
+                pkg = max(0, int(store_packages[i])) if i < len(store_packages) and store_packages[i] else 0
+            except (ValueError, TypeError):
+                pkg = 0
+            slat = slng = None
+            try:
+                if i < len(store_lats) and store_lats[i] and i < len(store_lngs) and store_lngs[i]:
+                    _la, _ln = float(store_lats[i]), float(store_lngs[i])
+                    if 17.7 <= _la <= 22.6 and 81.3 <= _ln <= 87.5:
+                        slat, slng = _la, _ln
+            except (ValueError, TypeError):
+                pass
+            stores.append({"name": nm[:150], "packages": pkg, "lat": slat, "lng": slng})
+
+        if not delivery_emp_id or not stores:
+            flash("Pick a delivery employee and add at least one store.", "warning")
+            return redirect(url_for("dashboard"))
+
+        delivery_emp = db.session.get(Employee, delivery_emp_id)
+        _p = (getattr(delivery_emp, "staff_type", "") or "").lower() if delivery_emp else ""
+        _s = (getattr(delivery_emp, "secondary_staff_type", "") or "").lower() if delivery_emp else ""
+        if not delivery_emp or (_p != "delivery" and _s != "delivery"):
+            flash("Selected employee is not a delivery staff member.", "warning")
+            return redirect(url_for("dashboard"))
+
+        total_tasks = sum(s["packages"] for s in stores) or len(stores)
+        route_str = ", ".join(s["name"] for s in stores)[:300]
+        pkg_desc = f"{total_tasks} packet(s) across {len(stores)} store(s)" + (f" — {packet_type}" if packet_type else "")
+
+        # Geocode any store missing a manual pin (best-effort)
+        for s in stores:
+            if s["lat"] is None:
+                s["lat"], s["lng"] = geocode_address(s["name"])
+
+        first = stores[0]
+        now = datetime.utcnow()
+        assignment = DeliveryAssignment(
+            purchaser_id=emp_id,
+            delivery_emp_id=delivery_emp_id,
+            destination_addr=route_str,
+            destination_lat=first["lat"],
+            destination_lng=first["lng"],
+            package_desc=pkg_desc,
+            bills_count=total_tasks,
+            recipient_name=None,
+            company_name=None,
+            notes=notes,
+            status="pending",
+            route=route_str,
+            no_of_tasks=total_tasks,
+            packet_type=packet_type or None,
+            dispatch_time=now,
+            no_of_task_return=0,
+        )
+        db.session.add(assignment)
+        db.session.flush()   # get assignment.id
+
+        for s in stores:
+            db.session.add(DeliveryStop(
+                assignment_id=assignment.id,
+                emp_id=delivery_emp_id,
+                place_name=s["name"],
+                packages=s["packages"],
+                reached_at=None,
+                lat=s["lat"],
+                lng=s["lng"],
+            ))
+        db.session.commit()
+
+        # Notify the rider — in-app bell + SMS (if admin saved a phone number)
+        notify_employee(
+            delivery_emp_id,
+            "🚚 New delivery assigned",
+            f"{total_tasks} packet(s) — {route_str[:120]}",
+            link="/dashboard",
+        )
+        log_audit("delivery_assign", delivery_emp.name, f"{total_tasks} tasks / {len(stores)} stores")
+        flash(f"✅ Assigned {total_tasks} packet(s) across {len(stores)} store(s) to {delivery_emp.name}. Notification sent.", "success")
+    except Exception as e:
+        db.session.rollback()
+        logger.error(f"delivery_assign: {e}")
+        flash("Error creating delivery assignment.", "danger")
+    return redirect(url_for("dashboard"))
+
+
+@app.route("/delivery/dispatch/<int:assignment_id>/edit", methods=["POST"])
+@login_required
+def delivery_dispatch_edit(assignment_id):
+    """Assigner edits a dispatch's stores (only while pending). Replaces the store rows."""
+    emp_id = session.get("user_id")
+    staff_type = session.get("staff_type", "")
+    if staff_type not in ("biller",) and not session.get("is_admin"):
+        flash("Only the Assigner can edit dispatches.", "danger")
+        return redirect(url_for("dashboard"))
+    try:
+        a = db.session.get(DeliveryAssignment, assignment_id)
+        if not a:
+            flash("Dispatch not found.", "warning")
+            return redirect(url_for("dashboard"))
+        if a.status != "pending":
+            flash("Can't edit — the rider has already started this trip.", "warning")
+            return redirect(url_for("dashboard"))
+
+        store_names    = request.form.getlist("store_name[]")
+        store_packages = request.form.getlist("store_packages[]")
+        stores = []
+        for i, raw in enumerate(store_names):
+            nm = (raw or "").strip()
+            if not nm:
+                continue
+            try:
+                pkg = max(0, int(store_packages[i])) if i < len(store_packages) and store_packages[i] else 0
+            except (ValueError, TypeError):
+                pkg = 0
+            stores.append({"name": nm[:150], "packages": pkg})
+        if not stores:
+            flash("A dispatch needs at least one store.", "warning")
+            return redirect(url_for("dashboard"))
+
+        DeliveryStop.query.filter_by(assignment_id=a.id).delete()
+        total = sum(s["packages"] for s in stores) or len(stores)
+        a.route = ", ".join(s["name"] for s in stores)[:300]
+        a.destination_addr = a.route
+        a.no_of_tasks = total
+        a.bills_count = total
+        pt = (request.form.get("packet_type", "") or "").strip()[:50]
+        if pt:
+            a.packet_type = pt
+        for s in stores:
+            slat, slng = geocode_address(s["name"])
+            db.session.add(DeliveryStop(assignment_id=a.id, emp_id=a.delivery_emp_id,
+                                        place_name=s["name"], packages=s["packages"],
+                                        reached_at=None, lat=slat, lng=slng))
+        db.session.commit()
+        notify_employee(a.delivery_emp_id, "✏️ Delivery updated",
+                        f"Your dispatch was updated — {total} packet(s).", link="/dashboard")
+        flash(f"✅ Dispatch updated — {total} packet(s) across {len(stores)} store(s).", "success")
+    except Exception as e:
+        db.session.rollback()
+        logger.error(f"delivery_dispatch_edit: {e}")
+        flash("Error updating dispatch.", "danger")
+    return redirect(url_for("dashboard"))
+
+
+@app.route("/delivery/dispatch/<int:assignment_id>/delete", methods=["POST"])
+@login_required
+def delivery_dispatch_delete(assignment_id):
+    """Assigner deletes a dispatch (only while pending)."""
+    emp_id = session.get("user_id")
+    staff_type = session.get("staff_type", "")
+    if staff_type not in ("biller",) and not session.get("is_admin"):
+        flash("Only the Assigner can delete dispatches.", "danger")
+        return redirect(url_for("dashboard"))
+    try:
+        a = db.session.get(DeliveryAssignment, assignment_id)
+        if not a:
+            flash("Dispatch not found.", "warning")
+            return redirect(url_for("dashboard"))
+        if a.status != "pending":
+            flash("Can't delete — the rider has already started this trip.", "warning")
+            return redirect(url_for("dashboard"))
+        rider = a.delivery_emp_id
+        DeliveryStop.query.filter_by(assignment_id=a.id).delete()
+        db.session.delete(a)
+        db.session.commit()
+        notify_employee(rider, "🗑️ Delivery cancelled", "A pending dispatch was removed.", link="/dashboard")
+        flash("✅ Dispatch deleted.", "success")
+    except Exception as e:
+        db.session.rollback()
+        logger.error(f"delivery_dispatch_delete: {e}")
+        flash("Error deleting dispatch.", "danger")
+    return redirect(url_for("dashboard"))
+
+
+@app.route("/delivery/log_stop/<int:stop_id>", methods=["POST"])
+@login_required
+def delivery_log_stop(stop_id):
+    """Delivery rider marks a store/stop as reached — records timestamp + actual packages delivered."""
+    emp_id = session.get("user_id")
+    try:
+        stop = db.session.get(DeliveryStop, stop_id)
+        if not stop or stop.emp_id != emp_id:
+            return jsonify({"ok": False, "error": "Stop not found"}), 404
+        data = request.get_json(force=True, silent=True) or {}
+        now = datetime.utcnow()
+        # minutes since departure (or previous logged stop)
+        trip = DeliveryTrip.query.filter_by(assignment_id=stop.assignment_id).first()
+        prev = (DeliveryStop.query
+                .filter(DeliveryStop.assignment_id == stop.assignment_id,
+                        DeliveryStop.reached_at.isnot(None))
+                .order_by(DeliveryStop.reached_at.desc()).first())
+        base = prev.reached_at if prev else (trip.departure_time if trip else now)
+        stop.reached_at = now
+        stop.minutes_from_prev = round((now - base).total_seconds() / 60.0, 1) if base else None
+        try:
+            if data.get("packages") is not None:
+                stop.packages = max(0, int(data.get("packages")))
+        except (ValueError, TypeError):
+            pass
+        try:
+            la, ln = float(data.get("lat", 0)), float(data.get("lng", 0))
+            if la and ln:
+                stop.lat, stop.lng = la, ln
+        except (ValueError, TypeError):
+            pass
+        db.session.commit()
+        # Summary: how many stops done / total
+        all_stops = DeliveryStop.query.filter_by(assignment_id=stop.assignment_id).all()
+        done = sum(1 for s in all_stops if s.reached_at)
+        return jsonify({"ok": True, "done": done, "total": len(all_stops),
+                        "minutes_from_prev": stop.minutes_from_prev})
+    except Exception as e:
+        db.session.rollback()
+        logger.error(f"delivery_log_stop: {e}")
+        return jsonify({"ok": False, "error": "Server error"}), 500
+
+
+@app.route("/notifications")
+@login_required
+def notifications_list():
+    """JSON feed for the in-app bell."""
+    emp_id = session.get("user_id")
+    try:
+        notes = (Notification.query.filter_by(emp_id=emp_id)
+                 .order_by(Notification.created_at.desc()).limit(20).all())
+        unread = sum(1 for n in notes if not n.is_read)
+        return jsonify({"ok": True, "unread": unread, "items": [
+            {"id": n.id, "title": n.title, "body": n.body, "link": n.link,
+             "is_read": bool(n.is_read),
+             "ago": n.created_at.strftime("%d %b %H:%M") if n.created_at else ""}
+            for n in notes
+        ]})
+    except Exception as e:
+        logger.error(f"notifications_list: {e}")
+        return jsonify({"ok": False, "items": [], "unread": 0})
+
+
+@app.route("/notifications/read", methods=["POST"])
+@login_required
+def notifications_mark_read():
+    emp_id = session.get("user_id")
+    try:
+        Notification.query.filter_by(emp_id=emp_id, is_read=False).update({"is_read": True})
+        db.session.commit()
+        return jsonify({"ok": True})
+    except Exception as e:
+        db.session.rollback()
+        logger.error(f"notifications_mark_read: {e}")
+        return jsonify({"ok": False}), 500
+
+
+# ─── SUPERVISOR: authoritative bill counts + 5-strike point penalty ───────────
+
+# Tunable: points removed per mismatch (scaled by the size of the gap).
+SUPERVISOR_STRIKE_FREE = 5          # first 5 mismatches per month are free
+SUPERVISOR_PENALTY_PER_BILL = 0.5   # points per bill of difference, beyond the free strikes
+SUPERVISOR_PENALTY_CAP = 15.0       # never deduct more than this in a month
+
+
+def _self_reported_bills(emp_id, d):
+    """Best-effort: a staff member's own reported bill count for a given date."""
+    e = KPIEntry.query.filter_by(emp_id=emp_id, entry_date=d).first()
+    if e is not None:
+        # Prefer an explicit bills field if present, else fall back to picked/checked volume
+        for attr in ("total_bills_received", "bills_received", "picked", "checked"):
+            v = getattr(e, attr, None)
+            if v:
+                return int(v)
+        return 0
+    n = DeliveryBillerNote.query.filter_by(emp_id=emp_id, entry_date=d).first()
+    if n is not None:
+        return int(n.quantity or 0)
+    return None  # nothing reported that day
+
+
+def supervisor_strike_summary(emp_id, month_str):
+    """Returns dict: mismatches this month, penalty points (scaled, after 5 free), and details.
+    Only counts days the supervisor entered an admin-validated super_bills value."""
+    try:
+        rows = (SupervisorBill.query
+                .filter(SupervisorBill.staff_id == emp_id,
+                        SupervisorBill.admin_validated == True)  # noqa: E712
+                .all())
+        mismatches = []
+        for r in rows:
+            if not r.entry_date or r.entry_date.strftime("%Y-%m") != month_str:
+                continue
+            reported = _self_reported_bills(emp_id, r.entry_date)
+            if reported is None:
+                continue
+            gap = abs(int(r.super_bills or 0) - int(reported))
+            if gap > 0:
+                mismatches.append({"date": r.entry_date, "super": r.super_bills,
+                                   "reported": reported, "gap": gap})
+        mismatches.sort(key=lambda m: m["date"])
+        n = len(mismatches)
+        penalty = 0.0
+        # Deduct only for mismatches beyond the free allowance, scaled by gap
+        for m in mismatches[SUPERVISOR_STRIKE_FREE:]:
+            penalty += m["gap"] * SUPERVISOR_PENALTY_PER_BILL
+        penalty = round(min(penalty, SUPERVISOR_PENALTY_CAP), 1)
+        return {"mismatches": n, "free": SUPERVISOR_STRIKE_FREE,
+                "penalty": penalty, "details": mismatches}
+    except Exception as e:
+        logger.warning(f"supervisor_strike_summary: {e}")
+        return {"mismatches": 0, "free": SUPERVISOR_STRIKE_FREE, "penalty": 0.0, "details": []}
+
+
+@app.route("/supervisor", methods=["GET", "POST"])
+@login_required
+def supervisor_console():
+    """Supervisor enters the authoritative ('super') bill count per staff per day."""
+    staff_type = session.get("staff_type", "")
+    is_super = (staff_type == "supervisor" or session.get("secondary_staff_type") == "supervisor"
+                or session.get("is_admin"))
+    if not is_super:
+        flash("Supervisor access only.", "danger")
+        return redirect(url_for("dashboard"))
+    try:
+        today = date.today()
+        if request.method == "POST":
+            sid = int(request.form.get("staff_id", 0) or 0)
+            d_raw = (request.form.get("entry_date", "") or "").strip()
+            try:
+                d = datetime.strptime(d_raw, "%Y-%m-%d").date() if d_raw else today
+            except ValueError:
+                d = today
+            bills = max(0, int(request.form.get("super_bills", 0) or 0))
+            note = (request.form.get("note", "") or "").strip()[:200]
+            if sid:
+                row = SupervisorBill.query.filter_by(staff_id=sid, entry_date=d).first()
+                if not row:
+                    row = SupervisorBill(staff_id=sid, entry_date=d)
+                    db.session.add(row)
+                row.super_bills = bills
+                row.supervisor_id = session.get("user_id")
+                row.note = note
+                # New/changed value needs admin re-validation
+                row.admin_validated = bool(session.get("is_admin"))
+                db.session.commit()
+                flash(f"✅ Saved super-bills for {d.strftime('%d %b')}.", "success")
+            return redirect(url_for("supervisor_console"))
+
+        staff = Employee.query.filter_by(is_admin=False).order_by(Employee.name).all()
+        recent = (SupervisorBill.query.order_by(SupervisorBill.entry_date.desc())
+                  .limit(60).all())
+        emp_names = {e.id: e.name for e in staff}
+        return render_template("supervisor.html", staff=staff, recent=recent,
+                               emp_names=emp_names, today=today,
+                               is_admin=bool(session.get("is_admin")),
+                               user_name=session.get("user_name", "Supervisor"))
+    except Exception as e:
+        logger.error(f"supervisor_console: {e}")
+        flash("Error loading supervisor console.", "danger")
+        return redirect(url_for("dashboard"))
+
+
+@app.route("/admin/validate_super_bill/<int:row_id>", methods=["POST"])
+@admin_required
+def admin_validate_super_bill(row_id):
+    """Admin confirms a supervisor's bill value is the true value."""
+    try:
+        row = db.session.get(SupervisorBill, row_id)
+        if row:
+            row.admin_validated = True
+            db.session.commit()
+            flash("✅ Super-bill validated.", "success")
+    except Exception as e:
+        db.session.rollback()
+        logger.error(f"admin_validate_super_bill: {e}")
+        flash("Error validating.", "danger")
+    return redirect(request.referrer or url_for("admin_dashboard"))
+
+
+@app.route("/delivery/start_trip/<int:assignment_id>", methods=["POST"])
+@login_required
+def delivery_start_trip(assignment_id):
+    """Delivery employee starts a trip — GPS must confirm they're near the store."""
+    emp_id = session.get("user_id")
+    try:
+        assignment = db.session.get(DeliveryAssignment, assignment_id)
+        if not assignment or assignment.delivery_emp_id != emp_id:
+            return jsonify({"ok": False, "error": "Assignment not found"}), 404
+        if assignment.status != "pending":
+            return jsonify({"ok": False, "error": "Assignment not in pending state"}), 400
+
+        data = request.get_json(force=True, silent=True) or {}
+        curr_lat = float(data.get("lat", 0))
+        curr_lng = float(data.get("lng", 0))
+
+        if STORE_LAT != 0.0 and STORE_LNG != 0.0:
+            dist = _haversine_m(curr_lat, curr_lng, STORE_LAT, STORE_LNG)
+            if dist > STORE_RADIUS_M:
+                return jsonify({"ok": False, "error": f"You must be at the store to start a trip (you are {int(dist)}m away, max {STORE_RADIUS_M}m)."}), 400
+
+        assignment.status = "in_transit"
+        trip = DeliveryTrip(
+            assignment_id=assignment_id,
+            emp_id=emp_id,
+            trip_date=date.today(),
+            departure_lat=curr_lat,
+            departure_lng=curr_lng,
+            departure_time=datetime.utcnow(),
+            status="active",
+        )
+        db.session.add(trip)
+        db.session.commit()
+        return jsonify({"ok": True, "trip_id": trip.id,
+                        "dest_lat": assignment.destination_lat,
+                        "dest_lng": assignment.destination_lng})
+    except Exception as e:
+        db.session.rollback()
+        logger.error(f"delivery_start_trip: {e}")
+        return jsonify({"ok": False, "error": "Server error"}), 500
+
+
+@app.route("/delivery/check_arrival/<int:assignment_id>", methods=["POST"])
+@login_required
+def delivery_check_arrival(assignment_id):
+    """Check if delivery employee is within ARRIVAL_RADIUS_M of destination. Returns unlock flag."""
+    emp_id = session.get("user_id")
+    try:
+        assignment = db.session.get(DeliveryAssignment, assignment_id)
+        if not assignment or assignment.delivery_emp_id != emp_id:
+            return jsonify({"ok": False, "error": "Not found"}), 404
+
+        data = request.get_json(force=True, silent=True) or {}
+        curr_lat = float(data.get("lat", 0))
+        curr_lng = float(data.get("lng", 0))
+
+        if not assignment.destination_lat or not assignment.destination_lng:
+            return jsonify({"ok": True, "unlock": True, "dist": 0})
+
+        # Skip GPS check if device sent null/zero coords (GPS unavailable)
+        if curr_lat == 0 and curr_lng == 0:
+            return jsonify({"ok": True, "unlock": True, "dist": 0})
+
+        dist = _haversine_m(curr_lat, curr_lng, assignment.destination_lat, assignment.destination_lng)
+        unlock = dist <= ARRIVAL_RADIUS_M
+        return jsonify({"ok": True, "unlock": unlock, "dist": int(dist), "radius": ARRIVAL_RADIUS_M})
+    except Exception as e:
+        logger.error(f"delivery_check_arrival: {e}")
+        return jsonify({"ok": False, "error": "Server error"}), 500
+
+
+@app.route("/delivery/confirm/<int:assignment_id>", methods=["POST"])
+@login_required
+def delivery_confirm(assignment_id):
+    """Delivery employee confirms delivery — GPS check, marks assignment delivered."""
+    emp_id = session.get("user_id")
+    try:
+        assignment = db.session.get(DeliveryAssignment, assignment_id)
+        if not assignment or assignment.delivery_emp_id != emp_id:
+            return jsonify({"ok": False, "error": "Not found"}), 404
+        if assignment.status not in ("in_transit", "pending"):
+            return jsonify({"ok": False, "error": "Cannot confirm this assignment"}), 400
+
+        data = request.get_json(force=True, silent=True) or {}
+        curr_lat      = float(data.get("lat", 0))
+        curr_lng      = float(data.get("lng", 0))
+        delivered_to  = data.get("delivered_to", "").strip()
+        company       = data.get("company", "").strip()
+        delivery_note = data.get("note", "").strip()[:500]
+
+        if not delivered_to:
+            return jsonify({"ok": False, "error": "Please enter the name of the person who received the package"}), 400
+
+        # Only enforce GPS geofence when the device actually sent a valid position
+        if assignment.destination_lat and assignment.destination_lng and not (curr_lat == 0 and curr_lng == 0):
+            dist = _haversine_m(curr_lat, curr_lng, assignment.destination_lat, assignment.destination_lng)
+            if dist > ARRIVAL_RADIUS_M:
+                return jsonify({"ok": False, "error": f"You must be at the destination to confirm delivery ({int(dist)}m away, max {ARRIVAL_RADIUS_M}m)."}), 400
+
+        trip = DeliveryTrip.query.filter_by(assignment_id=assignment_id).first()
+        now = datetime.utcnow()
+        is_on_time = None
+
+        if trip:
+            trip.arrival_time         = now
+            trip.delivered_to_name    = delivered_to
+            trip.delivered_to_company = company
+            trip.delivery_note        = delivery_note
+            trip.status               = "completed"
+            if trip.departure_time:
+                duration = (now - trip.departure_time).total_seconds() / 60.0
+                trip.duration_minutes = round(duration, 1)
+                is_on_time = duration <= 60.0
+                trip.is_on_time = is_on_time
+        else:
+            trip = DeliveryTrip(
+                assignment_id=assignment_id,
+                emp_id=emp_id,
+                trip_date=date.today(),
+                arrival_time=now,
+                delivered_to_name=delivered_to,
+                delivered_to_company=company,
+                delivery_note=delivery_note,
+                status="completed",
+                is_on_time=None,
+            )
+            db.session.add(trip)
+            is_on_time = None
+
+        assignment.status = "delivered"
+        db.session.commit()
+
+        try:
+            compute_delivery_badges(emp_id)
+        except Exception:
+            pass
+
+        log_audit("delivery_confirm", str(emp_id), f"Delivered to {delivered_to} @ {company}")
+        return jsonify({"ok": True, "message": "Delivery confirmed!", "on_time": is_on_time})
+    except Exception as e:
+        db.session.rollback()
+        logger.error(f"delivery_confirm: {e}")
+        return jsonify({"ok": False, "error": "Server error"}), 500
+
+
+@app.route("/delivery/leaderboard")
+@login_required
+def delivery_leaderboard():
+    """Delivery staff leaderboard — ranked by monthly score."""
+    try:
+        today = date.today()
+        month_start = today.replace(day=1)
+        delivery_staff = Employee.query.filter(
+            Employee.is_admin == False,
+            or_(Employee.staff_type == "delivery",
+                Employee.secondary_staff_type == "delivery")
+        ).all()
+        leaderboard = []
+        for emp in delivery_staff:
+            all_trips   = DeliveryTrip.query.filter_by(emp_id=emp.id, status="completed").all()
+            month_trips = [t for t in all_trips if t.trip_date and t.trip_date >= month_start]
+            total       = len(all_trips)
+            on_time     = sum(1 for t in all_trips if t.is_on_time)
+            month_total = len(month_trips)
+            month_score = sum(score_delivery_trip(t) for t in month_trips)
+            all_durs    = [t.duration_minutes for t in all_trips if t.duration_minutes]
+            avg_dur     = round(sum(all_durs) / len(all_durs), 1) if all_durs else 0.0
+            leaderboard.append({
+                "emp": emp,
+                "total": total,
+                "on_time": on_time,
+                "on_time_pct": round(on_time / max(total, 1) * 100, 1),
+                "month_total": month_total,
+                "month_score": month_score,
+                "avg_dur": avg_dur,
+            })
+        leaderboard.sort(key=lambda x: x["month_score"], reverse=True)
+        return render_template("delivery_leaderboard.html",
+                               leaderboard=leaderboard,
+                               current_month=today.strftime("%B %Y"),
+                               today=today)
+    except Exception as e:
+        logger.error(f"delivery_leaderboard: {e}")
+        flash("Error loading leaderboard.", "danger")
+        return redirect(url_for("dashboard"))
+
+
+@app.route("/admin/debug_delivery_staff")
+@admin_required
+def admin_debug_delivery_staff():
+    """Diagnostic — lists every employee and their primary/secondary roles."""
+    try:
+        emps = Employee.query.all()
+        rows = []
+        delivery_count = 0
+        for e in emps:
+            primary = (getattr(e, "staff_type", "") or "").lower()
+            secondary = (getattr(e, "secondary_staff_type", "") or "").lower()
+            is_delivery = (primary == "delivery" or secondary == "delivery") and not getattr(e, "is_admin", False)
+            if is_delivery:
+                delivery_count += 1
+            rows.append({
+                "id": e.id, "name": e.name, "email": e.email,
+                "is_admin": bool(getattr(e, "is_admin", False)),
+                "primary": primary, "secondary": secondary,
+                "is_delivery_eligible": is_delivery,
+            })
+        return jsonify({
+            "total_employees": len(emps),
+            "delivery_eligible_count": delivery_count,
+            "employees": rows,
+        })
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/admin/delivery")
+@admin_required
+def admin_delivery():
+    """Admin panel: all delivery assignments and trips with analysis."""
+    try:
+        today       = date.today()
+        month_start = today.replace(day=1)
+        cutoff_30   = today - timedelta(days=30)
+
+        assignments = (
+            DeliveryAssignment.query
+            .order_by(DeliveryAssignment.assigned_at.desc())
+            .limit(200).all()
+        )
+        all_trips = DeliveryTrip.query.order_by(DeliveryTrip.trip_date.desc()).all()
+        trip_map  = {t.assignment_id: t for t in all_trips}
+
+        all_emp        = Employee.query.all()
+        emp_map        = {e.id: e for e in all_emp}
+        delivery_staff = [e for e in all_emp if e.staff_type == "delivery" or e.secondary_staff_type == "delivery"]
+
+        # ── Per-staff leaderboard with month + all-time stats ──
+        leaderboard = []
+        for emp in delivery_staff:
+            emp_trips   = [t for t in all_trips if t.emp_id == emp.id and t.status == "completed"]
+            month_trips = [t for t in emp_trips if t.trip_date and t.trip_date >= month_start]
+            total       = len(emp_trips)
+            on_time     = sum(1 for t in emp_trips if t.is_on_time)
+            month_total = len(month_trips)
+            month_score = sum(score_delivery_trip(t) for t in month_trips)
+            all_durs    = [t.duration_minutes for t in emp_trips if t.duration_minutes]
+            avg_dur     = round(sum(all_durs) / len(all_durs), 1) if all_durs else None
+            today_trips = [t for t in emp_trips if t.trip_date == today]
+            leaderboard.append({
+                "emp": emp, "total": total, "on_time": on_time,
+                "on_time_pct": round(on_time / max(total, 1) * 100, 1),
+                "month_total": month_total, "month_score": month_score,
+                "avg_dur": avg_dur, "today_count": len(today_trips),
+            })
+        leaderboard.sort(key=lambda x: x["month_score"], reverse=True)
+
+        # ── Daily delivery counts for last 14 days (chart data) ──
+        from collections import defaultdict
+        daily_counts = defaultdict(int)
+        daily_ontime = defaultdict(int)
+        for t in all_trips:
+            if t.status == "completed" and t.trip_date and t.trip_date >= (today - timedelta(days=13)):
+                day_str = t.trip_date.strftime("%d %b")
+                daily_counts[day_str] += 1
+                if t.is_on_time:
+                    daily_ontime[day_str] += 1
+        chart_labels = [(today - timedelta(days=i)).strftime("%d %b") for i in range(13, -1, -1)]
+        chart_total  = [daily_counts.get(d, 0) for d in chart_labels]
+        chart_ontime = [daily_ontime.get(d, 0) for d in chart_labels]
+
+        # ── Overall summary stats ──
+        completed_trips = [t for t in all_trips if t.status == "completed"]
+        total_completed = len(completed_trips)
+        total_on_time   = sum(1 for t in completed_trips if t.is_on_time)
+        today_completed = sum(1 for t in completed_trips if t.trip_date == today)
+        month_completed = sum(1 for t in completed_trips if t.trip_date and t.trip_date >= month_start)
+        pending_count   = sum(1 for a in assignments if a.status == "pending")
+        in_transit_count= sum(1 for a in assignments if a.status == "in_transit")
+
+        return render_template("admin_delivery.html",
+                               assignments=assignments, trip_map=trip_map,
+                               emp_map=emp_map, leaderboard=leaderboard,
+                               today=today, current_month=today.strftime("%B %Y"),
+                               chart_labels=chart_labels,
+                               chart_total=chart_total,
+                               chart_ontime=chart_ontime,
+                               total_completed=total_completed,
+                               total_on_time=total_on_time,
+                               today_completed=today_completed,
+                               month_completed=month_completed,
+                               pending_count=pending_count,
+                               in_transit_count=in_transit_count)
+    except Exception as e:
+        logger.error(f"admin_delivery: {e}")
+        flash("Error loading delivery dashboard.", "danger")
+        return redirect(url_for("admin_dashboard"))
 
 
 # ─── APScheduler Setup ────────────────────────────────────────────────────────

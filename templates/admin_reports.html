@@ -7,9 +7,9 @@
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&family=DM+Serif+Display&display=swap" rel="stylesheet">
 <style>
 *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
-:root { --blue: #1d4ed8; --blue-dark: #1e3a8a; --border: #c7d9f5; --bg: #e8f0fe;
+:root { --blue: #1d4ed8; --blue-dark: #1e3a8a; --border: #c7d9f5; --bg: #f8fafc;
         --muted: #64748b; --text: #0f172a; --white: #fff; }
-body { font-family: 'DM Sans', sans-serif; background: var(--bg); min-height: 100vh; color: var(--text); }
+body { font-family: 'DM Sans', sans-serif; background: #ffffff; min-height: 100vh; color: var(--text); }
 .nav { position: sticky; top: 0; z-index: 200; background: rgba(255,255,255,0.9);
        backdrop-filter: blur(14px); border-bottom: 1px solid var(--border);
        padding: 0 28px; height: 60px; display: flex; align-items: center;
@@ -38,7 +38,7 @@ td { padding: 12px 12px; font-size: 13px; border-bottom: 1px solid rgba(199,217,
 </head>
 <body>
 <nav class="nav">
-  <div class="nav-brand">📊 Reports Archive</div>
+  <div class="nav-brand">Reports Archive</div>
   <a href="/admin_dashboard" class="btn-back">← Back to Admin</a>
 </nav>
 
@@ -50,7 +50,7 @@ td { padding: 12px 12px; font-size: 13px; border-bottom: 1px solid rgba(199,217,
   {% endwith %}
 
   <div class="card">
-    <div class="card-title">📊 Monthly Reports Archive</div>
+    <div class="card-title">Monthly Reports Archive</div>
     <p style="font-size:13px;color:var(--muted);margin-bottom:18px;">
       Reports are auto-generated on the 1st of each month. You can also re-download any month below.
     </p>
@@ -71,7 +71,7 @@ td { padding: 12px 12px; font-size: 13px; border-bottom: 1px solid rgba(199,217,
           <td>{{ a.generated_at.strftime('%d %b %Y %H:%M') if a.generated_at else '—' }}</td>
           <td>{{ a.emp_count }} staff</td>
           <td>
-            <a href="/admin/reports/{{ a.month_str }}" class="btn-dl">📥 Download ZIP</a>
+            <a href="/admin/reports/{{ a.month_str }}" class="btn-dl">Download ZIP</a>
           </td>
         </tr>
         {% endfor %}
