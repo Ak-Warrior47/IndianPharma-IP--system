@@ -7,17 +7,12 @@ services:
     envVars:
       - key: SECRET_KEY
         generateValue: true
-      - key: DATABASE_URL
-        fromDatabase:
-          name: indianpharma-db
-          property: connectionString
       - key: RENDER
         value: "true"
       - key: PORT
         value: "10000"
-
-databases:
-  - name: indianpharma-db
-    databaseName: indianpharma
-    user: indianpharma
-    plan: free
+      # DATABASE_URL points to your Supabase Postgres.
+      # Set it in the Render dashboard (Environment tab) — not stored in this file.
+      # Format: postgresql://postgres:<password>@db.<project>.supabase.co:5432/postgres
+      - key: DATABASE_URL
+        sync: false
