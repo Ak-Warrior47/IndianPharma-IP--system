@@ -66,6 +66,28 @@ db = SQLAlchemy(app)
 mail = Mail(app)
 socketio = SocketIO(app, cors_allowed_origins="*", async_mode="eventlet")
 
+# ─── ROLES ───────────────────────────────────────────────────────────────────
+# "biller" is internally kept but displayed as "Assigner". "supervisor" is a
+# hidden role (admin-assigned only, never on the login screen).
+VALID_STAFF_TYPES = ("picker", "checker", "purchaser", "delivery", "biller", "packer", "supervisor")
+ROLE_DISPLAY_NAMES = {
+    "picker": "Operations Picker",
+    "checker": "Operations Checker",
+    "purchaser": "Operations Purchaser",
+    "delivery": "Delivery Staff",
+    "biller": "Assigner",
+    "packer": "Packer",
+    "supervisor": "Supervisor",
+}
+# Recommended Cuttack delivery areas (from the delivery-CRM Excel) + packet types
+KNOWN_ROUTES = [
+    "RANIHAT", "MANGALABAG", "COLLEGE SQUARE", "BADAMBADI", "LINK ROAD",
+    "B.K ROAD", "JOBRA", "CHAULIGANJ", "JAGATPUR", "BUXI BAZAR", "BALU BAZAR",
+    "BUS STAND", "PURIGHAT", "GANDARPUR", "KANIKA CHAK", "THOTIA SAHI",
+    "SUBHADRA", "BIDANASI", "NAYA SARAK", "TULSIPUR", "SUTAHAT", "DOLAMUNDAI",
+]
+PACKET_TYPES = ["Poly Bag", "Box", "Carton", "Envelope", "Fragile", "Cold Chain", "Bulk"]
+
 
 # ─── MODELS ──────────────────────────────────────────────────────────────────
 
@@ -453,7 +475,8 @@ class DeliveryBillerNote(db.Model):
 
 
 class DeliveryAssignment(db.Model):
-    """Purchaser assigns a package to a delivery employee with destination info."""
+    """Assigner dispatches a route (one or more areas) to a delivery employee.
+    Mirrors the real delivery-CRM Excel: ROUTE, NO OF TASK, DISPATCH TIME, returns, etc."""
     __tablename__ = "delivery_assignments"
     id               = db.Column(db.Integer, primary_key=True)
     purchaser_id     = db.Column(db.Integer, db.ForeignKey("employees.id"), nullable=False)
@@ -469,10 +492,60 @@ class DeliveryAssignment(db.Model):
     status           = db.Column(db.String(20), default="pending", index=True)
     assigned_at      = db.Column(db.DateTime, default=datetime.utcnow)
     notes            = db.Column(db.Text, nullable=True)
+    # ── Excel-CRM fields ──
+    route            = db.Column(db.String(300), nullable=True)   # comma-separated areas e.g. "RANIHAT,MANGALABAG"
+    no_of_tasks      = db.Column(db.Integer, default=1)            # NO OF TASK (packets in this dispatch)
+    packet_type      = db.Column(db.String(50), nullable=True)    # Poly Bag / Box / Carton / Fragile ...
+    dispatch_time    = db.Column(db.DateTime, nullable=True)       # DISPATCH TIME (defaults to assigned_at)
+    no_of_task_return= db.Column(db.Integer, default=0)           # NO OF TASK RETURN
+    return_reason    = db.Column(db.String(200), nullable=True)   # RETURN REASON (e.g. CLOSE)
     __table_args__ = (
         db.Index("idx_da_delivery_emp", "delivery_emp_id"),
         db.Index("idx_da_status", "status"),
     )
+
+
+class DeliveryStop(db.Model):
+    """A single stop within a delivery trip — the delivery boy logs each place reached.
+    Packages across all stops sum to the trip's delivered total; per-stop timestamps give timing."""
+    __tablename__ = "delivery_stops"
+    id            = db.Column(db.Integer, primary_key=True)
+    assignment_id = db.Column(db.Integer, db.ForeignKey("delivery_assignments.id", ondelete="CASCADE"), nullable=False, index=True)
+    emp_id        = db.Column(db.Integer, db.ForeignKey("employees.id", ondelete="CASCADE"), nullable=False)
+    place_name    = db.Column(db.String(150), nullable=False)
+    packages      = db.Column(db.Integer, default=0)          # packets delivered at this stop
+    reached_at    = db.Column(db.DateTime, default=datetime.utcnow)
+    minutes_from_prev = db.Column(db.Float, nullable=True)    # time since previous stop / departure
+    lat           = db.Column(db.Float, nullable=True)
+    lng           = db.Column(db.Float, nullable=True)
+    note          = db.Column(db.String(300), nullable=True)
+
+
+class Notification(db.Model):
+    """In-app notification (bell). Used to alert delivery staff of new assignments, etc."""
+    __tablename__ = "notifications"
+    id         = db.Column(db.Integer, primary_key=True)
+    emp_id     = db.Column(db.Integer, db.ForeignKey("employees.id", ondelete="CASCADE"), nullable=False, index=True)
+    title      = db.Column(db.String(150), nullable=False)
+    body       = db.Column(db.String(400), nullable=True)
+    link       = db.Column(db.String(200), nullable=True)
+    is_read    = db.Column(db.Boolean, default=False, index=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+
+class SupervisorBill(db.Model):
+    """Authoritative ('super') bill count entered by a supervisor for a staff member on a date.
+    Admin-validated source of truth; staff self-reports are checked against this."""
+    __tablename__ = "supervisor_bills"
+    id            = db.Column(db.Integer, primary_key=True)
+    staff_id      = db.Column(db.Integer, db.ForeignKey("employees.id", ondelete="CASCADE"), nullable=False, index=True)
+    entry_date    = db.Column(db.Date, nullable=False, index=True)
+    super_bills   = db.Column(db.Integer, default=0)        # authoritative count
+    supervisor_id = db.Column(db.Integer, db.ForeignKey("employees.id"), nullable=True)
+    admin_validated = db.Column(db.Boolean, default=False)  # admin confirmed it's true
+    note          = db.Column(db.String(200), nullable=True)
+    created_at    = db.Column(db.DateTime, default=datetime.utcnow)
+    __table_args__ = (db.UniqueConstraint("staff_id", "entry_date", name="_supbill_staff_date_uc"),)
 
 
 class DeliveryTrip(db.Model):
@@ -1113,6 +1186,26 @@ def log_audit(action, target, details=""):
         db.session.rollback()
 
 
+def notify_employee(emp_id, title, body="", link=None, sms=True):
+    """Create an in-app notification and optionally send an SMS (if the employee has a phone).
+    Best-effort — never raises so callers don't break."""
+    try:
+        n = Notification(emp_id=emp_id, title=title[:150], body=(body or "")[:400], link=link)
+        db.session.add(n)
+        db.session.commit()
+    except Exception as e:
+        db.session.rollback()
+        logger.warning(f"notify_employee in-app failed: {e}")
+    if sms:
+        try:
+            emp = db.session.get(Employee, emp_id)
+            if emp and getattr(emp, "phone", None):
+                msg = f"{title}" + (f" — {body}" if body else "")
+                send_sms(emp.phone, msg[:300])
+        except Exception as e:
+            logger.warning(f"notify_employee SMS failed: {e}")
+
+
 def send_sms(to_number: str, body: str) -> bool:
     """Send SMS via Twilio. Returns True on success. No-ops if env vars not set."""
     try:
@@ -1280,6 +1373,24 @@ def run_migrations():
             except Exception as ce:
                 db.session.rollback()
                 logger.warning(f"employees.secondary_staff_type migration skipped: {ce}")
+            # Delivery CRM (Excel-format) columns on delivery_assignments
+            for col, col_type in [
+                ("route", "VARCHAR(300)"),
+                ("no_of_tasks", "INTEGER DEFAULT 1"),
+                ("packet_type", "VARCHAR(50)"),
+                ("dispatch_time", "TIMESTAMP"),
+                ("no_of_task_return", "INTEGER DEFAULT 0"),
+                ("return_reason", "VARCHAR(200)"),
+            ]:
+                try:
+                    db.session.execute(db.text(
+                        f"ALTER TABLE delivery_assignments ADD COLUMN IF NOT EXISTS {col} {col_type}"
+                    ))
+                    db.session.commit()
+                except Exception as ce:
+                    db.session.rollback()
+                    logger.warning(f"delivery_assignments.{col} migration skipped: {ce}")
+            logger.info("✅ delivery_assignments CRM columns ensured")
             # New feature tables
             for tbl_sql in [
                 """CREATE TABLE IF NOT EXISTS announcements (
@@ -1411,6 +1522,35 @@ def run_migrations():
                     status VARCHAR(20) DEFAULT 'active',
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     CONSTRAINT _dt_assignment_uc UNIQUE(assignment_id))""",
+                """CREATE TABLE IF NOT EXISTS delivery_stops (
+                    id SERIAL PRIMARY KEY,
+                    assignment_id INTEGER NOT NULL REFERENCES delivery_assignments(id) ON DELETE CASCADE,
+                    emp_id INTEGER NOT NULL REFERENCES employees(id) ON DELETE CASCADE,
+                    place_name VARCHAR(150) NOT NULL,
+                    packages INTEGER DEFAULT 0,
+                    reached_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    minutes_from_prev FLOAT,
+                    lat FLOAT,
+                    lng FLOAT,
+                    note VARCHAR(300))""",
+                """CREATE TABLE IF NOT EXISTS notifications (
+                    id SERIAL PRIMARY KEY,
+                    emp_id INTEGER NOT NULL REFERENCES employees(id) ON DELETE CASCADE,
+                    title VARCHAR(150) NOT NULL,
+                    body VARCHAR(400),
+                    link VARCHAR(200),
+                    is_read BOOLEAN DEFAULT FALSE,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)""",
+                """CREATE TABLE IF NOT EXISTS supervisor_bills (
+                    id SERIAL PRIMARY KEY,
+                    staff_id INTEGER NOT NULL REFERENCES employees(id) ON DELETE CASCADE,
+                    entry_date DATE NOT NULL,
+                    super_bills INTEGER DEFAULT 0,
+                    supervisor_id INTEGER REFERENCES employees(id),
+                    admin_validated BOOLEAN DEFAULT FALSE,
+                    note VARCHAR(200),
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    CONSTRAINT _supbill_staff_date_uc UNIQUE(staff_id, entry_date))""",
             ]:
                 try:
                     db.session.execute(db.text(tbl_sql))
@@ -1601,6 +1741,45 @@ def run_migrations():
                     status VARCHAR(20) DEFAULT 'active',
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     UNIQUE(assignment_id))""")
+                cursor.execute("""CREATE TABLE IF NOT EXISTS delivery_stops (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    assignment_id INTEGER NOT NULL,
+                    emp_id INTEGER NOT NULL,
+                    place_name VARCHAR(150) NOT NULL,
+                    packages INTEGER DEFAULT 0,
+                    reached_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    minutes_from_prev REAL,
+                    lat REAL,
+                    lng REAL,
+                    note VARCHAR(300))""")
+                cursor.execute("""CREATE TABLE IF NOT EXISTS notifications (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    emp_id INTEGER NOT NULL,
+                    title VARCHAR(150) NOT NULL,
+                    body VARCHAR(400),
+                    link VARCHAR(200),
+                    is_read INTEGER DEFAULT 0,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)""")
+                cursor.execute("""CREATE TABLE IF NOT EXISTS supervisor_bills (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    staff_id INTEGER NOT NULL,
+                    entry_date DATE NOT NULL,
+                    super_bills INTEGER DEFAULT 0,
+                    supervisor_id INTEGER,
+                    admin_validated INTEGER DEFAULT 0,
+                    note VARCHAR(200),
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    UNIQUE(staff_id, entry_date))""")
+                # Add CRM columns to existing SQLite delivery_assignments (ignore if present)
+                for col, col_type in [
+                    ("route", "VARCHAR(300)"), ("no_of_tasks", "INTEGER DEFAULT 1"),
+                    ("packet_type", "VARCHAR(50)"), ("dispatch_time", "TIMESTAMP"),
+                    ("no_of_task_return", "INTEGER DEFAULT 0"), ("return_reason", "VARCHAR(200)"),
+                ]:
+                    try:
+                        cursor.execute(f"ALTER TABLE delivery_assignments ADD COLUMN {col} {col_type}")
+                    except Exception:
+                        pass
                 conn.commit()
                 logger.info("✅ SQLite delivery tables created")
             except Exception as dte:
@@ -2677,11 +2856,10 @@ def admin_add_user():
             flash(f"Email '{email}' already exists.", "warning")
             return redirect(url_for("admin_dashboard"))
 
-        _role_names = {"picker": "Operations Picker", "checker": "Operations Checker",
-                       "purchaser": "Operations Purchaser", "delivery": "Delivery Staff",
-                       "biller": "Billing Staff"}
+        if staff_type not in VALID_STAFF_TYPES:
+            staff_type = "picker"
         emp = Employee(name=name, email=email, staff_type=staff_type,
-                       role=_role_names.get(staff_type, f"Operations {staff_type.title()}"))
+                       role=ROLE_DISPLAY_NAMES.get(staff_type, f"Operations {staff_type.title()}"))
         emp.set_password(password)
         db.session.add(emp)
         db.session.commit()
@@ -2716,19 +2894,16 @@ def admin_edit_user(emp_id):
                 flash(f"Email '{email}' already taken.", "warning")
                 return redirect(url_for("admin_dashboard"))
             emp.email = email
-        if staff_type in ("picker", "checker", "purchaser", "delivery", "biller"):
+        if staff_type in VALID_STAFF_TYPES:
             emp.staff_type = staff_type
-            role_names = {"picker": "Operations Picker", "checker": "Operations Checker",
-                          "purchaser": "Operations Purchaser", "delivery": "Delivery Staff",
-                          "biller": "Billing Staff"}
-            emp.role = role_names.get(staff_type, f"Operations {staff_type.title()}")
+            emp.role = ROLE_DISPLAY_NAMES.get(staff_type, f"Operations {staff_type.title()}")
         # Secondary role (optional; "" = clear)
         sec_raw = request.form.get("secondary_staff_type", None)
         if sec_raw is not None:
             sec = sec_raw.strip()
             if sec == "" or sec == "none":
                 emp.secondary_staff_type = None
-            elif sec in ("picker", "checker", "purchaser", "delivery", "biller") and sec != emp.staff_type:
+            elif sec in VALID_STAFF_TYPES and sec != emp.staff_type:
                 emp.secondary_staff_type = sec
         if new_password:
             if len(new_password) < 6:
