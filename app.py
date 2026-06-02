@@ -514,7 +514,7 @@ class DeliveryStop(db.Model):
     emp_id        = db.Column(db.Integer, db.ForeignKey("employees.id", ondelete="CASCADE"), nullable=False)
     place_name    = db.Column(db.String(150), nullable=False)
     packages      = db.Column(db.Integer, default=0)          # packets delivered at this stop
-    reached_at    = db.Column(db.DateTime, default=datetime.utcnow)
+    reached_at    = db.Column(db.DateTime, nullable=True)     # NULL until the rider logs arrival
     minutes_from_prev = db.Column(db.Float, nullable=True)    # time since previous stop / departure
     lat           = db.Column(db.Float, nullable=True)
     lng           = db.Column(db.Float, nullable=True)
@@ -1528,7 +1528,7 @@ def run_migrations():
                     emp_id INTEGER NOT NULL REFERENCES employees(id) ON DELETE CASCADE,
                     place_name VARCHAR(150) NOT NULL,
                     packages INTEGER DEFAULT 0,
-                    reached_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    reached_at TIMESTAMP,
                     minutes_from_prev FLOAT,
                     lat FLOAT,
                     lng FLOAT,
@@ -1747,7 +1747,7 @@ def run_migrations():
                     emp_id INTEGER NOT NULL,
                     place_name VARCHAR(150) NOT NULL,
                     packages INTEGER DEFAULT 0,
-                    reached_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    reached_at TIMESTAMP,
                     minutes_from_prev REAL,
                     lat REAL,
                     lng REAL,
@@ -2008,12 +2008,17 @@ def dashboard():
         emp_id = session.get("user_id")
         staff_type = session.get("staff_type", "picker")
         today = date.today()
+
+        # Supervisor has a dedicated bill-validation console, not the KPI dashboard
+        if staff_type == "supervisor" and not session.get("is_admin"):
+            return redirect(url_for("supervisor_console"))
+
         today_entry = KPIEntry.query.filter_by(emp_id=emp_id, entry_date=today).first()
         new_personal_best = False
 
-        # ── Delivery / Biller: simple note entry (no KPIEntry) ──────────────────
+        # ── Delivery / Assigner / Packer: simple note entry (no KPIEntry) ───────
         today_db_note = None
-        if staff_type in ("delivery", "biller"):
+        if staff_type in ("delivery", "biller", "packer"):
             today_db_note = DeliveryBillerNote.query.filter_by(emp_id=emp_id, entry_date=today).first()
             if request.method == "POST" and not today_db_note:
                 note_text = request.form.get("delivery_note", "").strip()
@@ -2042,6 +2047,8 @@ def dashboard():
             my_deliveries_today = []
             trip_map = {}
             delivery_diag = None
+            stops_map = {}
+            my_dispatches = []
             try:
                 if staff_type == "delivery":
                     my_assignments = (
@@ -2062,6 +2069,9 @@ def dashboard():
                         aid_list = [a.id for a in my_assignments]
                         trips = DeliveryTrip.query.filter(DeliveryTrip.assignment_id.in_(aid_list)).all()
                         trip_map = {t.assignment_id: t for t in trips}
+                        stops = DeliveryStop.query.filter(DeliveryStop.assignment_id.in_(aid_list)).order_by(DeliveryStop.id).all()
+                        for st in stops:
+                            stops_map.setdefault(st.assignment_id, []).append(st)
                 elif staff_type == "biller":
                     all_emps = Employee.query.all()
                     _role_breakdown = {}
@@ -2078,6 +2088,16 @@ def dashboard():
                         "del_total": len(purchaser_delivery_staff),
                         "breakdown": _role_breakdown,
                     }
+                    # Assigner's recent dispatches (so they can edit/delete)
+                    my_dispatches = (DeliveryAssignment.query
+                                     .filter(DeliveryAssignment.purchaser_id == emp_id,
+                                             DeliveryAssignment.status.in_(["pending", "in_transit"]))
+                                     .order_by(DeliveryAssignment.assigned_at.desc()).limit(30).all())
+                    if my_dispatches:
+                        aid_list = [a.id for a in my_dispatches]
+                        stops = DeliveryStop.query.filter(DeliveryStop.assignment_id.in_(aid_list)).order_by(DeliveryStop.id).all()
+                        for st in stops:
+                            stops_map.setdefault(st.assignment_id, []).append(st)
                     logger.info(f"Biller dashboard (note path): {len(purchaser_delivery_staff)} delivery staff "
                                 f"of {len(all_emps)} employees, breakdown={_role_breakdown}")
             except Exception as _de:
@@ -2107,6 +2127,10 @@ def dashboard():
                 my_deliveries_today=my_deliveries_today,
                 trip_map=trip_map,
                 delivery_diag=delivery_diag,
+                stops_map=stops_map,
+                my_dispatches=my_dispatches,
+                known_routes=KNOWN_ROUTES,
+                packet_types=PACKET_TYPES,
                 store_lat=STORE_LAT,
                 store_lng=STORE_LNG,
                 tomtom_key=TOMTOM_API_KEY,
@@ -4643,23 +4667,47 @@ def geocode_address(address):
 @app.route("/delivery/assign", methods=["POST"])
 @login_required
 def delivery_assign():
-    """Purchaser creates a delivery assignment — auto-geocodes the destination address."""
+    """Assigner dispatches a multi-store route to a delivery employee.
+    Each store row = name + package count; total tasks = sum of packages.
+    Creates one DeliveryAssignment + a DeliveryStop per store, then notifies the rider."""
     emp_id = session.get("user_id")
     staff_type = session.get("staff_type", "")
     if staff_type not in ("biller",) and not session.get("is_admin"):
-        flash("Only billers can assign deliveries.", "danger")
+        flash("Only the Assigner can assign deliveries.", "danger")
         return redirect(url_for("dashboard"))
     try:
-        delivery_emp_id  = int(request.form.get("delivery_emp_id", 0))
-        destination_addr = request.form.get("destination_addr", "").strip()
-        package_desc     = request.form.get("package_desc", "").strip()
-        bills_count      = int(request.form.get("bills_count", 0) or 0)
-        recipient_name   = request.form.get("recipient_name", "").strip()
-        company_name     = request.form.get("company_name", "").strip()
-        notes            = request.form.get("notes", "").strip()[:500]
+        delivery_emp_id = int(request.form.get("delivery_emp_id", 0) or 0)
+        packet_type     = (request.form.get("packet_type", "") or "").strip()[:50]
+        notes           = (request.form.get("notes", "") or "").strip()[:500]
 
-        if not delivery_emp_id or not destination_addr or not package_desc:
-            flash("Please fill in delivery employee, destination, and package description.", "warning")
+        # Multi-store line items (parallel arrays from the form)
+        store_names    = request.form.getlist("store_name[]")
+        store_packages = request.form.getlist("store_packages[]")
+        store_lats     = request.form.getlist("store_lat[]")
+        store_lngs     = request.form.getlist("store_lng[]")
+
+        # Build a clean list of (name, packages, lat, lng), dropping blank rows
+        stores = []
+        for i, raw_name in enumerate(store_names):
+            nm = (raw_name or "").strip()
+            if not nm:
+                continue
+            try:
+                pkg = max(0, int(store_packages[i])) if i < len(store_packages) and store_packages[i] else 0
+            except (ValueError, TypeError):
+                pkg = 0
+            slat = slng = None
+            try:
+                if i < len(store_lats) and store_lats[i] and i < len(store_lngs) and store_lngs[i]:
+                    _la, _ln = float(store_lats[i]), float(store_lngs[i])
+                    if 17.7 <= _la <= 22.6 and 81.3 <= _ln <= 87.5:
+                        slat, slng = _la, _ln
+            except (ValueError, TypeError):
+                pass
+            stores.append({"name": nm[:150], "packages": pkg, "lat": slat, "lng": slng})
+
+        if not delivery_emp_id or not stores:
+            flash("Pick a delivery employee and add at least one store.", "warning")
             return redirect(url_for("dashboard"))
 
         delivery_emp = db.session.get(Employee, delivery_emp_id)
@@ -4669,46 +4717,352 @@ def delivery_assign():
             flash("Selected employee is not a delivery staff member.", "warning")
             return redirect(url_for("dashboard"))
 
-        # Manual pin overrides geocoding (for shops not on OSM / ambiguous names)
-        dest_lat = dest_lng = None
-        m_lat_raw = (request.form.get("manual_lat") or "").strip()
-        m_lng_raw = (request.form.get("manual_lng") or "").strip()
-        if m_lat_raw and m_lng_raw:
-            try:
-                ml, mn = float(m_lat_raw), float(m_lng_raw)
-                # Sanity: inside Odisha bbox
-                if 17.7 <= ml <= 22.6 and 81.3 <= mn <= 87.5:
-                    dest_lat, dest_lng = ml, mn
-                else:
-                    flash("Manual pin must be inside Odisha. Ignoring.", "warning")
-            except (ValueError, TypeError):
-                pass
-        if dest_lat is None:
-            dest_lat, dest_lng = geocode_address(destination_addr)
+        total_tasks = sum(s["packages"] for s in stores) or len(stores)
+        route_str = ", ".join(s["name"] for s in stores)[:300]
+        pkg_desc = f"{total_tasks} packet(s) across {len(stores)} store(s)" + (f" — {packet_type}" if packet_type else "")
 
+        # Geocode any store missing a manual pin (best-effort)
+        for s in stores:
+            if s["lat"] is None:
+                s["lat"], s["lng"] = geocode_address(s["name"])
+
+        first = stores[0]
+        now = datetime.utcnow()
         assignment = DeliveryAssignment(
             purchaser_id=emp_id,
             delivery_emp_id=delivery_emp_id,
-            destination_addr=destination_addr,
-            destination_lat=dest_lat,
-            destination_lng=dest_lng,
-            package_desc=package_desc,
-            bills_count=bills_count,
-            recipient_name=recipient_name,
-            company_name=company_name,
+            destination_addr=route_str,
+            destination_lat=first["lat"],
+            destination_lng=first["lng"],
+            package_desc=pkg_desc,
+            bills_count=total_tasks,
+            recipient_name=None,
+            company_name=None,
             notes=notes,
             status="pending",
+            route=route_str,
+            no_of_tasks=total_tasks,
+            packet_type=packet_type or None,
+            dispatch_time=now,
+            no_of_task_return=0,
         )
         db.session.add(assignment)
+        db.session.flush()   # get assignment.id
+
+        for s in stores:
+            db.session.add(DeliveryStop(
+                assignment_id=assignment.id,
+                emp_id=delivery_emp_id,
+                place_name=s["name"],
+                packages=s["packages"],
+                reached_at=None,
+                lat=s["lat"],
+                lng=s["lng"],
+            ))
         db.session.commit()
-        log_audit("delivery_assign", delivery_emp.name, f"Package: {package_desc[:50]}")
-        geo_note = " (map location set)" if dest_lat else " (map will use address text)"
-        flash(f"✅ Delivery assigned to {delivery_emp.name}.{geo_note}", "success")
+
+        # Notify the rider — in-app bell + SMS (if admin saved a phone number)
+        notify_employee(
+            delivery_emp_id,
+            "🚚 New delivery assigned",
+            f"{total_tasks} packet(s) — {route_str[:120]}",
+            link="/dashboard",
+        )
+        log_audit("delivery_assign", delivery_emp.name, f"{total_tasks} tasks / {len(stores)} stores")
+        flash(f"✅ Assigned {total_tasks} packet(s) across {len(stores)} store(s) to {delivery_emp.name}. Notification sent.", "success")
     except Exception as e:
         db.session.rollback()
         logger.error(f"delivery_assign: {e}")
         flash("Error creating delivery assignment.", "danger")
     return redirect(url_for("dashboard"))
+
+
+@app.route("/delivery/dispatch/<int:assignment_id>/edit", methods=["POST"])
+@login_required
+def delivery_dispatch_edit(assignment_id):
+    """Assigner edits a dispatch's stores (only while pending). Replaces the store rows."""
+    emp_id = session.get("user_id")
+    staff_type = session.get("staff_type", "")
+    if staff_type not in ("biller",) and not session.get("is_admin"):
+        flash("Only the Assigner can edit dispatches.", "danger")
+        return redirect(url_for("dashboard"))
+    try:
+        a = db.session.get(DeliveryAssignment, assignment_id)
+        if not a:
+            flash("Dispatch not found.", "warning")
+            return redirect(url_for("dashboard"))
+        if a.status != "pending":
+            flash("Can't edit — the rider has already started this trip.", "warning")
+            return redirect(url_for("dashboard"))
+
+        store_names    = request.form.getlist("store_name[]")
+        store_packages = request.form.getlist("store_packages[]")
+        stores = []
+        for i, raw in enumerate(store_names):
+            nm = (raw or "").strip()
+            if not nm:
+                continue
+            try:
+                pkg = max(0, int(store_packages[i])) if i < len(store_packages) and store_packages[i] else 0
+            except (ValueError, TypeError):
+                pkg = 0
+            stores.append({"name": nm[:150], "packages": pkg})
+        if not stores:
+            flash("A dispatch needs at least one store.", "warning")
+            return redirect(url_for("dashboard"))
+
+        DeliveryStop.query.filter_by(assignment_id=a.id).delete()
+        total = sum(s["packages"] for s in stores) or len(stores)
+        a.route = ", ".join(s["name"] for s in stores)[:300]
+        a.destination_addr = a.route
+        a.no_of_tasks = total
+        a.bills_count = total
+        pt = (request.form.get("packet_type", "") or "").strip()[:50]
+        if pt:
+            a.packet_type = pt
+        for s in stores:
+            slat, slng = geocode_address(s["name"])
+            db.session.add(DeliveryStop(assignment_id=a.id, emp_id=a.delivery_emp_id,
+                                        place_name=s["name"], packages=s["packages"],
+                                        reached_at=None, lat=slat, lng=slng))
+        db.session.commit()
+        notify_employee(a.delivery_emp_id, "✏️ Delivery updated",
+                        f"Your dispatch was updated — {total} packet(s).", link="/dashboard")
+        flash(f"✅ Dispatch updated — {total} packet(s) across {len(stores)} store(s).", "success")
+    except Exception as e:
+        db.session.rollback()
+        logger.error(f"delivery_dispatch_edit: {e}")
+        flash("Error updating dispatch.", "danger")
+    return redirect(url_for("dashboard"))
+
+
+@app.route("/delivery/dispatch/<int:assignment_id>/delete", methods=["POST"])
+@login_required
+def delivery_dispatch_delete(assignment_id):
+    """Assigner deletes a dispatch (only while pending)."""
+    emp_id = session.get("user_id")
+    staff_type = session.get("staff_type", "")
+    if staff_type not in ("biller",) and not session.get("is_admin"):
+        flash("Only the Assigner can delete dispatches.", "danger")
+        return redirect(url_for("dashboard"))
+    try:
+        a = db.session.get(DeliveryAssignment, assignment_id)
+        if not a:
+            flash("Dispatch not found.", "warning")
+            return redirect(url_for("dashboard"))
+        if a.status != "pending":
+            flash("Can't delete — the rider has already started this trip.", "warning")
+            return redirect(url_for("dashboard"))
+        rider = a.delivery_emp_id
+        DeliveryStop.query.filter_by(assignment_id=a.id).delete()
+        db.session.delete(a)
+        db.session.commit()
+        notify_employee(rider, "🗑️ Delivery cancelled", "A pending dispatch was removed.", link="/dashboard")
+        flash("✅ Dispatch deleted.", "success")
+    except Exception as e:
+        db.session.rollback()
+        logger.error(f"delivery_dispatch_delete: {e}")
+        flash("Error deleting dispatch.", "danger")
+    return redirect(url_for("dashboard"))
+
+
+@app.route("/delivery/log_stop/<int:stop_id>", methods=["POST"])
+@login_required
+def delivery_log_stop(stop_id):
+    """Delivery rider marks a store/stop as reached — records timestamp + actual packages delivered."""
+    emp_id = session.get("user_id")
+    try:
+        stop = db.session.get(DeliveryStop, stop_id)
+        if not stop or stop.emp_id != emp_id:
+            return jsonify({"ok": False, "error": "Stop not found"}), 404
+        data = request.get_json(force=True, silent=True) or {}
+        now = datetime.utcnow()
+        # minutes since departure (or previous logged stop)
+        trip = DeliveryTrip.query.filter_by(assignment_id=stop.assignment_id).first()
+        prev = (DeliveryStop.query
+                .filter(DeliveryStop.assignment_id == stop.assignment_id,
+                        DeliveryStop.reached_at.isnot(None))
+                .order_by(DeliveryStop.reached_at.desc()).first())
+        base = prev.reached_at if prev else (trip.departure_time if trip else now)
+        stop.reached_at = now
+        stop.minutes_from_prev = round((now - base).total_seconds() / 60.0, 1) if base else None
+        try:
+            if data.get("packages") is not None:
+                stop.packages = max(0, int(data.get("packages")))
+        except (ValueError, TypeError):
+            pass
+        try:
+            la, ln = float(data.get("lat", 0)), float(data.get("lng", 0))
+            if la and ln:
+                stop.lat, stop.lng = la, ln
+        except (ValueError, TypeError):
+            pass
+        db.session.commit()
+        # Summary: how many stops done / total
+        all_stops = DeliveryStop.query.filter_by(assignment_id=stop.assignment_id).all()
+        done = sum(1 for s in all_stops if s.reached_at)
+        return jsonify({"ok": True, "done": done, "total": len(all_stops),
+                        "minutes_from_prev": stop.minutes_from_prev})
+    except Exception as e:
+        db.session.rollback()
+        logger.error(f"delivery_log_stop: {e}")
+        return jsonify({"ok": False, "error": "Server error"}), 500
+
+
+@app.route("/notifications")
+@login_required
+def notifications_list():
+    """JSON feed for the in-app bell."""
+    emp_id = session.get("user_id")
+    try:
+        notes = (Notification.query.filter_by(emp_id=emp_id)
+                 .order_by(Notification.created_at.desc()).limit(20).all())
+        unread = sum(1 for n in notes if not n.is_read)
+        return jsonify({"ok": True, "unread": unread, "items": [
+            {"id": n.id, "title": n.title, "body": n.body, "link": n.link,
+             "is_read": bool(n.is_read),
+             "ago": n.created_at.strftime("%d %b %H:%M") if n.created_at else ""}
+            for n in notes
+        ]})
+    except Exception as e:
+        logger.error(f"notifications_list: {e}")
+        return jsonify({"ok": False, "items": [], "unread": 0})
+
+
+@app.route("/notifications/read", methods=["POST"])
+@login_required
+def notifications_mark_read():
+    emp_id = session.get("user_id")
+    try:
+        Notification.query.filter_by(emp_id=emp_id, is_read=False).update({"is_read": True})
+        db.session.commit()
+        return jsonify({"ok": True})
+    except Exception as e:
+        db.session.rollback()
+        logger.error(f"notifications_mark_read: {e}")
+        return jsonify({"ok": False}), 500
+
+
+# ─── SUPERVISOR: authoritative bill counts + 5-strike point penalty ───────────
+
+# Tunable: points removed per mismatch (scaled by the size of the gap).
+SUPERVISOR_STRIKE_FREE = 5          # first 5 mismatches per month are free
+SUPERVISOR_PENALTY_PER_BILL = 0.5   # points per bill of difference, beyond the free strikes
+SUPERVISOR_PENALTY_CAP = 15.0       # never deduct more than this in a month
+
+
+def _self_reported_bills(emp_id, d):
+    """Best-effort: a staff member's own reported bill count for a given date."""
+    e = KPIEntry.query.filter_by(emp_id=emp_id, entry_date=d).first()
+    if e is not None:
+        # Prefer an explicit bills field if present, else fall back to picked/checked volume
+        for attr in ("total_bills_received", "bills_received", "picked", "checked"):
+            v = getattr(e, attr, None)
+            if v:
+                return int(v)
+        return 0
+    n = DeliveryBillerNote.query.filter_by(emp_id=emp_id, entry_date=d).first()
+    if n is not None:
+        return int(n.quantity or 0)
+    return None  # nothing reported that day
+
+
+def supervisor_strike_summary(emp_id, month_str):
+    """Returns dict: mismatches this month, penalty points (scaled, after 5 free), and details.
+    Only counts days the supervisor entered an admin-validated super_bills value."""
+    try:
+        rows = (SupervisorBill.query
+                .filter(SupervisorBill.staff_id == emp_id,
+                        SupervisorBill.admin_validated == True)  # noqa: E712
+                .all())
+        mismatches = []
+        for r in rows:
+            if not r.entry_date or r.entry_date.strftime("%Y-%m") != month_str:
+                continue
+            reported = _self_reported_bills(emp_id, r.entry_date)
+            if reported is None:
+                continue
+            gap = abs(int(r.super_bills or 0) - int(reported))
+            if gap > 0:
+                mismatches.append({"date": r.entry_date, "super": r.super_bills,
+                                   "reported": reported, "gap": gap})
+        mismatches.sort(key=lambda m: m["date"])
+        n = len(mismatches)
+        penalty = 0.0
+        # Deduct only for mismatches beyond the free allowance, scaled by gap
+        for m in mismatches[SUPERVISOR_STRIKE_FREE:]:
+            penalty += m["gap"] * SUPERVISOR_PENALTY_PER_BILL
+        penalty = round(min(penalty, SUPERVISOR_PENALTY_CAP), 1)
+        return {"mismatches": n, "free": SUPERVISOR_STRIKE_FREE,
+                "penalty": penalty, "details": mismatches}
+    except Exception as e:
+        logger.warning(f"supervisor_strike_summary: {e}")
+        return {"mismatches": 0, "free": SUPERVISOR_STRIKE_FREE, "penalty": 0.0, "details": []}
+
+
+@app.route("/supervisor", methods=["GET", "POST"])
+@login_required
+def supervisor_console():
+    """Supervisor enters the authoritative ('super') bill count per staff per day."""
+    staff_type = session.get("staff_type", "")
+    is_super = (staff_type == "supervisor" or session.get("secondary_staff_type") == "supervisor"
+                or session.get("is_admin"))
+    if not is_super:
+        flash("Supervisor access only.", "danger")
+        return redirect(url_for("dashboard"))
+    try:
+        today = date.today()
+        if request.method == "POST":
+            sid = int(request.form.get("staff_id", 0) or 0)
+            d_raw = (request.form.get("entry_date", "") or "").strip()
+            try:
+                d = datetime.strptime(d_raw, "%Y-%m-%d").date() if d_raw else today
+            except ValueError:
+                d = today
+            bills = max(0, int(request.form.get("super_bills", 0) or 0))
+            note = (request.form.get("note", "") or "").strip()[:200]
+            if sid:
+                row = SupervisorBill.query.filter_by(staff_id=sid, entry_date=d).first()
+                if not row:
+                    row = SupervisorBill(staff_id=sid, entry_date=d)
+                    db.session.add(row)
+                row.super_bills = bills
+                row.supervisor_id = session.get("user_id")
+                row.note = note
+                # New/changed value needs admin re-validation
+                row.admin_validated = bool(session.get("is_admin"))
+                db.session.commit()
+                flash(f"✅ Saved super-bills for {d.strftime('%d %b')}.", "success")
+            return redirect(url_for("supervisor_console"))
+
+        staff = Employee.query.filter_by(is_admin=False).order_by(Employee.name).all()
+        recent = (SupervisorBill.query.order_by(SupervisorBill.entry_date.desc())
+                  .limit(60).all())
+        emp_names = {e.id: e.name for e in staff}
+        return render_template("supervisor.html", staff=staff, recent=recent,
+                               emp_names=emp_names, today=today,
+                               user_name=session.get("user_name", "Supervisor"))
+    except Exception as e:
+        logger.error(f"supervisor_console: {e}")
+        flash("Error loading supervisor console.", "danger")
+        return redirect(url_for("dashboard"))
+
+
+@app.route("/admin/validate_super_bill/<int:row_id>", methods=["POST"])
+@admin_required
+def admin_validate_super_bill(row_id):
+    """Admin confirms a supervisor's bill value is the true value."""
+    try:
+        row = db.session.get(SupervisorBill, row_id)
+        if row:
+            row.admin_validated = True
+            db.session.commit()
+            flash("✅ Super-bill validated.", "success")
+    except Exception as e:
+        db.session.rollback()
+        logger.error(f"admin_validate_super_bill: {e}")
+        flash("Error validating.", "danger")
+    return redirect(request.referrer or url_for("admin_dashboard"))
 
 
 @app.route("/delivery/start_trip/<int:assignment_id>", methods=["POST"])

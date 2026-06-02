@@ -326,6 +326,17 @@ tbody tr:hover { background: rgba(165,180,252,0.18) !important; }
   <div class="nav-right">
     <span class="nav-pill" style="background:#ede9fe;color:#6d28d9;border-color:#ddd6fe;">Role 1: {{ (primary_staff_type or staff_type)|title }}</span>
     <span class="nav-user">{{ user_name }}</span>
+    <!-- In-app notification bell -->
+    <span style="position:relative;display:inline-block;">
+      <button type="button" id="notif-bell" title="Notifications"
+        style="position:relative;padding:7px 11px;background:#eff6ff;color:var(--blue);border:1px solid var(--blue-mid);border-radius:8px;font-size:14px;cursor:pointer;">🔔
+        <span id="notif-count" style="display:none;position:absolute;top:-6px;right:-6px;background:#dc2626;color:#fff;border-radius:999px;font-size:10px;font-weight:700;padding:1px 5px;">0</span>
+      </button>
+      <div id="notif-dropdown" style="display:none;position:absolute;top:42px;right:0;width:290px;max-height:360px;overflow-y:auto;background:#fff;border:1px solid var(--border);border-radius:12px;box-shadow:0 12px 32px rgba(15,23,42,0.18);z-index:1000;">
+        <div style="padding:10px 13px;font-size:11px;font-weight:800;color:var(--muted);text-transform:uppercase;letter-spacing:.6px;border-bottom:1px solid #eef2f7;">Notifications</div>
+        <div id="notif-list"></div>
+      </div>
+    </span>
     {% if unread_count and unread_count > 0 %}
     <span style="position:relative;display:inline-block;">
       <a href="#announcements-section" style="padding:7px 14px;background:#fef3c7;color:#b45309;border:1px solid #fbbf24;border-radius:8px;font-size:12px;font-weight:600;text-decoration:none;">Notices</a>
@@ -516,8 +527,8 @@ tbody tr:hover { background: rgba(165,180,252,0.18) !important; }
   <div class="card">
     <div class="section-label">Today's Metrics — {{ today.strftime('%A, %d %b %Y') }}</div>
 
-    {% if staff_type in ('delivery', 'biller') %}
-    <!-- DELIVERY / BILLER NOTE FORM -->
+    {% if staff_type in ('delivery', 'biller', 'packer') %}
+    <!-- DELIVERY / ASSIGNER / PACKER NOTE FORM -->
     {% if today_db_note %}
     <div class="submitted-box">Note submitted for today. See you tomorrow!</div>
     <div style="background:linear-gradient(135deg,#f5f3ff,#ede9fe);border:1.5px solid #ddd6fe;border-radius:13px;padding:16px 20px;margin-top:12px;">
@@ -532,12 +543,12 @@ tbody tr:hover { background: rgba(165,180,252,0.18) !important; }
     <form method="POST" autocomplete="off">
       <div class="form-grid">
         <div class="field" style="grid-column:span 2;">
-          <label>{{ 'Deliveries Made' if staff_type == 'delivery' else 'Bills Processed' }}</label>
+          <label>{% if staff_type == 'delivery' %}Deliveries Made{% elif staff_type == 'packer' %}No. of Bills Packed{% else %}Bills Processed{% endif %}</label>
           <input type="number" name="delivery_qty" min="0" value="0" placeholder="Count for today">
         </div>
         <div class="field" style="grid-column:span 2;">
-          <label>Issues / Complaints Today</label>
-          <input type="number" name="delivery_issues" min="0" value="0" placeholder="Number of issues or 0">
+          <label>{% if staff_type == 'packer' %}No. of Bills Opened{% else %}Issues / Complaints Today{% endif %}</label>
+          <input type="number" name="delivery_issues" min="0" value="0" placeholder="{% if staff_type == 'packer' %}Bills opened{% else %}Number of issues or 0{% endif %}">
         </div>
         <div class="field" style="grid-column:span 2;">
           <label>Daily Note <span style="color:var(--danger);">*</span></label>
@@ -977,6 +988,31 @@ tbody tr:hover { background: rgba(165,180,252,0.18) !important; }
         <div style="font-size:12px;color:var(--muted);margin-bottom:10px;padding:8px 10px;background:#f1f5f9;border-radius:6px;">{{ assignment.notes }}</div>
         {% endif %}
 
+        {# Multi-store checklist — rider logs each store as reached #}
+        {% set astops = stops_map.get(assignment.id, []) %}
+        {% if astops %}
+        <div style="margin-bottom:10px;padding:10px 12px;background:#fff;border:1px solid var(--border);border-radius:10px;">
+          <div style="font-size:11px;font-weight:800;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px;">
+            Stores ({{ astops|length }}) · {{ assignment.no_of_tasks or assignment.bills_count }} packet(s){% if assignment.packet_type %} · {{ assignment.packet_type }}{% endif %}
+          </div>
+          <div style="display:flex;flex-direction:column;gap:7px;">
+            {% for st in astops %}
+            <div id="stop-{{ st.id }}" style="display:flex;align-items:center;gap:9px;padding:7px 10px;border-radius:8px;background:{{ '#f0fdf4' if st.reached_at else '#f8fafc' }};border:1px solid {{ '#86efac' if st.reached_at else 'var(--border)' }};">
+              <span style="font-size:14px;">{{ '✅' if st.reached_at else '📍' }}</span>
+              <div style="flex:1;">
+                <div style="font-size:13px;font-weight:700;color:var(--text);">{{ st.place_name }}</div>
+                <div style="font-size:11px;color:var(--muted);">{{ st.packages }} packet(s){% if st.reached_at %} · reached {{ st.reached_at.strftime('%H:%M') }}{% if st.minutes_from_prev %} · {{ st.minutes_from_prev }} min{% endif %}{% endif %}</div>
+              </div>
+              {% if assignment.status == 'in_transit' and not st.reached_at %}
+              <button type="button" onclick="logStop({{ st.id }}, this)"
+                style="padding:5px 12px;background:#16a34a;color:#fff;border:none;border-radius:7px;font-size:12px;font-weight:700;cursor:pointer;">Reached</button>
+              {% endif %}
+            </div>
+            {% endfor %}
+          </div>
+        </div>
+        {% endif %}
+
         {% if assignment.status == 'pending' %}
         <button id="start-trip-btn-{{ assignment.id }}"
           onclick="startDeliveryTrip({{ assignment.id }})"
@@ -1054,6 +1090,14 @@ tbody tr:hover { background: rgba(165,180,252,0.18) !important; }
       {% endif %}
     </div>
     {% endif %}
+    <!-- datalists for recommendations -->
+    <datalist id="route-options">
+      {% for r in known_routes %}<option value="{{ r }}">{% endfor %}
+    </datalist>
+    <datalist id="packet-options">
+      {% for p in packet_types %}<option value="{{ p }}">{% endfor %}
+    </datalist>
+
     <form method="POST" action="{{ url_for('delivery_assign') }}" style="display:flex;flex-direction:column;gap:12px;">
       <div style="display:flex;gap:12px;flex-wrap:wrap;">
         <div style="flex:1;min-width:200px;">
@@ -1066,53 +1110,29 @@ tbody tr:hover { background: rgba(165,180,252,0.18) !important; }
             {% endfor %}
           </select>
         </div>
-        <div style="flex:1;min-width:120px;">
-          <label style="font-size:12px;font-weight:600;color:var(--muted);display:block;margin-bottom:4px;">Bills Count</label>
-          <input type="number" name="bills_count" min="0" value="0"
+        <div style="flex:1;min-width:150px;">
+          <label style="font-size:12px;font-weight:600;color:var(--muted);display:block;margin-bottom:4px;">Packet Type</label>
+          <input list="packet-options" name="packet_type" placeholder="Poly Bag / Box / Carton..."
             style="width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:9px;font-size:13px;font-family:inherit;">
         </div>
       </div>
+
+      <!-- Multi-store line items -->
       <div>
-        <label style="font-size:12px;font-weight:600;color:var(--muted);display:block;margin-bottom:4px;">Shop Name / Destination Address *</label>
-        <input type="text" name="destination_addr" id="dest-addr-input" required maxlength="500"
-          placeholder="e.g. Sharma Medical Store, Link Road, Cuttack"
-          style="width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:9px;font-size:13px;font-family:inherit;">
-        <div style="font-size:11px;color:var(--muted);margin-top:3px;">
-          Location is auto-found inside Odisha. If shop isn't on the map, or many shops share the name,
-          <a href="#" onclick="toggleManualPin(event)" style="color:var(--blue);font-weight:600;">📍 pin it on the map manually</a>.
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+          <label style="font-size:12px;font-weight:700;color:var(--text);">Stores in this route *</label>
+          <span style="font-size:12px;color:var(--muted);">Total packets: <strong id="total-packets" style="color:var(--blue);">0</strong></span>
         </div>
-        <div id="manual-pin-section" style="display:none;margin-top:10px;padding:10px;background:rgba(14,165,233,0.06);border:1.5px dashed #0ea5e9;border-radius:9px;">
-          <div style="font-size:11px;font-weight:700;color:#0369a1;text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px;">Pick exact shop location (Odisha)</div>
-          <div style="font-size:11px;color:var(--muted);margin-bottom:6px;">Search the area, OR tap directly on the map to drop a pin.</div>
-          <div style="display:flex;gap:6px;margin-bottom:6px;">
-            <input type="text" id="pin-search-box" placeholder="Search area / landmark in Odisha..."
-              style="flex:1;padding:7px 10px;border:1px solid var(--border);border-radius:7px;font-size:12px;">
-            <button type="button" onclick="pinSearch()" style="padding:7px 14px;background:var(--blue);color:#fff;border:none;border-radius:7px;font-size:12px;font-weight:600;cursor:pointer;">Search</button>
-          </div>
-          <div id="pin-results" style="font-size:11px;margin-bottom:6px;"></div>
-          <div id="pin-map" style="height:240px;border-radius:9px;border:1px solid var(--border);"></div>
-          <div id="pin-coords" style="font-size:11px;color:var(--muted);margin-top:6px;">No pin yet — tap the map to drop one.</div>
-          <input type="hidden" name="manual_lat" id="manual_lat" value="">
-          <input type="hidden" name="manual_lng" id="manual_lng" value="">
+        <div id="store-rows" style="display:flex;flex-direction:column;gap:8px;">
+          <!-- one row injected by JS on load -->
         </div>
+        <button type="button" onclick="addStoreRow()"
+          style="margin-top:8px;padding:7px 16px;background:#eff6ff;color:var(--blue);border:1.5px solid #bfdbfe;border-radius:8px;font-size:13px;font-weight:700;font-family:inherit;cursor:pointer;">
+          ➕ Add Store
+        </button>
+        <div style="font-size:11px;color:var(--muted);margin-top:4px;">Each store's location is auto-found inside Odisha from its name.</div>
       </div>
-      <div>
-        <label style="font-size:12px;font-weight:600;color:var(--muted);display:block;margin-bottom:4px;">Package Description *</label>
-        <textarea name="package_desc" required rows="2" maxlength="500"
-          style="width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:9px;font-size:13px;font-family:inherit;resize:vertical;"></textarea>
-      </div>
-      <div style="display:flex;gap:12px;flex-wrap:wrap;">
-        <div style="flex:1;min-width:180px;">
-          <label style="font-size:12px;font-weight:600;color:var(--muted);display:block;margin-bottom:4px;">Expected Recipient Name</label>
-          <input type="text" name="recipient_name" maxlength="150"
-            style="width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:9px;font-size:13px;font-family:inherit;">
-        </div>
-        <div style="flex:1;min-width:180px;">
-          <label style="font-size:12px;font-weight:600;color:var(--muted);display:block;margin-bottom:4px;">Company</label>
-          <input type="text" name="company_name" maxlength="150"
-            style="width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:9px;font-size:13px;font-family:inherit;">
-        </div>
-      </div>
+
       <div>
         <label style="font-size:12px;font-weight:600;color:var(--muted);display:block;margin-bottom:4px;">Notes (optional)</label>
         <textarea name="notes" rows="2" maxlength="500"
@@ -1120,15 +1140,76 @@ tbody tr:hover { background: rgba(165,180,252,0.18) !important; }
       </div>
       <button type="submit"
         style="padding:10px 24px;background:linear-gradient(135deg,var(--blue-dark),var(--blue));color:#fff;border:none;border-radius:9px;font-size:14px;font-weight:700;font-family:inherit;cursor:pointer;">
-        Assign Delivery
+        Assign Delivery & Notify Rider
       </button>
     </form>
   </div>
+
+  <!-- Assigner's active dispatches (edit / delete) -->
+  {% if my_dispatches %}
+  <div class="card" style="margin-bottom:20px;">
+    <div class="section-label" style="margin-bottom:12px;">📋 Active Dispatches</div>
+    <div style="display:flex;flex-direction:column;gap:10px;">
+      {% for d in my_dispatches %}
+      <div style="padding:11px 14px;background:#f8fafc;border:1px solid var(--border);border-radius:10px;">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;flex-wrap:wrap;">
+          <div>
+            <div style="font-size:13px;font-weight:700;">{{ d.route or d.destination_addr }}</div>
+            <div style="font-size:11px;color:var(--muted);margin-top:2px;">
+              {{ d.no_of_tasks or d.bills_count }} packet(s)
+              {% if d.packet_type %} · {{ d.packet_type }}{% endif %}
+              · <span style="font-weight:700;color:{{ '#1e40af' if d.status=='in_transit' else '#854d0e' }};">{{ d.status|replace('_',' ')|title }}</span>
+            </div>
+          </div>
+          {% if d.status == 'pending' %}
+          <div style="display:flex;gap:6px;">
+            <button type="button" onclick="toggleEdit({{ d.id }})"
+              style="padding:5px 12px;background:#fef9c3;color:#854d0e;border:1px solid #fde047;border-radius:7px;font-size:12px;font-weight:700;cursor:pointer;">Edit</button>
+            <form method="POST" action="{{ url_for('delivery_dispatch_delete', assignment_id=d.id) }}"
+                  onsubmit="return confirm('Delete this dispatch?');" style="margin:0;">
+              <button type="submit" style="padding:5px 12px;background:#fee2e2;color:#991b1b;border:1px solid #fca5a5;border-radius:7px;font-size:12px;font-weight:700;cursor:pointer;">Delete</button>
+            </form>
+          </div>
+          {% endif %}
+        </div>
+        {% set dstops = stops_map.get(d.id, []) %}
+        {% if dstops %}
+        <div style="margin-top:7px;display:flex;flex-wrap:wrap;gap:5px;">
+          {% for st in dstops %}
+          <span style="font-size:11px;padding:2px 9px;background:#e0e7ff;color:#3730a3;border-radius:20px;">{{ st.place_name }} · {{ st.packages }}</span>
+          {% endfor %}
+        </div>
+        {% endif %}
+        {% if d.status == 'pending' %}
+        <form method="POST" action="{{ url_for('delivery_dispatch_edit', assignment_id=d.id) }}"
+              id="edit-form-{{ d.id }}" style="display:none;margin-top:10px;padding:10px;background:#fffbeb;border:1px dashed #fbbf24;border-radius:9px;">
+          <div style="font-size:11px;font-weight:700;color:#92400e;margin-bottom:6px;">Edit stores</div>
+          <div id="edit-rows-{{ d.id }}" style="display:flex;flex-direction:column;gap:6px;">
+            {% for st in dstops %}
+            <div style="display:flex;gap:6px;">
+              <input list="route-options" name="store_name[]" value="{{ st.place_name }}" placeholder="Store name"
+                style="flex:2;padding:7px 10px;border:1px solid var(--border);border-radius:7px;font-size:12px;">
+              <input type="number" name="store_packages[]" value="{{ st.packages }}" min="0" placeholder="Pkts"
+                style="width:70px;padding:7px 10px;border:1px solid var(--border);border-radius:7px;font-size:12px;">
+            </div>
+            {% endfor %}
+          </div>
+          <button type="button" onclick="addEditRow({{ d.id }})"
+            style="margin-top:6px;padding:5px 12px;background:#fff;color:var(--blue);border:1px solid #bfdbfe;border-radius:7px;font-size:12px;font-weight:700;cursor:pointer;">➕ Add store</button>
+          <button type="submit"
+            style="margin-top:6px;margin-left:6px;padding:5px 14px;background:var(--blue);color:#fff;border:none;border-radius:7px;font-size:12px;font-weight:700;cursor:pointer;">Save changes</button>
+        </form>
+        {% endif %}
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+  {% endif %}
   {% endif %}
   <!-- ════ END DELIVERY GPS TRACKING MODULE ════ -->
 
   <!-- DELIVERY / BILLER RECENT NOTES -->
-  {% if staff_type in ('delivery', 'biller') and recent %}
+  {% if staff_type in ('delivery', 'biller', 'packer') and recent %}
   <div class="card" style="margin-bottom:20px;">
     <div class="section-label">Recent Daily Notes</div>
     <div style="display:flex;flex-direction:column;gap:8px;max-height:300px;overflow-y:auto;">
@@ -1865,6 +1946,115 @@ function validateAndSubmit(e){
   }
   return true;
 }
+</script>
+
+<script>
+// ═══ ASSIGNER MULTI-STORE LINE ITEMS ═══
+function _storeRowHTML(){
+  return '<div class="store-row" style="display:flex;gap:8px;align-items:center;">' +
+    '<input list="route-options" name="store_name[]" placeholder="Store / area name" ' +
+      'style="flex:2;padding:8px 11px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;">' +
+    '<input type="number" name="store_packages[]" min="0" value="1" placeholder="Pkts" oninput="recalcTotal()" ' +
+      'style="width:80px;padding:8px 11px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;">' +
+    '<input type="hidden" name="store_lat[]" value=""><input type="hidden" name="store_lng[]" value="">' +
+    '<button type="button" onclick="this.closest(\'.store-row\').remove();recalcTotal();" ' +
+      'style="padding:7px 11px;background:#fee2e2;color:#991b1b;border:1px solid #fca5a5;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;">✕</button>' +
+    '</div>';
+}
+function addStoreRow(){
+  var box = document.getElementById('store-rows');
+  if(!box) return;
+  box.insertAdjacentHTML('beforeend', _storeRowHTML());
+  recalcTotal();
+}
+function recalcTotal(){
+  var inputs = document.querySelectorAll('#store-rows input[name="store_packages[]"]');
+  var total = 0;
+  inputs.forEach(function(i){ total += parseInt(i.value || 0, 10) || 0; });
+  var el = document.getElementById('total-packets');
+  if(el) el.textContent = total;
+}
+function addEditRow(id){
+  var box = document.getElementById('edit-rows-' + id);
+  if(!box) return;
+  box.insertAdjacentHTML('beforeend',
+    '<div style="display:flex;gap:6px;">' +
+    '<input list="route-options" name="store_name[]" placeholder="Store name" style="flex:2;padding:7px 10px;border:1px solid var(--border);border-radius:7px;font-size:12px;">' +
+    '<input type="number" name="store_packages[]" min="0" value="1" style="width:70px;padding:7px 10px;border:1px solid var(--border);border-radius:7px;font-size:12px;"></div>');
+}
+function toggleEdit(id){
+  var f = document.getElementById('edit-form-' + id);
+  if(f) f.style.display = (f.style.display === 'none' || !f.style.display) ? 'block' : 'none';
+}
+// Rider marks a store reached (captures GPS if available)
+function logStop(stopId, btn){
+  if(btn){ btn.disabled = true; btn.textContent = '...'; }
+  function send(lat, lng){
+    fetch('/delivery/log_stop/' + stopId, {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({lat:lat||0, lng:lng||0})
+    }).then(function(r){return r.json();}).then(function(d){
+      if(d.ok){
+        var row = document.getElementById('stop-' + stopId);
+        if(row){ row.style.background='#f0fdf4'; row.style.borderColor='#86efac';
+          var b = row.querySelector('button'); if(b) b.remove();
+          var icon = row.querySelector('span'); if(icon) icon.textContent='✅';
+        }
+      } else { if(btn){ btn.disabled=false; btn.textContent='Reached'; } alert(d.error||'Failed'); }
+    }).catch(function(){ if(btn){ btn.disabled=false; btn.textContent='Reached'; } });
+  }
+  if(navigator.geolocation){
+    navigator.geolocation.getCurrentPosition(
+      function(p){ send(p.coords.latitude, p.coords.longitude); },
+      function(){ send(0,0); }, {enableHighAccuracy:true, timeout:6000}
+    );
+  } else { send(0,0); }
+}
+// seed first store row on load
+document.addEventListener('DOMContentLoaded', function(){
+  if(document.getElementById('store-rows') && document.querySelectorAll('#store-rows .store-row').length === 0){
+    addStoreRow();
+  }
+});
+</script>
+
+<script>
+// ═══ IN-APP NOTIFICATION BELL ═══
+(function(){
+  var bell = document.getElementById('notif-bell');
+  if(!bell) return;
+  function refresh(){
+    fetch('/notifications').then(function(r){return r.json();}).then(function(d){
+      if(!d.ok) return;
+      var badge = document.getElementById('notif-count');
+      if(badge){
+        if(d.unread > 0){ badge.textContent = d.unread; badge.style.display='inline-block'; }
+        else { badge.style.display='none'; }
+      }
+      var list = document.getElementById('notif-list');
+      if(list){
+        if(!d.items.length){ list.innerHTML = '<div style="padding:14px;color:#64748b;font-size:13px;text-align:center;">No notifications</div>'; }
+        else {
+          list.innerHTML = d.items.map(function(n){
+            return '<div style="padding:10px 13px;border-bottom:1px solid #eef2f7;'+(n.is_read?'':'background:#eff6ff;')+'">'+
+              '<div style="font-size:13px;font-weight:700;color:#0f172a;">'+n.title+'</div>'+
+              (n.body?'<div style="font-size:12px;color:#475569;margin-top:2px;">'+n.body+'</div>':'')+
+              '<div style="font-size:10px;color:#94a3b8;margin-top:3px;">'+n.ago+'</div></div>';
+          }).join('');
+        }
+      }
+    }).catch(function(){});
+  }
+  bell.addEventListener('click', function(){
+    var dd = document.getElementById('notif-dropdown');
+    if(!dd) return;
+    var open = dd.style.display === 'block';
+    dd.style.display = open ? 'none' : 'block';
+    if(!open){ fetch('/notifications/read',{method:'POST'}).then(refresh).catch(function(){}); }
+  });
+  refresh();
+  setInterval(refresh, 60000);
+})();
 </script>
 
 <script>
