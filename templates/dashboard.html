@@ -991,17 +991,19 @@ tbody tr:hover { background: rgba(165,180,252,0.18) !important; }
         {# Multi-store checklist — rider logs each store as reached #}
         {% set astops = stops_map.get(assignment.id, []) %}
         {% if astops %}
+        {% set ns = namespace(km=0) %}
+        {% for st in astops %}{% set ns.km = ns.km + (st.dist_from_prev_km or 0) %}{% endfor %}
         <div style="margin-bottom:10px;padding:10px 12px;background:#fff;border:1px solid var(--border);border-radius:10px;">
           <div style="font-size:11px;font-weight:800;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px;">
-            Stores ({{ astops|length }}) · {{ assignment.no_of_tasks or assignment.bills_count }} packet(s){% if assignment.packet_type %} · {{ assignment.packet_type }}{% endif %}
+            Stores ({{ astops|length }}) · {{ assignment.no_of_tasks or assignment.bills_count }} packet(s){% if assignment.packet_type %} · {{ assignment.packet_type }}{% endif %}{% if ns.km > 0 %} · ≈ {{ ns.km|round(2) }} km{% endif %}
           </div>
           <div style="display:flex;flex-direction:column;gap:7px;">
             {% for st in astops %}
             <div id="stop-{{ st.id }}" style="display:flex;align-items:center;gap:9px;padding:7px 10px;border-radius:8px;background:{{ '#f0fdf4' if st.reached_at else '#f8fafc' }};border:1px solid {{ '#86efac' if st.reached_at else 'var(--border)' }};">
               <span style="font-size:14px;">{{ '✅' if st.reached_at else '📍' }}</span>
               <div style="flex:1;">
-                <div style="font-size:13px;font-weight:700;color:var(--text);">{{ st.place_name }}</div>
-                <div style="font-size:11px;color:var(--muted);">{{ st.packages }} packet(s){% if st.reached_at %} · reached {{ st.reached_at.strftime('%H:%M') }}{% if st.minutes_from_prev %} · {{ st.minutes_from_prev }} min{% endif %}{% endif %}</div>
+                <div style="font-size:13px;font-weight:700;color:var(--text);">{{ st.place_name }}{% if st.packet_type %} <span style="font-weight:600;color:var(--muted);font-size:11px;">· {{ st.packet_type }}</span>{% endif %}</div>
+                <div style="font-size:11px;color:var(--muted);">{{ st.packages }} packet(s){% if st.dist_from_prev_km %} · {{ st.dist_from_prev_km }} km{% endif %}{% if st.reached_at %} · reached {{ st.reached_at.strftime('%H:%M') }}{% if st.minutes_from_prev %} · {{ st.minutes_from_prev }} min{% endif %}{% endif %}</div>
               </div>
               {% if assignment.status == 'in_transit' and not st.reached_at %}
               <button type="button" onclick="logStop({{ st.id }}, this)"
@@ -1174,11 +1176,14 @@ tbody tr:hover { background: rgba(165,180,252,0.18) !important; }
         </div>
         {% set dstops = stops_map.get(d.id, []) %}
         {% if dstops %}
+        {% set ns = namespace(km=0) %}
         <div style="margin-top:7px;display:flex;flex-wrap:wrap;gap:5px;">
           {% for st in dstops %}
-          <span style="font-size:11px;padding:2px 9px;background:#e0e7ff;color:#3730a3;border-radius:20px;">{{ st.place_name }} · {{ st.packages }}</span>
+          {% set ns.km = ns.km + (st.dist_from_prev_km or 0) %}
+          <span style="font-size:11px;padding:2px 9px;background:#e0e7ff;color:#3730a3;border-radius:20px;">{{ st.place_name }} · {{ st.packages }} pkt{% if st.packet_type %} · {{ st.packet_type }}{% endif %}{% if st.dist_from_prev_km %} · {{ st.dist_from_prev_km }} km{% endif %}</span>
           {% endfor %}
         </div>
+        {% if ns.km > 0 %}<div style="font-size:11px;color:var(--muted);margin-top:4px;">Total route ≈ <strong>{{ ns.km|round(2) }} km</strong></div>{% endif %}
         {% endif %}
         {% if d.status == 'pending' %}
         <form method="POST" action="{{ url_for('delivery_dispatch_edit', assignment_id=d.id) }}"
@@ -1186,11 +1191,13 @@ tbody tr:hover { background: rgba(165,180,252,0.18) !important; }
           <div style="font-size:11px;font-weight:700;color:#92400e;margin-bottom:6px;">Edit stores</div>
           <div id="edit-rows-{{ d.id }}" style="display:flex;flex-direction:column;gap:6px;">
             {% for st in dstops %}
-            <div style="display:flex;gap:6px;">
+            <div style="display:flex;gap:6px;flex-wrap:wrap;">
               <input list="route-options" name="store_name[]" value="{{ st.place_name }}" placeholder="Store name"
-                style="flex:2;padding:7px 10px;border:1px solid var(--border);border-radius:7px;font-size:12px;">
+                style="flex:2;min-width:120px;padding:7px 10px;border:1px solid var(--border);border-radius:7px;font-size:12px;">
+              <input list="packet-options" name="store_packet_type[]" value="{{ st.packet_type or '' }}" placeholder="Packet type"
+                style="flex:1;min-width:90px;padding:7px 10px;border:1px solid var(--border);border-radius:7px;font-size:12px;">
               <input type="number" name="store_packages[]" value="{{ st.packages }}" min="0" placeholder="Pkts"
-                style="width:70px;padding:7px 10px;border:1px solid var(--border);border-radius:7px;font-size:12px;">
+                style="width:60px;padding:7px 10px;border:1px solid var(--border);border-radius:7px;font-size:12px;">
             </div>
             {% endfor %}
           </div>
@@ -1943,9 +1950,11 @@ function validateAndSubmit(e){
 <script>
 // ═══ ASSIGNER MULTI-STORE LINE ITEMS ═══
 function _storeRowHTML(){
-  return '<div class="store-row" style="display:flex;gap:8px;align-items:center;">' +
+  return '<div class="store-row" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">' +
     '<input list="route-options" name="store_name[]" placeholder="Store / area name" ' +
-      'style="flex:2;padding:8px 11px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;">' +
+      'style="flex:2;min-width:150px;padding:8px 11px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;">' +
+    '<input list="packet-options" name="store_packet_type[]" placeholder="Packet type" ' +
+      'style="flex:1;min-width:110px;padding:8px 11px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;">' +
     '<input type="number" name="store_packages[]" min="0" value="1" placeholder="Pkts" oninput="recalcTotal()" ' +
       'style="width:80px;padding:8px 11px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;">' +
     '<input type="hidden" name="store_lat[]" value=""><input type="hidden" name="store_lng[]" value="">' +
@@ -1970,9 +1979,10 @@ function addEditRow(id){
   var box = document.getElementById('edit-rows-' + id);
   if(!box) return;
   box.insertAdjacentHTML('beforeend',
-    '<div style="display:flex;gap:6px;">' +
-    '<input list="route-options" name="store_name[]" placeholder="Store name" style="flex:2;padding:7px 10px;border:1px solid var(--border);border-radius:7px;font-size:12px;">' +
-    '<input type="number" name="store_packages[]" min="0" value="1" style="width:70px;padding:7px 10px;border:1px solid var(--border);border-radius:7px;font-size:12px;"></div>');
+    '<div style="display:flex;gap:6px;flex-wrap:wrap;">' +
+    '<input list="route-options" name="store_name[]" placeholder="Store name" style="flex:2;min-width:120px;padding:7px 10px;border:1px solid var(--border);border-radius:7px;font-size:12px;">' +
+    '<input list="packet-options" name="store_packet_type[]" placeholder="Packet type" style="flex:1;min-width:90px;padding:7px 10px;border:1px solid var(--border);border-radius:7px;font-size:12px;">' +
+    '<input type="number" name="store_packages[]" min="0" value="1" style="width:60px;padding:7px 10px;border:1px solid var(--border);border-radius:7px;font-size:12px;"></div>');
 }
 function toggleEdit(id){
   var f = document.getElementById('edit-form-' + id);

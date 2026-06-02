@@ -107,7 +107,8 @@ class Employee(db.Model):
     admin_adjustment_note = db.Column(db.String(200), default="")  # Reason/notes
     custom_hourly_target = db.Column(db.Float, nullable=True)  # Override default role target (Phase 1 auto-raise)
     phone         = db.Column(db.String(20), nullable=True)   # Feature 15: phone for OTP reset
-    secondary_staff_type = db.Column(db.String(20), nullable=True)  # optional 2nd role for multitasking
+    secondary_staff_type = db.Column(db.String(20), nullable=True)  # optional 2nd role for multitasking (kept for compat)
+    extra_roles   = db.Column(db.String(160), nullable=True)  # comma-separated extra roles a multitasker may log
     created_at    = db.Column(db.DateTime, default=datetime.utcnow)
     entries = db.relationship("KPIEntry", backref="owner", lazy="select", cascade="all, delete-orphan")
 
@@ -467,11 +468,18 @@ class DeliveryBillerNote(db.Model):
     note_text    = db.Column(db.Text, nullable=False)
     quantity     = db.Column(db.Integer, default=0)   # deliveries made / bills processed
     issues_count = db.Column(db.Integer, default=0)   # complaints / errors logged
+    table_clean  = db.Column(db.Integer, default=0)   # 0=No 1=Yes (workspace — for everyone)
+    sweep_done   = db.Column(db.Integer, default=0)   # 0=No 1=Yes (workspace — for everyone)
     created_at   = db.Column(db.DateTime, default=datetime.utcnow)
     __table_args__ = (
         db.UniqueConstraint("emp_id", "entry_date", name="_dbnote_emp_date_uc"),
         db.Index("idx_dbn_date", "entry_date"),
     )
+
+    @property
+    def workspace_score(self):
+        """Simple workspace points: 5 each for table clean + sweep done = 10 max."""
+        return (5 if self.table_clean else 0) + (5 if self.sweep_done else 0)
 
 
 class DeliveryAssignment(db.Model):
@@ -519,6 +527,8 @@ class DeliveryStop(db.Model):
     lat           = db.Column(db.Float, nullable=True)
     lng           = db.Column(db.Float, nullable=True)
     note          = db.Column(db.String(300), nullable=True)
+    packet_type   = db.Column(db.String(50), nullable=True)   # per-store packet type (Box / Poly Bag / Fragile ...)
+    dist_from_prev_km = db.Column(db.Float, nullable=True)    # straight-line km from previous stop / store base
 
 
 class Notification(db.Model):
@@ -1255,6 +1265,9 @@ def run_migrations():
                 ("admin_adjustment","FLOAT DEFAULT 0"),
                 ("admin_adjustment_note","VARCHAR(200) DEFAULT ''"),
                 ("custom_hourly_target", "FLOAT"),
+                ("phone",           "VARCHAR(20)"),
+                ("secondary_staff_type", "VARCHAR(20)"),
+                ("extra_roles",     "VARCHAR(160)"),
                 ("created_at",      "TIMESTAMP DEFAULT CURRENT_TIMESTAMP"),
             ]
             for col, col_type in emp_cols:
@@ -1404,6 +1417,23 @@ def run_migrations():
                     db.session.rollback()
                     logger.warning(f"delivery_assignments.{col} migration skipped: {ce}")
             logger.info("✅ delivery_assignments CRM columns ensured")
+            # Per-store packet type + distance on delivery_stops; workspace + extra_roles
+            for tbl, col, col_type in [
+                ("delivery_stops", "packet_type", "VARCHAR(50)"),
+                ("delivery_stops", "dist_from_prev_km", "FLOAT"),
+                ("delivery_biller_notes", "table_clean", "INTEGER DEFAULT 0"),
+                ("delivery_biller_notes", "sweep_done", "INTEGER DEFAULT 0"),
+                ("employees", "extra_roles", "VARCHAR(160)"),
+            ]:
+                try:
+                    db.session.execute(db.text(
+                        f"ALTER TABLE {tbl} ADD COLUMN IF NOT EXISTS {col} {col_type}"
+                    ))
+                    db.session.commit()
+                except Exception as ce:
+                    db.session.rollback()
+                    logger.warning(f"{tbl}.{col} migration skipped: {ce}")
+            logger.info("✅ delivery_stops / notes / extra_roles columns ensured")
             # New feature tables
             for tbl_sql in [
                 """CREATE TABLE IF NOT EXISTS announcements (
@@ -1614,6 +1644,7 @@ def run_migrations():
                 "custom_hourly_target": "FLOAT",
                 "phone": "VARCHAR(20)",  # Feature 15
                 "secondary_staff_type": "VARCHAR(20)",  # 2nd role for multitasking
+                "extra_roles": "VARCHAR(160)",  # multitasker: many roles
             }
             for col, col_type in sqlite_cols.items():
                 if col not in existing:
@@ -1796,6 +1827,18 @@ def run_migrations():
                 ]:
                     try:
                         cursor.execute(f"ALTER TABLE delivery_assignments ADD COLUMN {col} {col_type}")
+                    except Exception:
+                        pass
+                # Per-store packet type + distance on delivery_stops
+                for col, col_type in [("packet_type", "VARCHAR(50)"), ("dist_from_prev_km", "REAL")]:
+                    try:
+                        cursor.execute(f"ALTER TABLE delivery_stops ADD COLUMN {col} {col_type}")
+                    except Exception:
+                        pass
+                # Workspace (table clean / sweep) on delivery_biller_notes — for everyone
+                for col, col_type in [("table_clean", "INTEGER DEFAULT 0"), ("sweep_done", "INTEGER DEFAULT 0")]:
+                    try:
+                        cursor.execute(f"ALTER TABLE delivery_biller_notes ADD COLUMN {col} {col_type}")
                     except Exception:
                         pass
                 conn.commit()
@@ -4639,6 +4682,32 @@ def _haversine_m(lat1, lng1, lat2, lng2):
     return 2 * R * math.asin(math.sqrt(a))
 
 
+def _haversine_km(lat1, lng1, lat2, lng2):
+    """Straight-line distance in kilometres between two points (0 if any coord missing)."""
+    try:
+        if None in (lat1, lng1, lat2, lng2):
+            return 0.0
+        return round(_haversine_m(float(lat1), float(lng1), float(lat2), float(lng2)) / 1000.0, 2)
+    except (TypeError, ValueError):
+        return 0.0
+
+
+def compute_stop_distances(stops, base_lat=None, base_lng=None):
+    """Fill each stop's dist_from_prev_km (from the store base, then chained). Returns total km."""
+    prev_lat = base_lat if base_lat else (STORE_LAT or None)
+    prev_lng = base_lng if base_lng else (STORE_LNG or None)
+    total = 0.0
+    for s in stops:
+        if s.lat and s.lng and prev_lat and prev_lng:
+            d = _haversine_km(prev_lat, prev_lng, s.lat, s.lng)
+            s.dist_from_prev_km = d
+            total += d
+            prev_lat, prev_lng = s.lat, s.lng
+        else:
+            s.dist_from_prev_km = s.dist_from_prev_km or 0.0
+    return round(total, 2)
+
+
 def geocode_address(address):
     """Convert an Odisha address to (lat, lng) using Nominatim, biased to Odisha state.
     Tries hard: appends ', Odisha, India' if missing, then falls back to a wider search.
@@ -4703,8 +4772,9 @@ def delivery_assign():
         store_packages = request.form.getlist("store_packages[]")
         store_lats     = request.form.getlist("store_lat[]")
         store_lngs     = request.form.getlist("store_lng[]")
+        store_ptypes   = request.form.getlist("store_packet_type[]")  # per-store packet type
 
-        # Build a clean list of (name, packages, lat, lng), dropping blank rows
+        # Build a clean list of (name, packages, lat, lng, packet_type), dropping blank rows
         stores = []
         for i, raw_name in enumerate(store_names):
             nm = (raw_name or "").strip()
@@ -4722,7 +4792,9 @@ def delivery_assign():
                         slat, slng = _la, _ln
             except (ValueError, TypeError):
                 pass
-            stores.append({"name": nm[:150], "packages": pkg, "lat": slat, "lng": slng})
+            # Per-store packet type; fall back to the dispatch-wide packet_type
+            spt = (store_ptypes[i].strip()[:50] if i < len(store_ptypes) and store_ptypes[i] else "") or packet_type
+            stores.append({"name": nm[:150], "packages": pkg, "lat": slat, "lng": slng, "packet_type": spt or None})
 
         if not delivery_emp_id or not stores:
             flash("Pick a delivery employee and add at least one store.", "warning")
@@ -4767,8 +4839,9 @@ def delivery_assign():
         db.session.add(assignment)
         db.session.flush()   # get assignment.id
 
+        stop_objs = []
         for s in stores:
-            db.session.add(DeliveryStop(
+            so = DeliveryStop(
                 assignment_id=assignment.id,
                 emp_id=delivery_emp_id,
                 place_name=s["name"],
@@ -4776,7 +4849,12 @@ def delivery_assign():
                 reached_at=None,
                 lat=s["lat"],
                 lng=s["lng"],
-            ))
+                packet_type=s.get("packet_type"),
+            )
+            db.session.add(so)
+            stop_objs.append(so)
+        # Compute straight-line km between stops (store base → stop1 → stop2 …)
+        total_km = compute_stop_distances(stop_objs, first["lat"], first["lng"])
         db.session.commit()
 
         # Notify the rider — in-app bell + SMS (if admin saved a phone number)
@@ -4815,6 +4893,8 @@ def delivery_dispatch_edit(assignment_id):
 
         store_names    = request.form.getlist("store_name[]")
         store_packages = request.form.getlist("store_packages[]")
+        store_ptypes   = request.form.getlist("store_packet_type[]")
+        pt = (request.form.get("packet_type", "") or "").strip()[:50]
         stores = []
         for i, raw in enumerate(store_names):
             nm = (raw or "").strip()
@@ -4824,7 +4904,8 @@ def delivery_dispatch_edit(assignment_id):
                 pkg = max(0, int(store_packages[i])) if i < len(store_packages) and store_packages[i] else 0
             except (ValueError, TypeError):
                 pkg = 0
-            stores.append({"name": nm[:150], "packages": pkg})
+            spt = (store_ptypes[i].strip()[:50] if i < len(store_ptypes) and store_ptypes[i] else "") or pt
+            stores.append({"name": nm[:150], "packages": pkg, "packet_type": spt or None})
         if not stores:
             flash("A dispatch needs at least one store.", "warning")
             return redirect(url_for("dashboard"))
@@ -4835,14 +4916,22 @@ def delivery_dispatch_edit(assignment_id):
         a.destination_addr = a.route
         a.no_of_tasks = total
         a.bills_count = total
-        pt = (request.form.get("packet_type", "") or "").strip()[:50]
         if pt:
             a.packet_type = pt
+        new_stops = []
+        first_lat = first_lng = None
         for s in stores:
             slat, slng = geocode_address(s["name"])
-            db.session.add(DeliveryStop(assignment_id=a.id, emp_id=a.delivery_emp_id,
-                                        place_name=s["name"], packages=s["packages"],
-                                        reached_at=None, lat=slat, lng=slng))
+            if first_lat is None:
+                first_lat, first_lng = slat, slng
+                a.destination_lat, a.destination_lng = slat, slng
+            so = DeliveryStop(assignment_id=a.id, emp_id=a.delivery_emp_id,
+                              place_name=s["name"], packages=s["packages"],
+                              reached_at=None, lat=slat, lng=slng,
+                              packet_type=s.get("packet_type"))
+            db.session.add(so)
+            new_stops.append(so)
+        compute_stop_distances(new_stops, first_lat, first_lng)
         db.session.commit()
         notify_employee(a.delivery_emp_id, "✏️ Delivery updated",
                         f"Your dispatch was updated — {total} packet(s).", link="/dashboard")
