@@ -2013,53 +2013,66 @@ def switch_role():
 
 
 def _save_multitask_entry(emp_id, entry_date, primary_role):
-    """Save (or update) the staff member's multitask Role-2 report for the day.
-    Reads per-role mt_* fields from the request form. The chosen role can differ
-    each day. No-ops cleanly if nothing meaningful was entered."""
-    role = (request.form.get("multitask_role", "") or "").strip()
-    if not role or role == primary_role:
-        return
+    """Save (or update) the staff member's multitask reports for the day.
+    A multitasker can pick MANY extra roles (checkboxes → multitask_roles list);
+    the legacy single `multitask_role` is still honoured. Each role's own KPI
+    params are read from its mt_* fields and upserted on (emp, date, role) so the
+    chosen roles can differ each day. No-ops cleanly when nothing was entered."""
+    roles = list(request.form.getlist("multitask_roles"))
+    legacy = (request.form.get("multitask_role", "") or "").strip()
+    if legacy:
+        roles.append(legacy)
+    # Dedupe, drop blanks + the primary role
+    seen = set()
+    roles = [r for r in (x.strip() for x in roles)
+             if r and r != primary_role and not (r in seen or seen.add(r))]
+    if not roles:
+        return 0
+
     def mi(k):
         try: return max(0, int(request.form.get(k, 0) or 0))
         except Exception: return 0
     note = (request.form.get("multitask_note", "") or "").strip()[:300]
 
-    # Map per-role form fields → unified MultitaskEntry columns
-    vals = dict(sales_bills_open=0, picked=0, missed=0, checked=0, errors_found=0,
-                packing_done=0, cs_sales_open=0, total_bills_received=0,
-                bills_received=0, pending_bills_manual=0, quantity=0)
-    if role == "picker":
-        vals.update(total_bills_received=mi("mt_p_total_bills"),
-                    sales_bills_open=mi("mt_p_sbo"), picked=mi("mt_p_picked"),
-                    missed=mi("mt_p_missed"), cs_sales_open=mi("mt_p_cso"),
-                    packing_done=mi("mt_p_packing"))
-    elif role == "checker":
-        vals.update(bills_received=mi("mt_c_bills_received"),
-                    pending_bills_manual=mi("mt_c_pending"),
-                    sales_bills_open=mi("mt_c_sbo"), cs_sales_open=mi("mt_c_cso"),
-                    checked=mi("mt_c_checked"), errors_found=mi("mt_c_errors"))
-    elif role == "purchaser":
-        vals.update(sales_bills_open=mi("mt_pu_sbo"), checked=mi("mt_pu_checked"),
-                    picked=mi("mt_pu_picked"), errors_found=mi("mt_pu_items"),
-                    cs_sales_open=mi("mt_pu_cso"), packing_done=mi("mt_pu_packing"))
-    else:  # delivery / billing / packing / other
-        vals.update(quantity=mi("mt_s_quantity"))
+    saved = 0
+    for role in roles:
+        vals = dict(sales_bills_open=0, picked=0, missed=0, checked=0, errors_found=0,
+                    packing_done=0, cs_sales_open=0, total_bills_received=0,
+                    bills_received=0, pending_bills_manual=0, quantity=0)
+        if role == "picker":
+            vals.update(total_bills_received=mi("mt_p_total_bills"),
+                        sales_bills_open=mi("mt_p_sbo"), picked=mi("mt_p_picked"),
+                        missed=mi("mt_p_missed"), cs_sales_open=mi("mt_p_cso"),
+                        packing_done=mi("mt_p_packing"))
+        elif role == "checker":
+            vals.update(bills_received=mi("mt_c_bills_received"),
+                        pending_bills_manual=mi("mt_c_pending"),
+                        sales_bills_open=mi("mt_c_sbo"), cs_sales_open=mi("mt_c_cso"),
+                        checked=mi("mt_c_checked"), errors_found=mi("mt_c_errors"))
+        elif role == "purchaser":
+            vals.update(sales_bills_open=mi("mt_pu_sbo"), checked=mi("mt_pu_checked"),
+                        picked=mi("mt_pu_picked"), errors_found=mi("mt_pu_items"),
+                        cs_sales_open=mi("mt_pu_cso"), packing_done=mi("mt_pu_packing"))
+        else:  # delivery / billing / packing / other — per-role quantity, legacy fallback
+            qty = mi(f"mt_s_quantity__{role}") or mi("mt_s_quantity")
+            vals.update(quantity=qty)
 
-    # Skip if absolutely nothing was filled in
-    if not any(vals.values()) and not note:
-        return
+        # Skip a role with nothing filled in
+        if not any(vals.values()) and not note:
+            continue
 
-    # Upsert on (emp, date, role) so re-submitting the same role updates it
-    mt = MultitaskEntry.query.filter_by(
-        emp_id=emp_id, entry_date=entry_date, secondary_type=role
-    ).first()
-    if not mt:
-        mt = MultitaskEntry(emp_id=emp_id, entry_date=entry_date, secondary_type=role)
-        db.session.add(mt)
-    for k, v in vals.items():
-        setattr(mt, k, v)
-    mt.note = note or None
+        mt = MultitaskEntry.query.filter_by(
+            emp_id=emp_id, entry_date=entry_date, secondary_type=role
+        ).first()
+        if not mt:
+            mt = MultitaskEntry(emp_id=emp_id, entry_date=entry_date, secondary_type=role)
+            db.session.add(mt)
+        for k, v in vals.items():
+            setattr(mt, k, v)
+        mt.note = note or None
+        saved += 1
     db.session.commit()
+    return saved
 
 
 @app.route("/dashboard", methods=["GET", "POST"])
@@ -2092,6 +2105,8 @@ def dashboard():
                             note_text=note_text[:1000],
                             quantity=max(0, int(request.form.get("delivery_qty", 0) or 0)),
                             issues_count=max(0, int(request.form.get("delivery_issues", 0) or 0)),
+                            table_clean=1 if request.form.get("table_clean") == "1" else 0,
+                            sweep_done=1 if request.form.get("sweep_done") == "1" else 0,
                         )
                         db.session.add(db_note)
                         db.session.commit()
@@ -2456,11 +2471,13 @@ def dashboard():
         except Exception:
             today_multitask = []
 
-        # Multitasker bonus: +15 to daily score when secondary role work was also submitted today
+        # Multitasker bonus: +10 per extra role worked today (capped at +30) — points for extra work
         if today_multitask and d_stats:
+            extra_roles_n = len({mt.secondary_type for mt in today_multitask})
+            bonus = min(10 * extra_roles_n, 30)
             d_stats = dict(d_stats)
-            d_stats["eff_score"] = min(round(d_stats["eff_score"] + 15, 1), 100.0)
-            d_stats["multitask_bonus"] = 15
+            d_stats["eff_score"] = min(round(d_stats["eff_score"] + bonus, 1), 100.0)
+            d_stats["multitask_bonus"] = bonus
 
         # Delivery module data
         delivery_diag = None

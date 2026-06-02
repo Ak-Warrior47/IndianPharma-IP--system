@@ -534,9 +534,12 @@ tbody tr:hover { background: rgba(165,180,252,0.18) !important; }
     <div style="background:linear-gradient(135deg,#f5f3ff,#ede9fe);border:1.5px solid #ddd6fe;border-radius:13px;padding:16px 20px;margin-top:12px;">
       <div style="font-size:11px;font-weight:700;color:#6d28d9;text-transform:uppercase;letter-spacing:.8px;margin-bottom:6px;">Today's Note</div>
       <div style="font-size:14px;color:var(--text);line-height:1.5;">{{ today_db_note.note_text }}</div>
-      <div style="display:flex;gap:14px;margin-top:10px;font-size:12px;color:var(--muted);">
+      <div style="display:flex;gap:14px;margin-top:10px;font-size:12px;color:var(--muted);flex-wrap:wrap;">
         <span>Processed: <strong>{{ today_db_note.quantity }}</strong></span>
         <span>Issues: <strong>{{ today_db_note.issues_count }}</strong></span>
+        <span>Table clean: <strong>{{ 'Yes' if today_db_note.table_clean else 'No' }}</strong></span>
+        <span>Sweep: <strong>{{ 'Yes' if today_db_note.sweep_done else 'No' }}</strong></span>
+        <span>Workspace: <strong style="color:#16a34a;">{{ today_db_note.workspace_score }}/10</strong></span>
       </div>
     </div>
     {% else %}
@@ -555,6 +558,23 @@ tbody tr:hover { background: rgba(165,180,252,0.18) !important; }
           <textarea name="delivery_note" rows="4" maxlength="1000" required
             placeholder="{% if staff_type == 'delivery' %}Describe today's deliveries — routes, issues, customer feedback...{% else %}Describe today's billing activity — pending bills, errors, notes...{% endif %}"
             style="width:100%;padding:10px 13px;border:1.5px solid var(--border);border-radius:9px;background:rgba(255,255,255,0.9);font-size:13px;font-family:'DM Sans',sans-serif;color:var(--text);resize:vertical;min-height:90px;"></textarea>
+        </div>
+        <!-- Workspace (for everyone) — table clean + sweep -->
+        <div class="field">
+          <label>Table Clean?</label>
+          <input type="hidden" name="table_clean" id="dbn_table_clean" value="1">
+          <div style="display:flex;gap:8px;">
+            <button type="button" class="yn-btn yes active" id="dbn_tc_yes" onclick="document.getElementById('dbn_table_clean').value='1';this.classList.add('active');document.getElementById('dbn_tc_no').classList.remove('active')">Yes</button>
+            <button type="button" class="yn-btn no" id="dbn_tc_no" onclick="document.getElementById('dbn_table_clean').value='0';this.classList.add('active');document.getElementById('dbn_tc_yes').classList.remove('active')">No</button>
+          </div>
+        </div>
+        <div class="field">
+          <label>Sweep Done?</label>
+          <input type="hidden" name="sweep_done" id="dbn_sweep_done" value="1">
+          <div style="display:flex;gap:8px;">
+            <button type="button" class="yn-btn yes active" id="dbn_sd_yes" onclick="document.getElementById('dbn_sweep_done').value='1';this.classList.add('active');document.getElementById('dbn_sd_no').classList.remove('active')">Yes</button>
+            <button type="button" class="yn-btn no" id="dbn_sd_no" onclick="document.getElementById('dbn_sweep_done').value='0';this.classList.add('active');document.getElementById('dbn_sd_yes').classList.remove('active')">No</button>
+          </div>
         </div>
       </div>
       <button type="submit" class="btn-submit">Submit Daily Note</button>
@@ -803,10 +823,10 @@ tbody tr:hover { background: rgba(165,180,252,0.18) !important; }
   <!-- ════ MULTITASK (ROLE 2) REPORT — fill default role above, second role here ════ -->
   <div class="card multitask-section" style="margin-bottom:20px;border-left:4px solid #7c3aed;">
     <div class="section-label" style="display:flex;align-items:center;gap:10px;">
-      Multitask Role (Role 2) — Optional
+      Multitask Roles — Optional
       <span style="font-size:10px;font-weight:700;padding:3px 9px;border-radius:20px;background:#ede9fe;color:#6d28d9;text-transform:uppercase;letter-spacing:.5px;">Changeable Daily</span>
     </div>
-    <p style="font-size:12px;color:var(--muted);margin:-4px 0 14px;">Your default role is <strong>{{ (primary_staff_type or staff_type)|title }}</strong>. If you also worked a second role today, pick it and fill its numbers. You can choose a different Role 2 each day.</p>
+    <p style="font-size:12px;color:var(--muted);margin:-4px 0 14px;">Your default role is <strong>{{ (primary_staff_type or staff_type)|title }}</strong>. If you also worked other roles today, tick each and fill its numbers — you earn <strong>+10 points per extra role</strong> (up to +30). You can pick different roles each day.</p>
 
     {% if today_multitask %}
     <div style="margin-bottom:14px;padding:12px 14px;background:rgba(240,253,244,0.7);border:1.5px solid #bbf7d0;border-radius:11px;">
@@ -824,20 +844,19 @@ tbody tr:hover { background: rgba(165,180,252,0.18) !important; }
 
     <form method="POST" autocomplete="off">
       <input type="hidden" name="multitask_only" value="1">
-      <div class="field" style="margin-bottom:14px;max-width:320px;">
-        <label>Role 2 — Which role did you also work?</label>
-        <select name="multitask_role" id="multitask_role" onchange="showMultitaskFields(this.value)"
-          style="padding:9px 12px;border:1.5px solid var(--border);border-radius:9px;font-size:13px;font-family:inherit;background:rgba(255,255,255,0.9);width:100%;">
-          <option value="">— Select Role 2 —</option>
-          {% set sec = secondary_staff_type %}
-          {% if (primary_staff_type or staff_type) != 'picker' %}<option value="picker" {% if sec=='picker' %}selected{% endif %}>Picker</option>{% endif %}
-          {% if (primary_staff_type or staff_type) != 'checker' %}<option value="checker" {% if sec=='checker' %}selected{% endif %}>Checker</option>{% endif %}
-          {% if (primary_staff_type or staff_type) != 'purchaser' %}<option value="purchaser" {% if sec=='purchaser' %}selected{% endif %}>Purchaser</option>{% endif %}
-          <option value="delivery" {% if sec=='delivery' %}selected{% endif %}>Delivery</option>
-          <option value="billing" {% if sec=='billing' %}selected{% endif %}>Billing</option>
-          <option value="packing">Packing</option>
-          <option value="other">Other</option>
-        </select>
+      <div class="field" style="margin-bottom:14px;">
+        <label>Which role(s) did you also work today? <span style="color:var(--muted);font-weight:600;">— tick any number, you earn extra points for each</span></label>
+        {% set prim = (primary_staff_type or staff_type) %}
+        <div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:8px;">
+          {% for r in ['picker','checker','purchaser','delivery','billing','packing','other'] %}
+          {% if r != prim %}
+          <label style="display:inline-flex;align-items:center;gap:6px;padding:8px 14px;border:1.5px solid var(--border);border-radius:20px;font-size:13px;font-weight:700;cursor:pointer;background:rgba(255,255,255,0.9);">
+            <input type="checkbox" name="multitask_roles" value="{{ r }}" onchange="toggleMtRole('{{ r }}', this.checked)" style="width:auto;margin:0;cursor:pointer;">
+            {{ r|title }}
+          </label>
+          {% endif %}
+          {% endfor %}
+        </div>
       </div>
 
       <!-- PICKER params -->
@@ -876,12 +895,17 @@ tbody tr:hover { background: rgba(165,180,252,0.18) !important; }
         </div>
       </div>
 
-      <!-- SIMPLE (delivery/billing/packing/other) params -->
-      <div class="mt-fields" id="mt_simple" style="display:none;">
+      <!-- SIMPLE roles (delivery/billing/packing/other) — each its own quantity -->
+      {% set prim2 = (primary_staff_type or staff_type) %}
+      {% for r in ['delivery','billing','packing','other'] %}
+      {% if r != prim2 %}
+      <div class="mt-fields" id="mt_simple_{{ r }}" style="display:none;">
         <div class="form-grid">
-          <div class="field"><label>Quantity Done (deliveries / bills / items)</label><input type="number" name="mt_s_quantity" min="0" value="0"></div>
+          <div class="field"><label>{{ r|title }} — Quantity Done (deliveries / bills / items)</label><input type="number" name="mt_s_quantity__{{ r }}" min="0" value="0"></div>
         </div>
       </div>
+      {% endif %}
+      {% endfor %}
 
       <div class="field" style="margin-top:6px;">
         <label>Note (optional)</label>
@@ -889,7 +913,7 @@ tbody tr:hover { background: rgba(165,180,252,0.18) !important; }
           style="padding:9px 12px;border:1.5px solid var(--border);border-radius:9px;font-size:13px;width:100%;background:rgba(255,255,255,0.9);">
       </div>
 
-      <button type="submit" class="btn-submit" style="margin-top:14px;background:linear-gradient(135deg,#7c3aed,#6d28d9);">Save Role 2 Report</button>
+      <button type="submit" class="btn-submit" style="margin-top:14px;background:linear-gradient(135deg,#7c3aed,#6d28d9);">Save Multitask Report</button>
     </form>
   </div>
   {% endif %}
@@ -1637,24 +1661,13 @@ document.addEventListener('DOMContentLoaded', function(){
   });
 });
 
-// Show the parameter block matching the selected Role 2
-function showMultitaskFields(role) {
-  document.querySelectorAll('.mt-fields').forEach(function(el){ el.style.display = 'none'; });
-  var target = null;
-  if (role === 'picker') target = 'mt_picker';
-  else if (role === 'checker') target = 'mt_checker';
-  else if (role === 'purchaser') target = 'mt_purchaser';
-  else if (role) target = 'mt_simple';
-  if (target) {
-    var el = document.getElementById(target);
-    if (el) el.style.display = 'block';
-  }
+// Toggle one role's parameter block when its checkbox is ticked (multi-select)
+function toggleMtRole(role, checked) {
+  var id = (role === 'picker' || role === 'checker' || role === 'purchaser')
+           ? ('mt_' + role) : ('mt_simple_' + role);
+  var el = document.getElementById(id);
+  if (el) el.style.display = checked ? 'block' : 'none';
 }
-// On load, reveal fields if a role is pre-selected (admin default secondary)
-document.addEventListener('DOMContentLoaded', function(){
-  var sel = document.getElementById('multitask_role');
-  if (sel && sel.value) showMultitaskFields(sel.value);
-});
 
 // ─── Delivery GPS tracking ───────────────────────────────────────────────────
 function startDeliveryTrip(assignmentId) {
