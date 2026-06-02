@@ -872,7 +872,18 @@ def build_analytics(entries: List[KPIEntry], staff_type: str = "picker", emp_id:
         per_entry_adj = sum(float(e.admin_adjustment or 0) for e in entries if hasattr(e, 'admin_adjustment'))
         total_adjustment = _emp_adj + per_entry_adj
 
-        eff_score = max(round(eff_score - complaint_deduction + total_adjustment, 1), 0.0)
+        # Supervisor mismatch penalty (current month, only after 5 mismatches)
+        supervisor_penalty = 0.0
+        supervisor_mismatches = 0
+        try:
+            if emp_id is not None:
+                _ss = supervisor_strike_summary(emp_id, date.today().strftime("%Y-%m"))
+                supervisor_penalty = float(_ss.get("penalty", 0.0))
+                supervisor_mismatches = int(_ss.get("mismatches", 0))
+        except Exception:
+            supervisor_penalty = 0.0
+
+        eff_score = max(round(eff_score - complaint_deduction + total_adjustment - supervisor_penalty, 1), 0.0)
         eff_score = min(eff_score, 100.0)
 
         # Auto-suggest: if error rate stays <1% over enough days, suggest raising the target
@@ -944,6 +955,8 @@ def build_analytics(entries: List[KPIEntry], staff_type: str = "picker", emp_id:
             pur_speed=pur_speed if staff_type=="purchaser" else 0,
             complaint_deduction=complaint_deduction,
             admin_adjustment=round(total_adjustment, 1),
+            supervisor_penalty=round(supervisor_penalty, 1),
+            supervisor_mismatches=supervisor_mismatches,
             vwcr=vwcr,
             cleaner_rate=cleaner_rate_score,
             efficiency_ratio=efficiency_ratio,
@@ -5041,6 +5054,7 @@ def supervisor_console():
         emp_names = {e.id: e.name for e in staff}
         return render_template("supervisor.html", staff=staff, recent=recent,
                                emp_names=emp_names, today=today,
+                               is_admin=bool(session.get("is_admin")),
                                user_name=session.get("user_name", "Supervisor"))
     except Exception as e:
         logger.error(f"supervisor_console: {e}")
