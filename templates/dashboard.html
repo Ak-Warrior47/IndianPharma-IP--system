@@ -1013,26 +1013,44 @@ tbody tr:hover { background: rgba(165,180,252,0.18) !important; }
         <div style="font-size:12px;color:var(--muted);margin-bottom:10px;padding:8px 10px;background:#f1f5f9;border-radius:6px;">{{ assignment.notes }}</div>
         {% endif %}
 
-        {# Multi-store checklist — rider logs each store as reached #}
+        {# ── Per-stop delivery checklist ── #}
         {% set astops = stops_map.get(assignment.id, []) %}
         {% if astops %}
         {% set ns = namespace(km=0) %}
         {% for st in astops %}{% set ns.km = ns.km + (st.dist_from_prev_km or 0) %}{% endfor %}
         <div style="margin-bottom:10px;padding:10px 12px;background:#fff;border:1px solid var(--border);border-radius:10px;">
           <div style="font-size:11px;font-weight:800;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px;">
-            Stores ({{ astops|length }}) · {{ assignment.no_of_tasks or assignment.bills_count }} packet(s){% if assignment.packet_type %} · {{ assignment.packet_type }}{% endif %}{% if ns.km > 0 %} · ≈ {{ ns.km|round(2) }} km{% endif %}
+            {{ astops|length }} Stop{{ 's' if astops|length != 1 else '' }} · {{ assignment.no_of_tasks or assignment.bills_count }} pkt{% if assignment.packet_type %} · {{ assignment.packet_type }}{% endif %}{% if ns.km > 0 %} · ≈ {{ ns.km|round(2) }} km{% endif %}
           </div>
-          <div style="display:flex;flex-direction:column;gap:7px;">
+          <div style="display:flex;flex-direction:column;gap:8px;">
             {% for st in astops %}
-            <div id="stop-{{ st.id }}" style="display:flex;align-items:center;gap:9px;padding:7px 10px;border-radius:8px;background:{{ '#f0fdf4' if st.reached_at else '#f8fafc' }};border:1px solid {{ '#86efac' if st.reached_at else 'var(--border)' }};">
-              <span style="font-size:14px;">{{ '✅' if st.reached_at else '📍' }}</span>
-              <div style="flex:1;">
-                <div style="font-size:13px;font-weight:700;color:var(--text);">{{ st.place_name }}{% if st.packet_type %} <span style="font-weight:600;color:var(--muted);font-size:11px;">· {{ st.packet_type }}</span>{% endif %}</div>
-                <div style="font-size:11px;color:var(--muted);">{{ st.packages }} packet(s){% if st.dist_from_prev_km %} · {{ st.dist_from_prev_km }} km{% endif %}{% if st.reached_at %} · reached {{ st.reached_at.strftime('%H:%M') }}{% if st.minutes_from_prev %} · {{ st.minutes_from_prev }} min{% endif %}{% endif %}</div>
+            <div id="stop-{{ st.id }}" style="padding:10px 12px;border-radius:10px;background:{{ '#f0fdf4' if st.reached_at else '#f8fafc' }};border:1.5px solid {{ '#86efac' if st.reached_at else 'var(--border)' }};">
+              {# Top row: icon + store name + time badge #}
+              <div style="display:flex;align-items:center;gap:8px;margin-bottom:{% if not st.reached_at and assignment.status == 'in_transit' %}8{% else %}0{% endif %}px;">
+                <span style="font-size:16px;">{{ '✅' if st.reached_at else '📍' }}</span>
+                <div style="flex:1;">
+                  <div style="font-size:13px;font-weight:700;color:var(--text);">{{ st.place_name }}{% if st.packet_type %} <span style="font-size:11px;font-weight:600;color:var(--muted);">· {{ st.packet_type }}</span>{% endif %}</div>
+                  <div style="font-size:11px;color:var(--muted);">
+                    {{ st.packages }} pkt{% if st.dist_from_prev_km %} · {{ st.dist_from_prev_km }} km from prev{% endif %}
+                    {% if st.reached_at %}
+                    · <strong style="color:#166534;">Done {{ st.reached_at.strftime('%H:%M') }}</strong>{% if st.minutes_from_prev %} · {{ st.minutes_from_prev }} min{% endif %}
+                    {% if st.note %} · <em style="color:var(--muted);">{{ st.note }}</em>{% endif %}
+                    {% endif %}
+                  </div>
+                </div>
               </div>
+              {# Inline complete form — only for in_transit + not yet reached #}
               {% if assignment.status == 'in_transit' and not st.reached_at %}
-              <button type="button" onclick="logStop({{ st.id }}, this)"
-                style="padding:5px 12px;background:#16a34a;color:#fff;border:none;border-radius:7px;font-size:12px;font-weight:700;cursor:pointer;">Reached</button>
+              <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;">
+                <input type="text" id="rcvd-by-{{ st.id }}" placeholder="Received by (name) *"
+                  style="flex:2;min-width:130px;padding:6px 10px;border:1.5px solid var(--border);border-radius:8px;font-size:12px;font-family:inherit;">
+                <input type="text" id="rcvd-co-{{ st.id }}" placeholder="Company (optional)"
+                  style="flex:2;min-width:120px;padding:6px 10px;border:1.5px solid var(--border);border-radius:8px;font-size:12px;font-family:inherit;">
+                <button type="button" id="stop-btn-{{ st.id }}" onclick="completeStop({{ st.id }}, this)"
+                  style="padding:6px 16px;background:linear-gradient(135deg,#16a34a,#22c55e);color:#fff;border:none;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;white-space:nowrap;">
+                  ✓ Complete Delivery
+                </button>
+              </div>
               {% endif %}
             </div>
             {% endfor %}
@@ -1040,56 +1058,26 @@ tbody tr:hover { background: rgba(165,180,252,0.18) !important; }
         </div>
         {% endif %}
 
+        {# ── Trip actions ── #}
         {% if assignment.status == 'pending' %}
         <button id="start-trip-btn-{{ assignment.id }}"
           onclick="startDeliveryTrip({{ assignment.id }})"
           style="padding:9px 18px;background:linear-gradient(135deg,#0284c7,#0ea5e9);color:#fff;border:none;border-radius:9px;font-size:13px;font-weight:700;font-family:inherit;cursor:pointer;">
-          Start Trip
+          🚀 Start Trip
         </button>
         {% elif assignment.status == 'in_transit' %}
-        <div style="margin-top:6px;">
-          {% if trip and trip.departure_time %}
-          <div class="delivery-timer-box" style="display:flex;align-items:center;gap:10px;margin-bottom:10px;padding:10px 14px;background:linear-gradient(135deg,#ecfeff,#cffafe);border:1.5px solid #67e8f9;border-radius:10px;">
-            <span style="font-size:20px;">⏱️</span>
-            <div>
-              <div style="font-size:10px;font-weight:700;color:#0e7490;text-transform:uppercase;letter-spacing:.6px;">Time since accepted</div>
-              <div class="delivery-timer" data-departure="{{ trip.departure_time.strftime('%Y-%m-%dT%H:%M:%S') }}Z"
-                   style="font-size:22px;font-weight:800;color:#0891b2;font-variant-numeric:tabular-nums;letter-spacing:1px;">00:00</div>
-            </div>
-            <span style="margin-left:auto;font-size:11px;color:#155e75;">Departed {{ trip.departure_time.strftime('%H:%M') }} UTC</span>
+        {% if trip and trip.departure_time %}
+        <div class="delivery-timer-box" style="display:flex;align-items:center;gap:10px;margin-top:6px;padding:10px 14px;background:linear-gradient(135deg,#ecfeff,#cffafe);border:1.5px solid #67e8f9;border-radius:10px;">
+          <span style="font-size:20px;">⏱️</span>
+          <div>
+            <div style="font-size:10px;font-weight:700;color:#0e7490;text-transform:uppercase;letter-spacing:.6px;">Trip time</div>
+            <div class="delivery-timer" data-departure="{{ trip.departure_time.strftime('%Y-%m-%dT%H:%M:%S') }}Z"
+                 style="font-size:22px;font-weight:800;color:#0891b2;font-variant-numeric:tabular-nums;letter-spacing:1px;">00:00</div>
           </div>
-          {% endif %}
-          <button id="check-arrival-btn-{{ assignment.id }}"
-            onclick="checkArrivalAndUnlock({{ assignment.id }})"
-            style="padding:9px 18px;background:linear-gradient(135deg,#d97706,#f59e0b);color:#fff;border:none;border-radius:9px;font-size:13px;font-weight:700;font-family:inherit;cursor:pointer;">
-            Check Arrival
-          </button>
-          <div id="delivery-form-{{ assignment.id }}" style="display:none;margin-top:14px;padding:14px;background:#fff;border:1.5px solid #86efac;border-radius:10px;">
-            <div style="font-size:13px;font-weight:700;color:#166534;margin-bottom:10px;">Confirm Delivery</div>
-            <div style="display:flex;flex-direction:column;gap:10px;">
-              <div>
-                <label style="font-size:12px;font-weight:600;color:var(--muted);display:block;margin-bottom:4px;">Delivered to (name) *</label>
-                <input id="del-to-name-{{ assignment.id }}" type="text" maxlength="150"
-                  style="width:100%;padding:8px 11px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;">
-              </div>
-              <div>
-                <label style="font-size:12px;font-weight:600;color:var(--muted);display:block;margin-bottom:4px;">Company</label>
-                <input id="del-to-company-{{ assignment.id }}" type="text" maxlength="150"
-                  style="width:100%;padding:8px 11px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;">
-              </div>
-              <div>
-                <label style="font-size:12px;font-weight:600;color:var(--muted);display:block;margin-bottom:4px;">Note (optional)</label>
-                <textarea id="del-note-{{ assignment.id }}" rows="2" maxlength="500"
-                  style="width:100%;padding:8px 11px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;resize:vertical;"></textarea>
-              </div>
-              <button id="del-submit-btn-{{ assignment.id }}"
-                onclick="confirmDelivery({{ assignment.id }})"
-                style="padding:9px 20px;background:linear-gradient(135deg,#16a34a,#22c55e);color:#fff;border:none;border-radius:9px;font-size:13px;font-weight:700;font-family:inherit;cursor:pointer;align-self:flex-start;">
-                Confirm Delivery
-              </button>
-            </div>
-          </div>
+          <span style="margin-left:auto;font-size:11px;color:#155e75;">Started {{ trip.departure_time.strftime('%H:%M') }} UTC</span>
         </div>
+        {% endif %}
+        <p style="font-size:12px;color:var(--muted);margin:8px 0 0;">Complete each store above — assignment auto-closes when all are done.</p>
         {% endif %}
       </div>
       {% endfor %}
@@ -1100,8 +1088,11 @@ tbody tr:hover { background: rgba(165,180,252,0.18) !important; }
   </div>
 
   {% elif staff_type == 'biller' %}
-  <div class="card" style="margin-bottom:20px;border-left:4px solid #0ea5e9;">
-    <div class="section-label" style="margin-bottom:16px;">🚚 Assign New Delivery</div>
+  <div class="card" style="margin-bottom:20px;border-left:4px solid #0ea5e9;" id="dispatch-form">
+    <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:6px;margin-bottom:16px;">
+      <div class="section-label" style="margin-bottom:0;">🚚 Assign Delivery</div>
+      <span style="font-size:11px;color:var(--muted);font-weight:600;">You can assign as many deliveries as needed — each is independent with its own timing.</span>
+    </div>
     {% if not purchaser_delivery_staff %}
     <div style="padding:14px;background:#fef3c7;border:1.5px solid #fbbf24;border-radius:9px;font-size:13px;color:#92400e;margin-bottom:12px;">
       ⚠️ No delivery staff found. Ask admin to set at least one employee's role to <strong>Delivery</strong>.
@@ -1770,55 +1761,6 @@ function startDeliveryTrip(assignmentId) {
   }, {enableHighAccuracy: true, timeout: 15000});
 }
 
-function checkArrivalAndUnlock(assignmentId) {
-  if (!navigator.geolocation) { unlockDeliveryForm(assignmentId); return; }
-  var btn = document.getElementById('check-arrival-btn-' + assignmentId);
-  if (btn) { btn.textContent = 'Checking GPS...'; btn.disabled = true; }
-  navigator.geolocation.getCurrentPosition(function(pos) {
-    fetch('/delivery/check_arrival/' + assignmentId, {
-      method: 'POST', headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({lat: pos.coords.latitude, lng: pos.coords.longitude})
-    }).then(function(r){ return r.json(); }).then(function(d) {
-      if (d.ok && d.unlock) { unlockDeliveryForm(assignmentId); }
-      else if (d.ok && !d.unlock) {
-        alert('You are ' + d.dist + 'm away. You need to be within ' + d.radius + 'm to confirm delivery.');
-        if (btn) { btn.textContent = 'Check Arrival'; btn.disabled = false; }
-      } else { alert('Error: ' + (d.error || 'Unknown')); if (btn) { btn.textContent = 'Check Arrival'; btn.disabled = false; } }
-    }).catch(function(){ unlockDeliveryForm(assignmentId); });
-  }, function() { unlockDeliveryForm(assignmentId); }, {enableHighAccuracy: true, timeout: 15000});
-}
-
-function unlockDeliveryForm(assignmentId) {
-  var form = document.getElementById('delivery-form-' + assignmentId);
-  var btn  = document.getElementById('check-arrival-btn-' + assignmentId);
-  if (form) { form.style.display = 'block'; }
-  if (btn)  { btn.style.display = 'none'; }
-}
-
-function confirmDelivery(assignmentId) {
-  var name    = document.getElementById('del-to-name-'    + assignmentId).value.trim();
-  var company = document.getElementById('del-to-company-' + assignmentId).value.trim();
-  var note    = document.getElementById('del-note-'       + assignmentId).value.trim();
-  if (!name) { alert('Please enter the name of the person who received the package.'); return; }
-  var btn = document.getElementById('del-submit-btn-' + assignmentId);
-  if (btn) { btn.textContent = 'Confirming...'; btn.disabled = true; }
-  if (!navigator.geolocation) { _doConfirm(assignmentId, 0, 0, name, company, note, btn); return; }
-  navigator.geolocation.getCurrentPosition(
-    function(pos) { _doConfirm(assignmentId, pos.coords.latitude, pos.coords.longitude, name, company, note, btn); },
-    function()    { _doConfirm(assignmentId, 0, 0, name, company, note, btn); },
-    {enableHighAccuracy: true, timeout: 15000}
-  );
-}
-
-function _doConfirm(assignmentId, lat, lng, name, company, note, btn) {
-  fetch('/delivery/confirm/' + assignmentId, {
-    method: 'POST', headers: {'Content-Type': 'application/json'},
-    body: JSON.stringify({lat: lat, lng: lng, delivered_to: name, company: company, note: note})
-  }).then(function(r){ return r.json(); }).then(function(d) {
-    if (d.ok) { location.reload(); }
-    else { alert('Cannot confirm: ' + d.error); if (btn) { btn.textContent = 'Confirm Delivery'; btn.disabled = false; } }
-  }).catch(function(){ alert('Network error'); if (btn) { btn.textContent = 'Confirm Delivery'; btn.disabled = false; } });
-}
 // ─── End Delivery GPS tracking ───────────────────────────────────────────────
 
 // ─── Leaflet live delivery maps (route + ETA + live tracking) ─────────────────
@@ -2083,27 +2025,50 @@ function toggleEdit(id){
   var f = document.getElementById('edit-form-' + id);
   if(f) f.style.display = (f.style.display === 'none' || !f.style.display) ? 'block' : 'none';
 }
-// Rider marks a store reached (captures GPS if available)
-function logStop(stopId, btn){
-  if(btn){ btn.disabled = true; btn.textContent = '...'; }
+// Rider completes one store delivery — inline name/company inputs per stop
+function completeStop(stopId, btn){
+  var receivedBy = (document.getElementById('rcvd-by-' + stopId) || {}).value || '';
+  if(!receivedBy.trim()){
+    alert('Please enter the name of the person who received the package.');
+    return;
+  }
+  var company = (document.getElementById('rcvd-co-' + stopId) || {}).value || '';
+  if(btn){ btn.disabled = true; btn.textContent = 'Saving…'; }
   function send(lat, lng){
     fetch('/delivery/log_stop/' + stopId, {
       method:'POST', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({lat:lat||0, lng:lng||0})
+      body: JSON.stringify({lat:lat||0, lng:lng||0, received_by:receivedBy.trim(), company:company.trim()})
     }).then(function(r){return r.json();}).then(function(d){
       if(d.ok){
         var row = document.getElementById('stop-' + stopId);
-        if(row){ row.style.background='#f0fdf4'; row.style.borderColor='#86efac';
-          var b = row.querySelector('button'); if(b) b.remove();
-          var icon = row.querySelector('span'); if(icon) icon.textContent='✅';
+        if(row){
+          row.style.background='#f0fdf4'; row.style.borderColor='#86efac';
+          // Replace inline form with done badge
+          var form = row.querySelector('div:last-child');
+          if(form && form.querySelector('input')){
+            var mins = d.minutes_from_prev ? (' · ' + d.minutes_from_prev + ' min') : '';
+            var rcvd = receivedBy + (company ? ' / ' + company : '');
+            form.outerHTML = '<div style="font-size:11px;color:#166534;margin-top:4px;">✅ Delivered to <strong>'+rcvd+'</strong>' + mins + '</div>';
+          }
+          var icon = row.querySelector('span:first-child'); if(icon) icon.textContent='✅';
         }
-      } else { if(btn){ btn.disabled=false; btn.textContent='Reached'; } alert(d.error||'Failed'); }
-    }).catch(function(){ if(btn){ btn.disabled=false; btn.textContent='Reached'; } });
+        if(d.all_done){
+          // Short pause then reload so the assignment disappears from the list
+          setTimeout(function(){ location.reload(); }, 1200);
+        }
+      } else {
+        if(btn){ btn.disabled=false; btn.textContent='✓ Complete Delivery'; }
+        alert(d.error || 'Failed to save. Try again.');
+      }
+    }).catch(function(){
+      if(btn){ btn.disabled=false; btn.textContent='✓ Complete Delivery'; }
+      alert('Network error. Check connection and try again.');
+    });
   }
   if(navigator.geolocation){
     navigator.geolocation.getCurrentPosition(
       function(p){ send(p.coords.latitude, p.coords.longitude); },
-      function(){ send(0,0); }, {enableHighAccuracy:true, timeout:6000}
+      function(){ send(0,0); }, {enableHighAccuracy:true, timeout:5000}
     );
   } else { send(0,0); }
 }

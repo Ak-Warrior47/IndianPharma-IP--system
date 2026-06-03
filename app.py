@@ -5094,15 +5094,20 @@ def delivery_dispatch_delete(assignment_id):
 @app.route("/delivery/log_stop/<int:stop_id>", methods=["POST"])
 @login_required
 def delivery_log_stop(stop_id):
-    """Delivery rider marks a store/stop as reached — records timestamp + actual packages delivered."""
+    """Delivery rider marks a store/stop as delivered — records timestamp, who received it,
+    and auto-completes the assignment when every stop is done."""
     emp_id = session.get("user_id")
     try:
         stop = db.session.get(DeliveryStop, stop_id)
         if not stop or stop.emp_id != emp_id:
             return jsonify({"ok": False, "error": "Stop not found"}), 404
+        if stop.reached_at:
+            return jsonify({"ok": False, "error": "Already marked"}), 400
+
         data = request.get_json(force=True, silent=True) or {}
         now = datetime.utcnow()
-        # minutes since departure (or previous logged stop)
+
+        # Time since previous reached stop (or trip departure)
         trip = DeliveryTrip.query.filter_by(assignment_id=stop.assignment_id).first()
         prev = (DeliveryStop.query
                 .filter(DeliveryStop.assignment_id == stop.assignment_id,
@@ -5111,22 +5116,60 @@ def delivery_log_stop(stop_id):
         base = prev.reached_at if prev else (trip.departure_time if trip else now)
         stop.reached_at = now
         stop.minutes_from_prev = round((now - base).total_seconds() / 60.0, 1) if base else None
-        try:
-            if data.get("packages") is not None:
-                stop.packages = max(0, int(data.get("packages")))
-        except (ValueError, TypeError):
-            pass
+
+        # Store who received the package (saved in note field)
+        received_by = (data.get("received_by") or "").strip()[:150]
+        company     = (data.get("company") or "").strip()[:150]
+        if received_by or company:
+            parts = [p for p in [received_by, company] if p]
+            stop.note = "RCVD: " + " / ".join(parts)
+
+        # GPS
         try:
             la, ln = float(data.get("lat", 0)), float(data.get("lng", 0))
             if la and ln:
                 stop.lat, stop.lng = la, ln
         except (ValueError, TypeError):
             pass
-        db.session.commit()
-        # Summary: how many stops done / total
+
+        db.session.flush()  # assign stop.reached_at before counting
+
+        # Check if ALL stops for this assignment are now done
         all_stops = DeliveryStop.query.filter_by(assignment_id=stop.assignment_id).all()
-        done = sum(1 for s in all_stops if s.reached_at)
-        return jsonify({"ok": True, "done": done, "total": len(all_stops),
+        done  = sum(1 for s in all_stops if s.reached_at)
+        total = len(all_stops)
+        all_done = (done == total)
+
+        if all_done:
+            assignment = db.session.get(DeliveryAssignment, stop.assignment_id)
+            if assignment and assignment.status != "delivered":
+                assignment.status = "delivered"
+                if trip:
+                    trip.status        = "completed"
+                    trip.arrival_time  = now
+                    if trip.departure_time:
+                        dur = (now - trip.departure_time).total_seconds() / 60.0
+                        trip.duration_minutes = round(dur, 1)
+                        trip.is_on_time = dur <= 60.0
+                else:
+                    new_trip = DeliveryTrip(
+                        assignment_id=stop.assignment_id, emp_id=emp_id,
+                        trip_date=date.today(), arrival_time=now, status="completed",
+                    )
+                    db.session.add(new_trip)
+
+        db.session.commit()
+
+        if all_done:
+            try:
+                compute_delivery_badges(emp_id)
+            except Exception:
+                pass
+            log_audit("delivery_complete", str(emp_id),
+                      f"All {total} stops done for assignment #{stop.assignment_id}")
+
+        return jsonify({"ok": True, "done": done, "total": total,
+                        "all_done": all_done,
                         "minutes_from_prev": stop.minutes_from_prev})
     except Exception as e:
         db.session.rollback()
