@@ -2700,6 +2700,15 @@ def admin_dashboard():
         total_entries = len(all_ents)
         active_today = KPIEntry.query.filter_by(entry_date=today).count()
         open_windows = PastEntryWindow.query.filter_by(is_active=True).order_by(PastEntryWindow.past_date.desc()).all()
+        # Last 12 months (incl. current) for the bulk open/close month picker
+        selectable_months = []
+        _y, _m = today.year, today.month
+        for _ in range(12):
+            selectable_months.append({"value": f"{_y:04d}-{_m:02d}",
+                                      "label": date(_y, _m, 1).strftime("%B %Y")})
+            _m -= 1
+            if _m == 0:
+                _m = 12; _y -= 1
         open_complaints = Complaint.query.filter_by(is_resolved=False).order_by(Complaint.created_at.desc()).all()
 
         # Feature 17: Stale validations (pending > 24h)
@@ -2795,6 +2804,7 @@ def admin_dashboard():
             active_today=active_today, emp_count=len(employees), today=today,
             current_month=today.strftime("%B %Y"),
             open_windows=open_windows,
+            selectable_months=selectable_months,
             open_complaints=open_complaints,
             all_staff=employees,
             picker_lb=picker_lb, checker_lb=checker_lb, purchaser_lb=purchaser_lb, mixed_lb=mixed_lb,
@@ -2818,7 +2828,7 @@ def admin_dashboard():
         return render_template("admin.html", rows=[], total_picked=0,
                                total_entries=0, active_today=0, emp_count=0, today=date.today(),
                                current_month=date.today().strftime("%B %Y"),
-                               open_windows=[], open_complaints=[], all_staff=[],
+                               open_windows=[], selectable_months=[], open_complaints=[], all_staff=[],
                                picker_lb=[], checker_lb=[], purchaser_lb=[], mixed_lb=[],
                                picker_week_lb=[], checker_week_lb=[], purchaser_week_lb=[], mixed_week_lb=[],
                                team_avg_eff=0, team_avg_acc=0, improving=[],
@@ -3322,6 +3332,67 @@ def admin_open_past_window():
         db.session.rollback()
         logger.error(f"admin_open_past_window: {e}")
         flash("Error updating entry window.", "danger")
+    return redirect(url_for("admin_dashboard"))
+
+
+@app.route("/admin/past_window_bulk", methods=["POST"])
+@admin_required
+def admin_past_window_bulk():
+    """Open or close past-entry windows for whole month(s) in a single click.
+    Accepts `months` (one or more YYYY-MM values) and an `action` (open|close)."""
+    try:
+        action = request.form.get("action", "open")
+        months = request.form.getlist("months") or request.form.getlist("months[]")
+        # Also accept a single 'month' field for convenience
+        single = (request.form.get("month", "") or "").strip()
+        if single:
+            months.append(single)
+        months = [m.strip() for m in months if m and m.strip()]
+        if not months:
+            flash("Pick at least one month.", "warning")
+            return redirect(url_for("admin_dashboard"))
+
+        today = date.today()
+        opened = closed = 0
+        for ym in months:
+            try:
+                year, mon = (int(x) for x in ym.split("-")[:2])
+            except (ValueError, IndexError):
+                continue
+            # Every day in that month that is strictly before today
+            d = date(year, mon, 1)
+            while d.month == mon and d.year == year:
+                if d < today:
+                    window = PastEntryWindow.query.filter_by(past_date=d).first()
+                    if action == "close":
+                        if window and window.is_active:
+                            window.is_active = False
+                            closed += 1
+                    else:
+                        if window:
+                            if not window.is_active:
+                                window.is_active = True
+                                window.opened_by = session.get("user_id")
+                                window.opened_at = datetime.utcnow()
+                                opened += 1
+                        else:
+                            db.session.add(PastEntryWindow(
+                                past_date=d, opened_by=session.get("user_id"), is_active=True))
+                            opened += 1
+                d += timedelta(days=1)
+        db.session.commit()
+
+        if action == "close":
+            log_audit("bulk_close_past_windows", ", ".join(months), f"{closed} days closed")
+            flash(f"✅ Closed {closed} past-entry day(s) across {len(months)} month(s).", "success")
+        else:
+            log_audit("bulk_open_past_windows", ", ".join(months), f"{opened} days opened")
+            flash(f"✅ Opened {opened} past-entry day(s) across {len(months)} month(s). "
+                  f"Staff who haven't submitted can now backfill any day in those months.", "success")
+    except Exception as e:
+        db.session.rollback()
+        logger.error(f"admin_past_window_bulk: {e}")
+        flash("Error updating month windows.", "danger")
     return redirect(url_for("admin_dashboard"))
 
 

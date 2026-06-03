@@ -863,6 +863,32 @@ var NOTES_BY_EMP = {
       </div>
     </form>
 
+    <!-- BULK: whole month(s) in one click -->
+    <div style="margin-top:18px;padding-top:16px;border-top:1px dashed var(--border);">
+      <div style="font-size:13px;font-weight:700;margin-bottom:6px;">Open / Close Whole Month(s) in One Click</div>
+      <p style="font-size:12px;color:var(--muted);margin-bottom:12px;">
+        Pick one or more months and open (or close) entry windows for every past day in those months at once.
+      </p>
+      <form method="POST" action="/admin/past_window_bulk" autocomplete="off" id="bulkMonthForm">
+        <div class="pw-form-row" style="flex-wrap:wrap;align-items:flex-end;gap:10px;">
+          <div class="field" style="flex:1;min-width:180px;">
+            <label>Months (hold Ctrl/Cmd to pick many)</label>
+            <select name="months" multiple size="5"
+              style="width:100%;padding:8px 10px;border:1.5px solid var(--border);border-radius:9px;font-size:13px;font-family:inherit;">
+              {% for m in selectable_months %}
+              <option value="{{ m.value }}">{{ m.label }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <button type="submit" class="btn-open-win" formaction="/admin/past_window_bulk"
+            onclick="document.getElementById('bulkAction').value='open'">Open All Days</button>
+          <button type="submit" class="btn-open-win" style="background:#fee2e2;color:#991b1b;border:1px solid #fca5a5;"
+            onclick="document.getElementById('bulkAction').value='close'">Close All Days</button>
+        </div>
+        <input type="hidden" name="action" id="bulkAction" value="open">
+      </form>
+    </div>
+
     {% if open_windows %}
     <div class="pw-active-list">
       <div class="pw-active-title">Currently Open Windows</div>
