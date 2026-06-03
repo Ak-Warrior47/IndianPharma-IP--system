@@ -1023,6 +1023,52 @@ def get_period_entries(emp_id: int, period: str) -> List[KPIEntry]:
         return []
 
 
+def _entry_volume(e, staff_type):
+    """Primary output volume of one KPIEntry, by role."""
+    st = (staff_type or "").lower()
+    if st == "picker":
+        return (e.picked or 0)
+    if st == "checker":
+        return (e.checked or 0)
+    if st == "purchaser":
+        return (e.checked or 0)  # PO bills checked
+    return (e.sales_bills_open or 0)
+
+
+def compute_monthly_target(emp_id, staff_type):
+    """Auto monthly target = the employee's own highest past calendar-month total.
+    Their personal best month becomes the bar to beat next month.
+    Returns dict with best_total, best_label, current_total, pct, met."""
+    try:
+        entries = KPIEntry.query.filter_by(emp_id=emp_id).all()
+    except Exception:
+        entries = []
+    if not entries:
+        return None
+    today = date.today()
+    cur_key = (today.year, today.month)
+    by_month = {}
+    for e in entries:
+        if not e.entry_date:
+            continue
+        key = (e.entry_date.year, e.entry_date.month)
+        by_month[key] = by_month.get(key, 0) + _entry_volume(e, staff_type)
+    current_total = by_month.get(cur_key, 0)
+    # Best among PAST months (exclude the current, still-in-progress month)
+    past = {k: v for k, v in by_month.items() if k != cur_key}
+    if not past:
+        return {"best_total": 0, "best_label": "—", "current_total": current_total,
+                "pct": 0, "met": False, "has_history": False}
+    best_key = max(past, key=lambda k: past[k])
+    best_total = past[best_key]
+    best_label = date(best_key[0], best_key[1], 1).strftime("%B %Y")
+    pct = round(current_total / best_total * 100, 1) if best_total else 0
+    return {"best_total": best_total, "best_label": best_label,
+            "current_total": current_total, "pct": min(pct, 999),
+            "met": current_total >= best_total and best_total > 0,
+            "has_history": True}
+
+
 def build_pdf_payload(emp: "Employee") -> Dict[str, Any]:
     """Build the dict passed to utils.generate_visual_pdf().
 
@@ -2253,7 +2299,7 @@ def dashboard():
                 today=today,
                 today_entry=None,
                 today_db_note=today_db_note,
-                d_stats=None, w_stats=None, m_stats=None,
+                d_stats=None, w_stats=None, m_stats=None, monthly_target=None,
                 recent=DeliveryBillerNote.query.filter_by(emp_id=emp_id).order_by(
                     DeliveryBillerNote.entry_date.desc()).limit(14).all(),
                 trend_labels=[], trend_accuracy=[], trend_speed=[],
@@ -2462,6 +2508,7 @@ def dashboard():
         d_stats = build_analytics(get_period_entries(emp_id, "day"), staff_type, emp_id=emp_id)
         w_stats = build_analytics(get_period_entries(emp_id, "week"), staff_type, emp_id=emp_id)
         m_stats = build_analytics(get_period_entries(emp_id, "month"), staff_type, emp_id=emp_id)
+        monthly_target = compute_monthly_target(emp_id, staff_type)
 
         trend_labels = []
         trend_accuracy = []
@@ -2619,6 +2666,7 @@ def dashboard():
             d_stats=d_stats,
             w_stats=w_stats,
             m_stats=m_stats,
+            monthly_target=monthly_target,
             recent=all_entries[:14],
             trend_labels=trend_labels,
             trend_accuracy=trend_accuracy,
@@ -2659,7 +2707,7 @@ def dashboard():
         flash("Error loading dashboard.", "danger")
         return render_template("dashboard.html",
             user_name="User", user_id=0, staff_type="picker", today=date.today(),
-            today_entry=None, d_stats=None, w_stats=None, m_stats=None,
+            today_entry=None, d_stats=None, w_stats=None, m_stats=None, monthly_target=None,
             recent=[], trend_labels=[], trend_accuracy=[], trend_speed=[], total_entries=0,
             new_personal_best=False, pending_windows=[],
             active_announcements=[], unread_count=0, current_goal=None,

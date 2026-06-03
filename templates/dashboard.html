@@ -494,6 +494,28 @@ tbody tr:hover { background: rgba(165,180,252,0.18) !important; }
     </div>
   </div>
 
+  <!-- MONTHLY AUTO-TARGET — beat your own best month -->
+  {% if monthly_target and monthly_target.has_history %}
+  <div class="card" style="border-left:4px solid #f59e0b;">
+    <div class="section-label" style="display:flex;align-items:center;gap:10px;">
+      🎯 Monthly Target — Beat Your Best
+      {% if monthly_target.met %}<span style="padding:3px 9px;border-radius:6px;background:#dcfce7;color:#15803d;font-size:11px;font-weight:700;">BEATEN! 🎉</span>{% endif %}
+    </div>
+    <p style="font-size:12px;color:var(--muted);margin:-2px 0 12px;">
+      Your best month was <strong>{{ monthly_target.best_label }}</strong> with <strong>{{ monthly_target.best_total }}</strong>.
+      That's now your target — beat it this month.
+    </p>
+    {% set tgt_disp = 100 if monthly_target.pct > 100 else monthly_target.pct %}
+    <div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:4px;">
+      <span style="font-weight:600;color:var(--text);">This month: <strong>{{ monthly_target.current_total }}</strong> / {{ monthly_target.best_total }}</span>
+      <span style="font-weight:700;color:{{ '#16a34a' if monthly_target.met else '#d97706' }};">{{ monthly_target.pct }}%</span>
+    </div>
+    <div style="height:12px;background:#f1f5f9;border-radius:20px;overflow:hidden;">
+      <div style="height:100%;width:{{ tgt_disp }}%;background:linear-gradient(90deg,{{ '#16a34a,#22c55e' if monthly_target.met else '#f59e0b,#fbbf24' }});border-radius:20px;transition:width .5s;"></div>
+    </div>
+  </div>
+  {% endif %}
+
   <!-- POTENTIAL BAR — hard-level target tracker -->
   {% if w_stats and w_stats.hard_target_items %}
   <div class="card">
