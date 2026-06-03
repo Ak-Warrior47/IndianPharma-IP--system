@@ -2125,6 +2125,7 @@ def dashboard():
             delivery_diag = None
             stops_map = {}
             my_dispatches = []
+            assigner_today = None
             try:
                 if staff_type == "delivery":
                     my_assignments = (
@@ -2174,6 +2175,8 @@ def dashboard():
                         stops = DeliveryStop.query.filter(DeliveryStop.assignment_id.in_(aid_list)).order_by(DeliveryStop.id).all()
                         for st in stops:
                             stops_map.setdefault(st.assignment_id, []).append(st)
+                    # End-of-day summary: everything THIS assigner dispatched today
+                    assigner_today = _assigner_day_summary(emp_id, today, emp_map={e.id: e for e in all_emps})
                     logger.info(f"Biller dashboard (note path): {len(purchaser_delivery_staff)} delivery staff "
                                 f"of {len(all_emps)} employees, breakdown={_role_breakdown}")
             except Exception as _de:
@@ -2205,6 +2208,7 @@ def dashboard():
                 delivery_diag=delivery_diag,
                 stops_map=stops_map,
                 my_dispatches=my_dispatches,
+                assigner_today=assigner_today,
                 known_routes=KNOWN_ROUTES,
                 packet_types=PACKET_TYPES,
                 store_lat=STORE_LAT,
@@ -2567,10 +2571,15 @@ def dashboard():
             purchaser_delivery_staff=purchaser_delivery_staff,
             my_deliveries_today=my_deliveries_today,
             trip_map=trip_map,
+            stops_map={},
+            my_dispatches=[],
             store_lat=STORE_LAT,
             store_lng=STORE_LNG,
             tomtom_key=TOMTOM_API_KEY,
             delivery_diag=delivery_diag,
+            assigner_today=None,
+            known_routes=KNOWN_ROUTES,
+            packet_types=PACKET_TYPES,
         )
     except Exception as e:
         logger.error(f"Dashboard error: {e}")
@@ -2586,7 +2595,9 @@ def dashboard():
             today_multitask=[], today_db_note=None,
             primary_staff_type="picker", secondary_staff_type=None,
             my_assignments=[], purchaser_delivery_staff=[], my_deliveries_today=[],
-            trip_map={}, store_lat=0.0, store_lng=0.0, tomtom_key="", delivery_diag=None)
+            trip_map={}, stops_map={}, my_dispatches=[],
+            store_lat=0.0, store_lng=0.0, tomtom_key="", delivery_diag=None,
+            assigner_today=None, known_routes=[], packet_types=[])
 
 
 @app.route("/admin_dashboard")
@@ -4725,6 +4736,62 @@ def compute_stop_distances(stops, base_lat=None, base_lng=None):
     return round(total, 2)
 
 
+def _assigner_day_summary(assigner_id, day, emp_map=None):
+    """Return a dict summarising everything dispatched by `assigner_id` on `day`."""
+    emp_map = emp_map or {}
+    assignments = (DeliveryAssignment.query
+                   .filter_by(purchaser_id=assigner_id)
+                   .filter(db.func.date(DeliveryAssignment.assigned_at) == day)
+                   .order_by(DeliveryAssignment.assigned_at.asc())
+                   .all())
+    if not assignments:
+        return {
+            "total_dispatches": 0, "total_packets": 0,
+            "delivered": 0, "pending": 0, "in_transit": 0, "failed": 0,
+            "per_rider": [], "assignments": [],
+        }
+    aid_list = [a.id for a in assignments]
+    stops = DeliveryStop.query.filter(DeliveryStop.assignment_id.in_(aid_list)).order_by(DeliveryStop.id).all()
+    trips = DeliveryTrip.query.filter(DeliveryTrip.assignment_id.in_(aid_list)).all()
+    trip_map = {t.assignment_id: t for t in trips}
+    stops_map = {}
+    for st in stops:
+        stops_map.setdefault(st.assignment_id, []).append(st)
+
+    total_packets = 0
+    per_rider = {}
+    for a in assignments:
+        total_packets += a.no_of_tasks or 0
+        rid = a.delivery_emp_id
+        if rid not in per_rider:
+            emp = emp_map.get(rid)
+            per_rider[rid] = {
+                "name": emp.name if emp else f"#{rid}",
+                "dispatches": 0, "packets": 0,
+                "delivered": 0, "pending": 0, "in_transit": 0, "failed": 0,
+                "total_km": 0.0,
+            }
+        per_rider[rid]["dispatches"] += 1
+        per_rider[rid]["packets"] += a.no_of_tasks or 0
+        per_rider[rid][a.status if a.status in ("delivered", "in_transit", "failed") else "pending"] += 1
+        for st in stops_map.get(a.id, []):
+            per_rider[rid]["total_km"] = round(per_rider[rid]["total_km"] + (st.dist_from_prev_km or 0), 2)
+
+    statuses = [a.status for a in assignments]
+    return {
+        "total_dispatches": len(assignments),
+        "total_packets": total_packets,
+        "delivered": statuses.count("delivered"),
+        "pending": statuses.count("pending"),
+        "in_transit": statuses.count("in_transit"),
+        "failed": statuses.count("failed"),
+        "per_rider": sorted(per_rider.values(), key=lambda r: r["name"]),
+        "assignments": assignments,
+        "stops_map": stops_map,
+        "trip_map": trip_map,
+    }
+
+
 def geocode_address(address):
     """Convert an Odisha address to (lat, lng) using Nominatim, biased to Odisha state.
     Tries hard: appends ', Odisha, India' if missing, then falls back to a wider search.
@@ -5470,6 +5537,16 @@ def admin_delivery():
         pending_count   = sum(1 for a in assignments if a.status == "pending")
         in_transit_count= sum(1 for a in assignments if a.status == "in_transit")
 
+        # ── Stops for journey map (today's assignments) ──
+        today_aids = [a.id for a in assignments if a.assigned_at and a.assigned_at.date() == today]
+        today_stops = (DeliveryStop.query
+                       .filter(DeliveryStop.assignment_id.in_(today_aids))
+                       .order_by(DeliveryStop.assignment_id, DeliveryStop.id).all()
+                       if today_aids else [])
+        stops_map = {}
+        for st in today_stops:
+            stops_map.setdefault(st.assignment_id, []).append(st)
+
         return render_template("admin_delivery.html",
                                assignments=assignments, trip_map=trip_map,
                                emp_map=emp_map, leaderboard=leaderboard,
@@ -5482,7 +5559,10 @@ def admin_delivery():
                                today_completed=today_completed,
                                month_completed=month_completed,
                                pending_count=pending_count,
-                               in_transit_count=in_transit_count)
+                               in_transit_count=in_transit_count,
+                               stops_map=stops_map,
+                               store_lat=STORE_LAT,
+                               store_lng=STORE_LNG)
     except Exception as e:
         logger.error(f"admin_delivery: {e}")
         flash("Error loading delivery dashboard.", "danger")

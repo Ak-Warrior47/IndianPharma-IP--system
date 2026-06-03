@@ -6,6 +6,8 @@
 <title>Delivery Dashboard | Admin</title>
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&family=DM+Serif+Display&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <style>
 *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
 :root {
@@ -314,8 +316,10 @@ tbody tr:hover { background: rgba(165,180,252,0.18) !important; }
           <th>Bills</th>
           <th>Status</th>
           <th>Delivered To</th>
+          <th>Dispatch</th>
           <th>Duration</th>
           <th>On-Time</th>
+          <th>Route / Stops</th>
         </tr>
       </thead>
       <tbody>
@@ -323,13 +327,14 @@ tbody tr:hover { background: rgba(165,180,252,0.18) !important; }
         {% set trip = trip_map.get(a.id) %}
         {% set dstaff = emp_map.get(a.delivery_emp_id) %}
         {% set purchaser = emp_map.get(a.purchaser_id) %}
+        {% set astops = stops_map.get(a.id, []) %}
         <tr>
           <td style="color:var(--muted);">#{{ a.id }}</td>
           <td style="white-space:nowrap;">{{ a.assigned_at.strftime('%d %b %y') if a.assigned_at else '—' }}</td>
           <td><strong>{{ dstaff.name if dstaff else '—' }}</strong></td>
           <td style="color:var(--muted);">{{ purchaser.name if purchaser else '—' }}</td>
-          <td style="max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="{{ a.destination_addr }}">{{ a.destination_addr }}</td>
-          <td style="max-width:130px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="{{ a.package_desc }}">{{ a.package_desc[:50] }}{% if a.package_desc|length > 50 %}…{% endif %}</td>
+          <td style="max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="{{ a.destination_addr }}">{{ a.destination_addr }}</td>
+          <td>{{ a.no_of_tasks or a.bills_count or 0 }}{% if a.packet_type %}<br><span style="color:var(--muted);font-size:10px;">{{ a.packet_type }}</span>{% endif %}</td>
           <td>{{ a.bills_count or 0 }}</td>
           <td>
             {% if a.status == 'pending' %}<span class="badge badge-pending">Pending</span>
@@ -337,10 +342,9 @@ tbody tr:hover { background: rgba(165,180,252,0.18) !important; }
             {% elif a.status == 'delivered' %}<span class="badge badge-delivered">Delivered</span>
             {% else %}<span class="badge badge-failed">{{ a.status }}</span>{% endif %}
           </td>
-          <td>
-            {% if trip and trip.delivered_to_name %}
-              {{ trip.delivered_to_name }}{% if trip.delivered_to_company %}<br><span style="color:var(--muted);font-size:11px;">{{ trip.delivered_to_company }}</span>{% endif %}
-            {% else %}<span style="color:var(--muted);">—</span>{% endif %}
+          <td style="white-space:nowrap;font-size:11px;">
+            {% if trip and trip.departure_time %}{{ trip.departure_time.strftime('%H:%M') }}{% else %}<span style="color:var(--muted);">—</span>{% endif %}
+            {% if trip and trip.arrival_time %}→ {{ trip.arrival_time.strftime('%H:%M') }}{% endif %}
           </td>
           <td>
             {% if trip and trip.duration_minutes %}{{ trip.duration_minutes }} min
@@ -353,6 +357,22 @@ tbody tr:hover { background: rgba(165,180,252,0.18) !important; }
               {% else %}<span class="late">✗ Late</span>{% endif %}
             {% else %}<span style="color:var(--muted);">—</span>{% endif %}
           </td>
+          <td style="min-width:160px;">
+            {% if astops %}
+            {% set ns2 = namespace(tkm=0) %}
+            <div style="display:flex;flex-direction:column;gap:2px;">
+              {% for st in astops %}
+              {% set ns2.tkm = ns2.tkm + (st.dist_from_prev_km or 0) %}
+              <div style="font-size:10px;white-space:nowrap;">
+                <span style="color:#3730a3;">{{ st.place_name }}</span>
+                {% if st.dist_from_prev_km %} <span style="color:var(--muted);">{{ st.dist_from_prev_km }}km</span>{% endif %}
+                {% if st.reached_at %} <span style="color:#16a34a;">@{{ st.reached_at.strftime('%H:%M') }}</span>{% endif %}
+              </div>
+              {% endfor %}
+              {% if ns2.tkm > 0 %}<div style="font-size:10px;font-weight:700;color:var(--muted);margin-top:2px;">Total: {{ ns2.tkm|round(2) }} km</div>{% endif %}
+            </div>
+            {% else %}<span style="color:var(--muted);">—</span>{% endif %}
+          </td>
         </tr>
         {% endfor %}
       </tbody>
@@ -362,6 +382,27 @@ tbody tr:hover { background: rgba(165,180,252,0.18) !important; }
     <div class="empty-state">No delivery assignments yet.</div>
     {% endif %}
   </div>
+
+  <!-- ════ TODAY'S JOURNEY MAP ════ -->
+  {% set map_stops = [] %}
+  {% for a in assignments %}
+    {% if a.assigned_at and a.assigned_at.date() == today %}
+      {% for st in stops_map.get(a.id, []) %}
+        {% if st.lat and st.lng %}
+          {% set _ = map_stops.append({'name': st.place_name, 'lat': st.lat, 'lng': st.lng,
+              'pkts': st.packages, 'ptype': st.packet_type or '',
+              'km': st.dist_from_prev_km or 0,
+              'rider': emp_map[a.delivery_emp_id].name if a.delivery_emp_id in emp_map else ''}) %}
+        {% endif %}
+      {% endfor %}
+    {% endif %}
+  {% endfor %}
+  {% if map_stops %}
+  <div class="card" style="margin-bottom:22px;">
+    <div class="section-label">🗺️ Today's Delivery Routes (map)</div>
+    <div id="journey-map" style="height:420px;border-radius:10px;overflow:hidden;border:1px solid var(--border);"></div>
+  </div>
+  {% endif %}
 
 </div>
 
@@ -388,6 +429,57 @@ new Chart(document.getElementById('deliveryChart'), {
     }
   }
 });
+</script>
+
+<script>
+(function(){
+  var mapStops = {{ map_stops | tojson }};
+  var storeLat = {{ store_lat or 20.4625 }};
+  var storeLng = {{ store_lng or 85.8830 }};
+  if (!mapStops || mapStops.length === 0) return;
+  var mapEl = document.getElementById('journey-map');
+  if (!mapEl) return;
+  var map = L.map('journey-map').setView([storeLat, storeLng], 13);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    maxZoom: 18,
+    attribution: '© OpenStreetMap contributors'
+  }).addTo(map);
+
+  // Store base marker
+  var storeIcon = L.divIcon({ html: '<div style="background:#1d4ed8;color:#fff;font-size:11px;font-weight:700;padding:3px 7px;border-radius:6px;white-space:nowrap;box-shadow:0 2px 6px rgba(0,0,0,0.3);">🏪 Store</div>', className: '', iconAnchor: [30, 14] });
+  L.marker([storeLat, storeLng], { icon: storeIcon }).addTo(map);
+
+  // Group stops by rider
+  var riderStops = {};
+  mapStops.forEach(function(s) {
+    var k = s.rider || 'Unknown';
+    if (!riderStops[k]) riderStops[k] = [];
+    riderStops[k].push(s);
+  });
+
+  var colours = ['#e63946','#2a9d8f','#f4a261','#8338ec','#3a86ff','#fb5607'];
+  var ci = 0;
+  Object.keys(riderStops).forEach(function(rider) {
+    var stops = riderStops[rider];
+    var col = colours[ci++ % colours.length];
+    // Draw polyline from store → each stop in order
+    var pts = [[storeLat, storeLng]].concat(stops.map(function(s){ return [s.lat, s.lng]; }));
+    L.polyline(pts, { color: col, weight: 3, opacity: 0.75 }).addTo(map);
+    // Markers
+    stops.forEach(function(s, i) {
+      var icon = L.divIcon({
+        html: '<div style="background:' + col + ';color:#fff;font-size:10px;font-weight:700;padding:3px 8px;border-radius:12px;white-space:nowrap;box-shadow:0 2px 6px rgba(0,0,0,0.25);">' + (i+1) + '. ' + s.name + '</div>',
+        className: '', iconAnchor: [0, 0]
+      });
+      var popup = '<b>' + s.name + '</b><br>Rider: ' + rider + '<br>' + s.pkts + ' pkt' + (s.ptype ? ' · ' + s.ptype : '') + (s.km ? '<br>' + s.km + ' km from prev' : '');
+      L.marker([s.lat, s.lng], { icon: icon }).addTo(map).bindPopup(popup);
+    });
+  });
+
+  // Fit map to all points
+  var allPts = [[storeLat, storeLng]].concat(mapStops.map(function(s){ return [s.lat, s.lng]; }));
+  if (allPts.length > 1) map.fitBounds(allPts, { padding: [24, 24] });
+})();
 </script>
 </body>
 </html>
