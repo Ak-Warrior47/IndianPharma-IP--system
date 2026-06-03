@@ -598,6 +598,19 @@ class DeliveryTrip(db.Model):
     )
 
 
+class BreadcrumbPoint(db.Model):
+    """GPS breadcrumb trail point recorded during an active delivery trip."""
+    __tablename__ = "breadcrumb_points"
+    id          = db.Column(db.Integer, primary_key=True)
+    trip_id     = db.Column(db.Integer, db.ForeignKey("delivery_trips.id", ondelete="CASCADE"), nullable=False)
+    lat         = db.Column(db.Float, nullable=False)
+    lng         = db.Column(db.Float, nullable=False)
+    recorded_at = db.Column(db.DateTime, default=datetime.utcnow)
+    __table_args__ = (
+        db.Index("idx_bc_trip", "trip_id", "recorded_at"),
+    )
+
+
 # ─── HELPERS ─────────────────────────────────────────────────────────────────
 
 def safe_div(a, b, default=0.0):
@@ -1664,6 +1677,12 @@ def run_migrations():
                     note VARCHAR(200),
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     CONSTRAINT _supbill_staff_date_uc UNIQUE(staff_id, entry_date))""",
+                """CREATE TABLE IF NOT EXISTS breadcrumb_points (
+                    id SERIAL PRIMARY KEY,
+                    trip_id INTEGER NOT NULL REFERENCES delivery_trips(id) ON DELETE CASCADE,
+                    lat FLOAT NOT NULL,
+                    lng FLOAT NOT NULL,
+                    recorded_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)""",
             ]:
                 try:
                     db.session.execute(db.text(tbl_sql))
@@ -1914,6 +1933,13 @@ def run_migrations():
                         cursor.execute(f"ALTER TABLE delivery_biller_notes ADD COLUMN {col} {col_type}")
                     except Exception:
                         pass
+                # Breadcrumb GPS trail table
+                cursor.execute("""CREATE TABLE IF NOT EXISTS breadcrumb_points (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    trip_id INTEGER NOT NULL REFERENCES delivery_trips(id) ON DELETE CASCADE,
+                    lat REAL NOT NULL,
+                    lng REAL NOT NULL,
+                    recorded_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)""")
                 conn.commit()
                 logger.info("✅ SQLite delivery tables created")
             except Exception as dte:
@@ -2292,6 +2318,34 @@ def dashboard():
             except Exception:
                 note_today_multitask = []
 
+            # Inline delivery leaderboard (delivery staff only on this path)
+            note_delivery_lb = []
+            if staff_type == "delivery":
+                try:
+                    _month_start = today.replace(day=1)
+                    _dl_staff = Employee.query.filter(
+                        Employee.is_admin == False,
+                        or_(Employee.staff_type == "delivery",
+                            Employee.secondary_staff_type == "delivery")
+                    ).all()
+                    for _de in _dl_staff:
+                        _all_trips = DeliveryTrip.query.filter_by(emp_id=_de.id, status="completed").all()
+                        _mtrips = [t for t in _all_trips if t.trip_date and t.trip_date >= _month_start]
+                        _mscore = sum(score_delivery_trip(t) for t in _mtrips)
+                        _total = len(_all_trips)
+                        _on_t = sum(1 for t in _all_trips if t.is_on_time)
+                        note_delivery_lb.append({
+                            "name": _de.name,
+                            "is_self": _de.id == emp_id,
+                            "month_trips": len(_mtrips),
+                            "month_score": _mscore,
+                            "total": _total,
+                            "on_time_pct": round(_on_t / max(_total, 1) * 100),
+                        })
+                    note_delivery_lb.sort(key=lambda x: x["month_score"], reverse=True)
+                except Exception as _lbe2:
+                    logger.warning(f"note_delivery_lb: {_lbe2}")
+
             return render_template("dashboard.html",
                 user_name=session.get("user_name", "User"),
                 user_id=emp_id,
@@ -2325,6 +2379,7 @@ def dashboard():
                 store_lat=STORE_LAT,
                 store_lng=STORE_LNG,
                 tomtom_key=TOMTOM_API_KEY,
+                delivery_lb=note_delivery_lb,
             )
 
         # ── Independent multitask submission (Role 2 can be filled/changed any time) ──
@@ -2602,6 +2657,36 @@ def dashboard():
             d_stats["eff_score"] = min(round(d_stats["eff_score"] + bonus, 1), 100.0)
             d_stats["multitask_bonus"] = bonus
 
+        # Delivery leaderboard (inline, delivery staff only)
+        delivery_lb = []
+        try:
+            if staff_type == "delivery":
+                _today = today
+                _month_start = _today.replace(day=1)
+                _dl_staff = Employee.query.filter(
+                    Employee.is_admin == False,
+                    or_(Employee.staff_type == "delivery",
+                        Employee.secondary_staff_type == "delivery")
+                ).all()
+                for _de in _dl_staff:
+                    _all_trips = DeliveryTrip.query.filter_by(emp_id=_de.id, status="completed").all()
+                    _mtrips = [t for t in _all_trips if t.trip_date and t.trip_date >= _month_start]
+                    _mscore = sum(score_delivery_trip(t) for t in _mtrips)
+                    _total = len(_all_trips)
+                    _on_t = sum(1 for t in _all_trips if t.is_on_time)
+                    delivery_lb.append({
+                        "name": _de.name,
+                        "is_self": _de.id == emp_id,
+                        "month_trips": len(_mtrips),
+                        "month_score": _mscore,
+                        "total": _total,
+                        "on_time_pct": round(_on_t / max(_total, 1) * 100),
+                    })
+                delivery_lb.sort(key=lambda x: x["month_score"], reverse=True)
+        except Exception as _lbe:
+            logger.warning(f"delivery_lb build: {_lbe}")
+            delivery_lb = []
+
         # Delivery module data
         delivery_diag = None
         try:
@@ -2701,6 +2786,7 @@ def dashboard():
             known_routes=KNOWN_ROUTES,
             packet_types=PACKET_TYPES,
             known_stores=known_stores_main,
+            delivery_lb=delivery_lb,
         )
     except Exception as e:
         logger.error(f"Dashboard error: {e}")
@@ -2718,7 +2804,8 @@ def dashboard():
             my_assignments=[], purchaser_delivery_staff=[], my_deliveries_today=[],
             trip_map={}, stops_map={}, my_dispatches=[],
             store_lat=0.0, store_lng=0.0, tomtom_key="", delivery_diag=None,
-            assigner_today=None, known_routes=[], packet_types=[], known_stores=[])
+            assigner_today=None, known_routes=[], packet_types=[], known_stores=[],
+            delivery_lb=[])
 
 
 @app.route("/admin_dashboard")
@@ -5583,6 +5670,46 @@ def delivery_start_trip(assignment_id):
         return jsonify({"ok": False, "error": "Server error"}), 500
 
 
+@app.route("/delivery/breadcrumb/<int:trip_id>", methods=["POST"])
+@login_required
+def delivery_breadcrumb(trip_id):
+    """Save a GPS breadcrumb point for an active trip."""
+    emp_id = session.get("user_id")
+    try:
+        data = request.get_json(force=True, silent=True) or {}
+        lat = float(data.get("lat", 0))
+        lng = float(data.get("lng", 0))
+        if not lat and not lng:
+            return jsonify({"ok": False, "reason": "no_coords"})
+        trip = db.session.get(DeliveryTrip, trip_id)
+        if not trip or trip.emp_id != emp_id:
+            return jsonify({"ok": False, "reason": "not_found"}), 404
+        pt = BreadcrumbPoint(trip_id=trip_id, lat=lat, lng=lng)
+        db.session.add(pt)
+        db.session.commit()
+        return jsonify({"ok": True})
+    except Exception as e:
+        db.session.rollback()
+        logger.error(f"delivery_breadcrumb: {e}")
+        return jsonify({"ok": False, "reason": "server_error"}), 500
+
+
+@app.route("/admin/delivery/breadcrumbs/<int:trip_id>")
+@admin_required
+def admin_delivery_breadcrumbs(trip_id):
+    """Return all breadcrumb points for a trip (admin-only)."""
+    try:
+        pts = (BreadcrumbPoint.query
+               .filter_by(trip_id=trip_id)
+               .order_by(BreadcrumbPoint.recorded_at)
+               .all())
+        return jsonify([{"lat": p.lat, "lng": p.lng,
+                         "t": p.recorded_at.strftime("%H:%M")} for p in pts])
+    except Exception as e:
+        logger.error(f"admin_delivery_breadcrumbs: {e}")
+        return jsonify([])
+
+
 @app.route("/delivery/check_arrival/<int:assignment_id>", methods=["POST"])
 @login_required
 def delivery_check_arrival(assignment_id):
@@ -5831,6 +5958,18 @@ def admin_delivery():
         for st in today_stops:
             stops_map.setdefault(st.assignment_id, []).append(st)
 
+        # Map: rider name -> list of trip_ids (for breadcrumb loading)
+        rider_trip_ids = {}
+        for a in assignments:
+            if a.assigned_at and a.assigned_at.date() == today:
+                t = trip_map.get(a.id)
+                if t:
+                    rider = emp_map.get(a.delivery_emp_id)
+                    rname = rider.name if rider else "Unknown"
+                    rider_trip_ids.setdefault(rname, [])
+                    if t.id not in rider_trip_ids[rname]:
+                        rider_trip_ids[rname].append(t.id)
+
         return render_template("admin_delivery.html",
                                assignments=assignments, trip_map=trip_map,
                                emp_map=emp_map, leaderboard=leaderboard,
@@ -5845,6 +5984,7 @@ def admin_delivery():
                                pending_count=pending_count,
                                in_transit_count=in_transit_count,
                                stops_map=stops_map,
+                               rider_trip_ids=rider_trip_ids,
                                store_lat=STORE_LAT,
                                store_lng=STORE_LNG)
     except Exception as e:

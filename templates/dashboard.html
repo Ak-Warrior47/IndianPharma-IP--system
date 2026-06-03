@@ -995,7 +995,6 @@ tbody tr:hover { background: rgba(165,180,252,0.18) !important; }
         <span style="margin-left:8px;font-size:11px;font-weight:700;padding:2px 9px;background:#dc2626;color:#fff;border-radius:20px;vertical-align:middle;">{{ my_assignments|length }} NEW</span>
         {% endif %}
       </div>
-      <a href="{{ url_for('delivery_leaderboard') }}" style="font-size:12px;font-weight:700;color:var(--blue);text-decoration:none;padding:6px 14px;border:1.5px solid var(--blue);border-radius:8px;">View Leaderboard</a>
     </div>
 
     {% if my_assignments %}
@@ -1068,6 +1067,7 @@ tbody tr:hover { background: rgba(165,180,252,0.18) !important; }
                data-lng="{{ assignment.destination_lng }}"
                data-addr="{{ assignment.destination_addr | e }}"
                data-status="{{ assignment.status }}"
+               data-trip-id="{{ trip.id if trip else '' }}"
                data-arrival-radius="200">
           </div>
           {% endif %}
@@ -1388,6 +1388,39 @@ tbody tr:hover { background: rgba(165,180,252,0.18) !important; }
   <!-- ════ END ASSIGNER SUMMARY ════ -->
 
   {% endif %}
+
+  <!-- ════ DELIVERY LEADERBOARD (inline) ════ -->
+  {% if staff_type == 'delivery' and delivery_lb %}
+  <div class="card" style="margin-bottom:20px;border-left:4px solid #f59e0b;">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:8px;">
+      <div class="section-label" style="margin-bottom:0;">🏆 Delivery Leaderboard — {{ current_month }}</div>
+      <span style="font-size:11px;color:#6b7280;">Points: completed=5, ≤60 min=+3, &lt;30 min=+2 · max 10/trip</span>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:6px;">
+      {% for row in delivery_lb %}
+      {% set rank = loop.index %}
+      <div style="display:flex;align-items:center;gap:10px;padding:9px 12px;border-radius:10px;
+                  background:{% if row.is_self %}rgba(245,158,11,0.1);border:1.5px solid #f59e0b{% elif rank == 1 %}rgba(251,191,36,0.08);border:1px solid #fde68a{% elif rank == 2 %}rgba(209,213,219,0.3);border:1px solid #e5e7eb{% elif rank == 3 %}rgba(234,88,12,0.06);border:1px solid #fed7aa{% else %}rgba(248,250,252,0.8);border:1px solid var(--border){% endif %};">
+        <div style="min-width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:13px;
+                    background:{% if rank == 1 %}#f59e0b;color:#fff{% elif rank == 2 %}#9ca3af;color:#fff{% elif rank == 3 %}#d97706;color:#fff{% else %}#e5e7eb;color:#374151{% endif %};">
+          {{ rank }}
+        </div>
+        <div style="flex:1;min-width:0;">
+          <div style="font-weight:700;font-size:13px;color:var(--text);">
+            {{ row.name }}{% if row.is_self %} <span style="font-size:10px;background:#f59e0b;color:#fff;border-radius:20px;padding:1px 7px;font-weight:700;">YOU</span>{% endif %}
+          </div>
+          <div style="font-size:11px;color:#6b7280;">{{ row.month_trips }} trip{{ 's' if row.month_trips != 1 }} · {{ row.on_time_pct }}% on-time · {{ row.total }} all-time</div>
+        </div>
+        <div style="font-size:20px;font-weight:900;color:{% if rank == 1 %}#f59e0b{% elif row.is_self %}#1d4ed8{% else %}#374151{% endif %};">
+          {{ row.month_score }}
+        </div>
+        <div style="font-size:10px;color:#9ca3af;margin-left:-6px;">pts</div>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+  {% endif %}
+  <!-- ════ END DELIVERY LEADERBOARD ════ -->
   <!-- ════ END DELIVERY GPS TRACKING MODULE ════ -->
 
   <!-- DELIVERY / BILLER RECENT NOTES -->
@@ -1822,21 +1855,33 @@ function toggleMtRole(role, checked) {
 
 // ─── Delivery GPS tracking ───────────────────────────────────────────────────
 function startDeliveryTrip(assignmentId) {
-  if (!navigator.geolocation) { alert('GPS is not supported on this device.'); return; }
   var btn = document.getElementById('start-trip-btn-' + assignmentId);
-  if (btn) { btn.textContent = 'Getting location...'; btn.disabled = true; }
-  navigator.geolocation.getCurrentPosition(function(pos) {
+  function _doStart(lat, lng) {
+    if (btn) { btn.textContent = 'Starting...'; btn.disabled = true; }
     fetch('/delivery/start_trip/' + assignmentId, {
       method: 'POST', headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({lat: pos.coords.latitude, lng: pos.coords.longitude})
+      body: JSON.stringify({lat: lat, lng: lng})
     }).then(function(r){ return r.json(); }).then(function(d) {
-      if (d.ok) { location.reload(); }
-      else { alert('Cannot start trip: ' + d.error); if (btn) { btn.textContent = 'Start Trip'; btn.disabled = false; } }
+      if (d.ok) {
+        // Store trip_id so breadcrumbs can be saved before page reloads
+        var ctx = _deliveryMaps[assignmentId];
+        if (ctx && d.trip_id) { ctx.tripId = String(d.trip_id); ctx.lastCrumbAt = 0; }
+        location.reload();
+      } else { alert('Cannot start trip: ' + d.error); if (btn) { btn.textContent = 'Start Trip'; btn.disabled = false; } }
     }).catch(function(){ alert('Network error'); if (btn) { btn.textContent = 'Start Trip'; btn.disabled = false; } });
+  }
+  if (!navigator.geolocation) {
+    // No GPS — still start the trip (GPS optional), position recorded as 0,0
+    _doStart(0, 0);
+    return;
+  }
+  if (btn) { btn.textContent = 'Getting location...'; btn.disabled = true; }
+  navigator.geolocation.getCurrentPosition(function(pos) {
+    _doStart(pos.coords.latitude, pos.coords.longitude);
   }, function(err) {
-    alert('GPS error: ' + err.message + '. Please enable location access.');
-    if (btn) { btn.textContent = 'Start Trip'; btn.disabled = false; }
-  }, {enableHighAccuracy: true, timeout: 15000});
+    // GPS blocked or unavailable — start anyway with no position
+    _doStart(0, 0);
+  }, {enableHighAccuracy: true, timeout: 10000});
 }
 
 // ─── End Delivery GPS tracking ───────────────────────────────────────────────
@@ -1930,12 +1975,27 @@ function updateDeliveryRoute(assignmentId, fromLat, fromLng, force) {
   });
 }
 
+// Save a breadcrumb to the server (fire-and-forget)
+function _saveBreadcrumb(tripId, lat, lng) {
+  if (!tripId) return;
+  fetch('/delivery/breadcrumb/' + tripId, {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({lat: lat, lng: lng})
+  }).catch(function(){});  // ignore network errors silently
+}
+
 // Begin continuous live GPS tracking for an in-transit assignment
 function startLiveTracking(assignmentId) {
   var ctx = _deliveryMaps[assignmentId];
-  if (!ctx || !navigator.geolocation) return;
+  if (!ctx) return;
   var badge = document.getElementById('live-badge-' + assignmentId);
   if (badge) badge.style.display = 'inline-block';
+
+  if (!navigator.geolocation) {
+    if (badge) { badge.textContent = '⚠ No GPS'; badge.style.color = '#d97706'; }
+    return;
+  }
 
   ctx.watchId = navigator.geolocation.watchPosition(function(pos) {
     var myLat = pos.coords.latitude, myLng = pos.coords.longitude;
@@ -1951,6 +2011,13 @@ function startLiveTracking(assignmentId) {
     // Refresh route every update
     updateDeliveryRoute(assignmentId, myLat, myLng);
 
+    // Save breadcrumb every 30 seconds
+    var now = Date.now();
+    if (ctx.tripId && (now - ctx.lastCrumbAt) >= 30000) {
+      ctx.lastCrumbAt = now;
+      _saveBreadcrumb(ctx.tripId, myLat, myLng);
+    }
+
     // Auto-detect arrival
     var dist = _haversineJS(myLat, myLng, ctx.destLat, ctx.destLng);
     var radius = ctx.arrivalRadius || 200;
@@ -1960,7 +2027,9 @@ function startLiveTracking(assignmentId) {
       unlockDeliveryForm(assignmentId);  // open confirm form automatically
       if (ctx.watchId != null) { navigator.geolocation.clearWatch(ctx.watchId); ctx.watchId = null; }
     }
-  }, function(){}, {enableHighAccuracy: true, maximumAge: 5000, timeout: 20000});
+  }, function(err) {
+    if (badge) { badge.textContent = '⚠ GPS off'; badge.style.color = '#d97706'; }
+  }, {enableHighAccuracy: true, maximumAge: 5000, timeout: 20000});
 }
 
 function _haversineJS(lat1, lng1, lat2, lng2) {
@@ -1994,9 +2063,11 @@ document.addEventListener('DOMContentLoaded', function() {
     L.marker([lat, lng], {icon: destIcon}).addTo(map)
       .bindPopup('<strong>Destination</strong><br><span style="font-size:12px;">' + addr + '</span>');
 
+    var tripId = div.dataset.tripId || '';
     _deliveryMaps[assignmentId] = {
       map: map, destLat: lat, destLng: lng, arrivalRadius: arrivalRadius,
-      myMarker: null, routeLine: null, watchId: null, arrived: false
+      myMarker: null, routeLine: null, watchId: null, arrived: false,
+      tripId: tripId, lastCrumbAt: 0
     };
 
     // Initial route from current position (one-shot, force a fresh route)

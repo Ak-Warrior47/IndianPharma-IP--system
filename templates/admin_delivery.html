@@ -499,8 +499,17 @@ tbody tr:hover { background: rgba(165,180,252,0.18) !important; }
   {% endfor %}
   {% if map_stops %}
   <div class="card" style="margin-bottom:22px;">
-    <div class="section-label">🗺️ Today's Delivery Routes</div>
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:8px;">
+      <div class="section-label" style="margin-bottom:0;">🗺️ Today's Delivery Routes</div>
+      <button onclick="loadAllBreadcrumbs()" id="crumb-btn"
+              style="font-size:12px;font-weight:700;padding:6px 14px;border:1.5px solid #6366f1;background:#fff;color:#6366f1;border-radius:8px;cursor:pointer;">
+        📍 Show GPS Trails
+      </button>
+    </div>
     <div id="journey-map" style="height:460px;border-radius:10px;overflow:hidden;border:1px solid var(--border);"></div>
+    <div style="margin-top:8px;font-size:11px;color:#9ca3af;">
+      Solid line = planned route · Dotted line = actual GPS trail · Markers = delivery stops
+    </div>
   </div>
   {% endif %}
 
@@ -532,6 +541,54 @@ new Chart(document.getElementById('deliveryChart'), {
 </script>
 
 <script>
+var _adminMap = null;
+var _riderColours = {};
+var _riderCI = 0;
+var _colours = ['#e63946','#2a9d8f','#f4a261','#8338ec','#3a86ff','#fb5607'];
+var _riderTripIds = {{ rider_trip_ids | tojson }};
+
+function _riderColor(rider) {
+  if (!_riderColours[rider]) {
+    _riderColours[rider] = _colours[_riderCI++ % _colours.length];
+  }
+  return _riderColours[rider];
+}
+
+function loadAllBreadcrumbs() {
+  var btn = document.getElementById('crumb-btn');
+  if (btn) { btn.textContent = 'Loading...'; btn.disabled = true; }
+  var entries = Object.entries(_riderTripIds);
+  var pending = entries.reduce(function(acc, e){ return acc + e[1].length; }, 0);
+  if (pending === 0) { if (btn) btn.textContent = 'No active trips'; return; }
+  var done = 0;
+  entries.forEach(function(entry) {
+    var rider = entry[0], tripIds = entry[1];
+    var col = _riderColor(rider);
+    tripIds.forEach(function(tid) {
+      fetch('/admin/delivery/breadcrumbs/' + tid)
+        .then(function(r){ return r.json(); })
+        .then(function(pts) {
+          if (pts && pts.length >= 2 && _adminMap) {
+            var latlngs = pts.map(function(p){ return [p.lat, p.lng]; });
+            // Dotted trail in rider colour
+            L.polyline(latlngs, { color: col, weight: 3, opacity: 0.85, dashArray: '4,5' }).addTo(_adminMap);
+            // "Trail ends here" marker at last point
+            var last = latlngs[latlngs.length - 1];
+            var endIcon = L.divIcon({
+              html: '<div style="background:' + col + ';color:#fff;font-size:10px;font-weight:700;padding:2px 7px;border-radius:10px;white-space:nowrap;box-shadow:0 2px 5px rgba(0,0,0,0.3);">📍 ' + rider + '</div>',
+              className: '', iconAnchor: [0, 14]
+            });
+            L.marker(last, { icon: endIcon }).addTo(_adminMap)
+              .bindPopup('<b>Last known position</b><br>' + rider + '<br>' + pts[pts.length-1].t);
+          }
+          done++;
+          if (done >= pending && btn) { btn.textContent = '✅ Trails loaded'; }
+        })
+        .catch(function(){ done++; if (done >= pending && btn) btn.textContent = '✅ Done'; });
+    });
+  });
+}
+
 (function(){
   var mapStops = {{ map_stops | tojson }};
   var storeLat = {{ store_lat or 20.4625 }};
@@ -540,6 +597,7 @@ new Chart(document.getElementById('deliveryChart'), {
   var mapEl = document.getElementById('journey-map');
   if (!mapEl) return;
   var map = L.map('journey-map').setView([storeLat, storeLng], 13);
+  _adminMap = map;
   L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
     maxZoom: 18,
     attribution: '© OpenStreetMap contributors'
@@ -557,11 +615,9 @@ new Chart(document.getElementById('deliveryChart'), {
     riderStops[k].push(s);
   });
 
-  var colours = ['#e63946','#2a9d8f','#f4a261','#8338ec','#3a86ff','#fb5607'];
-  var ci = 0;
   Object.keys(riderStops).forEach(function(rider) {
     var stops = riderStops[rider];
-    var col = colours[ci++ % colours.length];
+    var col = _riderColor(rider);
     // Polyline: store base → stops in order
     var pts = [[storeLat, storeLng]].concat(stops.map(function(s){ return [s.lat, s.lng]; }));
     L.polyline(pts, { color: col, weight: 3, opacity: 0.8, dashArray: stops[0] && stops[0].time ? null : '6,4' }).addTo(map);
