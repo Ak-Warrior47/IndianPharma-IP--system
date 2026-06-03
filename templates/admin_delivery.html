@@ -364,9 +364,10 @@ tbody tr:hover { background: rgba(165,180,252,0.18) !important; }
               {% for st in astops %}
               {% set ns2.tkm = ns2.tkm + (st.dist_from_prev_km or 0) %}
               <div style="font-size:10px;white-space:nowrap;">
-                <span style="color:#3730a3;">{{ st.place_name }}</span>
+                <span style="color:#3730a3;font-weight:700;">{{ st.place_name }}</span>
+                {% if st.area %}<span style="color:#6366f1;"> ({{ st.area }})</span>{% endif %}
                 {% if st.dist_from_prev_km %} <span style="color:var(--muted);">{{ st.dist_from_prev_km }}km</span>{% endif %}
-                {% if st.reached_at %} <span style="color:#16a34a;">@{{ st.reached_at.strftime('%H:%M') }}</span>{% endif %}
+                {% if st.reached_at %} <span style="color:#16a34a;font-weight:700;">✅{{ st.reached_at.strftime('%H:%M') }}</span>{% endif %}
               </div>
               {% endfor %}
               {% if ns2.tkm > 0 %}<div style="font-size:10px;font-weight:700;color:var(--muted);margin-top:2px;">Total: {{ ns2.tkm|round(2) }} km</div>{% endif %}
@@ -383,24 +384,123 @@ tbody tr:hover { background: rgba(165,180,252,0.18) !important; }
     {% endif %}
   </div>
 
+  <!-- ════ TODAY'S TRIP TIMELINES ════ -->
+  {% set today_assignments = assignments | selectattr('assigned_at') | list %}
+  {% set today_assignments = today_assignments | selectattr('assigned_at') | list %}
+  {% set today_trips = [] %}
+  {% for a in assignments %}
+    {% if a.assigned_at and a.assigned_at.date() == today %}
+      {% set astops = stops_map.get(a.id, []) %}
+      {% set trip = trip_map.get(a.id) %}
+      {% if astops or trip %}
+        {% set _ = today_trips.append({'a': a, 'stops': astops, 'trip': trip}) %}
+      {% endif %}
+    {% endif %}
+  {% endfor %}
+  {% if today_trips %}
+  <div class="card" style="margin-bottom:22px;">
+    <div class="section-label">📍 Today's Trip Timelines</div>
+    {% for row in today_trips %}
+    {% set a = row.a %}
+    {% set trip = row.trip %}
+    {% set rider = emp_map.get(a.delivery_emp_id) %}
+    <div style="margin-bottom:16px;padding:14px;background:#f8fafc;border:1px solid var(--border);border-radius:12px;">
+      <!-- Trip header -->
+      <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:6px;margin-bottom:10px;">
+        <div>
+          <span style="font-size:13px;font-weight:800;color:var(--text);">{{ rider.name if rider else '—' }}</span>
+          <span style="margin-left:8px;font-size:11px;font-weight:700;padding:2px 9px;border-radius:20px;
+            {% if a.status=='delivered' %}background:#dcfce7;color:#166534;
+            {% elif a.status=='in_transit' %}background:#dbeafe;color:#1e40af;
+            {% else %}background:#fef9c3;color:#854d0e;{% endif %}">
+            {{ a.status|replace('_',' ')|title }}
+          </span>
+        </div>
+        <div style="font-size:11px;color:var(--muted);">
+          {% if trip and trip.departure_time %}Departed {{ trip.departure_time.strftime('%H:%M UTC') }}{% endif %}
+          {% if trip and trip.duration_minutes %} · <strong>{{ trip.duration_minutes }} min total</strong>{% endif %}
+          {% if trip and trip.is_on_time is not none %}
+            · <span style="font-weight:700;color:{{ '#16a34a' if trip.is_on_time else '#dc2626' }};">{{ '✓ On-time' if trip.is_on_time else '✗ Late' }}</span>
+          {% endif %}
+        </div>
+      </div>
+      <!-- Stop-by-stop timeline -->
+      {% if row.stops %}
+      <div style="position:relative;padding-left:24px;">
+        {% for st in row.stops %}
+        <div style="position:relative;margin-bottom:10px;">
+          <!-- Timeline dot & line -->
+          <div style="position:absolute;left:-24px;top:3px;width:14px;height:14px;border-radius:50%;
+            background:{{ '#16a34a' if st.reached_at else '#cbd5e1' }};
+            border:2px solid {{ '#86efac' if st.reached_at else '#e2e8f0' }};"></div>
+          {% if not loop.last %}
+          <div style="position:absolute;left:-18px;top:17px;width:2px;height:calc(100% + 4px);background:#e2e8f0;"></div>
+          {% endif %}
+          <!-- Stop content -->
+          <div style="background:#fff;border:1px solid var(--border);border-radius:9px;padding:9px 12px;">
+            <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px;flex-wrap:wrap;">
+              <div>
+                <span style="font-size:13px;font-weight:700;color:var(--text);">{{ st.place_name }}</span>
+                {% if st.area %}<span style="margin-left:6px;font-size:10px;font-weight:700;padding:1px 7px;background:#e0e7ff;color:#3730a3;border-radius:10px;">{{ st.area }}</span>{% endif %}
+                {% if st.packet_type %}<span style="margin-left:4px;font-size:10px;color:var(--muted);">{{ st.packet_type }}</span>{% endif %}
+                <div style="font-size:11px;color:var(--muted);margin-top:2px;">{{ st.packages }} packet(s){% if st.dist_from_prev_km %} · {{ st.dist_from_prev_km }} km{% endif %}</div>
+              </div>
+              {% if st.reached_at %}
+              <div style="text-align:right;flex-shrink:0;">
+                <div style="font-size:12px;font-weight:700;color:#166534;">{{ st.reached_at.strftime('%H:%M') }}</div>
+                {% if st.minutes_from_prev %}<div style="font-size:10px;color:var(--muted);">+{{ st.minutes_from_prev }} min</div>{% endif %}
+              </div>
+              {% else %}
+              <span style="font-size:10px;color:#94a3b8;font-weight:600;">Pending</span>
+              {% endif %}
+            </div>
+            {% if st.note %}
+            <div style="margin-top:5px;font-size:11px;color:#475569;padding:4px 8px;background:#f8fafc;border-radius:6px;">
+              {{ st.note.replace('RCVD: ', '📦 Received by: ') }}
+            </div>
+            {% endif %}
+          </div>
+        </div>
+        {% endfor %}
+        <!-- Final total -->
+        {% if trip and trip.arrival_time and trip.departure_time %}
+        <div style="margin-left:-24px;padding:8px 12px;background:#f0fdf4;border:1px solid #86efac;border-radius:9px;font-size:12px;font-weight:700;color:#166534;">
+          ✅ All delivered · Total time: {{ trip.duration_minutes }} min · Finished {{ trip.arrival_time.strftime('%H:%M UTC') }}
+        </div>
+        {% endif %}
+      </div>
+      {% else %}
+      <div style="font-size:12px;color:var(--muted);">No stops recorded yet.</div>
+      {% endif %}
+    </div>
+    {% endfor %}
+  </div>
+  {% endif %}
+
   <!-- ════ TODAY'S JOURNEY MAP ════ -->
   {% set map_stops = [] %}
   {% for a in assignments %}
     {% if a.assigned_at and a.assigned_at.date() == today %}
+      {% set rider_name = emp_map[a.delivery_emp_id].name if a.delivery_emp_id in emp_map else '' %}
       {% for st in stops_map.get(a.id, []) %}
         {% if st.lat and st.lng %}
-          {% set _ = map_stops.append({'name': st.place_name, 'lat': st.lat, 'lng': st.lng,
+          {% set rcvd = st.note.replace('RCVD: ', '') if st.note else '' %}
+          {% set _ = map_stops.append({'name': st.place_name, 'area': st.area or '',
+              'lat': st.lat, 'lng': st.lng,
               'pkts': st.packages, 'ptype': st.packet_type or '',
               'km': st.dist_from_prev_km or 0,
-              'rider': emp_map[a.delivery_emp_id].name if a.delivery_emp_id in emp_map else ''}) %}
+              'rider': rider_name,
+              'time': st.reached_at.strftime('%H:%M') if st.reached_at else '',
+              'mins': st.minutes_from_prev or 0,
+              'rcvd': rcvd}) %}
         {% endif %}
       {% endfor %}
     {% endif %}
   {% endfor %}
   {% if map_stops %}
   <div class="card" style="margin-bottom:22px;">
-    <div class="section-label">🗺️ Today's Delivery Routes (map)</div>
-    <div id="journey-map" style="height:420px;border-radius:10px;overflow:hidden;border:1px solid var(--border);"></div>
+    <div class="section-label">🗺️ Today's Delivery Routes</div>
+    <div id="journey-map" style="height:460px;border-radius:10px;overflow:hidden;border:1px solid var(--border);"></div>
   </div>
   {% endif %}
 
@@ -462,16 +562,26 @@ new Chart(document.getElementById('deliveryChart'), {
   Object.keys(riderStops).forEach(function(rider) {
     var stops = riderStops[rider];
     var col = colours[ci++ % colours.length];
-    // Draw polyline from store → each stop in order
+    // Polyline: store base → stops in order
     var pts = [[storeLat, storeLng]].concat(stops.map(function(s){ return [s.lat, s.lng]; }));
-    L.polyline(pts, { color: col, weight: 3, opacity: 0.75 }).addTo(map);
-    // Markers
+    L.polyline(pts, { color: col, weight: 3, opacity: 0.8, dashArray: stops[0] && stops[0].time ? null : '6,4' }).addTo(map);
+    // Markers per stop
     stops.forEach(function(s, i) {
+      var done = !!s.time;
+      var label = (i+1) + '. ' + s.name + (s.area ? ' (' + s.area + ')' : '') + (s.time ? ' ✅' : ' ⏳');
       var icon = L.divIcon({
-        html: '<div style="background:' + col + ';color:#fff;font-size:10px;font-weight:700;padding:3px 8px;border-radius:12px;white-space:nowrap;box-shadow:0 2px 6px rgba(0,0,0,0.25);">' + (i+1) + '. ' + s.name + '</div>',
+        html: '<div style="background:' + (done ? col : '#94a3b8') + ';color:#fff;font-size:10px;font-weight:700;' +
+              'padding:3px 8px;border-radius:12px;white-space:nowrap;box-shadow:0 2px 6px rgba(0,0,0,0.3);">' + label + '</div>',
         className: '', iconAnchor: [0, 0]
       });
-      var popup = '<b>' + s.name + '</b><br>Rider: ' + rider + '<br>' + s.pkts + ' pkt' + (s.ptype ? ' · ' + s.ptype : '') + (s.km ? '<br>' + s.km + ' km from prev' : '');
+      var popup = '<div style="min-width:160px;font-family:sans-serif;">' +
+        '<div style="font-weight:700;font-size:13px;margin-bottom:4px;">' + s.name + (s.area ? ' <span style="font-size:11px;color:#6366f1;">(' + s.area + ')</span>' : '') + '</div>' +
+        '<div style="font-size:12px;color:#475569;"><b>Rider:</b> ' + rider + '</div>' +
+        '<div style="font-size:12px;color:#475569;"><b>Packets:</b> ' + s.pkts + (s.ptype ? ' · ' + s.ptype : '') + '</div>' +
+        (s.km ? '<div style="font-size:12px;color:#475569;"><b>Distance:</b> ' + s.km + ' km</div>' : '') +
+        (s.time ? '<div style="font-size:12px;font-weight:700;color:#16a34a;margin-top:4px;">✅ Delivered at ' + s.time + (s.mins ? ' (+' + s.mins + ' min)' : '') + '</div>' : '') +
+        (s.rcvd ? '<div style="font-size:11px;color:#64748b;margin-top:3px;">📦 ' + s.rcvd + '</div>' : '') +
+        '</div>';
       L.marker([s.lat, s.lng], { icon: icon }).addTo(map).bindPopup(popup);
     });
   });

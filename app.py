@@ -521,6 +521,7 @@ class DeliveryStop(db.Model):
     assignment_id = db.Column(db.Integer, db.ForeignKey("delivery_assignments.id", ondelete="CASCADE"), nullable=False, index=True)
     emp_id        = db.Column(db.Integer, db.ForeignKey("employees.id", ondelete="CASCADE"), nullable=False)
     place_name    = db.Column(db.String(150), nullable=False)
+    area          = db.Column(db.String(150), nullable=True)   # delivery area (RANIHAT, MANGALABAG …)
     packages      = db.Column(db.Integer, default=0)          # packets delivered at this stop
     reached_at    = db.Column(db.DateTime, nullable=True)     # NULL until the rider logs arrival
     minutes_from_prev = db.Column(db.Float, nullable=True)    # time since previous stop / departure
@@ -1421,6 +1422,7 @@ def run_migrations():
             for tbl, col, col_type in [
                 ("delivery_stops", "packet_type", "VARCHAR(50)"),
                 ("delivery_stops", "dist_from_prev_km", "FLOAT"),
+                ("delivery_stops", "area", "VARCHAR(150)"),
                 ("delivery_biller_notes", "table_clean", "INTEGER DEFAULT 0"),
                 ("delivery_biller_notes", "sweep_done", "INTEGER DEFAULT 0"),
                 ("employees", "extra_roles", "VARCHAR(160)"),
@@ -1829,8 +1831,8 @@ def run_migrations():
                         cursor.execute(f"ALTER TABLE delivery_assignments ADD COLUMN {col} {col_type}")
                     except Exception:
                         pass
-                # Per-store packet type + distance on delivery_stops
-                for col, col_type in [("packet_type", "VARCHAR(50)"), ("dist_from_prev_km", "REAL")]:
+                # Per-store packet type + distance + area on delivery_stops
+                for col, col_type in [("packet_type", "VARCHAR(50)"), ("dist_from_prev_km", "REAL"), ("area", "VARCHAR(150)")]:
                     try:
                         cursor.execute(f"ALTER TABLE delivery_stops ADD COLUMN {col} {col_type}")
                     except Exception:
@@ -4887,21 +4889,23 @@ def delivery_assign():
 
         # Multi-store line items (parallel arrays from the form)
         store_names    = request.form.getlist("store_name[]")
+        store_areas    = request.form.getlist("store_area[]")   # new: delivery area separate from store name
         store_packages = request.form.getlist("store_packages[]")
         store_lats     = request.form.getlist("store_lat[]")
         store_lngs     = request.form.getlist("store_lng[]")
-        store_ptypes   = request.form.getlist("store_packet_type[]")  # per-store packet type
+        store_ptypes   = request.form.getlist("store_packet_type[]")
 
-        # Build a clean list of (name, packages, lat, lng, packet_type), dropping blank rows
+        # Build a clean list, dropping blank rows (store name is required; area is optional)
         stores = []
         for i, raw_name in enumerate(store_names):
             nm = (raw_name or "").strip()
             if not nm:
                 continue
+            ar = (store_areas[i].strip()[:150] if i < len(store_areas) and store_areas[i] else "")
             try:
-                pkg = max(0, int(store_packages[i])) if i < len(store_packages) and store_packages[i] else 0
+                pkg = max(1, int(store_packages[i])) if i < len(store_packages) and store_packages[i] else 1
             except (ValueError, TypeError):
-                pkg = 0
+                pkg = 1
             slat = slng = None
             try:
                 if i < len(store_lats) and store_lats[i] and i < len(store_lngs) and store_lngs[i]:
@@ -4910,9 +4914,12 @@ def delivery_assign():
                         slat, slng = _la, _ln
             except (ValueError, TypeError):
                 pass
-            # Per-store packet type; fall back to the dispatch-wide packet_type
             spt = (store_ptypes[i].strip()[:50] if i < len(store_ptypes) and store_ptypes[i] else "") or packet_type
-            stores.append({"name": nm[:150], "packages": pkg, "lat": slat, "lng": slng, "packet_type": spt or None})
+            # Geocode against "Store Name, Area, Odisha" for better accuracy
+            geo_hint = f"{nm}, {ar}" if ar else nm
+            stores.append({"name": nm[:150], "area": ar or None, "packages": pkg,
+                           "lat": slat, "lng": slng, "packet_type": spt or None,
+                           "geo_hint": geo_hint})
 
         if not delivery_emp_id or not stores:
             flash("Pick a delivery employee and add at least one store.", "warning")
@@ -4926,13 +4933,15 @@ def delivery_assign():
             return redirect(url_for("dashboard"))
 
         total_tasks = sum(s["packages"] for s in stores) or len(stores)
-        route_str = ", ".join(s["name"] for s in stores)[:300]
+        route_str = ", ".join(
+            (f"{s['name']} ({s['area']})" if s.get("area") else s["name"]) for s in stores
+        )[:300]
         pkg_desc = f"{total_tasks} packet(s) across {len(stores)} store(s)" + (f" — {packet_type}" if packet_type else "")
 
-        # Geocode any store missing a manual pin (best-effort)
+        # Geocode any store missing a manual pin — use "Store Name, Area" for better accuracy
         for s in stores:
             if s["lat"] is None:
-                s["lat"], s["lng"] = geocode_address(s["name"])
+                s["lat"], s["lng"] = geocode_address(s.get("geo_hint") or s["name"])
 
         first = stores[0]
         now = datetime.utcnow()
@@ -4963,6 +4972,7 @@ def delivery_assign():
                 assignment_id=assignment.id,
                 emp_id=delivery_emp_id,
                 place_name=s["name"],
+                area=s.get("area"),
                 packages=s["packages"],
                 reached_at=None,
                 lat=s["lat"],
@@ -5010,6 +5020,7 @@ def delivery_dispatch_edit(assignment_id):
             return redirect(url_for("dashboard"))
 
         store_names    = request.form.getlist("store_name[]")
+        store_areas    = request.form.getlist("store_area[]")
         store_packages = request.form.getlist("store_packages[]")
         store_ptypes   = request.form.getlist("store_packet_type[]")
         pt = (request.form.get("packet_type", "") or "").strip()[:50]
@@ -5018,19 +5029,24 @@ def delivery_dispatch_edit(assignment_id):
             nm = (raw or "").strip()
             if not nm:
                 continue
+            ar = (store_areas[i].strip()[:150] if i < len(store_areas) and store_areas[i] else "")
             try:
-                pkg = max(0, int(store_packages[i])) if i < len(store_packages) and store_packages[i] else 0
+                pkg = max(1, int(store_packages[i])) if i < len(store_packages) and store_packages[i] else 1
             except (ValueError, TypeError):
-                pkg = 0
+                pkg = 1
             spt = (store_ptypes[i].strip()[:50] if i < len(store_ptypes) and store_ptypes[i] else "") or pt
-            stores.append({"name": nm[:150], "packages": pkg, "packet_type": spt or None})
+            stores.append({"name": nm[:150], "area": ar or None, "packages": pkg,
+                           "packet_type": spt or None,
+                           "geo_hint": f"{nm}, {ar}" if ar else nm})
         if not stores:
             flash("A dispatch needs at least one store.", "warning")
             return redirect(url_for("dashboard"))
 
         DeliveryStop.query.filter_by(assignment_id=a.id).delete()
         total = sum(s["packages"] for s in stores) or len(stores)
-        a.route = ", ".join(s["name"] for s in stores)[:300]
+        a.route = ", ".join(
+            (f"{s['name']} ({s['area']})" if s.get("area") else s["name"]) for s in stores
+        )[:300]
         a.destination_addr = a.route
         a.no_of_tasks = total
         a.bills_count = total
@@ -5039,12 +5055,13 @@ def delivery_dispatch_edit(assignment_id):
         new_stops = []
         first_lat = first_lng = None
         for s in stores:
-            slat, slng = geocode_address(s["name"])
+            slat, slng = geocode_address(s.get("geo_hint") or s["name"])
             if first_lat is None:
                 first_lat, first_lng = slat, slng
                 a.destination_lat, a.destination_lng = slat, slng
             so = DeliveryStop(assignment_id=a.id, emp_id=a.delivery_emp_id,
-                              place_name=s["name"], packages=s["packages"],
+                              place_name=s["name"], area=s.get("area"),
+                              packages=s["packages"],
                               reached_at=None, lat=slat, lng=slng,
                               packet_type=s.get("packet_type"))
             db.session.add(so)

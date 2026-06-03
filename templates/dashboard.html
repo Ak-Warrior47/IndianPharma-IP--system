@@ -1029,12 +1029,12 @@ tbody tr:hover { background: rgba(165,180,252,0.18) !important; }
               <div style="display:flex;align-items:center;gap:8px;margin-bottom:{% if not st.reached_at and assignment.status == 'in_transit' %}8{% else %}0{% endif %}px;">
                 <span style="font-size:16px;">{{ '✅' if st.reached_at else '📍' }}</span>
                 <div style="flex:1;">
-                  <div style="font-size:13px;font-weight:700;color:var(--text);">{{ st.place_name }}{% if st.packet_type %} <span style="font-size:11px;font-weight:600;color:var(--muted);">· {{ st.packet_type }}</span>{% endif %}</div>
+                  <div style="font-size:13px;font-weight:700;color:var(--text);">{{ st.place_name }}{% if st.area %} <span style="font-size:11px;font-weight:600;color:#3730a3;background:#e0e7ff;padding:1px 7px;border-radius:10px;">{{ st.area }}</span>{% endif %}{% if st.packet_type %} <span style="font-size:11px;font-weight:600;color:var(--muted);">· {{ st.packet_type }}</span>{% endif %}</div>
                   <div style="font-size:11px;color:var(--muted);">
                     {{ st.packages }} pkt{% if st.dist_from_prev_km %} · {{ st.dist_from_prev_km }} km from prev{% endif %}
                     {% if st.reached_at %}
                     · <strong style="color:#166534;">Done {{ st.reached_at.strftime('%H:%M') }}</strong>{% if st.minutes_from_prev %} · {{ st.minutes_from_prev }} min{% endif %}
-                    {% if st.note %} · <em style="color:var(--muted);">{{ st.note }}</em>{% endif %}
+                    {% if st.note %} · <em style="color:var(--muted);">{{ st.note.replace('RCVD: ', '') }}</em>{% endif %}
                     {% endif %}
                   </div>
                 </div>
@@ -1146,17 +1146,27 @@ tbody tr:hover { background: rgba(165,180,252,0.18) !important; }
           <span style="font-size:12px;color:var(--muted);">Total packets: <strong id="total-packets" style="color:var(--blue);">0</strong></span>
         </div>
         <div id="store-rows" style="display:flex;flex-direction:column;gap:8px;">
-          <!-- First row is server-rendered so it shows even if JS is blocked; more added by JS -->
+          <!-- Column headers -->
+          <div style="display:flex;gap:8px;flex-wrap:wrap;padding:0 2px 2px;">
+            <span style="flex:2;min-width:120px;font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;">Store Name *</span>
+            <span style="flex:1;min-width:110px;font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;">Area / Location</span>
+            <span style="flex:1;min-width:100px;font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;">Packet Type</span>
+            <span style="width:70px;font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;">Pkts</span>
+            <span style="width:36px;"></span>
+          </div>
+          <!-- First row is server-rendered so it shows even if JS is blocked -->
           <div class="store-row" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
-            <input list="store-options" name="store_name[]" placeholder="Store / area name (start typing for suggestions)"
-              style="flex:2;min-width:150px;padding:8px 11px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;">
-            <input list="packet-options" name="store_packet_type[]" placeholder="Packet type"
+            <input list="store-options" name="store_name[]" placeholder="e.g. City Medical"
+              style="flex:2;min-width:120px;padding:8px 11px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;">
+            <input list="route-options" name="store_area[]" placeholder="e.g. RANIHAT"
               style="flex:1;min-width:110px;padding:8px 11px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;">
-            <input type="number" name="store_packages[]" min="0" value="1" placeholder="Pkts" oninput="recalcTotal()"
-              style="width:80px;padding:8px 11px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;">
+            <input list="packet-options" name="store_packet_type[]" placeholder="Packet type"
+              style="flex:1;min-width:100px;padding:8px 11px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;">
+            <input type="number" name="store_packages[]" min="1" value="1" placeholder="Pkts" oninput="recalcTotal()"
+              style="width:70px;padding:8px 11px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;">
             <input type="hidden" name="store_lat[]" value=""><input type="hidden" name="store_lng[]" value="">
             <button type="button" onclick="this.closest('.store-row').remove();recalcTotal();"
-              style="padding:7px 11px;background:#fee2e2;color:#991b1b;border:1px solid #fca5a5;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;">✕</button>
+              style="padding:7px 10px;background:#fee2e2;color:#991b1b;border:1px solid #fca5a5;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;">✕</button>
           </div>
         </div>
         <button type="button" onclick="addStoreRow()"
@@ -1211,7 +1221,7 @@ tbody tr:hover { background: rgba(165,180,252,0.18) !important; }
         <div style="margin-top:7px;display:flex;flex-wrap:wrap;gap:5px;">
           {% for st in dstops %}
           {% set ns.km = ns.km + (st.dist_from_prev_km or 0) %}
-          <span style="font-size:11px;padding:2px 9px;background:#e0e7ff;color:#3730a3;border-radius:20px;">{{ st.place_name }} · {{ st.packages }} pkt{% if st.packet_type %} · {{ st.packet_type }}{% endif %}{% if st.dist_from_prev_km %} · {{ st.dist_from_prev_km }} km{% endif %}</span>
+          <span style="font-size:11px;padding:2px 9px;background:#e0e7ff;color:#3730a3;border-radius:20px;">{{ st.place_name }}{% if st.area %} ({{ st.area }}){% endif %} · {{ st.packages }} pkt{% if st.packet_type %} · {{ st.packet_type }}{% endif %}{% if st.dist_from_prev_km %} · {{ st.dist_from_prev_km }} km{% endif %}</span>
           {% endfor %}
         </div>
         {% if ns.km > 0 %}<div style="font-size:11px;color:var(--muted);margin-top:4px;">Total route ≈ <strong>{{ ns.km|round(2) }} km</strong></div>{% endif %}
@@ -1222,13 +1232,15 @@ tbody tr:hover { background: rgba(165,180,252,0.18) !important; }
           <div style="font-size:11px;font-weight:700;color:#92400e;margin-bottom:6px;">Edit stores</div>
           <div id="edit-rows-{{ d.id }}" style="display:flex;flex-direction:column;gap:6px;">
             {% for st in dstops %}
-            <div style="display:flex;gap:6px;flex-wrap:wrap;">
+            <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;">
               <input list="store-options" name="store_name[]" value="{{ st.place_name }}" placeholder="Store name"
-                style="flex:2;min-width:120px;padding:7px 10px;border:1px solid var(--border);border-radius:7px;font-size:12px;">
-              <input list="packet-options" name="store_packet_type[]" value="{{ st.packet_type or '' }}" placeholder="Packet type"
+                style="flex:2;min-width:110px;padding:7px 10px;border:1px solid var(--border);border-radius:7px;font-size:12px;">
+              <input list="route-options" name="store_area[]" value="{{ st.area or '' }}" placeholder="Area"
                 style="flex:1;min-width:90px;padding:7px 10px;border:1px solid var(--border);border-radius:7px;font-size:12px;">
-              <input type="number" name="store_packages[]" value="{{ st.packages }}" min="0" placeholder="Pkts"
-                style="width:60px;padding:7px 10px;border:1px solid var(--border);border-radius:7px;font-size:12px;">
+              <input list="packet-options" name="store_packet_type[]" value="{{ st.packet_type or '' }}" placeholder="Packet type"
+                style="flex:1;min-width:80px;padding:7px 10px;border:1px solid var(--border);border-radius:7px;font-size:12px;">
+              <input type="number" name="store_packages[]" value="{{ st.packages }}" min="1" placeholder="Pkts"
+                style="width:55px;padding:7px 10px;border:1px solid var(--border);border-radius:7px;font-size:12px;">
             </div>
             {% endfor %}
           </div>
@@ -1988,15 +2000,17 @@ function validateAndSubmit(e){
 // ═══ ASSIGNER MULTI-STORE LINE ITEMS ═══
 function _storeRowHTML(){
   return '<div class="store-row" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">' +
-    '<input list="store-options" name="store_name[]" placeholder="Store / area name" ' +
-      'style="flex:2;min-width:150px;padding:8px 11px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;">' +
-    '<input list="packet-options" name="store_packet_type[]" placeholder="Packet type" ' +
+    '<input list="store-options" name="store_name[]" placeholder="Store name" ' +
+      'style="flex:2;min-width:120px;padding:8px 11px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;">' +
+    '<input list="route-options" name="store_area[]" placeholder="Area (RANIHAT…)" ' +
       'style="flex:1;min-width:110px;padding:8px 11px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;">' +
-    '<input type="number" name="store_packages[]" min="0" value="1" placeholder="Pkts" oninput="recalcTotal()" ' +
-      'style="width:80px;padding:8px 11px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;">' +
+    '<input list="packet-options" name="store_packet_type[]" placeholder="Packet type" ' +
+      'style="flex:1;min-width:100px;padding:8px 11px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;">' +
+    '<input type="number" name="store_packages[]" min="1" value="1" placeholder="Pkts" oninput="recalcTotal()" ' +
+      'style="width:70px;padding:8px 11px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;">' +
     '<input type="hidden" name="store_lat[]" value=""><input type="hidden" name="store_lng[]" value="">' +
     '<button type="button" onclick="this.closest(\'.store-row\').remove();recalcTotal();" ' +
-      'style="padding:7px 11px;background:#fee2e2;color:#991b1b;border:1px solid #fca5a5;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;">✕</button>' +
+      'style="padding:7px 10px;background:#fee2e2;color:#991b1b;border:1px solid #fca5a5;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;">✕</button>' +
     '</div>';
 }
 function addStoreRow(){
@@ -2016,10 +2030,11 @@ function addEditRow(id){
   var box = document.getElementById('edit-rows-' + id);
   if(!box) return;
   box.insertAdjacentHTML('beforeend',
-    '<div style="display:flex;gap:6px;flex-wrap:wrap;">' +
-    '<input list="store-options" name="store_name[]" placeholder="Store name" style="flex:2;min-width:120px;padding:7px 10px;border:1px solid var(--border);border-radius:7px;font-size:12px;">' +
-    '<input list="packet-options" name="store_packet_type[]" placeholder="Packet type" style="flex:1;min-width:90px;padding:7px 10px;border:1px solid var(--border);border-radius:7px;font-size:12px;">' +
-    '<input type="number" name="store_packages[]" min="0" value="1" style="width:60px;padding:7px 10px;border:1px solid var(--border);border-radius:7px;font-size:12px;"></div>');
+    '<div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;">' +
+    '<input list="store-options" name="store_name[]" placeholder="Store name" style="flex:2;min-width:110px;padding:7px 10px;border:1px solid var(--border);border-radius:7px;font-size:12px;">' +
+    '<input list="route-options" name="store_area[]" placeholder="Area" style="flex:1;min-width:90px;padding:7px 10px;border:1px solid var(--border);border-radius:7px;font-size:12px;">' +
+    '<input list="packet-options" name="store_packet_type[]" placeholder="Packet type" style="flex:1;min-width:80px;padding:7px 10px;border:1px solid var(--border);border-radius:7px;font-size:12px;">' +
+    '<input type="number" name="store_packages[]" min="1" value="1" style="width:55px;padding:7px 10px;border:1px solid var(--border);border-radius:7px;font-size:12px;"></div>');
 }
 function toggleEdit(id){
   var f = document.getElementById('edit-form-' + id);
