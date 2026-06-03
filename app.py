@@ -86,7 +86,7 @@ KNOWN_ROUTES = [
     "BUS STAND", "PURIGHAT", "GANDARPUR", "KANIKA CHAK", "THOTIA SAHI",
     "SUBHADRA", "BIDANASI", "NAYA SARAK", "TULSIPUR", "SUTAHAT", "DOLAMUNDAI",
 ]
-PACKET_TYPES = ["Poly Bag", "Box", "Carton", "Envelope", "Fragile", "Cold Chain", "Bulk"]
+PACKET_TYPES = ["Poly Bag", "Box", "Carton", "Cold Chain", "Bulk"]
 
 
 # ─── MODELS ──────────────────────────────────────────────────────────────────
