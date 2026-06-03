@@ -437,6 +437,15 @@ class MultitaskEntry(db.Model):
     bills_received       = db.Column(db.Integer, default=0)
     pending_bills_manual = db.Column(db.Integer, default=0)
     quantity       = db.Column(db.Integer, default=0)
+    # Billing role params
+    bills_done     = db.Column(db.Integer, default=0)
+    items_count    = db.Column(db.Integer, default=0)
+    # "Other" role params (breakage / expiry handling)
+    breakage_received          = db.Column(db.Integer, default=0)
+    expire_received            = db.Column(db.Integer, default=0)
+    breakage_expire_processed  = db.Column(db.Integer, default=0)
+    item_receive_qty           = db.Column(db.Integer, default=0)
+    expire_return_qty          = db.Column(db.Integer, default=0)
     note           = db.Column(db.String(300), nullable=True)
     created_at     = db.Column(db.DateTime, default=datetime.utcnow)
     __table_args__ = (
@@ -454,7 +463,13 @@ class MultitaskEntry(db.Model):
             return f"{self.checked or 0} checked / {self.errors_found or 0} urgent · {self.bills_received or 0} bills"
         if st == "purchaser":
             return f"{self.checked or 0} PO checked · {self.sales_bills_open or 0} PO bills · {self.errors_found or 0} items"
-        # delivery / billing / packing / other
+        if st == "billing":
+            return f"{self.bills_done or 0} bills · {self.items_count or 0} items · {self.quantity or 0} qty"
+        if st == "other":
+            return (f"Brkg {self.breakage_received or 0} · Exp {self.expire_received or 0} · "
+                    f"Proc {self.breakage_expire_processed or 0} · Recv {self.item_receive_qty or 0} · "
+                    f"ExpRet {self.expire_return_qty or 0}")
+        # delivery / packing
         return f"{self.quantity or 0} done"
 
 
@@ -1426,6 +1441,13 @@ def run_migrations():
                 ("delivery_biller_notes", "table_clean", "INTEGER DEFAULT 0"),
                 ("delivery_biller_notes", "sweep_done", "INTEGER DEFAULT 0"),
                 ("employees", "extra_roles", "VARCHAR(160)"),
+                ("multitask_entries", "bills_done", "INTEGER DEFAULT 0"),
+                ("multitask_entries", "items_count", "INTEGER DEFAULT 0"),
+                ("multitask_entries", "breakage_received", "INTEGER DEFAULT 0"),
+                ("multitask_entries", "expire_received", "INTEGER DEFAULT 0"),
+                ("multitask_entries", "breakage_expire_processed", "INTEGER DEFAULT 0"),
+                ("multitask_entries", "item_receive_qty", "INTEGER DEFAULT 0"),
+                ("multitask_entries", "expire_return_qty", "INTEGER DEFAULT 0"),
             ]:
                 try:
                     db.session.execute(db.text(
@@ -1738,7 +1760,10 @@ def run_migrations():
                 mt_existing = [row[1] for row in cursor.fetchall()]
                 for mt_col in ["sales_bills_open", "picked", "missed", "checked",
                                "errors_found", "packing_done", "cs_sales_open",
-                               "total_bills_received", "bills_received", "pending_bills_manual"]:
+                               "total_bills_received", "bills_received", "pending_bills_manual",
+                               "quantity", "bills_done", "items_count",
+                               "breakage_received", "expire_received", "breakage_expire_processed",
+                               "item_receive_qty", "expire_return_qty"]:
                     if mt_col not in mt_existing:
                         cursor.execute(f"ALTER TABLE multitask_entries ADD COLUMN {mt_col} INTEGER DEFAULT 0")
                 logger.info("✅ SQLite multitask_entries ensured")
@@ -2040,7 +2065,10 @@ def _save_multitask_entry(emp_id, entry_date, primary_role):
     for role in roles:
         vals = dict(sales_bills_open=0, picked=0, missed=0, checked=0, errors_found=0,
                     packing_done=0, cs_sales_open=0, total_bills_received=0,
-                    bills_received=0, pending_bills_manual=0, quantity=0)
+                    bills_received=0, pending_bills_manual=0, quantity=0,
+                    bills_done=0, items_count=0,
+                    breakage_received=0, expire_received=0, breakage_expire_processed=0,
+                    item_receive_qty=0, expire_return_qty=0)
         if role == "picker":
             vals.update(total_bills_received=mi("mt_p_total_bills"),
                         sales_bills_open=mi("mt_p_sbo"), picked=mi("mt_p_picked"),
@@ -2055,7 +2083,16 @@ def _save_multitask_entry(emp_id, entry_date, primary_role):
             vals.update(sales_bills_open=mi("mt_pu_sbo"), checked=mi("mt_pu_checked"),
                         picked=mi("mt_pu_picked"), errors_found=mi("mt_pu_items"),
                         cs_sales_open=mi("mt_pu_cso"), packing_done=mi("mt_pu_packing"))
-        else:  # delivery / billing / packing / other — per-role quantity, legacy fallback
+        elif role == "billing":
+            vals.update(bills_done=mi("mt_b_bills"), items_count=mi("mt_b_items"),
+                        quantity=mi("mt_b_quantity"))
+        elif role == "other":
+            vals.update(breakage_received=mi("mt_o_breakage"),
+                        expire_received=mi("mt_o_expire"),
+                        breakage_expire_processed=mi("mt_o_processed"),
+                        item_receive_qty=mi("mt_o_recv_qty"),
+                        expire_return_qty=mi("mt_o_exp_return"))
+        else:  # delivery / packing — per-role quantity, legacy fallback
             qty = mi(f"mt_s_quantity__{role}") or mi("mt_s_quantity")
             vals.update(quantity=qty)
 
@@ -3093,16 +3130,42 @@ def admin_edit_user(emp_id):
 def admin_delete_user(emp_id):
     try:
         emp = db.session.get(Employee, emp_id)
-        if emp and not emp.is_admin:
-            name = emp.name
-            db.session.delete(emp)
-            db.session.commit()
-            log_audit("delete_user", name, "User removed")
-            flash(f"🗑️ {name} removed.", "success")
+        if not emp:
+            flash("User not found.", "warning")
+            return redirect(url_for("admin_dashboard"))
+        if emp.is_admin:
+            flash("Admin accounts cannot be deleted.", "warning")
+            return redirect(url_for("admin_dashboard"))
+
+        name = emp.name
+        # Explicitly clear dependent rows whose FK has no ON DELETE CASCADE,
+        # so the delete never fails on a constraint.
+        try:
+            DeliveryStop.query.filter_by(emp_id=emp_id).delete(synchronize_session=False)
+            DeliveryTrip.query.filter_by(emp_id=emp_id).delete(synchronize_session=False)
+            DeliveryAssignment.query.filter(
+                (DeliveryAssignment.delivery_emp_id == emp_id) |
+                (DeliveryAssignment.purchaser_id == emp_id)
+            ).delete(synchronize_session=False)
+            DeliveryBillerNote.query.filter_by(emp_id=emp_id).delete(synchronize_session=False)
+            MultitaskEntry.query.filter_by(emp_id=emp_id).delete(synchronize_session=False)
+            Notification.query.filter_by(emp_id=emp_id).delete(synchronize_session=False)
+            SupervisorBill.query.filter(
+                (SupervisorBill.staff_id == emp_id) |
+                (SupervisorBill.supervisor_id == emp_id)
+            ).delete(synchronize_session=False)
+            KPIEntry.query.filter_by(emp_id=emp_id).delete(synchronize_session=False)
+        except Exception as dep_err:
+            logger.warning(f"delete_user dependent cleanup: {dep_err}")
+
+        db.session.delete(emp)
+        db.session.commit()
+        log_audit("delete_user", name, "User removed")
+        flash(f"🗑️ {name} removed.", "success")
     except Exception as e:
         db.session.rollback()
         logger.error(f"delete_user: {e}")
-        flash("Error deleting user.", "danger")
+        flash(f"Error deleting user: {e}", "danger")
     return redirect(url_for("admin_dashboard"))
 
 
@@ -4269,13 +4332,21 @@ def compute_delivery_badges(emp_id):
 
 
 def score_delivery_trip(trip):
-    """Return point score for a completed delivery trip."""
-    score = 10  # base completion
-    if trip.is_on_time:
-        score += 20  # on-time bonus
-    if trip.duration_minutes and trip.duration_minutes < 30:
-        score += 5   # speed bonus
-    return score
+    """Points for ONE completed delivery (capped at 10):
+      • completed            = 5
+      • delivered ≤ 60 min   = +3
+      • delivered < 30 min   = +2 more
+    So a fast delivery earns the full 10; a slow-but-done one earns 5."""
+    score = 5  # base completion
+    dur = trip.duration_minutes
+    if dur is not None:
+        if dur <= 60:
+            score += 3
+        if dur < 30:
+            score += 2
+    elif trip.is_on_time:
+        score += 3
+    return min(score, 10)
 
 
 @app.route("/admin/badge/award", methods=["POST"])

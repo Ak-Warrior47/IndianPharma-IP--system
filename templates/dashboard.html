@@ -94,6 +94,16 @@ body {
 
 /* MAIN */
 .main { padding: 28px; max-width: 1200px; margin: 0 auto; width: 100%; }
+/* Assigner view: float the "Assign Delivery" card to the very top */
+.main.assigner-view { display: flex; flex-direction: column; }
+.main.assigner-view > #dispatch-form { order: -1; }
+/* Responsive framing for tablets & phones */
+@media (max-width: 1024px) { .main { padding: 22px 18px; } }
+@media (max-width: 640px) {
+  .main { padding: 16px 12px; }
+  .card { padding: 16px 14px; }
+  .store-row input, .store-row button { font-size: 12px; }
+}
 
 /* ALERTS */
 .alert { padding: 12px 16px; border-radius: 10px; font-size: 13px; font-weight: 500; margin-bottom: 16px; }
@@ -383,7 +393,7 @@ tbody tr:hover { background: rgba(165,180,252,0.18) !important; }
   </div>
 </div>
 
-<div class="main">
+<div class="main{% if staff_type == 'biller' %} assigner-view{% endif %}">
 
   <!-- FEATURE 2: ANNOUNCEMENTS BANNER -->
   {% if active_announcements %}
@@ -535,8 +545,13 @@ tbody tr:hover { background: rgba(165,180,252,0.18) !important; }
       <div style="font-size:11px;font-weight:700;color:#6d28d9;text-transform:uppercase;letter-spacing:.8px;margin-bottom:6px;">Today's Note</div>
       <div style="font-size:14px;color:var(--text);line-height:1.5;">{{ today_db_note.note_text }}</div>
       <div style="display:flex;gap:14px;margin-top:10px;font-size:12px;color:var(--muted);flex-wrap:wrap;">
+        {% if staff_type == 'packer' %}
+        <span>Sales Bill Open: <strong>{{ today_db_note.quantity }}</strong></span>
+        <span>Total Received: <strong>{{ today_db_note.issues_count }}</strong></span>
+        {% else %}
         <span>Processed: <strong>{{ today_db_note.quantity }}</strong></span>
         <span>Issues: <strong>{{ today_db_note.issues_count }}</strong></span>
+        {% endif %}
         <span>Table clean: <strong>{{ 'Yes' if today_db_note.table_clean else 'No' }}</strong></span>
         <span>Sweep: <strong>{{ 'Yes' if today_db_note.sweep_done else 'No' }}</strong></span>
         <span>Workspace: <strong style="color:#16a34a;">{{ today_db_note.workspace_score }}/10</strong></span>
@@ -546,13 +561,18 @@ tbody tr:hover { background: rgba(165,180,252,0.18) !important; }
     <form method="POST" autocomplete="off">
       <div class="form-grid">
         <div class="field" style="grid-column:span 2;">
-          <label>{% if staff_type == 'delivery' %}Deliveries Made{% elif staff_type == 'packer' %}No. of Bills Packed{% else %}Bills Processed{% endif %}</label>
-          <input type="number" name="delivery_qty" min="0" value="0" placeholder="Count for today">
+          <label>{% if staff_type == 'delivery' %}Deliveries Made{% elif staff_type == 'packer' %}Sales Bill Open{% else %}Bills Processed{% endif %}</label>
+          <input type="number" name="delivery_qty" min="0" value="0" placeholder="{% if staff_type == 'packer' %}Sales bills open{% else %}Count for today{% endif %}">
         </div>
         <div class="field" style="grid-column:span 2;">
-          <label>{% if staff_type == 'packer' %}No. of Bills Opened{% else %}Issues / Complaints Today{% endif %}</label>
-          <input type="number" name="delivery_issues" min="0" value="0" placeholder="{% if staff_type == 'packer' %}Bills opened{% else %}Number of issues or 0{% endif %}">
+          <label>{% if staff_type == 'packer' %}Total Number of Bills Received{% else %}Issues / Complaints Today{% endif %}</label>
+          <input type="number" name="delivery_issues" min="0" value="0" placeholder="{% if staff_type == 'packer' %}Total bills received{% else %}Number of issues or 0{% endif %}">
         </div>
+        {% if staff_type == 'packer' %}
+        <div class="field" style="grid-column:span 2;background:rgba(238,244,255,0.5);border:1px solid var(--border);border-radius:10px;padding:10px 12px;font-size:12px;color:var(--muted);">
+          ℹ️ The <strong>correct bill count</strong> is verified and entered by your supervisor — you only report Sales Bill Open and Total Received.
+        </div>
+        {% endif %}
         <div class="field" style="grid-column:span 2;">
           <label>Daily Note <span style="color:var(--danger);">*</span></label>
           <textarea name="delivery_note" rows="4" maxlength="1000" required
@@ -896,18 +916,42 @@ tbody tr:hover { background: rgba(165,180,252,0.18) !important; }
         </div>
       </div>
 
-      <!-- SIMPLE roles (delivery/billing/packing/other) — each its own quantity -->
+      <!-- SIMPLE roles: delivery & packing keep a single quantity -->
       {% set _p1 = (primary_staff_type or staff_type) %}
       {% set prim2 = {'biller':'billing','packer':'packing'}.get(_p1, _p1) %}
-      {% for r in ['delivery','billing','packing','other'] %}
+      {% for r in ['delivery','packing'] %}
       {% if r != prim2 %}
       <div class="mt-fields" id="mt_simple_{{ r }}" style="display:none;">
         <div class="form-grid">
-          <div class="field"><label>{{ r|title }} — Quantity Done (deliveries / bills / items)</label><input type="number" name="mt_s_quantity__{{ r }}" min="0" value="0"></div>
+          <div class="field"><label>{{ r|title }} — Quantity Done (deliveries / items)</label><input type="number" name="mt_s_quantity__{{ r }}" min="0" value="0"></div>
         </div>
       </div>
       {% endif %}
       {% endfor %}
+
+      <!-- BILLING role params -->
+      {% if prim2 != 'billing' %}
+      <div class="mt-fields" id="mt_simple_billing" style="display:none;">
+        <div class="form-grid">
+          <div class="field"><label>Number of Bills Done</label><input type="number" name="mt_b_bills" min="0" value="0"></div>
+          <div class="field"><label>Number of Items</label><input type="number" name="mt_b_items" min="0" value="0"></div>
+          <div class="field"><label>Number of Quantity</label><input type="number" name="mt_b_quantity" min="0" value="0"></div>
+        </div>
+      </div>
+      {% endif %}
+
+      <!-- OTHER role params (breakage / expiry handling) -->
+      {% if prim2 != 'other' %}
+      <div class="mt-fields" id="mt_simple_other" style="display:none;">
+        <div class="form-grid">
+          <div class="field"><label>Breakage Received</label><input type="number" name="mt_o_breakage" min="0" value="0"></div>
+          <div class="field"><label>Expire Received</label><input type="number" name="mt_o_expire" min="0" value="0"></div>
+          <div class="field"><label>Breakage / Expire Processed</label><input type="number" name="mt_o_processed" min="0" value="0"></div>
+          <div class="field"><label>Item Receive Quantity</label><input type="number" name="mt_o_recv_qty" min="0" value="0"></div>
+          <div class="field"><label>Expire Return Quantity</label><input type="number" name="mt_o_exp_return" min="0" value="0"></div>
+        </div>
+      </div>
+      {% endif %}
 
       <div class="field" style="margin-top:6px;">
         <label>Note (optional)</label>
@@ -1134,7 +1178,7 @@ tbody tr:hover { background: rgba(165,180,252,0.18) !important; }
         </div>
         <div style="flex:1;min-width:150px;">
           <label style="font-size:12px;font-weight:600;color:var(--muted);display:block;margin-bottom:4px;">Packet Type</label>
-          <input list="packet-options" name="packet_type" placeholder="Poly Bag / Box / Carton..."
+          <input list="packet-options" name="packet_type" value="Poly Bag" placeholder="Poly Bag / Box / Carton..."
             style="width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:9px;font-size:13px;font-family:inherit;">
         </div>
       </div>
@@ -1160,7 +1204,7 @@ tbody tr:hover { background: rgba(165,180,252,0.18) !important; }
               style="flex:2;min-width:120px;padding:8px 11px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;">
             <input list="route-options" name="store_area[]" placeholder="e.g. RANIHAT"
               style="flex:1;min-width:110px;padding:8px 11px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;">
-            <input list="packet-options" name="store_packet_type[]" placeholder="Packet type"
+            <input list="packet-options" name="store_packet_type[]" value="Poly Bag" placeholder="Packet type"
               style="flex:1;min-width:100px;padding:8px 11px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;">
             <input type="number" name="store_packages[]" min="1" value="1" placeholder="Pkts" oninput="recalcTotal()"
               style="width:70px;padding:8px 11px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;">
@@ -2004,7 +2048,7 @@ function _storeRowHTML(){
       'style="flex:2;min-width:120px;padding:8px 11px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;">' +
     '<input list="route-options" name="store_area[]" placeholder="Area (RANIHAT…)" ' +
       'style="flex:1;min-width:110px;padding:8px 11px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;">' +
-    '<input list="packet-options" name="store_packet_type[]" placeholder="Packet type" ' +
+    '<input list="packet-options" name="store_packet_type[]" value="Poly Bag" placeholder="Packet type" ' +
       'style="flex:1;min-width:100px;padding:8px 11px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;">' +
     '<input type="number" name="store_packages[]" min="1" value="1" placeholder="Pkts" oninput="recalcTotal()" ' +
       'style="width:70px;padding:8px 11px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;">' +
