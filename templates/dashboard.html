@@ -1205,6 +1205,72 @@ tbody tr:hover { background: rgba(165,180,252,0.18) !important; }
     </div>
   </div>
   {% endif %}
+
+  <!-- ════ ASSIGNER END-OF-DAY SUMMARY ════ -->
+  {% if staff_type == 'biller' and assigner_today and assigner_today.total_dispatches > 0 %}
+  <div class="card" style="margin-bottom:20px;">
+    <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:14px;">
+      <div class="section-label" style="margin-bottom:0;">📊 Today's Dispatch Summary</div>
+      <button type="button" onclick="document.getElementById('dispatch-form').scrollIntoView({behavior:'smooth'})"
+        style="padding:7px 18px;background:var(--blue);color:#fff;border:none;border-radius:9px;font-size:13px;font-weight:700;cursor:pointer;">
+        ➕ New Delivery
+      </button>
+    </div>
+    <!-- Totals row -->
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(100px,1fr));gap:10px;margin-bottom:14px;">
+      <div style="text-align:center;padding:10px;background:#f0fdf4;border-radius:10px;border:1px solid #bbf7d0;">
+        <div style="font-size:22px;font-weight:800;color:#16a34a;">{{ assigner_today.total_dispatches }}</div>
+        <div style="font-size:11px;color:#166534;">Dispatches</div>
+      </div>
+      <div style="text-align:center;padding:10px;background:#eff6ff;border-radius:10px;border:1px solid #bfdbfe;">
+        <div style="font-size:22px;font-weight:800;color:#2563eb;">{{ assigner_today.total_packets }}</div>
+        <div style="font-size:11px;color:#1e40af;">Packets</div>
+      </div>
+      <div style="text-align:center;padding:10px;background:#f0fdf4;border-radius:10px;border:1px solid #bbf7d0;">
+        <div style="font-size:22px;font-weight:800;color:#16a34a;">{{ assigner_today.delivered }}</div>
+        <div style="font-size:11px;color:#166534;">Delivered</div>
+      </div>
+      <div style="text-align:center;padding:10px;background:#fffbeb;border-radius:10px;border:1px solid #fde68a;">
+        <div style="font-size:22px;font-weight:800;color:#d97706;">{{ assigner_today.in_transit }}</div>
+        <div style="font-size:11px;color:#92400e;">In Transit</div>
+      </div>
+      <div style="text-align:center;padding:10px;background:#f8fafc;border-radius:10px;border:1px solid var(--border);">
+        <div style="font-size:22px;font-weight:800;color:var(--muted);">{{ assigner_today.pending }}</div>
+        <div style="font-size:11px;color:var(--muted);">Pending</div>
+      </div>
+      {% if assigner_today.failed %}
+      <div style="text-align:center;padding:10px;background:#fef2f2;border-radius:10px;border:1px solid #fecaca;">
+        <div style="font-size:22px;font-weight:800;color:#dc2626;">{{ assigner_today.failed }}</div>
+        <div style="font-size:11px;color:#991b1b;">Failed</div>
+      </div>
+      {% endif %}
+    </div>
+    <!-- Per-rider breakdown -->
+    {% if assigner_today.per_rider %}
+    <div style="font-size:12px;font-weight:700;color:var(--muted);margin-bottom:6px;text-transform:uppercase;letter-spacing:.5px;">Per Rider</div>
+    <div style="display:flex;flex-direction:column;gap:7px;">
+      {% for r in assigner_today.per_rider %}
+      <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:9px 12px;background:#f8fafc;border:1px solid var(--border);border-radius:9px;">
+        <div style="font-size:13px;font-weight:700;min-width:110px;">{{ r.name }}</div>
+        <div style="font-size:12px;color:var(--muted);flex:1;">
+          {{ r.dispatches }} dispatch{{ 'es' if r.dispatches != 1 else '' }}
+          · {{ r.packets }} pkt
+          {% if r.total_km %} · {{ r.total_km }} km{% endif %}
+        </div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;">
+          {% if r.delivered %}<span style="padding:2px 9px;background:#dcfce7;color:#166534;border-radius:20px;font-size:11px;font-weight:700;">✓ {{ r.delivered }} delivered</span>{% endif %}
+          {% if r.in_transit %}<span style="padding:2px 9px;background:#fef9c3;color:#854d0e;border-radius:20px;font-size:11px;font-weight:700;">🚚 {{ r.in_transit }} in transit</span>{% endif %}
+          {% if r.pending %}<span style="padding:2px 9px;background:#e0e7ff;color:#3730a3;border-radius:20px;font-size:11px;font-weight:700;">⏳ {{ r.pending }} pending</span>{% endif %}
+          {% if r.failed %}<span style="padding:2px 9px;background:#fee2e2;color:#991b1b;border-radius:20px;font-size:11px;font-weight:700;">✗ {{ r.failed }} failed</span>{% endif %}
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+    {% endif %}
+  </div>
+  {% endif %}
+  <!-- ════ END ASSIGNER SUMMARY ════ -->
+
   {% endif %}
   <!-- ════ END DELIVERY GPS TRACKING MODULE ════ -->
 
