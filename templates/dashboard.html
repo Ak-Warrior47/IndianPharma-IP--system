@@ -819,7 +819,7 @@ tbody tr:hover { background: rgba(165,180,252,0.18) !important; }
     {% endif %}
   </div>
 
-  {% if staff_type not in ('delivery', 'biller') %}
+  {# Multitask is available to EVERY role and can be changed every day #}
   <!-- ════ MULTITASK (ROLE 2) REPORT — fill default role above, second role here ════ -->
   <div class="card multitask-section" style="margin-bottom:20px;border-left:4px solid #7c3aed;">
     <div class="section-label" style="display:flex;align-items:center;gap:10px;">
@@ -846,7 +846,8 @@ tbody tr:hover { background: rgba(165,180,252,0.18) !important; }
       <input type="hidden" name="multitask_only" value="1">
       <div class="field" style="margin-bottom:14px;">
         <label>Which role(s) did you also work today? <span style="color:var(--muted);font-weight:600;">— tick any number, you earn extra points for each</span></label>
-        {% set prim = (primary_staff_type or staff_type) %}
+        {% set _p0 = (primary_staff_type or staff_type) %}
+        {% set prim = {'biller':'billing','packer':'packing'}.get(_p0, _p0) %}
         <div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:8px;">
           {% for r in ['picker','checker','purchaser','delivery','billing','packing','other'] %}
           {% if r != prim %}
@@ -896,7 +897,8 @@ tbody tr:hover { background: rgba(165,180,252,0.18) !important; }
       </div>
 
       <!-- SIMPLE roles (delivery/billing/packing/other) — each its own quantity -->
-      {% set prim2 = (primary_staff_type or staff_type) %}
+      {% set _p1 = (primary_staff_type or staff_type) %}
+      {% set prim2 = {'biller':'billing','packer':'packing'}.get(_p1, _p1) %}
       {% for r in ['delivery','billing','packing','other'] %}
       {% if r != prim2 %}
       <div class="mt-fields" id="mt_simple_{{ r }}" style="display:none;">
@@ -916,7 +918,6 @@ tbody tr:hover { background: rgba(165,180,252,0.18) !important; }
       <button type="submit" class="btn-submit" style="margin-top:14px;background:linear-gradient(135deg,#7c3aed,#6d28d9);">Save Multitask Report</button>
     </form>
   </div>
-  {% endif %}
 
   <!-- ════ DELIVERY GPS TRACKING MODULE ════ -->
   {% if staff_type == 'delivery' %}
@@ -1120,6 +1121,10 @@ tbody tr:hover { background: rgba(165,180,252,0.18) !important; }
     <datalist id="route-options">
       {% for r in known_routes %}<option value="{{ r }}">{% endfor %}
     </datalist>
+    <datalist id="store-options">
+      {% for s in known_stores %}<option value="{{ s }}">{% endfor %}
+      {% for r in known_routes %}<option value="{{ r }}">{% endfor %}
+    </datalist>
     <datalist id="packet-options">
       {% for p in packet_types %}<option value="{{ p }}">{% endfor %}
     </datalist>
@@ -1150,7 +1155,18 @@ tbody tr:hover { background: rgba(165,180,252,0.18) !important; }
           <span style="font-size:12px;color:var(--muted);">Total packets: <strong id="total-packets" style="color:var(--blue);">0</strong></span>
         </div>
         <div id="store-rows" style="display:flex;flex-direction:column;gap:8px;">
-          <!-- one row injected by JS on load -->
+          <!-- First row is server-rendered so it shows even if JS is blocked; more added by JS -->
+          <div class="store-row" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+            <input list="store-options" name="store_name[]" placeholder="Store / area name (start typing for suggestions)"
+              style="flex:2;min-width:150px;padding:8px 11px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;">
+            <input list="packet-options" name="store_packet_type[]" placeholder="Packet type"
+              style="flex:1;min-width:110px;padding:8px 11px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;">
+            <input type="number" name="store_packages[]" min="0" value="1" placeholder="Pkts" oninput="recalcTotal()"
+              style="width:80px;padding:8px 11px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;">
+            <input type="hidden" name="store_lat[]" value=""><input type="hidden" name="store_lng[]" value="">
+            <button type="button" onclick="this.closest('.store-row').remove();recalcTotal();"
+              style="padding:7px 11px;background:#fee2e2;color:#991b1b;border:1px solid #fca5a5;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;">✕</button>
+          </div>
         </div>
         <button type="button" onclick="addStoreRow()"
           style="margin-top:8px;padding:7px 16px;background:#eff6ff;color:var(--blue);border:1.5px solid #bfdbfe;border-radius:8px;font-size:13px;font-weight:700;font-family:inherit;cursor:pointer;">
@@ -1216,7 +1232,7 @@ tbody tr:hover { background: rgba(165,180,252,0.18) !important; }
           <div id="edit-rows-{{ d.id }}" style="display:flex;flex-direction:column;gap:6px;">
             {% for st in dstops %}
             <div style="display:flex;gap:6px;flex-wrap:wrap;">
-              <input list="route-options" name="store_name[]" value="{{ st.place_name }}" placeholder="Store name"
+              <input list="store-options" name="store_name[]" value="{{ st.place_name }}" placeholder="Store name"
                 style="flex:2;min-width:120px;padding:7px 10px;border:1px solid var(--border);border-radius:7px;font-size:12px;">
               <input list="packet-options" name="store_packet_type[]" value="{{ st.packet_type or '' }}" placeholder="Packet type"
                 style="flex:1;min-width:90px;padding:7px 10px;border:1px solid var(--border);border-radius:7px;font-size:12px;">
@@ -2030,7 +2046,7 @@ function validateAndSubmit(e){
 // ═══ ASSIGNER MULTI-STORE LINE ITEMS ═══
 function _storeRowHTML(){
   return '<div class="store-row" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">' +
-    '<input list="route-options" name="store_name[]" placeholder="Store / area name" ' +
+    '<input list="store-options" name="store_name[]" placeholder="Store / area name" ' +
       'style="flex:2;min-width:150px;padding:8px 11px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;">' +
     '<input list="packet-options" name="store_packet_type[]" placeholder="Packet type" ' +
       'style="flex:1;min-width:110px;padding:8px 11px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;">' +
@@ -2059,7 +2075,7 @@ function addEditRow(id){
   if(!box) return;
   box.insertAdjacentHTML('beforeend',
     '<div style="display:flex;gap:6px;flex-wrap:wrap;">' +
-    '<input list="route-options" name="store_name[]" placeholder="Store name" style="flex:2;min-width:120px;padding:7px 10px;border:1px solid var(--border);border-radius:7px;font-size:12px;">' +
+    '<input list="store-options" name="store_name[]" placeholder="Store name" style="flex:2;min-width:120px;padding:7px 10px;border:1px solid var(--border);border-radius:7px;font-size:12px;">' +
     '<input list="packet-options" name="store_packet_type[]" placeholder="Packet type" style="flex:1;min-width:90px;padding:7px 10px;border:1px solid var(--border);border-radius:7px;font-size:12px;">' +
     '<input type="number" name="store_packages[]" min="0" value="1" style="width:60px;padding:7px 10px;border:1px solid var(--border);border-radius:7px;font-size:12px;"></div>');
 }

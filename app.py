@@ -2093,6 +2093,17 @@ def dashboard():
         # ── Delivery / Assigner / Packer: simple note entry (no KPIEntry) ───────
         today_db_note = None
         if staff_type in ("delivery", "biller", "packer"):
+            # Independent multitask submission — works for delivery/biller/packer too
+            if request.method == "POST" and request.form.get("multitask_only") == "1":
+                try:
+                    _save_multitask_entry(emp_id, today, staff_type)
+                    flash("✅ Multitask role report saved.", "success")
+                except Exception as mte:
+                    db.session.rollback()
+                    logger.warning(f"Independent multitask save (note path): {mte}")
+                    flash("Error saving multitask report.", "danger")
+                return redirect(url_for("dashboard"))
+
             today_db_note = DeliveryBillerNote.query.filter_by(emp_id=emp_id, entry_date=today).first()
             if request.method == "POST" and not today_db_note:
                 note_text = request.form.get("delivery_note", "").strip()
@@ -2182,6 +2193,20 @@ def dashboard():
             except Exception as _de:
                 logger.error(f"Delivery module (note path) failed: {_de}")
 
+            # Past store names (so the assigner gets autocomplete suggestions)
+            try:
+                known_stores = [r[0] for r in db.session.query(DeliveryStop.place_name)
+                                .distinct().order_by(DeliveryStop.place_name).all() if r[0]]
+            except Exception:
+                known_stores = []
+            # Multitask entries logged today (so delivery/biller can multitask too)
+            try:
+                note_today_multitask = MultitaskEntry.query.filter_by(
+                    emp_id=emp_id, entry_date=today
+                ).order_by(MultitaskEntry.created_at.desc()).all()
+            except Exception:
+                note_today_multitask = []
+
             return render_template("dashboard.html",
                 user_name=session.get("user_name", "User"),
                 user_id=emp_id,
@@ -2198,7 +2223,8 @@ def dashboard():
                 unread_count=0, current_goal=None, pending_requests=[],
                 my_staff_badges=[], all_auto_badges=[], earned_badge_ids=set(),
                 current_month=today.strftime("%B %Y"), month_str=today.strftime("%Y-%m"),
-                today_multitask=[],
+                today_multitask=note_today_multitask,
+                known_stores=known_stores,
                 primary_staff_type=session.get("primary_staff_type") or staff_type,
                 secondary_staff_type=session.get("secondary_staff_type"),
                 my_assignments=my_assignments,
@@ -2475,6 +2501,13 @@ def dashboard():
         except Exception:
             today_multitask = []
 
+        # Past store names for assigner autocomplete (used by biller/admin dispatch form)
+        try:
+            known_stores_main = [r[0] for r in db.session.query(DeliveryStop.place_name)
+                                 .distinct().order_by(DeliveryStop.place_name).all() if r[0]]
+        except Exception:
+            known_stores_main = []
+
         # Multitasker bonus: +10 per extra role worked today (capped at +30) — points for extra work
         if today_multitask and d_stats:
             extra_roles_n = len({mt.secondary_type for mt in today_multitask})
@@ -2580,6 +2613,7 @@ def dashboard():
             assigner_today=None,
             known_routes=KNOWN_ROUTES,
             packet_types=PACKET_TYPES,
+            known_stores=known_stores_main,
         )
     except Exception as e:
         logger.error(f"Dashboard error: {e}")
@@ -2597,7 +2631,7 @@ def dashboard():
             my_assignments=[], purchaser_delivery_staff=[], my_deliveries_today=[],
             trip_map={}, stops_map={}, my_dispatches=[],
             store_lat=0.0, store_lng=0.0, tomtom_key="", delivery_diag=None,
-            assigner_today=None, known_routes=[], packet_types=[])
+            assigner_today=None, known_routes=[], packet_types=[], known_stores=[])
 
 
 @app.route("/admin_dashboard")
