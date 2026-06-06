@@ -4222,9 +4222,6 @@ def migrate_checker_data(emp_id):
         return jsonify(error=str(ex)), 500
 
 
-if __name__ == "__main__":
-    socketio.run(app, host="0.0.0.0", port=int(os.environ.get("PORT", 10000)))
-
 # ─── FEATURE 2: ANNOUNCEMENTS ────────────────────────────────────────────────
 
 @app.route("/admin/announcement/create", methods=["POST"])
@@ -6026,3 +6023,7 @@ try:
     logger.info("APScheduler started — monthly reports job scheduled.")
 except Exception as _sch_err:
     logger.warning(f"APScheduler init failed: {_sch_err}")
+
+
+if __name__ == "__main__":
+    socketio.run(app, host="0.0.0.0", port=int(os.environ.get("PORT", 10000)))
