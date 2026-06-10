@@ -4631,7 +4631,7 @@ def admin_bulk_import():
             if len(password) < 6:
                 skipped.append(f"{email}: password too short")
                 continue
-            if staff_type not in ("picker", "checker", "purchaser"):
+            if staff_type not in VALID_STAFF_TYPES:
                 skipped.append(f"{email}: invalid staff_type '{staff_type}'")
                 continue
             if Employee.query.filter_by(email=email).first():
