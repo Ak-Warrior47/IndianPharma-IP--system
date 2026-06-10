@@ -575,6 +575,12 @@ new Chart(document.getElementById('deliveryChart'), {
 </script>
 
 <script>
+// Escape staff-entered text before injecting into map popup HTML (anti-XSS)
+function _esc(s) {
+  return String(s == null ? '' : s).replace(/[&<>"']/g, function(ch) {
+    return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch];
+  });
+}
 var _adminMap = null;
 var _riderColours = {};
 var _riderCI = 0;
@@ -610,11 +616,11 @@ function loadAllBreadcrumbs() {
             // "Trail ends here" marker at last point
             var last = latlngs[latlngs.length - 1];
             var endIcon = L.divIcon({
-              html: '<div style="background:' + col + ';color:#fff;font-size:10px;font-weight:700;padding:2px 7px;border-radius:10px;white-space:nowrap;box-shadow:0 2px 5px rgba(0,0,0,0.3);">📍 ' + rider + '</div>',
+              html: '<div style="background:' + col + ';color:#fff;font-size:10px;font-weight:700;padding:2px 7px;border-radius:10px;white-space:nowrap;box-shadow:0 2px 5px rgba(0,0,0,0.3);">📍 ' + _esc(rider) + '</div>',
               className: '', iconAnchor: [0, 14]
             });
             L.marker(last, { icon: endIcon }).addTo(_adminMap)
-              .bindPopup('<b>Last known position</b><br>' + rider + '<br>' + pts[pts.length-1].t);
+              .bindPopup('<b>Last known position</b><br>' + _esc(rider) + '<br>' + _esc(pts[pts.length-1].t));
           }
           done++;
           if (done >= pending && btn) { btn.textContent = '✅ Trails loaded'; }
@@ -659,19 +665,19 @@ function loadAllBreadcrumbs() {
     // Markers per stop
     stops.forEach(function(s, i) {
       var done = !!s.time;
-      var label = (i+1) + '. ' + s.name + (s.area ? ' (' + s.area + ')' : '') + (s.time ? ' ✅' : ' ⏳');
+      var label = (i+1) + '. ' + _esc(s.name) + (s.area ? ' (' + _esc(s.area) + ')' : '') + (s.time ? ' ✅' : ' ⏳');
       var icon = L.divIcon({
         html: '<div style="background:' + (done ? col : '#94a3b8') + ';color:#fff;font-size:10px;font-weight:700;' +
               'padding:3px 8px;border-radius:12px;white-space:nowrap;box-shadow:0 2px 6px rgba(0,0,0,0.3);">' + label + '</div>',
         className: '', iconAnchor: [0, 0]
       });
       var popup = '<div style="min-width:160px;font-family:sans-serif;">' +
-        '<div style="font-weight:700;font-size:13px;margin-bottom:4px;">' + s.name + (s.area ? ' <span style="font-size:11px;color:#6366f1;">(' + s.area + ')</span>' : '') + '</div>' +
-        '<div style="font-size:12px;color:#475569;"><b>Rider:</b> ' + rider + '</div>' +
-        '<div style="font-size:12px;color:#475569;"><b>Packets:</b> ' + s.pkts + (s.ptype ? ' · ' + s.ptype : '') + '</div>' +
-        (s.km ? '<div style="font-size:12px;color:#475569;"><b>Distance:</b> ' + s.km + ' km</div>' : '') +
-        (s.time ? '<div style="font-size:12px;font-weight:700;color:#16a34a;margin-top:4px;">✅ Delivered at ' + s.time + (s.mins ? ' (+' + s.mins + ' min)' : '') + '</div>' : '') +
-        (s.rcvd ? '<div style="font-size:11px;color:#64748b;margin-top:3px;">📦 ' + s.rcvd + '</div>' : '') +
+        '<div style="font-weight:700;font-size:13px;margin-bottom:4px;">' + _esc(s.name) + (s.area ? ' <span style="font-size:11px;color:#6366f1;">(' + _esc(s.area) + ')</span>' : '') + '</div>' +
+        '<div style="font-size:12px;color:#475569;"><b>Rider:</b> ' + _esc(rider) + '</div>' +
+        '<div style="font-size:12px;color:#475569;"><b>Packets:</b> ' + _esc(s.pkts) + (s.ptype ? ' · ' + _esc(s.ptype) : '') + '</div>' +
+        (s.km ? '<div style="font-size:12px;color:#475569;"><b>Distance:</b> ' + _esc(s.km) + ' km</div>' : '') +
+        (s.time ? '<div style="font-size:12px;font-weight:700;color:#16a34a;margin-top:4px;">✅ Delivered at ' + _esc(s.time) + (s.mins ? ' (+' + _esc(s.mins) + ' min)' : '') + '</div>' : '') +
+        (s.rcvd ? '<div style="font-size:11px;color:#64748b;margin-top:3px;">📦 ' + _esc(s.rcvd) + '</div>' : '') +
         '</div>';
       L.marker([s.lat, s.lng], { icon: icon }).addTo(map).bindPopup(popup);
     });

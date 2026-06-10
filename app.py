@@ -31,7 +31,13 @@ IS_PRODUCTION = os.environ.get("RENDER") or os.environ.get("DATABASE_URL")
 
 _secret_key = os.environ.get("SECRET_KEY", "pharma_secure_key_2024")
 if IS_PRODUCTION and _secret_key == "pharma_secure_key_2024":
-    logger.critical("⛔ SECRET_KEY is not set! Sessions are insecure in production. Set SECRET_KEY env var.")
+    # The fallback key is public (it's in the repo) — anyone could forge admin
+    # session cookies with it. Use a random key instead: sessions reset on each
+    # deploy until SECRET_KEY is set, but cookies can no longer be forged.
+    import secrets as _secrets
+    _secret_key = _secrets.token_hex(32)
+    logger.critical("⛔ SECRET_KEY env var not set! Using a random key — all users are "
+                    "logged out on every restart. Set SECRET_KEY in Render to fix.")
 
 app.config.update(
     SECRET_KEY=_secret_key,
@@ -1222,6 +1228,48 @@ def build_pdf_payload(emp: "Employee") -> Dict[str, Any]:
         return {"staff_type": emp.staff_type, "all_entries": []}
 
 
+# ─── Security: headers + brute-force throttling ─────────────────────────────
+
+@app.after_request
+def _security_headers(resp):
+    resp.headers.setdefault("X-Frame-Options", "DENY")              # no clickjacking
+    resp.headers.setdefault("X-Content-Type-Options", "nosniff")    # no MIME sniffing
+    resp.headers.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
+    resp.headers.setdefault("Permissions-Policy", "camera=(), microphone=()")
+    if IS_PRODUCTION:
+        resp.headers.setdefault("Strict-Transport-Security", "max-age=31536000; includeSubDomains")
+    return resp
+
+
+# In-memory failed-attempt throttle (per key). Fine for a single-instance app;
+# resets on restart, which only ever helps the legitimate user.
+_fail_counts = {}   # key -> [count, locked_until_timestamp]
+_THROTTLE_MAX = 5
+_THROTTLE_LOCK_SECS = 600   # 10 minutes
+
+def _throttle_check(key):
+    """Returns remaining lock seconds if locked, else 0."""
+    rec = _fail_counts.get(key)
+    if not rec:
+        return 0
+    import time as _t
+    if rec[0] >= _THROTTLE_MAX and rec[1] > _t.time():
+        return int(rec[1] - _t.time())
+    if rec[1] and rec[1] <= _t.time():
+        _fail_counts.pop(key, None)   # lock expired — reset
+    return 0
+
+def _throttle_fail(key):
+    import time as _t
+    rec = _fail_counts.setdefault(key, [0, 0])
+    rec[0] += 1
+    if rec[0] >= _THROTTLE_MAX:
+        rec[1] = _t.time() + _THROTTLE_LOCK_SECS
+
+def _throttle_clear(key):
+    _fail_counts.pop(key, None)
+
+
 def login_required(f):
     @wraps(f)
     def decorated(*args, **kwargs):
@@ -2036,11 +2084,22 @@ def login():
         try:
             email = request.form.get("email", "").lower().strip()
             password = request.form.get("password", "")
+
+            # Brute-force lockout: 5 wrong tries per account → 10 min lock
+            _lk = f"login:{email}"
+            _wait = _throttle_check(_lk)
+            if _wait:
+                flash(f"Too many failed attempts. Try again in {max(_wait // 60, 1)} minute(s).", "danger")
+                return render_template("login.html")
+
             user = Employee.query.filter_by(email=email).first()
 
             if not user or not user.check_password(password):
+                _throttle_fail(_lk)
+                logger.warning(f"Failed login attempt for: {email} (ip={request.remote_addr})")
                 flash("Invalid Pharma ID or Password.", "danger")
                 return render_template("login.html")
+            _throttle_clear(_lk)
 
             # NOTE: staff_type is NEVER read from login form.
             # Role is set by admin only. Prevents staff gaming the leaderboard.
@@ -3180,8 +3239,8 @@ def admin_add_user():
         if not name or not email or not password:
             flash("All fields required.", "danger")
             return redirect(url_for("admin_dashboard"))
-        if len(password) < 6:
-            flash("Password must be at least 6 characters.", "danger")
+        if len(password) < 8:
+            flash("Password must be at least 8 characters.", "danger")
             return redirect(url_for("admin_dashboard"))
         if Employee.query.filter_by(email=email).first():
             flash(f"Email '{email}' already exists.", "warning")
@@ -3237,8 +3296,8 @@ def admin_edit_user(emp_id):
             elif sec in VALID_STAFF_TYPES and sec != emp.staff_type:
                 emp.secondary_staff_type = sec
         if new_password:
-            if len(new_password) < 6:
-                flash("New password must be at least 6 characters.", "danger")
+            if len(new_password) < 8:
+                flash("New password must be at least 8 characters.", "danger")
                 return redirect(url_for("admin_dashboard"))
             emp.set_password(new_password)
 
@@ -4628,8 +4687,8 @@ def admin_bulk_import():
             if not name or not email or not password:
                 skipped.append(f"{email or name}: missing fields")
                 continue
-            if len(password) < 6:
-                skipped.append(f"{email}: password too short")
+            if len(password) < 8:
+                skipped.append(f"{email}: password too short (min 8)")
                 continue
             if staff_type not in VALID_STAFF_TYPES:
                 skipped.append(f"{email}: invalid staff_type '{staff_type}'")
@@ -4793,6 +4852,12 @@ def forgot_password():
         if not phone:
             flash("Please enter your phone number.", "warning")
             return render_template("forgot_password.html")
+        # Limit OTP sends per phone (anti SMS-flood): 5 per 10 minutes
+        _sk = f"otpsend:{phone}"
+        if _throttle_check(_sk):
+            flash("Too many OTP requests. Please wait a few minutes and try again.", "warning")
+            return render_template("forgot_password.html")
+        _throttle_fail(_sk)
         emp = Employee.query.filter_by(phone=phone).first()
         if not emp:
             flash("If that number is registered, an OTP has been sent.", "info")
@@ -4833,19 +4898,27 @@ def reset_password():
         if new_pw != confirm_pw:
             flash("Passwords do not match.", "danger")
             return render_template("reset_password.html", phone=phone)
-        if len(new_pw) < 6:
-            flash("Password must be at least 6 characters.", "danger")
+        if len(new_pw) < 8:
+            flash("Password must be at least 8 characters.", "danger")
             return render_template("reset_password.html", phone=phone)
         emp = Employee.query.filter_by(phone=phone).first()
         if not emp:
             flash("Invalid or expired reset link.", "danger")
             return redirect(url_for("forgot_password"))
+        # OTP brute-force lockout: 5 wrong codes per phone → 10 min lock
+        _ok = f"otp:{phone}"
+        _wait = _throttle_check(_ok)
+        if _wait:
+            flash(f"Too many wrong OTP attempts. Try again in {max(_wait // 60, 1)} minute(s).", "danger")
+            return render_template("reset_password.html", phone=phone)
         otp_obj = PasswordResetOTP.query.filter_by(
             emp_id=emp.id, otp_code=otp_input, is_used=False
         ).filter(PasswordResetOTP.expires_at >= datetime.utcnow()).first()
         if not otp_obj:
+            _throttle_fail(_ok)
             flash("OTP is invalid or has expired. Please request a new one.", "danger")
             return render_template("reset_password.html", phone=phone)
+        _throttle_clear(_ok)
         emp.set_password(new_pw)
         otp_obj.is_used = True
         db.session.commit()

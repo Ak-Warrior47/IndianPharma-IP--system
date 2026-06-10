@@ -2199,7 +2199,8 @@ function completeStop(stopId, btn){
           var form = row.querySelector('div:last-child');
           if(form && form.querySelector('input')){
             var mins = d.minutes_from_prev ? (' · ' + d.minutes_from_prev + ' min') : '';
-            var rcvd = receivedBy + (company ? ' / ' + company : '');
+            var esc = function(s){ return String(s).replace(/[&<>"']/g, function(ch){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]; }); };
+            var rcvd = esc(receivedBy) + (company ? ' / ' + esc(company) : '');
             form.outerHTML = '<div style="font-size:11px;color:#166534;margin-top:4px;">✅ Delivered to <strong>'+rcvd+'</strong>' + mins + '</div>';
           }
           var icon = row.querySelector('span:first-child'); if(icon) icon.textContent='✅';
