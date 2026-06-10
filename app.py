@@ -5945,20 +5945,29 @@ def admin_delivery():
         pending_count   = sum(1 for a in assignments if a.status == "pending")
         in_transit_count= sum(1 for a in assignments if a.status == "in_transit")
 
-        # ── Stops for journey map (today's assignments) ──
-        today_aids = [a.id for a in assignments if a.assigned_at and a.assigned_at.date() == today]
-        today_stops = (DeliveryStop.query
-                       .filter(DeliveryStop.assignment_id.in_(today_aids))
-                       .order_by(DeliveryStop.assignment_id, DeliveryStop.id).all()
-                       if today_aids else [])
+        # ── Journey map date: ?day=YYYY-MM-DD lets admin replay any past day ──
+        map_day = today
+        _day_raw = (request.args.get("day", "") or "").strip()
+        if _day_raw:
+            try:
+                map_day = datetime.strptime(_day_raw, "%Y-%m-%d").date()
+            except ValueError:
+                map_day = today
+
+        # ── Stops for journey map (selected day's assignments) ──
+        day_aids = [a.id for a in assignments if a.assigned_at and a.assigned_at.date() == map_day]
+        day_stops = (DeliveryStop.query
+                     .filter(DeliveryStop.assignment_id.in_(day_aids))
+                     .order_by(DeliveryStop.assignment_id, DeliveryStop.id).all()
+                     if day_aids else [])
         stops_map = {}
-        for st in today_stops:
+        for st in day_stops:
             stops_map.setdefault(st.assignment_id, []).append(st)
 
-        # Map: rider name -> list of trip_ids (for breadcrumb loading)
+        # Map: rider name -> list of trip_ids (for breadcrumb loading, selected day)
         rider_trip_ids = {}
         for a in assignments:
-            if a.assigned_at and a.assigned_at.date() == today:
+            if a.assigned_at and a.assigned_at.date() == map_day:
                 t = trip_map.get(a.id)
                 if t:
                     rider = emp_map.get(a.delivery_emp_id)
@@ -5966,6 +5975,10 @@ def admin_delivery():
                     rider_trip_ids.setdefault(rname, [])
                     if t.id not in rider_trip_ids[rname]:
                         rider_trip_ids[rname].append(t.id)
+
+        # Every date that has at least one assignment — for the history picker
+        delivery_days = sorted({a.assigned_at.date() for a in assignments if a.assigned_at},
+                               reverse=True)
 
         return render_template("admin_delivery.html",
                                assignments=assignments, trip_map=trip_map,
@@ -5982,6 +5995,8 @@ def admin_delivery():
                                in_transit_count=in_transit_count,
                                stops_map=stops_map,
                                rider_trip_ids=rider_trip_ids,
+                               map_day=map_day,
+                               delivery_days=delivery_days,
                                store_lat=STORE_LAT,
                                store_lng=STORE_LNG)
     except Exception as e:

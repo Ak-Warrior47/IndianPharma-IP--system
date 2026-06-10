@@ -477,10 +477,10 @@ tbody tr:hover { background: rgba(165,180,252,0.18) !important; }
   </div>
   {% endif %}
 
-  <!-- ════ TODAY'S JOURNEY MAP ════ -->
+  <!-- ════ JOURNEY MAP (any day — date picker below) ════ -->
   {% set map_stops = [] %}
   {% for a in assignments %}
-    {% if a.assigned_at and a.assigned_at.date() == today %}
+    {% if a.assigned_at and a.assigned_at.date() == map_day %}
       {% set rider_name = emp_map[a.delivery_emp_id].name if a.delivery_emp_id in emp_map else '' %}
       {% for st in stops_map.get(a.id, []) %}
         {% if st.lat and st.lng %}
@@ -497,21 +497,55 @@ tbody tr:hover { background: rgba(165,180,252,0.18) !important; }
       {% endfor %}
     {% endif %}
   {% endfor %}
-  {% if map_stops %}
   <div class="card" style="margin-bottom:22px;">
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:8px;">
-      <div class="section-label" style="margin-bottom:0;">🗺️ Today's Delivery Routes</div>
-      <button onclick="loadAllBreadcrumbs()" id="crumb-btn"
-              style="font-size:12px;font-weight:700;padding:6px 14px;border:1.5px solid #6366f1;background:#fff;color:#6366f1;border-radius:8px;cursor:pointer;">
-        📍 Show GPS Trails
-      </button>
+      <div class="section-label" style="margin-bottom:0;">
+        🗺️ Delivery Routes — {{ map_day.strftime('%d %b %Y') }}{% if map_day == today %} (Today){% endif %}
+      </div>
+      <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+        <!-- History: pick any past delivery day to replay its routes + GPS trails -->
+        <form method="GET" action="/admin/delivery" style="display:flex;align-items:center;gap:6px;margin:0;">
+          <input type="date" name="day" value="{{ map_day.isoformat() }}" max="{{ today.isoformat() }}"
+                 style="font-size:12px;padding:5px 9px;border:1.5px solid var(--border);border-radius:8px;font-family:inherit;">
+          <button type="submit"
+                  style="font-size:12px;font-weight:700;padding:6px 12px;border:1.5px solid #0ea5e9;background:#fff;color:#0ea5e9;border-radius:8px;cursor:pointer;">
+            📅 Load Day
+          </button>
+        </form>
+        {% if map_day != today %}
+        <a href="/admin/delivery" style="font-size:12px;font-weight:700;padding:6px 12px;border:1.5px solid var(--border);background:#fff;color:var(--muted);border-radius:8px;text-decoration:none;">
+          ↩ Back to Today
+        </a>
+        {% endif %}
+        <button onclick="loadAllBreadcrumbs()" id="crumb-btn"
+                style="font-size:12px;font-weight:700;padding:6px 14px;border:1.5px solid #6366f1;background:#fff;color:#6366f1;border-radius:8px;cursor:pointer;">
+          📍 Show GPS Trails
+        </button>
+      </div>
     </div>
+    {% if delivery_days %}
+    <div style="margin-bottom:10px;font-size:11px;color:var(--muted);">
+      Days with deliveries:
+      {% for d in delivery_days[:14] %}
+      <a href="/admin/delivery?day={{ d.isoformat() }}"
+         style="display:inline-block;margin:2px 3px;padding:2px 9px;border-radius:10px;text-decoration:none;font-weight:700;
+                {% if d == map_day %}background:#6366f1;color:#fff;{% else %}background:#eef2ff;color:#4338ca;{% endif %}">
+        {{ d.strftime('%d %b') }}
+      </a>
+      {% endfor %}
+    </div>
+    {% endif %}
+    {% if map_stops %}
     <div id="journey-map" style="height:460px;border-radius:10px;overflow:hidden;border:1px solid var(--border);"></div>
     <div style="margin-top:8px;font-size:11px;color:#9ca3af;">
-      Solid line = planned route · Dotted line = actual GPS trail · Markers = delivery stops
+      Solid line = planned route · Dotted line = actual GPS trail · Markers = delivery stops · 📍 = last known rider position
     </div>
+    {% else %}
+    <div style="padding:30px;text-align:center;color:var(--muted);font-size:13px;background:#f8fafc;border-radius:10px;">
+      No mapped deliveries on {{ map_day.strftime('%d %b %Y') }}. Pick another day above.
+    </div>
+    {% endif %}
   </div>
-  {% endif %}
 
 </div>
 
@@ -556,6 +590,7 @@ function _riderColor(rider) {
 
 function loadAllBreadcrumbs() {
   var btn = document.getElementById('crumb-btn');
+  if (!_adminMap) { if (btn) btn.textContent = 'No map for this day'; return; }
   if (btn) { btn.textContent = 'Loading...'; btn.disabled = true; }
   var entries = Object.entries(_riderTripIds);
   var pending = entries.reduce(function(acc, e){ return acc + e[1].length; }, 0);
