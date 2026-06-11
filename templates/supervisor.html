@@ -35,7 +35,7 @@
 </head>
 <body>
   <div class="topbar">
-    <h1>🧮 Supervisor Console</h1>
+    <h1>Supervisor Console</h1>
     <div>{{ user_name }} · <a href="{{ url_for('logout') }}">Logout</a></div>
   </div>
   <div class="wrap">
@@ -92,7 +92,7 @@
               <td><strong>{{ r.super_bills }}</strong></td>
               <td>
                 {% if r.admin_validated %}
-                <span class="pill" style="background:#dcfce7;color:#166534;">✓ Validated</span>
+                <span class="pill" style="background:#dcfce7;color:#166534;">Validated</span>
                 {% else %}
                 <span class="pill" style="background:#fef3c7;color:#92400e;">Pending admin</span>
                 {% endif %}

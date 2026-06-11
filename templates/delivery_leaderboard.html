@@ -265,11 +265,11 @@ tbody tr:hover { background: rgba(165,180,252,0.18) !important; }
           <tr>
             <td class="rank-cell">
               {% if loop_index == 1 %}
-                <span title="Gold">🥇</span>
+                <span title="Gold"></span>
               {% elif loop_index == 2 %}
-                <span title="Silver">🥈</span>
+                <span title="Silver"></span>
               {% elif loop_index == 3 %}
-                <span title="Bronze">🥉</span>
+                <span title="Bronze"></span>
               {% else %}
                 <span style="font-size:13px;color:var(--muted);font-weight:700;">{{ loop_index }}</span>
               {% endif %}

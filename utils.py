@@ -390,7 +390,7 @@ def generate_visual_pdf(emp_name, payload):
             elems += [
                 Spacer(1, 0.15 * cm),
                 Table(
-                    [[Paragraph(f"<font color='{ROSE}'><b>⚠ Minus Marking (complaint deductions)</b></font>",
+                    [[Paragraph(f"<font color='{ROSE}'><b>Minus Marking (complaint deductions)</b></font>",
                                 p("DL", fontSize=9, leading=12)),
                       Paragraph(f"<font color='{ROSE}'><b>−{deduction} pts</b></font>",
                                 p("DV", fontSize=11, alignment=TA_RIGHT, leading=12))]],
@@ -650,8 +650,8 @@ def generate_visual_pdf(emp_name, payload):
                         int(e.packing_done or 0),
                         int(e.cs_sales_open or 0),
                         int(e.rack_organized or 0),
-                        "✓" if e.table_clean else "—",
-                        "✓" if getattr(e, "sweep_done", 0) else "—",
+                        "Yes" if e.table_clean else "—",
+                        "Yes" if getattr(e, "sweep_done", 0) else "—",
                         round(float(e.total_time or 9.0), 2),
                     ])
                 cws = [2.0*cm, 1.6*cm, 1.5*cm, 1.3*cm, 1.3*cm, 1.3*cm,
@@ -945,9 +945,9 @@ def generate_visual_pdf(emp_name, payload):
             for pv in pending:
                 slots = f"{pv['slots_filled']}/3 submitted"
                 status_map = {
-                    "pending": (f"<font color='{AMBER}'>⏳ Pending</font>", ""),
-                    "mismatch": (f"<font color='{ROSE}'>⚠ Mismatch</font>", "Review needed — deduct points"),
-                    "admin_override": (f"<font color='{PURPLE}'>⚡ Override</font>", "Admin accepted"),
+                    "pending": (f"<font color='{AMBER}'>Pending</font>", ""),
+                    "mismatch": (f"<font color='{ROSE}'>Mismatch</font>", "Review needed — deduct points"),
+                    "admin_override": (f"<font color='{PURPLE}'>Override</font>", "Admin accepted"),
                 }
                 status_html, note = status_map.get(pv["status"], (pv["status"], ""))
                 pl_rows.append([

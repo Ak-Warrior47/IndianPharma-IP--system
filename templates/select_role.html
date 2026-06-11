@@ -177,12 +177,12 @@ tbody tr:hover { background: rgba(165,180,252,0.18) !important; }
   <div class="sub">Which role are you working as today?</div>
 
   <div class="roles">
-    {% set icons = {'picker': '📦', 'checker': '🔍', 'purchaser': '🛒', 'delivery': '🚚', 'biller': '🧾', 'packing': '📫', 'other': '⚙️'} %}
+    {% set icons = {'picker': '', 'checker': '', 'purchaser': '', 'delivery': '', 'biller': '', 'packing': '', 'other': ''} %}
 
     <form method="POST" action="{{ url_for('switch_role') }}">
       <input type="hidden" name="role" value="{{ primary_role }}">
       <button type="submit" class="role-btn" style="width:100%;font-family:inherit;">
-        <span class="role-icon">{{ icons.get(primary_role, '👤') }}</span>
+        <span class="role-icon">{{ icons.get(primary_role, '') }}</span>
         <span class="role-info">
           <div class="role-name">{{ primary_role }}</div>
           <div class="role-tag">Primary Role</div>
@@ -194,7 +194,7 @@ tbody tr:hover { background: rgba(165,180,252,0.18) !important; }
     <form method="POST" action="{{ url_for('switch_role') }}">
       <input type="hidden" name="role" value="{{ secondary_role }}">
       <button type="submit" class="role-btn" style="width:100%;font-family:inherit;border-color:rgba(167,139,250,0.35);">
-        <span class="role-icon">{{ icons.get(secondary_role, '👤') }}</span>
+        <span class="role-icon">{{ icons.get(secondary_role, '') }}</span>
         <span class="role-info">
           <div class="role-name">{{ secondary_role }}</div>
           <div class="role-tag">Secondary Role</div>

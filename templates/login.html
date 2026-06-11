@@ -446,7 +446,7 @@ tbody tr:hover { background: rgba(255,255,255,0.08) !important; }
   <div class="right-panel">
     <div class="wrap">
       <div class="brand">
-        <div class="brand-icon">🔬</div>
+        <div class="brand-icon"></div>
         <span class="brand-name">Pharma IP System</span>
         <span class="brand-sub">Operations KRA System</span>
       </div>
@@ -484,33 +484,33 @@ tbody tr:hover { background: rgba(255,255,255,0.08) !important; }
             <div class="role-wrap">
               <div class="role-opt">
                 <input type="radio" id="r-picker" name="staff_type" value="picker" checked>
-                <label for="r-picker">📦 Picker</label>
+                <label for="r-picker">Picker</label>
               </div>
               <div class="role-opt">
                 <input type="radio" id="r-purchaser" name="staff_type" value="purchaser">
-                <label for="r-purchaser">🛒 Purchaser</label>
+                <label for="r-purchaser">Purchaser</label>
               </div>
               <div class="role-opt">
                 <input type="radio" id="r-checker" name="staff_type" value="checker">
-                <label for="r-checker">🔍 Checker</label>
+                <label for="r-checker">Checker</label>
               </div>
               <div class="role-opt">
                 <input type="radio" id="r-delivery" name="staff_type" value="delivery">
-                <label for="r-delivery">🚚 Delivery</label>
+                <label for="r-delivery">Delivery</label>
               </div>
               <div class="role-opt">
                 <input type="radio" id="r-biller" name="staff_type" value="biller">
-                <label for="r-biller">🧾 Assigner</label>
+                <label for="r-biller">Assigner</label>
               </div>
               <div class="role-opt">
                 <input type="radio" id="r-packer" name="staff_type" value="packer">
-                <label for="r-packer">📦 Packer</label>
+                <label for="r-packer">Packer</label>
               </div>
             </div>
           </div>
 
           <button type="submit" class="btn-submit" id="signInBtn">
-            <span>🚀</span> Sign In
+            <span></span> Sign In
           </button>
 
           <div style="text-align:center;margin-top:14px;">
@@ -580,7 +580,7 @@ function handleEmailInput(input){
   const val=input.value, list=document.getElementById('autocompleteList');
   if(val.length>0&&!val.includes('@')){
     const sug=val+'@pharmaip.com';
-    list.innerHTML='<div class="autocomplete-item" id="ac0" onclick="selectSuggestion(\''+escHtml(sug)+'\')">📧 <span>'+escHtml(val)+'<span class="at-domain">@pharmaip.com</span></span></div>';
+    list.innerHTML='<div class="autocomplete-item" id="ac0" onclick="selectSuggestion(\''+escHtml(sug)+'\')"><span>'+escHtml(val)+'<span class="at-domain">@pharmaip.com</span></span></div>';
     list.classList.add('show'); selectedIndex=-1;
   } else { list.classList.remove('show'); selectedIndex=-1; }
 }
@@ -606,7 +606,7 @@ document.addEventListener('click',function(e){if(!document.getElementById('email
 
 document.getElementById('loginForm').addEventListener('submit',function(){
   const btn=document.getElementById('signInBtn');
-  btn.disabled=true; btn.innerHTML='<span>⏳</span> Signing in…';
+  btn.disabled=true; btn.innerHTML='<span></span> Signing in…';
 });
 </script>
 </body>

@@ -155,7 +155,7 @@ tbody tr:hover { background: rgba(165,180,252,0.18) !important; }
 <body>
 
 <div class="hero">
-  <div class="hero-title">🚚 Delivery Dashboard</div>
+  <div class="hero-title">Delivery Dashboard</div>
   <div class="hero-sub">Full delivery analysis — {{ current_month }}</div>
   <a href="{{ url_for('admin_dashboard') }}" class="back-link">← Back to Admin</a>
 </div>
@@ -232,9 +232,9 @@ tbody tr:hover { background: rgba(165,180,252,0.18) !important; }
           {% for row in leaderboard %}
           <tr>
             <td class="rank-cell">
-              {% if loop.index == 1 %}🥇
-              {% elif loop.index == 2 %}🥈
-              {% elif loop.index == 3 %}🥉
+              {% if loop.index == 1 %}
+              {% elif loop.index == 2 %}
+              {% elif loop.index == 3 %}
               {% else %}<span style="font-size:12px;color:var(--muted);">{{ loop.index }}</span>
               {% endif %}
             </td>
@@ -353,8 +353,8 @@ tbody tr:hover { background: rgba(165,180,252,0.18) !important; }
           <td>
             {% if trip %}
               {% if trip.is_on_time is none %}<span style="color:var(--muted);">—</span>
-              {% elif trip.is_on_time %}<span class="on-time">✓ Yes</span>
-              {% else %}<span class="late">✗ Late</span>{% endif %}
+              {% elif trip.is_on_time %}<span class="on-time">Yes</span>
+              {% else %}<span class="late">Late</span>{% endif %}
             {% else %}<span style="color:var(--muted);">—</span>{% endif %}
           </td>
           <td style="min-width:160px;">
@@ -367,7 +367,7 @@ tbody tr:hover { background: rgba(165,180,252,0.18) !important; }
                 <span style="color:#3730a3;font-weight:700;">{{ st.place_name }}</span>
                 {% if st.area %}<span style="color:#6366f1;"> ({{ st.area }})</span>{% endif %}
                 {% if st.dist_from_prev_km %} <span style="color:var(--muted);">{{ st.dist_from_prev_km }}km</span>{% endif %}
-                {% if st.reached_at %} <span style="color:#16a34a;font-weight:700;">✅{{ st.reached_at.strftime('%H:%M') }}</span>{% endif %}
+                {% if st.reached_at %} <span style="color:#16a34a;font-weight:700;">{{ st.reached_at.strftime('%H:%M') }}</span>{% endif %}
               </div>
               {% endfor %}
               {% if ns2.tkm > 0 %}<div style="font-size:10px;font-weight:700;color:var(--muted);margin-top:2px;">Total: {{ ns2.tkm|round(2) }} km</div>{% endif %}
@@ -399,7 +399,7 @@ tbody tr:hover { background: rgba(165,180,252,0.18) !important; }
   {% endfor %}
   {% if today_trips %}
   <div class="card" style="margin-bottom:22px;">
-    <div class="section-label">📍 Today's Trip Timelines</div>
+    <div class="section-label">Today's Trip Timelines</div>
     {% for row in today_trips %}
     {% set a = row.a %}
     {% set trip = row.trip %}
@@ -420,7 +420,7 @@ tbody tr:hover { background: rgba(165,180,252,0.18) !important; }
           {% if trip and trip.departure_time %}Departed {{ trip.departure_time.strftime('%H:%M UTC') }}{% endif %}
           {% if trip and trip.duration_minutes %} · <strong>{{ trip.duration_minutes }} min total</strong>{% endif %}
           {% if trip and trip.is_on_time is not none %}
-            · <span style="font-weight:700;color:{{ '#16a34a' if trip.is_on_time else '#dc2626' }};">{{ '✓ On-time' if trip.is_on_time else '✗ Late' }}</span>
+            · <span style="font-weight:700;color:{{ '#16a34a' if trip.is_on_time else '#dc2626' }};">{{ 'On-time' if trip.is_on_time else 'Late' }}</span>
           {% endif %}
         </div>
       </div>
@@ -456,7 +456,7 @@ tbody tr:hover { background: rgba(165,180,252,0.18) !important; }
             </div>
             {% if st.note %}
             <div style="margin-top:5px;font-size:11px;color:#475569;padding:4px 8px;background:#f8fafc;border-radius:6px;">
-              {{ st.note.replace('RCVD: ', '📦 Received by: ') }}
+              {{ st.note.replace('RCVD: ', 'Received by: ') }}
             </div>
             {% endif %}
           </div>
@@ -465,7 +465,7 @@ tbody tr:hover { background: rgba(165,180,252,0.18) !important; }
         <!-- Final total -->
         {% if trip and trip.arrival_time and trip.departure_time %}
         <div style="margin-left:-24px;padding:8px 12px;background:#f0fdf4;border:1px solid #86efac;border-radius:9px;font-size:12px;font-weight:700;color:#166534;">
-          ✅ All delivered · Total time: {{ trip.duration_minutes }} min · Finished {{ trip.arrival_time.strftime('%H:%M UTC') }}
+          All delivered · Total time: {{ trip.duration_minutes }} min · Finished {{ trip.arrival_time.strftime('%H:%M UTC') }}
         </div>
         {% endif %}
       </div>
@@ -500,7 +500,7 @@ tbody tr:hover { background: rgba(165,180,252,0.18) !important; }
   <div class="card" style="margin-bottom:22px;">
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:8px;">
       <div class="section-label" style="margin-bottom:0;">
-        🗺️ Delivery Routes — {{ map_day.strftime('%d %b %Y') }}{% if map_day == today %} (Today){% endif %}
+        Delivery Routes — {{ map_day.strftime('%d %b %Y') }}{% if map_day == today %} (Today){% endif %}
       </div>
       <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
         <!-- History: pick any past delivery day to replay its routes + GPS trails -->
@@ -509,17 +509,17 @@ tbody tr:hover { background: rgba(165,180,252,0.18) !important; }
                  style="font-size:12px;padding:5px 9px;border:1.5px solid var(--border);border-radius:8px;font-family:inherit;">
           <button type="submit"
                   style="font-size:12px;font-weight:700;padding:6px 12px;border:1.5px solid #0ea5e9;background:#fff;color:#0ea5e9;border-radius:8px;cursor:pointer;">
-            📅 Load Day
+            Load Day
           </button>
         </form>
         {% if map_day != today %}
         <a href="/admin/delivery" style="font-size:12px;font-weight:700;padding:6px 12px;border:1.5px solid var(--border);background:#fff;color:var(--muted);border-radius:8px;text-decoration:none;">
-          ↩ Back to Today
+          Back to Today
         </a>
         {% endif %}
         <button onclick="loadAllBreadcrumbs()" id="crumb-btn"
                 style="font-size:12px;font-weight:700;padding:6px 14px;border:1.5px solid #6366f1;background:#fff;color:#6366f1;border-radius:8px;cursor:pointer;">
-          📍 Show GPS Trails
+          Show GPS Trails
         </button>
       </div>
     </div>
@@ -538,7 +538,7 @@ tbody tr:hover { background: rgba(165,180,252,0.18) !important; }
     {% if map_stops %}
     <div id="journey-map" style="height:460px;border-radius:10px;overflow:hidden;border:1px solid var(--border);"></div>
     <div style="margin-top:8px;font-size:11px;color:#9ca3af;">
-      Solid line = planned route · Dotted line = actual GPS trail · Markers = delivery stops · 📍 = last known rider position
+      Solid line = planned route · Dotted line = actual GPS trail · Markers = delivery stops · = last known rider position
     </div>
     {% else %}
     <div style="padding:30px;text-align:center;color:var(--muted);font-size:13px;background:#f8fafc;border-radius:10px;">
@@ -616,16 +616,16 @@ function loadAllBreadcrumbs() {
             // "Trail ends here" marker at last point
             var last = latlngs[latlngs.length - 1];
             var endIcon = L.divIcon({
-              html: '<div style="background:' + col + ';color:#fff;font-size:10px;font-weight:700;padding:2px 7px;border-radius:10px;white-space:nowrap;box-shadow:0 2px 5px rgba(0,0,0,0.3);">📍 ' + _esc(rider) + '</div>',
+              html: '<div style="background:' + col + ';color:#fff;font-size:10px;font-weight:700;padding:2px 7px;border-radius:10px;white-space:nowrap;box-shadow:0 2px 5px rgba(0,0,0,0.3);">' + _esc(rider) + '</div>',
               className: '', iconAnchor: [0, 14]
             });
             L.marker(last, { icon: endIcon }).addTo(_adminMap)
               .bindPopup('<b>Last known position</b><br>' + _esc(rider) + '<br>' + _esc(pts[pts.length-1].t));
           }
           done++;
-          if (done >= pending && btn) { btn.textContent = '✅ Trails loaded'; }
+          if (done >= pending && btn) { btn.textContent = 'Trails loaded'; }
         })
-        .catch(function(){ done++; if (done >= pending && btn) btn.textContent = '✅ Done'; });
+        .catch(function(){ done++; if (done >= pending && btn) btn.textContent = 'Done'; });
     });
   });
 }
@@ -645,7 +645,7 @@ function loadAllBreadcrumbs() {
   }).addTo(map);
 
   // Store base marker
-  var storeIcon = L.divIcon({ html: '<div style="background:#1d4ed8;color:#fff;font-size:11px;font-weight:700;padding:3px 7px;border-radius:6px;white-space:nowrap;box-shadow:0 2px 6px rgba(0,0,0,0.3);">🏪 Store</div>', className: '', iconAnchor: [30, 14] });
+  var storeIcon = L.divIcon({ html: '<div style="background:#1d4ed8;color:#fff;font-size:11px;font-weight:700;padding:3px 7px;border-radius:6px;white-space:nowrap;box-shadow:0 2px 6px rgba(0,0,0,0.3);">Store</div>', className: '', iconAnchor: [30, 14] });
   L.marker([storeLat, storeLng], { icon: storeIcon }).addTo(map);
 
   // Group stops by rider
@@ -665,7 +665,7 @@ function loadAllBreadcrumbs() {
     // Markers per stop
     stops.forEach(function(s, i) {
       var done = !!s.time;
-      var label = (i+1) + '. ' + _esc(s.name) + (s.area ? ' (' + _esc(s.area) + ')' : '') + (s.time ? ' ✅' : ' ⏳');
+      var label = (i+1) + '. ' + _esc(s.name) + (s.area ? ' (' + _esc(s.area) + ')' : '') + (s.time ? ' ' : ' ');
       var icon = L.divIcon({
         html: '<div style="background:' + (done ? col : '#94a3b8') + ';color:#fff;font-size:10px;font-weight:700;' +
               'padding:3px 8px;border-radius:12px;white-space:nowrap;box-shadow:0 2px 6px rgba(0,0,0,0.3);">' + label + '</div>',
@@ -676,8 +676,8 @@ function loadAllBreadcrumbs() {
         '<div style="font-size:12px;color:#475569;"><b>Rider:</b> ' + _esc(rider) + '</div>' +
         '<div style="font-size:12px;color:#475569;"><b>Packets:</b> ' + _esc(s.pkts) + (s.ptype ? ' · ' + _esc(s.ptype) : '') + '</div>' +
         (s.km ? '<div style="font-size:12px;color:#475569;"><b>Distance:</b> ' + _esc(s.km) + ' km</div>' : '') +
-        (s.time ? '<div style="font-size:12px;font-weight:700;color:#16a34a;margin-top:4px;">✅ Delivered at ' + _esc(s.time) + (s.mins ? ' (+' + _esc(s.mins) + ' min)' : '') + '</div>' : '') +
-        (s.rcvd ? '<div style="font-size:11px;color:#64748b;margin-top:3px;">📦 ' + _esc(s.rcvd) + '</div>' : '') +
+        (s.time ? '<div style="font-size:12px;font-weight:700;color:#16a34a;margin-top:4px;">Delivered at ' + _esc(s.time) + (s.mins ? ' (+' + _esc(s.mins) + ' min)' : '') + '</div>' : '') +
+        (s.rcvd ? '<div style="font-size:11px;color:#64748b;margin-top:3px;">' + _esc(s.rcvd) + '</div>' : '') +
         '</div>';
       L.marker([s.lat, s.lng], { icon: icon }).addTo(map).bindPopup(popup);
     });

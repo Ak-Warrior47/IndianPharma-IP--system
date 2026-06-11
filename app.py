@@ -36,7 +36,7 @@ if IS_PRODUCTION and _secret_key == "pharma_secure_key_2024":
     # deploy until SECRET_KEY is set, but cookies can no longer be forged.
     import secrets as _secrets
     _secret_key = _secrets.token_hex(32)
-    logger.critical("⛔ SECRET_KEY env var not set! Using a random key — all users are "
+    logger.critical("SECRET_KEY env var not set! Using a random key — all users are "
                     "logged out on every restart. Set SECRET_KEY in Render to fix.")
 
 app.config.update(
@@ -60,7 +60,7 @@ app.config.update(
 
 db_url = os.environ.get("DATABASE_URL")
 if not db_url:
-    logger.warning("⚠️ DATABASE_URL not set! Using SQLite (local development mode)")
+    logger.warning("DATABASE_URL not set! Using SQLite (local development mode)")
     db_url = "sqlite:///pharma_final.db"
 elif db_url.startswith("postgres://"):
     db_url = db_url.replace("postgres://", "postgresql://", 1)
@@ -1399,7 +1399,7 @@ def run_migrations():
                         f"ALTER TABLE employees ADD COLUMN IF NOT EXISTS {col} {col_type}"
                     ))
                     db.session.commit()
-                    logger.info(f"✅ Column '{col}' ensured on employees table")
+                    logger.info(f"Column '{col}' ensured on employees table")
                 except Exception as ce:
                     db.session.rollback()
                     logger.warning(f"Column '{col}' migration skipped: {ce}")
@@ -1424,7 +1424,7 @@ def run_migrations():
                     )
                 """))
                 db.session.commit()
-                logger.info("✅ Complaints table ensured")
+                logger.info("Complaints table ensured")
             except Exception as ce:
                 db.session.rollback()
                 logger.warning(f"Complaints table: {ce}")
@@ -1441,7 +1441,7 @@ def run_migrations():
                         f"ALTER TABLE kpi_entries ADD COLUMN IF NOT EXISTS {col} {col_type}"
                     ))
                     db.session.commit()
-                    logger.info(f"✅ Column '{col}' ensured on kpi_entries table")
+                    logger.info(f"Column '{col}' ensured on kpi_entries table")
                 except Exception as ce:
                     db.session.rollback()
                     logger.warning(f"kpi_entries column '{col}' migration skipped: {ce}")
@@ -1451,7 +1451,7 @@ def run_migrations():
                     "ALTER TABLE complaints ADD COLUMN IF NOT EXISTS target_emp_id INTEGER REFERENCES employees(id)"
                 ))
                 db.session.commit()
-                logger.info("✅ complaints.target_emp_id ensured")
+                logger.info("complaints.target_emp_id ensured")
             except Exception as ce:
                 db.session.rollback()
                 logger.warning(f"complaints.target_emp_id migration skipped: {ce}")
@@ -1488,7 +1488,7 @@ def run_migrations():
                     "CREATE INDEX IF NOT EXISTS idx_bv_status ON bill_validations(status)"
                 ))
                 db.session.commit()
-                logger.info("✅ bill_validations table ensured")
+                logger.info("bill_validations table ensured")
             except Exception as ce:
                 db.session.rollback()
                 logger.warning(f"bill_validations migration skipped: {ce}")
@@ -1498,7 +1498,7 @@ def run_migrations():
                     "ALTER TABLE kpi_entries ADD COLUMN IF NOT EXISTS shift_note VARCHAR(300)"
                 ))
                 db.session.commit()
-                logger.info("✅ kpi_entries.shift_note ensured")
+                logger.info("kpi_entries.shift_note ensured")
             except Exception as ce:
                 db.session.rollback()
                 logger.warning(f"kpi_entries.shift_note migration skipped: {ce}")
@@ -1508,7 +1508,7 @@ def run_migrations():
                     "ALTER TABLE employees ADD COLUMN IF NOT EXISTS phone VARCHAR(20)"
                 ))
                 db.session.commit()
-                logger.info("✅ employees.phone ensured")
+                logger.info("employees.phone ensured")
             except Exception as ce:
                 db.session.rollback()
                 logger.warning(f"employees.phone migration skipped: {ce}")
@@ -1518,7 +1518,7 @@ def run_migrations():
                     "ALTER TABLE employees ADD COLUMN IF NOT EXISTS secondary_staff_type VARCHAR(20)"
                 ))
                 db.session.commit()
-                logger.info("✅ employees.secondary_staff_type ensured")
+                logger.info("employees.secondary_staff_type ensured")
             except Exception as ce:
                 db.session.rollback()
                 logger.warning(f"employees.secondary_staff_type migration skipped: {ce}")
@@ -1539,7 +1539,7 @@ def run_migrations():
                 except Exception as ce:
                     db.session.rollback()
                     logger.warning(f"delivery_assignments.{col} migration skipped: {ce}")
-            logger.info("✅ delivery_assignments CRM columns ensured")
+            logger.info("delivery_assignments CRM columns ensured")
             # Per-store packet type + distance on delivery_stops; workspace + extra_roles
             for tbl, col, col_type in [
                 ("delivery_stops", "packet_type", "VARCHAR(50)"),
@@ -1564,7 +1564,7 @@ def run_migrations():
                 except Exception as ce:
                     db.session.rollback()
                     logger.warning(f"{tbl}.{col} migration skipped: {ce}")
-            logger.info("✅ delivery_stops / notes / extra_roles columns ensured")
+            logger.info("delivery_stops / notes / extra_roles columns ensured")
             # New feature tables
             for tbl_sql in [
                 """CREATE TABLE IF NOT EXISTS announcements (
@@ -1786,14 +1786,14 @@ def run_migrations():
             for col, col_type in sqlite_cols.items():
                 if col not in existing:
                     cursor.execute(f"ALTER TABLE employees ADD COLUMN {col} {col_type}")
-                    logger.info(f"✅ SQLite column '{col}' added")
+                    logger.info(f"SQLite column '{col}' added")
             # KPI entries sqlite
             try:
                 cursor.execute("PRAGMA table_info(kpi_entries)")
                 kpi_existing = [row[1] for row in cursor.fetchall()]
                 if "admin_adjustment" not in kpi_existing:
                     cursor.execute("ALTER TABLE kpi_entries ADD COLUMN admin_adjustment FLOAT DEFAULT 0")
-                    logger.info("✅ SQLite kpi_entries.admin_adjustment added")
+                    logger.info("SQLite kpi_entries.admin_adjustment added")
             except Exception as kce:
                 logger.warning(f"SQLite kpi_entries migration: {kce}")
             # complaints.target_emp_id
@@ -1802,7 +1802,7 @@ def run_migrations():
                 cmp_cols = [row[1] for row in cursor.fetchall()]
                 if cmp_cols and "target_emp_id" not in cmp_cols:
                     cursor.execute("ALTER TABLE complaints ADD COLUMN target_emp_id INTEGER")
-                    logger.info("✅ SQLite complaints.target_emp_id added")
+                    logger.info("SQLite complaints.target_emp_id added")
             except Exception as sce:
                 logger.warning(f"SQLite complaints migration: {sce}")
             # shift_note on kpi_entries
@@ -1811,7 +1811,7 @@ def run_migrations():
                 kpi_cols2 = [row[1] for row in cursor.fetchall()]
                 if "shift_note" not in kpi_cols2:
                     cursor.execute("ALTER TABLE kpi_entries ADD COLUMN shift_note VARCHAR(300)")
-                    logger.info("✅ SQLite kpi_entries.shift_note added")
+                    logger.info("SQLite kpi_entries.shift_note added")
             except Exception as sne:
                 logger.warning(f"SQLite kpi_entries.shift_note migration: {sne}")
             # Feature 14: admin_staff_notes
@@ -1822,7 +1822,7 @@ def run_migrations():
                     note TEXT NOT NULL,
                     created_by INTEGER NOT NULL REFERENCES employees(id),
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)""")
-                logger.info("✅ SQLite admin_staff_notes ensured")
+                logger.info("SQLite admin_staff_notes ensured")
             except Exception as asne:
                 logger.warning(f"SQLite admin_staff_notes: {asne}")
             # Feature 15: password_reset_otps
@@ -1834,7 +1834,7 @@ def run_migrations():
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     expires_at TIMESTAMP NOT NULL,
                     is_used BOOLEAN DEFAULT 0)""")
-                logger.info("✅ SQLite password_reset_otps ensured")
+                logger.info("SQLite password_reset_otps ensured")
             except Exception as prote:
                 logger.warning(f"SQLite password_reset_otps: {prote}")
             # Feature 16: monthly_report_archives
@@ -1845,7 +1845,7 @@ def run_migrations():
                     generated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     emp_count INTEGER DEFAULT 0,
                     file_path VARCHAR(200))""")
-                logger.info("✅ SQLite monthly_report_archives ensured")
+                logger.info("SQLite monthly_report_archives ensured")
             except Exception as mrae:
                 logger.warning(f"SQLite monthly_report_archives: {mrae}")
             # Multitask entries
@@ -1879,7 +1879,7 @@ def run_migrations():
                                "item_receive_qty", "expire_return_qty"]:
                     if mt_col not in mt_existing:
                         cursor.execute(f"ALTER TABLE multitask_entries ADD COLUMN {mt_col} INTEGER DEFAULT 0")
-                logger.info("✅ SQLite multitask_entries ensured")
+                logger.info("SQLite multitask_entries ensured")
             except Exception as mte:
                 logger.warning(f"SQLite multitask_entries: {mte}")
             # Delivery / Biller notes
@@ -1894,7 +1894,7 @@ def run_migrations():
                     issues_count INTEGER DEFAULT 0,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     CONSTRAINT _dbnote_emp_date_uc UNIQUE(emp_id, entry_date))""")
-                logger.info("✅ SQLite delivery_biller_notes ensured")
+                logger.info("SQLite delivery_biller_notes ensured")
             except Exception as dbne:
                 logger.warning(f"SQLite delivery_biller_notes: {dbne}")
             # SQLite: delivery_assignments and delivery_trips
@@ -1989,7 +1989,7 @@ def run_migrations():
                     lng REAL NOT NULL,
                     recorded_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)""")
                 conn.commit()
-                logger.info("✅ SQLite delivery tables created")
+                logger.info("SQLite delivery tables created")
             except Exception as dte:
                 logger.warning(f"SQLite delivery tables: {dte}")
             conn.commit()
@@ -2007,7 +2007,7 @@ def init_db():
             if not Employee.query.first():
                 _admin_pw = os.environ.get("ADMIN_PASSWORD", "admin123")
                 if _admin_pw == "admin123":
-                    logger.warning("⚠️ Using default admin password 'admin123'. Set ADMIN_PASSWORD env var for production.")
+                    logger.warning("Using default admin password 'admin123'. Set ADMIN_PASSWORD env var for production.")
                 admin = Employee(name="Admin", email=os.environ.get("ADMIN_EMAIL", "admin@pharmaip.com"), staff_type="picker", is_admin=True, role="Admin")
                 admin.set_password(_admin_pw)
                 db.session.add(admin)
@@ -2018,26 +2018,26 @@ def init_db():
                 c1.set_password("test1234")
                 db.session.add(c1)
                 db.session.commit()
-                logger.info("✅ Database initialized successfully")
+                logger.info("Database initialized successfully")
             # Seed default auto badges if none exist
             try:
                 if Badge.query.count() == 0:
                     default_badges = [
-                        Badge(name="Perfect Week", description="100% accuracy for 5+ consecutive days", icon="🎯", badge_type="auto"),
-                        Badge(name="Speed Demon", description="Pick speed > 60 items/hr average this month", icon="⚡", badge_type="auto"),
-                        Badge(name="Clean Sweep", description="100% workspace score for full week", icon="🧹", badge_type="auto"),
-                        Badge(name="Century Club", description="100+ items picked in a single day", icon="📦", badge_type="auto"),
-                        Badge(name="Top Performer", description="#1 score in role for the month", icon="🏆", badge_type="auto"),
-                        Badge(name="7-Day Streak", description="Submitted every day for 7 consecutive days", icon="🔥", badge_type="auto"),
-                        Badge(name="First Delivery", description="Completed your very first GPS delivery", icon="🚚", badge_type="auto"),
-                        Badge(name="Speed Rider", description="Completed 3 deliveries faster than the average time", icon="⚡", badge_type="auto"),
-                        Badge(name="Perfect Courier", description="10 consecutive on-time deliveries", icon="🎯", badge_type="auto"),
-                        Badge(name="Veteran Courier", description="50 total deliveries completed", icon="🏆", badge_type="auto"),
+                        Badge(name="Perfect Week", description="100% accuracy for 5+ consecutive days", icon="", badge_type="auto"),
+                        Badge(name="Speed Demon", description="Pick speed > 60 items/hr average this month", icon="", badge_type="auto"),
+                        Badge(name="Clean Sweep", description="100% workspace score for full week", icon="", badge_type="auto"),
+                        Badge(name="Century Club", description="100+ items picked in a single day", icon="", badge_type="auto"),
+                        Badge(name="Top Performer", description="#1 score in role for the month", icon="", badge_type="auto"),
+                        Badge(name="7-Day Streak", description="Submitted every day for 7 consecutive days", icon="", badge_type="auto"),
+                        Badge(name="First Delivery", description="Completed your very first GPS delivery", icon="", badge_type="auto"),
+                        Badge(name="Speed Rider", description="Completed 3 deliveries faster than the average time", icon="", badge_type="auto"),
+                        Badge(name="Perfect Courier", description="10 consecutive on-time deliveries", icon="", badge_type="auto"),
+                        Badge(name="Veteran Courier", description="50 total deliveries completed", icon="", badge_type="auto"),
                     ]
                     for b in default_badges:
                         db.session.add(b)
                     db.session.commit()
-                    logger.info("✅ Default badges seeded")
+                    logger.info("Default badges seeded")
             except Exception as badge_err:
                 db.session.rollback()
                 logger.warning(f"Badge seeding: {badge_err}")
@@ -2267,7 +2267,7 @@ def dashboard():
             if request.method == "POST" and request.form.get("multitask_only") == "1":
                 try:
                     _save_multitask_entry(emp_id, today, staff_type)
-                    flash("✅ Multitask role report saved.", "success")
+                    flash("Multitask role report saved.", "success")
                 except Exception as mte:
                     db.session.rollback()
                     logger.warning(f"Independent multitask save (note path): {mte}")
@@ -2291,7 +2291,7 @@ def dashboard():
                         )
                         db.session.add(db_note)
                         db.session.commit()
-                        flash("✅ Daily note recorded successfully.", "success")
+                        flash("Daily note recorded successfully.", "success")
                         return redirect(url_for("dashboard"))
                     except Exception as dbe:
                         db.session.rollback()
@@ -2445,7 +2445,7 @@ def dashboard():
         if request.method == "POST" and request.form.get("multitask_only") == "1":
             try:
                 _save_multitask_entry(emp_id, today, staff_type)
-                flash("✅ Multitask role report saved.", "success")
+                flash("Multitask role report saved.", "success")
             except Exception as mte:
                 db.session.rollback()
                 logger.warning(f"Independent multitask save: {mte}")
@@ -2456,7 +2456,7 @@ def dashboard():
             is_sunday = today.weekday() == 6
             emp = db.session.get(Employee, emp_id)
             if is_sunday and not (emp and emp.sunday_override):
-                flash("📅 Sunday is a holiday. No data submission allowed.", "warning")
+                flash("Sunday is a holiday. No data submission allowed.", "warning")
             else:
                 try:
                     def gi(k): return max(0, int(request.form.get(k, 0) or 0))
@@ -2514,7 +2514,7 @@ def dashboard():
                             missing_fields.append("Number of Items")
 
                     if missing_fields:
-                        flash(f"❌ Cannot save — required fields missing or zero: {', '.join(missing_fields)}.", "danger")
+                        flash(f"Cannot save — required fields missing or zero: {', '.join(missing_fields)}.", "danger")
                         return redirect(url_for("dashboard"))
 
                     ne = KPIEntry(
@@ -2576,7 +2576,7 @@ def dashboard():
                     except Exception:
                         pass
 
-                    flash("✅ Metrics recorded successfully.", "success")
+                    flash("Metrics recorded successfully.", "success")
                     today_entry = ne
 
                     # ── Multitask: save secondary role work with its own params ──
@@ -3182,6 +3182,20 @@ def staff_detail(emp_id):
         except Exception:
             multitask_entries = []
 
+        # Daily notes (delivery / assigner / packer staff log these instead of KPI entries)
+        try:
+            daily_notes = (DeliveryBillerNote.query.filter_by(emp_id=emp_id)
+                           .order_by(DeliveryBillerNote.entry_date.desc()).limit(30).all())
+        except Exception:
+            daily_notes = []
+
+        # Delivery trips for delivery staff — what they actually delivered
+        try:
+            staff_trips = (DeliveryTrip.query.filter_by(emp_id=emp_id, status="completed")
+                           .order_by(DeliveryTrip.trip_date.desc()).limit(30).all())
+        except Exception:
+            staff_trips = []
+
         return render_template("staff_detail.html",
             emp=emp,
             emp_overall_rank=emp_overall_rank,
@@ -3201,6 +3215,8 @@ def staff_detail(emp_id):
             monthly_scores=monthly_scores,
             emp_badges=emp_badges,
             multitask_entries=multitask_entries,
+            daily_notes=daily_notes,
+            staff_trips=staff_trips,
         )
     except Exception as e:
         import traceback
@@ -3254,7 +3270,7 @@ def admin_add_user():
         db.session.add(emp)
         db.session.commit()
         log_audit("add_user", name, f"Added as {staff_type}")
-        flash(f"✅ {name} added successfully.", "success")
+        flash(f"{name} added successfully.", "success")
     except Exception as e:
         db.session.rollback()
         logger.error(f"add_user: {e}")
@@ -3321,7 +3337,7 @@ def admin_edit_user(emp_id):
 
         db.session.commit()
         log_audit("edit_user", name, "Updated by admin")
-        flash(f"✅ {emp.name} updated successfully.", "success")
+        flash(f"{emp.name} updated successfully.", "success")
     except Exception as e:
         db.session.rollback()
         logger.error(f"edit_user: {e}")
@@ -3365,7 +3381,7 @@ def admin_delete_user(emp_id):
         db.session.delete(emp)
         db.session.commit()
         log_audit("delete_user", name, "User removed")
-        flash(f"🗑️ {name} removed.", "success")
+        flash(f"{name} removed.", "success")
     except Exception as e:
         db.session.rollback()
         logger.error(f"delete_user: {e}")
@@ -3500,7 +3516,7 @@ def admin_open_past_window():
                 window.is_active = False
                 db.session.commit()
                 log_audit("close_past_window", str(past_date), "Admin closed past entry window")
-                flash(f"✅ Entry window for {past_date.strftime('%d %b %Y')} closed.", "success")
+                flash(f"Entry window for {past_date.strftime('%d %b %Y')} closed.", "success")
             else:
                 flash("No window found for that date.", "warning")
         else:
@@ -3517,7 +3533,7 @@ def admin_open_past_window():
                 db.session.add(window)
             db.session.commit()
             log_audit("open_past_window", str(past_date), "Admin opened past entry window")
-            flash(f"✅ Past entry window opened for {past_date.strftime('%d %b %Y')}. "
+            flash(f"Past entry window opened for {past_date.strftime('%d %b %Y')}. "
                   f"Staff who haven't submitted can now enter their data.", "success")
 
     except ValueError:
@@ -3578,10 +3594,10 @@ def admin_past_window_bulk():
 
         if action == "close":
             log_audit("bulk_close_past_windows", ", ".join(months), f"{closed} days closed")
-            flash(f"✅ Closed {closed} past-entry day(s) across {len(months)} month(s).", "success")
+            flash(f"Closed {closed} past-entry day(s) across {len(months)} month(s).", "success")
         else:
             log_audit("bulk_open_past_windows", ", ".join(months), f"{opened} days opened")
-            flash(f"✅ Opened {opened} past-entry day(s) across {len(months)} month(s). "
+            flash(f"Opened {opened} past-entry day(s) across {len(months)} month(s). "
                   f"Staff who haven't submitted can now backfill any day in those months.", "success")
     except Exception as e:
         db.session.rollback()
@@ -3685,7 +3701,7 @@ def past_entry(date_str):
                     missing_fields.append("Number of Items")
 
             if missing_fields:
-                flash(f"❌ Cannot save — required fields missing or zero: {', '.join(missing_fields)}.", "danger")
+                flash(f"Cannot save — required fields missing or zero: {', '.join(missing_fields)}.", "danger")
                 return redirect(url_for("past_entry", date_str=date_str))
 
             ne = KPIEntry(
@@ -3710,7 +3726,7 @@ def past_entry(date_str):
             db.session.add(ne)
             db.session.commit()
             log_audit("past_entry_submit", session.get("user_name", ""), f"Submitted past data for {past_date}")
-            flash(f"✅ Past entry for {past_date.strftime('%d %b %Y')} saved successfully.", "success")
+            flash(f"Past entry for {past_date.strftime('%d %b %Y')} saved successfully.", "success")
             return redirect(url_for("dashboard"))
         except Exception as e:
             db.session.rollback()
@@ -3834,7 +3850,7 @@ def admin_add_complaint():
         db.session.commit()
         tgt_note = f" → {db.session.get(Employee, target_id).name}" if target_id else " (applied to role)"
         log_audit("complaint_added", description[:50], f"type={complaint_type} mistakes={mistake_count}{tgt_note}")
-        flash(f"✅ Complaint recorded{tgt_note}. Deductions — Picker: {picker_final}pts, Checker: {checker_final}pts, Purchaser: {purchaser_final}pts", "warning")
+        flash(f"Complaint recorded{tgt_note}. Deductions — Picker: {picker_final}pts, Checker: {checker_final}pts, Purchaser: {purchaser_final}pts", "warning")
 
     except Exception as e:
         db.session.rollback()
@@ -3852,7 +3868,7 @@ def admin_resolve_complaint(cid):
         if c:
             c.is_resolved = True
             db.session.commit()
-            flash("✅ Complaint marked as resolved.", "success")
+            flash("Complaint marked as resolved.", "success")
     except Exception as e:
         db.session.rollback()
     return redirect(url_for("admin_dashboard"))
@@ -4050,7 +4066,7 @@ def validation_submit(bv_id):
             bv.mismatch_emp_ids = ",".join(str(x) for x in wrong_ids)
             db.session.commit()
             if new_status == "confirmed":
-                flash("✅ All 4 counts matched — submission confirmed.", "success")
+                flash("All 4 counts matched — submission confirmed.", "success")
             else:
                 # ── Auto-create complaint entries for each flagged staff ──
                 # Deduction scales with how far off they were from the majority.
@@ -4124,10 +4140,10 @@ def validation_submit(bv_id):
                         pass
                 except Exception:
                     pass
-                flash(f"⚠️ Counts do not match! {len(wrong_ids)} staff flagged and auto-deducted. Admin can review and resolve via Complaints.", "warning")
+                flash(f"Counts do not match! {len(wrong_ids)} staff flagged and auto-deducted. Admin can review and resolve via Complaints.", "warning")
         else:
             db.session.commit()
-            flash(f"✓ Count recorded ({bv.checker_count_submitted}/3 checkers).", "success")
+            flash(f"Count recorded ({bv.checker_count_submitted}/3 checkers).", "success")
 
         # Live update
         socketio.emit("validation_update", {
@@ -4167,7 +4183,7 @@ def admin_validation_override(bv_id):
             db.session.commit()
             log_audit("validation_override", f"picker={bv.picker_id} date={bv.entry_date}",
                       f"Accepted. Note: {note}")
-            flash(f"✅ Validation #{bv.id} accepted by admin override.", "success")
+            flash(f"Validation #{bv.id} accepted by admin override.", "success")
         elif action == "reject":
             bv.status = "mismatch"
             bv.override_by = admin_id
@@ -4175,7 +4191,7 @@ def admin_validation_override(bv_id):
             db.session.commit()
             log_audit("validation_reject", f"picker={bv.picker_id} date={bv.entry_date}",
                       f"Rejected. Note: {note}")
-            flash(f"⚠️ Validation #{bv.id} marked as mismatch.", "warning")
+            flash(f"Validation #{bv.id} marked as mismatch.", "warning")
         else:
             flash("Unknown action.", "warning")
 
@@ -4234,7 +4250,7 @@ def admin_accept_target_suggestion(emp_id):
         db.session.commit()
         log_audit("raise_target", emp.name,
                   f"Hourly target raised from {current} to {new_target}/hr")
-        flash(f"✅ {emp.name}'s hourly target raised to {new_target}/hr (was {current}).", "success")
+        flash(f"{emp.name}'s hourly target raised to {new_target}/hr (was {current}).", "success")
     except Exception as e:
         db.session.rollback()
         logger.error(f"accept_target_suggestion: {e}")
@@ -4252,7 +4268,7 @@ def admin_reset_target(emp_id):
             emp.custom_hourly_target = None
             db.session.commit()
             log_audit("reset_target", emp.name, "Reset to role default")
-            flash(f"✅ {emp.name}'s target reset to role default.", "success")
+            flash(f"{emp.name}'s target reset to role default.", "success")
     except Exception as e:
         db.session.rollback()
         logger.error(f"reset_target: {e}")
@@ -4645,7 +4661,7 @@ def admin_create_badge():
     try:
         name = request.form.get("name", "").strip()[:100]
         description = request.form.get("description", "").strip()[:200]
-        icon = request.form.get("icon", "🏅").strip()[:10]
+        icon = request.form.get("icon", "").strip()[:10]
         if not name or not description:
             flash("Name and description required.", "warning")
             return redirect(url_for("admin_dashboard"))
@@ -4834,7 +4850,7 @@ def admin_staff_note(emp_id):
         db.session.add(note)
         db.session.commit()
         log_audit("staff_note_added", emp.name, f"Note: {note_text[:60]}")
-        flash(f"✅ Note added for {emp.name}.", "success")
+        flash(f"Note added for {emp.name}.", "success")
     except Exception as e:
         db.session.rollback()
         logger.error(f"admin_staff_note: {e}")
@@ -4923,7 +4939,7 @@ def reset_password():
         otp_obj.is_used = True
         db.session.commit()
         log_audit("password_reset_otp", emp.name, "Password reset via phone OTP")
-        flash("✅ Password reset successfully. Please log in.", "success")
+        flash("Password reset successfully. Please log in.", "success")
         return redirect(url_for("login"))
     return render_template("reset_password.html", phone=phone)
 
@@ -4982,7 +4998,7 @@ def generate_monthly_report_job(month_str=None):
                 )
                 db.session.add(archive)
             db.session.commit()
-            logger.info(f"✅ Monthly report {month_str} generated: {pdf_count} PDFs")
+            logger.info(f"Monthly report {month_str} generated: {pdf_count} PDFs")
         except Exception as e:
             logger.error(f"generate_monthly_report_job: {e}")
             try:
@@ -5065,7 +5081,7 @@ def stale_validations_sms_job():
             if count > 0:
                 admin_phone = os.environ.get("ADMIN_PHONE", "")
                 if admin_phone:
-                    send_sms(admin_phone, f"⚠️ {count} bill validations have been pending for 24+ hours. Please review.")
+                    send_sms(admin_phone, f"{count} bill validations have been pending for 24+ hours. Please review.")
                     logger.info(f"Stale validations SMS sent: {count} pending")
                 else:
                     logger.info(f"Stale validations: {count} pending, ADMIN_PHONE not set")
@@ -5077,6 +5093,10 @@ def stale_validations_sms_job():
 
 STORE_LAT = float(os.environ.get("STORE_LAT", "0.0"))
 STORE_LNG = float(os.environ.get("STORE_LNG", "0.0"))
+# Fallback city centre (Cuttack) when no STORE_LAT/LNG configured — keeps the
+# delivery maps rendering even when geocoding fails for a store.
+FALLBACK_LAT = STORE_LAT if STORE_LAT else 20.4625
+FALLBACK_LNG = STORE_LNG if STORE_LNG else 85.8830
 STORE_RADIUS_M = 400    # meters — must be within this to start a trip
 ARRIVAL_RADIUS_M = 200  # meters — must be within this to confirm delivery
 TOMTOM_API_KEY = os.environ.get("TOMTOM_API_KEY", "")  # free key → live-traffic routing
@@ -5285,10 +5305,15 @@ def delivery_assign():
         )[:300]
         pkg_desc = f"{total_tasks} packet(s) across {len(stores)} store(s)" + (f" — {packet_type}" if packet_type else "")
 
-        # Geocode any store missing a manual pin — use "Store Name, Area" for better accuracy
+        # Geocode any store missing a manual pin — use "Store Name, Area" for better accuracy.
+        # If geocoding fails (service down / store unknown) fall back to the store-base
+        # coordinates so the rider's map and the admin route map ALWAYS render.
         for s in stores:
             if s["lat"] is None:
                 s["lat"], s["lng"] = geocode_address(s.get("geo_hint") or s["name"])
+            if s["lat"] is None:
+                s["lat"], s["lng"] = FALLBACK_LAT, FALLBACK_LNG
+                logger.warning(f"geocode fallback used for store '{s['name']}' — set a manual pin for accuracy")
 
         first = stores[0]
         now = datetime.utcnow()
@@ -5335,12 +5360,12 @@ def delivery_assign():
         # Notify the rider — in-app bell + SMS (if admin saved a phone number)
         notify_employee(
             delivery_emp_id,
-            "🚚 New delivery assigned",
+            "New delivery assigned",
             f"{total_tasks} packet(s) — {route_str[:120]}",
             link="/dashboard",
         )
         log_audit("delivery_assign", delivery_emp.name, f"{total_tasks} tasks / {len(stores)} stores")
-        flash(f"✅ Assigned {total_tasks} packet(s) across {len(stores)} store(s) to {delivery_emp.name}. Notification sent.", "success")
+        flash(f"Assigned {total_tasks} packet(s) across {len(stores)} store(s) to {delivery_emp.name}. Notification sent.", "success")
     except Exception as e:
         db.session.rollback()
         logger.error(f"delivery_assign: {e}")
@@ -5403,6 +5428,8 @@ def delivery_dispatch_edit(assignment_id):
         first_lat = first_lng = None
         for s in stores:
             slat, slng = geocode_address(s.get("geo_hint") or s["name"])
+            if slat is None:
+                slat, slng = FALLBACK_LAT, FALLBACK_LNG
             if first_lat is None:
                 first_lat, first_lng = slat, slng
                 a.destination_lat, a.destination_lng = slat, slng
@@ -5415,9 +5442,9 @@ def delivery_dispatch_edit(assignment_id):
             new_stops.append(so)
         compute_stop_distances(new_stops, first_lat, first_lng)
         db.session.commit()
-        notify_employee(a.delivery_emp_id, "✏️ Delivery updated",
+        notify_employee(a.delivery_emp_id, "Delivery updated",
                         f"Your dispatch was updated — {total} packet(s).", link="/dashboard")
-        flash(f"✅ Dispatch updated — {total} packet(s) across {len(stores)} store(s).", "success")
+        flash(f"Dispatch updated — {total} packet(s) across {len(stores)} store(s).", "success")
     except Exception as e:
         db.session.rollback()
         logger.error(f"delivery_dispatch_edit: {e}")
@@ -5446,8 +5473,8 @@ def delivery_dispatch_delete(assignment_id):
         DeliveryStop.query.filter_by(assignment_id=a.id).delete()
         db.session.delete(a)
         db.session.commit()
-        notify_employee(rider, "🗑️ Delivery cancelled", "A pending dispatch was removed.", link="/dashboard")
-        flash("✅ Dispatch deleted.", "success")
+        notify_employee(rider, "Delivery cancelled", "A pending dispatch was removed.", link="/dashboard")
+        flash("Dispatch deleted.", "success")
     except Exception as e:
         db.session.rollback()
         logger.error(f"delivery_dispatch_delete: {e}")
@@ -5664,7 +5691,7 @@ def supervisor_console():
                 # New/changed value needs admin re-validation
                 row.admin_validated = bool(session.get("is_admin"))
                 db.session.commit()
-                flash(f"✅ Saved super-bills for {d.strftime('%d %b')}.", "success")
+                flash(f"Saved super-bills for {d.strftime('%d %b')}.", "success")
             return redirect(url_for("supervisor_console"))
 
         staff = Employee.query.filter_by(is_admin=False).order_by(Employee.name).all()
@@ -5690,7 +5717,7 @@ def admin_validate_super_bill(row_id):
         if row:
             row.admin_validated = True
             db.session.commit()
-            flash("✅ Super-bill validated.", "success")
+            flash("Super-bill validated.", "success")
     except Exception as e:
         db.session.rollback()
         logger.error(f"admin_validate_super_bill: {e}")

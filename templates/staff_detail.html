@@ -1110,6 +1110,74 @@ tbody tr:hover { background: rgba(165,180,252,0.18) !important; }
     </div>
   </section>
   {% endif %}
+
+  <!-- ── DAILY NOTES (delivery / assigner / packer) ── -->
+  {% if daily_notes %}
+  <section class="card" style="margin-top:20px;">
+    <div class="card-title"><span class="ico">&#9656;</span>Daily Work Notes</div>
+    <div class="card-sub">Daily reports this staff member submitted (delivery / assigner / packer roles log these instead of KPI numbers).</div>
+    <div style="overflow-x:auto;">
+      <table style="width:100%;border-collapse:collapse;font-size:13px;">
+        <thead>
+          <tr style="border-bottom:1px solid var(--border);color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:0.05em;">
+            <th style="padding:8px 10px;text-align:left;">Date</th>
+            <th style="padding:8px 10px;text-align:left;">Role</th>
+            <th style="padding:8px 10px;text-align:right;">Quantity</th>
+            <th style="padding:8px 10px;text-align:right;">Issues</th>
+            <th style="padding:8px 10px;text-align:center;">Table Clean</th>
+            <th style="padding:8px 10px;text-align:center;">Sweep</th>
+            <th style="padding:8px 10px;text-align:left;">Note</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for n in daily_notes %}
+          <tr style="border-bottom:1px solid var(--border-2);{% if loop.last %}border-bottom:none;{% endif %}">
+            <td style="padding:8px 10px;color:var(--navy);font-weight:600;">{{ n.entry_date.strftime('%d %b %Y') }}</td>
+            <td style="padding:8px 10px;text-transform:capitalize;">{{ n.note_type }}</td>
+            <td style="padding:8px 10px;text-align:right;">{{ n.quantity or 0 }}</td>
+            <td style="padding:8px 10px;text-align:right;">{{ n.issues_count or 0 }}</td>
+            <td style="padding:8px 10px;text-align:center;">{{ 'Yes' if n.table_clean else 'No' }}</td>
+            <td style="padding:8px 10px;text-align:center;">{{ 'Yes' if n.sweep_done else 'No' }}</td>
+            <td style="padding:8px 10px;color:var(--muted);max-width:240px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">{{ n.note_text or '' }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </section>
+  {% endif %}
+
+  <!-- ── DELIVERY TRIPS (delivery staff) ── -->
+  {% if staff_trips %}
+  <section class="card" style="margin-top:20px;">
+    <div class="card-title"><span class="ico">&#9656;</span>Completed Delivery Trips</div>
+    <div class="card-sub">Last {{ staff_trips|length }} completed trips by this rider.</div>
+    <div style="overflow-x:auto;">
+      <table style="width:100%;border-collapse:collapse;font-size:13px;">
+        <thead>
+          <tr style="border-bottom:1px solid var(--border);color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:0.05em;">
+            <th style="padding:8px 10px;text-align:left;">Date</th>
+            <th style="padding:8px 10px;text-align:left;">Started</th>
+            <th style="padding:8px 10px;text-align:left;">Finished</th>
+            <th style="padding:8px 10px;text-align:right;">Duration</th>
+            <th style="padding:8px 10px;text-align:center;">On Time</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for t in staff_trips %}
+          <tr style="border-bottom:1px solid var(--border-2);{% if loop.last %}border-bottom:none;{% endif %}">
+            <td style="padding:8px 10px;color:var(--navy);font-weight:600;">{{ t.trip_date.strftime('%d %b %Y') if t.trip_date else '-' }}</td>
+            <td style="padding:8px 10px;">{{ t.departure_time.strftime('%H:%M') if t.departure_time else '-' }}</td>
+            <td style="padding:8px 10px;">{{ t.arrival_time.strftime('%H:%M') if t.arrival_time else '-' }}</td>
+            <td style="padding:8px 10px;text-align:right;">{{ t.duration_minutes ~ ' min' if t.duration_minutes else '-' }}</td>
+            <td style="padding:8px 10px;text-align:center;font-weight:700;color:{{ '#16a34a' if t.is_on_time else '#dc2626' }};">{{ 'Yes' if t.is_on_time else 'No' }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </section>
+  {% endif %}
 </main>
 
 <script>
