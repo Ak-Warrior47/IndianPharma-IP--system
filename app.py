@@ -5671,6 +5671,21 @@ def supervisor_console():
         return redirect(url_for("dashboard"))
     try:
         today = date.today()
+
+        # Supervisor can ALSO multitask — same engine as the staff dashboard
+        if request.method == "POST" and request.form.get("multitask_only") == "1":
+            try:
+                n = _save_multitask_entry(session.get("user_id"), today, "supervisor")
+                if n:
+                    flash("Multitask role report saved.", "success")
+                else:
+                    flash("Nothing to save — tick a role and fill at least one number.", "warning")
+            except Exception as mte:
+                db.session.rollback()
+                logger.warning(f"Supervisor multitask save: {mte}")
+                flash("Error saving multitask report.", "danger")
+            return redirect(url_for("supervisor_console"))
+
         if request.method == "POST":
             sid = int(request.form.get("staff_id", 0) or 0)
             d_raw = (request.form.get("entry_date", "") or "").strip()
@@ -5698,10 +5713,20 @@ def supervisor_console():
         recent = (SupervisorBill.query.order_by(SupervisorBill.entry_date.desc())
                   .limit(60).all())
         emp_names = {e.id: e.name for e in staff}
+        # Supervisor's own multitask reports for today (shown on the console)
+        try:
+            today_multitask = (MultitaskEntry.query
+                               .filter_by(emp_id=session.get("user_id"), entry_date=today)
+                               .order_by(MultitaskEntry.created_at.desc()).all())
+        except Exception:
+            today_multitask = []
         return render_template("supervisor.html", staff=staff, recent=recent,
                                emp_names=emp_names, today=today,
                                is_admin=bool(session.get("is_admin")),
-                               user_name=session.get("user_name", "Supervisor"))
+                               user_name=session.get("user_name", "Supervisor"),
+                               today_multitask=today_multitask,
+                               primary_staff_type=session.get("primary_staff_type"),
+                               secondary_staff_type=session.get("secondary_staff_type"))
     except Exception as e:
         logger.error(f"supervisor_console: {e}")
         flash("Error loading supervisor console.", "danger")

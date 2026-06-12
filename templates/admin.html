@@ -456,7 +456,7 @@ tbody tr:hover { background: rgba(165,180,252,0.18) !important; }
             <option value="delivery">Delivery</option>
             <option value="biller">Assigner</option>
             <option value="packer">Packer</option>
-            <option value="supervisor">Supervisor (hidden)</option>
+            <option value="supervisor">Supervisor</option>
           </select>
         </div>
         <div class="field">
@@ -701,19 +701,19 @@ var NOTES_BY_EMP = {
   </div>
   {% endif %}
 
-  <!-- MULTITASK (ROLE 2) REPORTS PANEL -->
-  {% if recent_multitask %}
+  <!-- MULTITASK (ROLE 2) REPORTS PANEL — always visible -->
   <div class="card anim-fade-in" style="margin-bottom:20px;border-left:4px solid #7c3aed;">
     <div class="card-header">
       <div class="card-title">Multitask (Role 2) Reports
         <span class="cnt" style="background:#f5f3ff;color:#7c3aed;border-color:#ddd6fe;">{{ recent_multitask|length }} (30 days)</span>
       </div>
     </div>
+    {% if recent_multitask %}
     <div style="overflow-x:auto;">
       <table class="ptable" style="width:100%;">
         <thead>
           <tr>
-            <th>Staff</th><th>Date</th><th>Role 2</th><th>Report</th><th>Note</th>
+            <th>Staff</th><th>Date</th><th>Role 2</th><th>Report (all numbers)</th><th>Note</th><th></th>
           </tr>
         </thead>
         <tbody>
@@ -721,19 +721,26 @@ var NOTES_BY_EMP = {
           {% set me = emp_map.get(mt.emp_id) %}
           <tr>
             <td><strong>{{ me.name if me else 'Employee #' ~ mt.emp_id }}</strong>
-              {% if me %}<div style="font-size:11px;color:var(--muted);">Default: {{ me.staff_type|title }}</div>{% endif %}
+              {% if me %}<div style="font-size:11px;color:var(--muted);">Default: {{ me.staff_type|title }}{% if me.secondary_staff_type %} (+ {{ me.secondary_staff_type|title }}){% endif %}</div>{% endif %}
             </td>
             <td>{{ mt.entry_date.strftime('%d %b %Y') }}</td>
             <td><span style="padding:3px 10px;background:#ede9fe;color:#6d28d9;border-radius:20px;font-size:11px;font-weight:700;text-transform:uppercase;">{{ mt.secondary_type }}</span></td>
             <td style="font-size:12px;color:var(--text);">{{ mt.summary }}</td>
             <td style="font-size:12px;color:var(--muted);">{{ mt.note or '—' }}</td>
+            <td>{% if me %}<a href="/staff/{{ me.id }}" class="btn-sm btn-view">View</a>{% endif %}</td>
           </tr>
           {% endfor %}
         </tbody>
       </table>
     </div>
+    {% else %}
+    <div style="padding:18px;text-align:center;color:var(--muted);font-size:13px;">
+      No multitask reports in the last 30 days. When staff (or a supervisor) tick extra roles in the
+      "Multitask Roles" section of their dashboard and save numbers, every report appears here
+      with its full figures. Each staff member's full history is also on their profile (View button in the staff table).
+    </div>
+    {% endif %}
   </div>
-  {% endif %}
 
   <!-- FEATURE 5: BADGE MANAGEMENT -->
   <div class="card" style="margin-bottom:20px;">
@@ -833,7 +840,7 @@ var NOTES_BY_EMP = {
             <option value="delivery">Delivery</option>
             <option value="biller">Assigner</option>
             <option value="packer">Packer</option>
-            <option value="supervisor">Supervisor (hidden)</option>
+            <option value="supervisor">Supervisor</option>
           </select>
         </div>
       </div>

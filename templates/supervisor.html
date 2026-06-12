@@ -36,7 +36,20 @@
 <body>
   <div class="topbar">
     <h1>Supervisor Console</h1>
-    <div>{{ user_name }} · <a href="{{ url_for('logout') }}">Logout</a></div>
+    <div style="display:flex;align-items:center;gap:14px;">
+      {% if is_admin %}
+      <a href="{{ url_for('admin_dashboard') }}">Admin Dashboard</a>
+      {% endif %}
+      {% if secondary_staff_type and primary_staff_type == 'supervisor' %}
+      <form method="POST" action="{{ url_for('switch_role') }}" style="margin:0;">
+        <input type="hidden" name="role" value="{{ secondary_staff_type }}">
+        <button type="submit" style="padding:6px 14px;font-size:12px;background:rgba(255,255,255,0.18);border:1px solid rgba(255,255,255,0.4);">Work as {{ secondary_staff_type|title }}</button>
+      </form>
+      {% elif secondary_staff_type == 'supervisor' and not is_admin %}
+      <a href="{{ url_for('dashboard') }}">My Dashboard</a>
+      {% endif %}
+      <span>{{ user_name }} · <a href="{{ url_for('logout') }}">Logout</a></span>
+    </div>
   </div>
   <div class="wrap">
     {% with messages = get_flashed_messages(with_categories=true) %}
@@ -115,6 +128,112 @@
         </table>
       </div>
     </div>
+
+    <!-- MULTITASK (ROLE 2) — supervisor can also log extra-role work -->
+    <div class="card" style="border-left:4px solid #7c3aed;">
+      <div class="label" style="color:#6d28d9;">Multitask Roles — Optional</div>
+      <p style="font-size:12px;color:var(--muted);margin-top:0;">
+        Your default role is <strong>Supervisor</strong>. If you also worked other roles today,
+        tick each one and fill its numbers. The admin sees these reports on the dashboard
+        and on your profile.
+      </p>
+
+      {% if today_multitask %}
+      <div style="margin-bottom:14px;padding:12px 14px;background:#f0fdf4;border:1.5px solid #bbf7d0;border-radius:11px;">
+        <div style="font-size:11px;font-weight:800;color:#15803d;text-transform:uppercase;letter-spacing:.7px;margin-bottom:6px;">Already logged today</div>
+        {% for mt in today_multitask %}
+        <div style="display:flex;align-items:center;gap:10px;padding:5px 0;">
+          <span class="pill" style="background:#ede9fe;color:#6d28d9;text-transform:uppercase;">{{ mt.secondary_type }}</span>
+          <span style="font-size:13px;">{{ mt.summary }}</span>
+          {% if mt.note %}<span style="font-size:12px;color:var(--muted);">— {{ mt.note }}</span>{% endif %}
+        </div>
+        {% endfor %}
+        <div style="font-size:11px;color:var(--muted);margin-top:4px;">Re-submitting the same role updates its numbers.</div>
+      </div>
+      {% endif %}
+
+      <form method="POST" action="{{ url_for('supervisor_console') }}" autocomplete="off">
+        <input type="hidden" name="multitask_only" value="1">
+        <label>Which role(s) did you also work today?</label>
+        <div style="display:flex;flex-wrap:wrap;gap:8px;margin:8px 0 14px;">
+          {% for r in ['picker','checker','purchaser','delivery','billing','packing','other'] %}
+          <label style="display:inline-flex;align-items:center;gap:6px;padding:8px 14px;border:1.5px solid var(--border);border-radius:20px;font-size:13px;font-weight:700;cursor:pointer;background:#fff;margin:0;">
+            <input type="checkbox" name="multitask_roles" value="{{ r }}" onchange="toggleMtRole('{{ r }}', this.checked)" style="width:auto;margin:0;cursor:pointer;">
+            {{ r|title }}
+          </label>
+          {% endfor %}
+        </div>
+
+        <div class="mt-fields" id="mt_picker" style="display:none;">
+          <div class="row">
+            <div><label>Total Bills Received to Pick</label><input type="number" name="mt_p_total_bills" min="0" value="0"></div>
+            <div><label>Sales Bill Picked</label><input type="number" name="mt_p_sbo" min="0" value="0"></div>
+            <div><label>Items Picked</label><input type="number" name="mt_p_picked" min="0" value="0"></div>
+            <div><label>Items Missed</label><input type="number" name="mt_p_missed" min="0" value="0"></div>
+            <div><label>CS Sales Open</label><input type="number" name="mt_p_cso" min="0" value="0"></div>
+            <div><label>Packing Done</label><input type="number" name="mt_p_packing" min="0" value="0"></div>
+          </div>
+        </div>
+        <div class="mt-fields" id="mt_checker" style="display:none;">
+          <div class="row">
+            <div><label>Total Bills Received</label><input type="number" name="mt_c_bills_received" min="0" value="0"></div>
+            <div><label>Pending Bills (not checked)</label><input type="number" name="mt_c_pending" min="0" value="0"></div>
+            <div><label>Sales Bill Checked (Normal)</label><input type="number" name="mt_c_sbo" min="0" value="0"></div>
+            <div><label>SB Checked Urgent</label><input type="number" name="mt_c_cso" min="0" value="0"></div>
+            <div><label>Item Checked (Normal)</label><input type="number" name="mt_c_checked" min="0" value="0"></div>
+            <div><label>Urgent Item Checked</label><input type="number" name="mt_c_errors" min="0" value="0"></div>
+          </div>
+        </div>
+        <div class="mt-fields" id="mt_purchaser" style="display:none;">
+          <div class="row">
+            <div><label>Total PO Bills Received</label><input type="number" name="mt_pu_sbo" min="0" value="0"></div>
+            <div><label>PO Bills Checked</label><input type="number" name="mt_pu_checked" min="0" value="0"></div>
+            <div><label>Purchase Bill Entry</label><input type="number" name="mt_pu_picked" min="0" value="0"></div>
+            <div><label>Number of Items</label><input type="number" name="mt_pu_items" min="0" value="0"></div>
+            <div><label>CS in Purchase Open</label><input type="number" name="mt_pu_cso" min="0" value="0"></div>
+            <div><label>CS in Purchase Received</label><input type="number" name="mt_pu_packing" min="0" value="0"></div>
+          </div>
+        </div>
+        <div class="mt-fields" id="mt_simple_delivery" style="display:none;">
+          <div class="row"><div><label>Delivery — Quantity Done</label><input type="number" name="mt_s_quantity__delivery" min="0" value="0"></div></div>
+        </div>
+        <div class="mt-fields" id="mt_simple_packing" style="display:none;">
+          <div class="row"><div><label>Packing — Quantity Done</label><input type="number" name="mt_s_quantity__packing" min="0" value="0"></div></div>
+        </div>
+        <div class="mt-fields" id="mt_simple_billing" style="display:none;">
+          <div class="row">
+            <div><label>Number of Bills Done</label><input type="number" name="mt_b_bills" min="0" value="0"></div>
+            <div><label>Number of Items</label><input type="number" name="mt_b_items" min="0" value="0"></div>
+            <div><label>Number of Quantity</label><input type="number" name="mt_b_quantity" min="0" value="0"></div>
+          </div>
+        </div>
+        <div class="mt-fields" id="mt_simple_other" style="display:none;">
+          <div class="row">
+            <div><label>Breakage Received</label><input type="number" name="mt_o_breakage" min="0" value="0"></div>
+            <div><label>Expire Received</label><input type="number" name="mt_o_expire" min="0" value="0"></div>
+            <div><label>Breakage / Expire Processed</label><input type="number" name="mt_o_processed" min="0" value="0"></div>
+            <div><label>Item Receive Quantity</label><input type="number" name="mt_o_recv_qty" min="0" value="0"></div>
+            <div><label>Expire Return Quantity</label><input type="number" name="mt_o_exp_return" min="0" value="0"></div>
+          </div>
+        </div>
+
+        <div style="margin-top:10px;">
+          <label>Note (optional)</label>
+          <input type="text" name="multitask_note" maxlength="300" placeholder="e.g. Helped with picking 2pm-4pm">
+        </div>
+        <div style="margin-top:14px;">
+          <button type="submit" style="background:linear-gradient(135deg,#7c3aed,#6d28d9);">Save Multitask Report</button>
+        </div>
+      </form>
+    </div>
   </div>
+
+  <script>
+    function toggleMtRole(role, on) {
+      var id = (role === 'picker' || role === 'checker' || role === 'purchaser') ? 'mt_' + role : 'mt_simple_' + role;
+      var el = document.getElementById(id);
+      if (el) el.style.display = on ? 'block' : 'none';
+    }
+  </script>
 </body>
 </html>
