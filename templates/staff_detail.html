@@ -1075,33 +1075,64 @@ tbody tr:hover { background: rgba(165,180,252,0.18) !important; }
   {% if multitask_entries %}
   <section class="card" style="margin-top:20px;">
     <div class="card-title"><span class="ico">▸</span>Recent Multitask (Secondary Role) Entries</div>
-    <div class="card-sub">Work logged under a secondary role by this staff member (last 30 entries).</div>
+    <div class="card-sub">Work logged under a secondary role by this staff member (last 30 entries). All role-specific numbers are shown.</div>
     <div style="overflow-x:auto;">
       <table style="width:100%;border-collapse:collapse;font-size:13px;">
         <thead>
           <tr style="border-bottom:1px solid var(--border);color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:0.05em;">
             <th style="padding:8px 10px;text-align:left;">Date</th>
             <th style="padding:8px 10px;text-align:left;">Role</th>
-            <th style="padding:8px 10px;text-align:right;">Picked</th>
-            <th style="padding:8px 10px;text-align:right;">Checked</th>
-            <th style="padding:8px 10px;text-align:right;">Bills</th>
-            <th style="padding:8px 10px;text-align:right;">Qty</th>
+            <th style="padding:8px 10px;text-align:left;">All Numbers (role-specific)</th>
             <th style="padding:8px 10px;text-align:left;">Note</th>
           </tr>
         </thead>
         <tbody>
           {% for mt in multitask_entries %}
           <tr style="border-bottom:1px solid var(--border-2);{% if loop.last %}border-bottom:none;{% endif %}">
-            <td style="padding:8px 10px;color:var(--navy);font-weight:600;">{{ mt.entry_date.strftime('%d %b %Y') }}</td>
-            <td style="padding:8px 10px;">
+            <td style="padding:8px 10px;color:var(--navy);font-weight:600;white-space:nowrap;">{{ mt.entry_date.strftime('%d %b %Y') }}</td>
+            <td style="padding:8px 10px;white-space:nowrap;">
               <span style="background:rgba(99,102,241,0.12);color:#6d28d9;border:1px solid rgba(99,102,241,0.2);border-radius:6px;padding:2px 8px;font-size:11px;font-weight:600;text-transform:capitalize;">
                 {{ mt.secondary_type }}
               </span>
             </td>
-            <td style="padding:8px 10px;text-align:right;">{{ mt.picked or '—' }}</td>
-            <td style="padding:8px 10px;text-align:right;">{{ mt.checked or '—' }}</td>
-            <td style="padding:8px 10px;text-align:right;">{{ mt.bills_received or mt.total_bills_received or '—' }}</td>
-            <td style="padding:8px 10px;text-align:right;">{{ mt.quantity or '—' }}</td>
+            <td style="padding:8px 10px;font-size:12px;color:var(--text);line-height:1.7;">
+              {% if mt.secondary_type == 'picker' %}
+                <span style="display:inline-block;margin-right:10px;"><b>Bills Rcvd:</b> {{ mt.total_bills_received or 0 }}</span>
+                <span style="display:inline-block;margin-right:10px;"><b>SB Picked:</b> {{ mt.sales_bills_open or 0 }}</span>
+                <span style="display:inline-block;margin-right:10px;"><b>Items Picked:</b> {{ mt.picked or 0 }}</span>
+                <span style="display:inline-block;margin-right:10px;"><b>Missed:</b> {{ mt.missed or 0 }}</span>
+                <span style="display:inline-block;margin-right:10px;"><b>CS Open:</b> {{ mt.cs_sales_open or 0 }}</span>
+                <span style="display:inline-block;"><b>Packing Done:</b> {{ mt.packing_done or 0 }}</span>
+              {% elif mt.secondary_type == 'checker' %}
+                <span style="display:inline-block;margin-right:10px;"><b>Bills Rcvd:</b> {{ mt.bills_received or 0 }}</span>
+                <span style="display:inline-block;margin-right:10px;"><b>Pending:</b> {{ mt.pending_bills_manual or 0 }}</span>
+                <span style="display:inline-block;margin-right:10px;"><b>SB Checked:</b> {{ mt.sales_bills_open or 0 }}</span>
+                <span style="display:inline-block;margin-right:10px;"><b>CS Checked:</b> {{ mt.cs_sales_open or 0 }}</span>
+                <span style="display:inline-block;margin-right:10px;"><b>Items Checked:</b> {{ mt.checked or 0 }}</span>
+                <span style="display:inline-block;"><b>Urgent:</b> {{ mt.errors_found or 0 }}</span>
+              {% elif mt.secondary_type == 'purchaser' %}
+                <span style="display:inline-block;margin-right:10px;"><b>PO Bills Rcvd:</b> {{ mt.sales_bills_open or 0 }}</span>
+                <span style="display:inline-block;margin-right:10px;"><b>PO Checked:</b> {{ mt.checked or 0 }}</span>
+                <span style="display:inline-block;margin-right:10px;"><b>PO Entry:</b> {{ mt.picked or 0 }}</span>
+                <span style="display:inline-block;margin-right:10px;"><b>Items:</b> {{ mt.errors_found or 0 }}</span>
+                <span style="display:inline-block;margin-right:10px;"><b>CS Open:</b> {{ mt.cs_sales_open or 0 }}</span>
+                <span style="display:inline-block;"><b>CS Rcvd:</b> {{ mt.packing_done or 0 }}</span>
+              {% elif mt.secondary_type == 'billing' %}
+                <span style="display:inline-block;margin-right:10px;"><b>Bills Done:</b> {{ mt.bills_done or 0 }}</span>
+                <span style="display:inline-block;margin-right:10px;"><b>Items:</b> {{ mt.items_count or 0 }}</span>
+                <span style="display:inline-block;"><b>Qty:</b> {{ mt.quantity or 0 }}</span>
+              {% elif mt.secondary_type in ('delivery', 'packing') %}
+                <span style="display:inline-block;"><b>Qty Done:</b> {{ mt.quantity or 0 }}</span>
+              {% elif mt.secondary_type == 'other' %}
+                <span style="display:inline-block;margin-right:10px;"><b>Brkg Rcvd:</b> {{ mt.breakage_received or 0 }}</span>
+                <span style="display:inline-block;margin-right:10px;"><b>Exp Rcvd:</b> {{ mt.expire_received or 0 }}</span>
+                <span style="display:inline-block;margin-right:10px;"><b>Processed:</b> {{ mt.breakage_expire_processed or 0 }}</span>
+                <span style="display:inline-block;margin-right:10px;"><b>Item Recv:</b> {{ mt.item_receive_qty or 0 }}</span>
+                <span style="display:inline-block;"><b>Exp Return:</b> {{ mt.expire_return_qty or 0 }}</span>
+              {% else %}
+                {{ mt.summary }}
+              {% endif %}
+            </td>
             <td style="padding:8px 10px;color:var(--muted);max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">{{ mt.note or '' }}</td>
           </tr>
           {% endfor %}

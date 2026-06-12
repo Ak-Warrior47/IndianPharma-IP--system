@@ -461,22 +461,31 @@ class MultitaskEntry(db.Model):
 
     @property
     def summary(self):
-        """Short human-readable summary of the multitask role's parameters."""
+        """Full human-readable summary — all role-specific parameters shown."""
         st = self.secondary_type
         if st == "picker":
-            return f"{self.picked or 0} picked / {self.missed or 0} missed · {self.sales_bills_open or 0} bills"
+            return (f"Bills Rcvd: {self.total_bills_received or 0} · "
+                    f"SB Picked: {self.sales_bills_open or 0} · "
+                    f"Items Picked: {self.picked or 0} · Missed: {self.missed or 0} · "
+                    f"CS Open: {self.cs_sales_open or 0} · Packing: {self.packing_done or 0}")
         if st == "checker":
-            return f"{self.checked or 0} checked / {self.errors_found or 0} urgent · {self.bills_received or 0} bills"
+            return (f"Bills Rcvd: {self.bills_received or 0} · "
+                    f"Pending: {self.pending_bills_manual or 0} · "
+                    f"SB Checked: {self.sales_bills_open or 0} · CS Checked: {self.cs_sales_open or 0} · "
+                    f"Items Checked: {self.checked or 0} · Urgent: {self.errors_found or 0}")
         if st == "purchaser":
-            return f"{self.checked or 0} PO checked · {self.sales_bills_open or 0} PO bills · {self.errors_found or 0} items"
+            return (f"PO Bills Rcvd: {self.sales_bills_open or 0} · "
+                    f"PO Checked: {self.checked or 0} · "
+                    f"PO Entry: {self.picked or 0} · Items: {self.errors_found or 0} · "
+                    f"CS Open: {self.cs_sales_open or 0} · CS Rcvd: {self.packing_done or 0}")
         if st == "billing":
-            return f"{self.bills_done or 0} bills · {self.items_count or 0} items · {self.quantity or 0} qty"
+            return f"Bills Done: {self.bills_done or 0} · Items: {self.items_count or 0} · Qty: {self.quantity or 0}"
         if st == "other":
-            return (f"Brkg {self.breakage_received or 0} · Exp {self.expire_received or 0} · "
-                    f"Proc {self.breakage_expire_processed or 0} · Recv {self.item_receive_qty or 0} · "
-                    f"ExpRet {self.expire_return_qty or 0}")
+            return (f"Brkg Rcvd: {self.breakage_received or 0} · Exp Rcvd: {self.expire_received or 0} · "
+                    f"Processed: {self.breakage_expire_processed or 0} · "
+                    f"Item Recv: {self.item_receive_qty or 0} · Exp Return: {self.expire_return_qty or 0}")
         # delivery / packing
-        return f"{self.quantity or 0} done"
+        return f"Qty Done: {self.quantity or 0}"
 
 
 class DeliveryBillerNote(db.Model):
