@@ -2189,6 +2189,28 @@ def _save_multitask_entry(emp_id, entry_date, primary_role):
     legacy = (request.form.get("multitask_role", "") or "").strip()
     if legacy:
         roles.append(legacy)
+
+    # SAFETY NET: a staff member can fill a role's numbers but forget to tick its
+    # checkbox (or the JS toggle misfires). Auto-include any role that has at least
+    # one number entered, so nothing the user typed is ever silently dropped.
+    role_fields = {
+        "picker":    ("mt_p_total_bills", "mt_p_sbo", "mt_p_picked", "mt_p_missed", "mt_p_cso", "mt_p_packing"),
+        "checker":   ("mt_c_bills_received", "mt_c_pending", "mt_c_sbo", "mt_c_cso", "mt_c_checked", "mt_c_errors"),
+        "purchaser": ("mt_pu_sbo", "mt_pu_checked", "mt_pu_picked", "mt_pu_items", "mt_pu_cso", "mt_pu_packing"),
+        "billing":   ("mt_b_bills", "mt_b_items", "mt_b_quantity"),
+        "other":     ("mt_o_breakage", "mt_o_expire", "mt_o_processed", "mt_o_recv_qty", "mt_o_exp_return"),
+    }
+    def _has_value(field):
+        try: return int(request.form.get(field, 0) or 0) > 0
+        except Exception: return False
+    for role, fields in role_fields.items():
+        if any(_has_value(f) for f in fields):
+            roles.append(role)
+    # delivery / packing per-role quantity fields (mt_s_quantity__<role>)
+    for key in request.form:
+        if key.startswith("mt_s_quantity__") and _has_value(key):
+            roles.append(key[len("mt_s_quantity__"):].strip())
+
     # Dedupe, drop blanks + the primary role
     seen = set()
     roles = [r for r in (x.strip() for x in roles)
@@ -2993,7 +3015,8 @@ def admin_dashboard():
                 .order_by(MultitaskEntry.entry_date.desc(), MultitaskEntry.created_at.desc())
                 .all()
             )
-        except Exception:
+        except Exception as _mte:
+            logger.error(f"recent_multitask query failed (check multitask_entries columns/migration): {_mte}")
             recent_multitask = []
 
         # Feature 5: Badges for admin
