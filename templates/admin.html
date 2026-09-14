@@ -3,6 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link rel="stylesheet" href="{{ url_for('static', filename='app.css') }}">
 <title>Admin | Pharma IP System</title>
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&family=DM+Serif+Display&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.2/socket.io.min.js"></script>
@@ -601,7 +602,9 @@ var NOTES_BY_EMP = {
       <div class="card-title">Announcements / Notice Board
         {% if all_announcements %}<span class="cnt">{{ all_announcements|length }} notices</span>{% endif %}
       </div>
-      <a href="/admin/send_monthly_report" class="btn-sm btn-view" style="font-size:12px;padding:7px 14px;" onclick="return confirm('Send monthly PDF reports now?')">Send Monthly Reports</a>
+      <form method="post" action="/admin/send_monthly_report" style="display:inline" onsubmit="return confirm('Send monthly PDF reports now?')">
+        <button type="submit" class="btn-sm btn-view" style="font-size:12px;padding:7px 14px;">Send Monthly Reports</button>
+      </form>
     </div>
     <form method="POST" action="/admin/announcement/create" autocomplete="off" style="display:grid;grid-template-columns:1fr 1fr auto;gap:12px;align-items:flex-end;margin-bottom:16px;">
       <div class="field" style="margin:0;">
@@ -1657,3 +1660,4 @@ function switchLB(tab){
 </script>
 </body>
 </html>
+
