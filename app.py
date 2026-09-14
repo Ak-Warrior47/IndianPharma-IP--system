@@ -70,7 +70,7 @@ logger.info(f"Using database: {db_url.split('@')[0] if '@' in db_url else 'SQLit
 
 db = SQLAlchemy(app)
 mail = Mail(app)
-socketio = SocketIO(app, cors_allowed_origins="*", async_mode="eventlet")
+socketio = SocketIO(app, async_mode="eventlet")
 
 # ─── ROLES ───────────────────────────────────────────────────────────────────
 # "biller" is internally kept but displayed as "Assigner". "supervisor" is a
@@ -2902,27 +2902,43 @@ def dashboard():
 @admin_required
 def admin_dashboard():
     try:
-        employees = Employee.query.filter_by(is_admin=False).options(db.joinedload(Employee.entries)).all()
+        employees = Employee.query.filter_by(is_admin=False).all()
         rows = []
         today = date.today()
         month_start = today.replace(day=1)
+        week_start = today - timedelta(days=6)
+        recent_start = min(month_start, week_start)
+        recent_entries = KPIEntry.query.filter(KPIEntry.entry_date >= recent_start).all()
+        entries_by_emp = {}
+        for entry in recent_entries:
+            entries_by_emp.setdefault(entry.emp_id, []).append(entry)
+        entry_meta = {
+            emp_id: {"count": count, "last_entry": last_entry}
+            for emp_id, count, last_entry in db.session.query(
+                KPIEntry.emp_id,
+                db.func.count(KPIEntry.id),
+                db.func.max(KPIEntry.entry_date),
+            ).group_by(KPIEntry.emp_id).all()
+        }
         for emp in employees:
-            ents = emp.entries
+            ents = entries_by_emp.get(emp.id, [])
             month_ents = [e for e in ents if e.entry_date >= month_start]
             stats = build_analytics(month_ents, emp.staff_type, emp_id=emp.id)
-            week_ents = [e for e in ents if e.entry_date >= today - timedelta(days=6)]
+            week_ents = [e for e in ents if e.entry_date >= week_start]
             week_stats = build_analytics(week_ents, emp.staff_type, emp_id=emp.id)
+            meta = entry_meta.get(emp.id, {})
             rows.append({
                 'emp': emp,
                 'stats': stats,
                 'week_stats': week_stats,
-                'count': len(ents),
-                'last_entry': max((e.entry_date for e in ents), default=None),
+                'count': meta.get('count', 0),
+                'last_entry': meta.get('last_entry'),
             })
 
-        all_ents = KPIEntry.query.all()
-        total_picked = sum(e.picked or 0 for e in all_ents)
-        total_entries = len(all_ents)
+        total_picked, total_entries = db.session.query(
+            db.func.coalesce(db.func.sum(KPIEntry.picked), 0),
+            db.func.count(KPIEntry.id),
+        ).one()
         active_today = KPIEntry.query.filter_by(entry_date=today).count()
         open_windows = PastEntryWindow.query.filter_by(is_active=True).order_by(PastEntryWindow.past_date.desc()).all()
         # Last 12 months (incl. current) for the bulk open/close month picker
@@ -2976,9 +2992,10 @@ def admin_dashboard():
         try:
             all_announcements = Announcement.query.order_by(Announcement.created_at.desc()).all()
             total_staff_count = len(employees)
-            ann_read_counts = {}
-            for ann in all_announcements:
-                ann_read_counts[ann.id] = AnnouncementRead.query.filter_by(announcement_id=ann.id).count()
+            ann_read_counts = dict(db.session.query(
+                AnnouncementRead.announcement_id,
+                db.func.count(AnnouncementRead.id),
+            ).group_by(AnnouncementRead.announcement_id).all())
         except Exception:
             all_announcements = []
             ann_read_counts = {}
@@ -2988,8 +3005,7 @@ def admin_dashboard():
         try:
             pending_past_requests = PastEntryRequest.query.filter_by(status="pending").order_by(PastEntryRequest.created_at.desc()).all()
             # emp_map: id -> Employee (all employees incl. delivery/biller)
-            _all_emp = Employee.query.all()
-            emp_map = {e.id: e for e in _all_emp}
+            emp_map = {e.id: e for e in employees}
         except Exception:
             pending_past_requests = []
             emp_map = {}
@@ -3791,6 +3807,8 @@ def api_stats(emp_id):
 
 @socketio.on('connect')
 def handle_connect():
+    if not session.get("user_id"):
+        return False
     emit('connected', {'message': 'Connected to KPI tracker'})
 
 
@@ -3798,11 +3816,16 @@ def handle_connect():
 
 @app.errorhandler(404)
 def not_found(e):
+    if request.path.startswith("/api/"):
+        return jsonify(error="Not found"), 404
     return redirect(url_for("login"))
 
 @app.errorhandler(500)
 def server_error(e):
+    db.session.rollback()
     logger.error(f"500: {e}")
+    if request.path.startswith("/api/"):
+        return jsonify(error="Server error"), 500
     return redirect(url_for("login"))
 
 
@@ -4787,6 +4810,10 @@ def api_analytics_range():
             end_date = datetime.strptime(end_str, "%Y-%m-%d").date()
         except ValueError:
             return jsonify(error="Invalid date format. Use YYYY-MM-DD"), 400
+        if start_date > end_date:
+            return jsonify(error="start must be on or before end"), 400
+        if (end_date - start_date).days > 366:
+            return jsonify(error="Date range cannot exceed 366 days"), 400
         entries = KPIEntry.query.filter(
             KPIEntry.emp_id == emp_id,
             KPIEntry.entry_date >= start_date,
@@ -4844,7 +4871,7 @@ def send_monthly_reports():
             logger.error(f"send_monthly_reports: {e}")
 
 
-@app.route("/admin/send_monthly_report")
+@app.route("/admin/send_monthly_report", methods=["POST"])
 @admin_required
 def admin_send_monthly_report():
     """Manual trigger for monthly PDF email."""
@@ -6199,3 +6226,4 @@ except Exception as _sch_err:
 
 if __name__ == "__main__":
     socketio.run(app, host="0.0.0.0", port=int(os.environ.get("PORT", 10000)))
+
