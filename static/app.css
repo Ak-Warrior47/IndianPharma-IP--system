@@ -1,0 +1,32 @@
+:where(a, button, input, select, textarea):focus-visible {
+  outline: 3px solid #2563eb;
+  outline-offset: 2px;
+}
+
+:where(button, input, select, textarea) {
+  font: inherit;
+}
+
+:where(button, [type="button"], [type="submit"], select) {
+  min-height: 40px;
+}
+
+:where(table) {
+  max-width: 100%;
+}
+
+@media (max-width: 640px) {
+  :where(body) { overflow-x: hidden; }
+  :where(.card, section, main) { max-width: 100%; }
+  :where(.table-wrap, .table-responsive) { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    scroll-behavior: auto !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
