@@ -3384,6 +3384,33 @@ def admin_delete_user(emp_id):
                 (SupervisorBill.supervisor_id == emp_id)
             ).delete(synchronize_session=False)
             KPIEntry.query.filter_by(emp_id=emp_id).delete(synchronize_session=False)
+            # Nullable references to this employee from rows we must KEEP.
+            # These FKs have no ON DELETE CASCADE, so on PostgreSQL/Supabase the
+            # delete below would abort with a constraint violation. (SQLite does
+            # not enforce foreign keys by default, which is why this only ever
+            # showed up in production.)
+            BillValidation.query.filter_by(checker1_id=emp_id).update(
+                {"checker1_id": None}, synchronize_session=False)
+            BillValidation.query.filter_by(checker2_id=emp_id).update(
+                {"checker2_id": None}, synchronize_session=False)
+            BillValidation.query.filter_by(checker3_id=emp_id).update(
+                {"checker3_id": None}, synchronize_session=False)
+            BillValidation.query.filter_by(override_by=emp_id).update(
+                {"override_by": None}, synchronize_session=False)
+            Complaint.query.filter_by(target_emp_id=emp_id).update(
+                {"target_emp_id": None}, synchronize_session=False)
+            Complaint.query.filter_by(reported_by=emp_id).update(
+                {"reported_by": None}, synchronize_session=False)
+            StaffBadge.query.filter_by(awarded_by=emp_id).update(
+                {"awarded_by": None}, synchronize_session=False)
+            PastEntryWindow.query.filter_by(opened_by=emp_id).update(
+                {"opened_by": None}, synchronize_session=False)
+            Announcement.query.filter_by(created_by=emp_id).update(
+                {"created_by": None}, synchronize_session=False)
+            AuditLog.query.filter_by(admin_id=emp_id).update(
+                {"admin_id": None}, synchronize_session=False)
+            # AdminStaffNote.created_by is NOT NULL, so those rows go with the author.
+            AdminStaffNote.query.filter_by(created_by=emp_id).delete(synchronize_session=False)
         except Exception as dep_err:
             logger.warning(f"delete_user dependent cleanup: {dep_err}")
 
