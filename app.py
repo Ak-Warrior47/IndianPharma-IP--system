@@ -937,7 +937,33 @@ def build_analytics(entries: List[KPIEntry], staff_type: str = "picker", emp_id:
         except Exception:
             supervisor_penalty = 0.0
 
-        eff_score = max(round(eff_score - complaint_deduction + total_adjustment - supervisor_penalty, 1), 0.0)
+        # Multitask bonus: +10 per extra role worked, capped at +30 for a single day.
+        # Averaged over the days in this period so it stays on the same 0-100 scale as the
+        # rest of eff_score: a one-day window gets that day's bonus outright, while a month
+        # window gets the mean of its daily bonuses. Computed here rather than in the
+        # dashboard route so the bonus reaches the admin view, the leaderboards and the
+        # monthly reports as well as the staff member's own card.
+        multitask_bonus = 0.0
+        try:
+            if emp_id is not None:
+                _dates = {e.entry_date for e in entries if e.entry_date}
+                if _dates:
+                    _mts = MultitaskEntry.query.filter(
+                        MultitaskEntry.emp_id == emp_id,
+                        MultitaskEntry.entry_date.in_(list(_dates)),
+                    ).all()
+                    _roles_by_day = {}
+                    for _mt in _mts:
+                        _roles_by_day.setdefault(_mt.entry_date, set()).add(_mt.secondary_type)
+                    if _roles_by_day:
+                        _total = sum(min(10 * len(rs), 30) for rs in _roles_by_day.values())
+                        multitask_bonus = round(_total / len(_dates), 1)
+        except Exception as _mtb:
+            logger.warning(f"multitask bonus: {_mtb}")
+            multitask_bonus = 0.0
+
+        eff_score = max(round(eff_score - complaint_deduction + total_adjustment
+                              - supervisor_penalty + multitask_bonus, 1), 0.0)
         eff_score = min(eff_score, 100.0)
 
         # Auto-suggest: if error rate stays <1% over enough days, suggest raising the target
@@ -1011,6 +1037,7 @@ def build_analytics(entries: List[KPIEntry], staff_type: str = "picker", emp_id:
             admin_adjustment=round(total_adjustment, 1),
             supervisor_penalty=round(supervisor_penalty, 1),
             supervisor_mismatches=supervisor_mismatches,
+            multitask_bonus=multitask_bonus,
             vwcr=vwcr,
             cleaner_rate=cleaner_rate_score,
             efficiency_ratio=efficiency_ratio,
@@ -2717,13 +2744,8 @@ def dashboard():
         except Exception:
             known_stores_main = []
 
-        # Multitasker bonus: +10 per extra role worked today (capped at +30) — points for extra work
-        if today_multitask and d_stats:
-            extra_roles_n = len({mt.secondary_type for mt in today_multitask})
-            bonus = min(10 * extra_roles_n, 30)
-            d_stats = dict(d_stats)
-            d_stats["eff_score"] = min(round(d_stats["eff_score"] + bonus, 1), 100.0)
-            d_stats["multitask_bonus"] = bonus
+        # The multitask bonus is applied inside build_analytics, so it already reaches
+        # d_stats, w_stats, m_stats, the admin view, the leaderboards and the reports.
 
         # Delivery leaderboard (inline, delivery staff only)
         delivery_lb = []
