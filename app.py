@@ -6002,6 +6002,53 @@ def checklist_toggle():
         return jsonify({"ok": False, "error": "Could not save."}), 500
 
 
+@app.route("/api/palette")
+@login_required
+def api_palette():
+    """Everything the command palette can jump to, scoped to who is asking.
+
+    Admin-only destinations and the staff directory are withheld from
+    non-admins, so the palette can never become a way to enumerate colleagues.
+    """
+    try:
+        is_admin = bool(session.get("is_admin"))
+        staff_type = session.get("staff_type", "")
+        me = session.get("user_id")
+        items = []
+
+        if is_admin:
+            items += [
+                {"t": "Admin Dashboard",   "s": "Scores, staff table, reports", "u": "/admin_dashboard",     "g": "Go to"},
+                {"t": "Daily Checklists",  "s": "Define tasks per role",        "u": "/admin/checklist",     "g": "Go to"},
+                {"t": "Delivery Dashboard","s": "Routes, trips, GPS trails",    "u": "/admin/delivery",      "g": "Go to"},
+                {"t": "Delivery Leaderboard","s": "Rider rankings",             "u": "/delivery/leaderboard","g": "Go to"},
+                {"t": "Bill Validations",  "s": "Picker and checker counts",    "u": "/validations",         "g": "Go to"},
+                {"t": "Supervisor Console","s": "Authoritative bill counts",    "u": "/supervisor",          "g": "Go to"},
+                {"t": "Reports Archive",   "s": "Past monthly reports",         "u": "/admin/reports",       "g": "Go to"},
+                {"t": "Bulk Import",       "s": "Add staff from CSV",           "u": "/admin/bulk_import",   "g": "Go to"},
+                {"t": "Export CSV",        "s": "Download all KPI data",        "u": "/admin/export_csv",    "g": "Action"},
+                {"t": "Export JSON",       "s": "Full data export",             "u": "/admin/export_full",   "g": "Action"},
+            ]
+            for e in Employee.query.filter_by(is_admin=False).order_by(Employee.name).all():
+                role = ROLE_DISPLAY_NAMES.get(e.staff_type, (e.staff_type or "").title())
+                sub = role + (" + " + e.secondary_staff_type.title() if e.secondary_staff_type else "")
+                items.append({"t": e.name, "s": sub, "u": "/staff/%d" % e.id, "g": "Staff"})
+        else:
+            items.append({"t": "My Dashboard", "s": "Today's entry and stats", "u": "/dashboard", "g": "Go to"})
+            if me:
+                items.append({"t": "My Profile", "s": "My scores and history", "u": "/staff/%d" % me, "g": "Go to"})
+            if staff_type == "supervisor" or session.get("secondary_staff_type") == "supervisor":
+                items.append({"t": "Supervisor Console", "s": "Bill counts", "u": "/supervisor", "g": "Go to"})
+            if staff_type == "delivery":
+                items.append({"t": "Delivery Leaderboard", "s": "Rider rankings", "u": "/delivery/leaderboard", "g": "Go to"})
+
+        items.append({"t": "Log out", "s": "End this session", "u": "/logout", "g": "Action"})
+        return jsonify({"ok": True, "items": items})
+    except Exception as e:
+        logger.error(f"api_palette: {e}")
+        return jsonify({"ok": False, "items": []}), 500
+
+
 @app.route("/supervisor", methods=["GET", "POST"])
 @login_required
 def supervisor_console():

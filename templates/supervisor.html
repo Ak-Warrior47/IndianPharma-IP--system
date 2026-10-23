@@ -14,6 +14,7 @@
 <header class="ip-topbar">
   <div class="ip-brand"><span class="ip-brand__mark">IP</span> Pharma IP System</div>
   <nav class="ip-navlinks">
+    <button class="ipk-trigger" data-ipk-open type="button" aria-label="Open command palette"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"></circle><path d="M20 20l-3.6-3.6"></path></svg><span>Search</span><kbd class="ipk__kbd">&#8984;K</kbd></button>
     {% if is_admin %}
     <a href="{{ url_for('admin_dashboard') }}" class="ip-btn ip-btn--ghost">Admin Dashboard</a>
     {% endif %}
@@ -262,5 +263,6 @@
     if (el) el.style.display = on ? 'block' : 'none';
   }
 </script>
+  <script src="{{ url_for('static', filename='js/palette.js') }}" defer></script>
 </body>
 </html>
