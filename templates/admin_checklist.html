@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Daily Checklists — Indian Pharma</title>
+<link rel="stylesheet" href="{{ url_for('static', filename='css/ip.css') }}">
+</head>
+<body>
+
+<header class="ip-topbar">
+  <div class="ip-brand"><span class="ip-brand__mark">IP</span> Pharma IP System</div>
+  <nav class="ip-navlinks">
+    <a href="{{ url_for('admin_dashboard') }}" class="ip-btn ip-btn--ghost">Dashboard</a>
+    <a href="{{ url_for('admin_delivery') }}" class="ip-btn ip-btn--ghost">Delivery</a>
+    <a href="/validations" class="ip-btn ip-btn--ghost">Validations</a>
+    <a href="{{ url_for('logout') }}" class="ip-btn">Log out</a>
+  </nav>
+</header>
+
+<main class="ip-shell">
+
+  <div class="ip-head">
+    <div>
+      <h1>Daily Checklists</h1>
+      <div class="ip-head__sub">
+        Tasks you define here appear on every staff member's dashboard for that role,
+        every day. Completion is recorded per person per day.
+      </div>
+    </div>
+    <div class="ip-muted ip-small">{{ today.strftime('%d %b %Y') }}</div>
+  </div>
+
+  {% with messages = get_flashed_messages(with_categories=true) %}
+    {% for category, message in messages %}
+      <div class="ip-flash {{ category }}">{{ message }}</div>
+    {% endfor %}
+  {% endwith %}
+
+  <!-- ============ TODAY'S COMPLETION ============ -->
+  <section class="ip-card">
+    <div class="ip-card__head">
+      <div>
+        <div class="ip-card__title">Today's Completion</div>
+        <div class="ip-card__sub">Where each person stands on their list right now.</div>
+      </div>
+      {% if staff_rows %}<span class="ip-count">{{ staff_rows|length }} staff</span>{% endif %}
+    </div>
+    {% if staff_rows %}
+    <div class="ip-tablewrap">
+      <table class="ip-table">
+        <thead>
+          <tr>
+            <th>Staff</th>
+            <th>Role</th>
+            <th class="num">Done</th>
+            <th style="min-width:150px;">Progress</th>
+            <th>Still pending</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for r in staff_rows %}
+          <tr>
+            <td class="nowrap"><strong>{{ r.emp.name }}</strong></td>
+            <td class="nowrap">
+              <span class="ip-pill ip-pill--muted">{{ role_names.get(r.emp.staff_type, r.emp.staff_type|title) }}</span>
+            </td>
+            <td class="num nowrap">{{ r.done }} / {{ r.total }}</td>
+            <td>
+              <div class="ip-between" style="gap:var(--s2);">
+                <div class="ip-bar" style="flex:1;min-width:70px;">
+                  <div class="ip-bar__fill {% if r.pct == 100 %}ip-bar__fill--ok{% elif r.pct < 50 %}ip-bar__fill--warn{% endif %}"
+                       style="width:{{ r.pct }}%;"></div>
+                </div>
+                <span class="ip-small ip-muted" style="min-width:34px;text-align:right;">{{ r.pct }}%</span>
+              </div>
+            </td>
+            <td>
+              {% if r.pending %}
+                <span class="ip-small">{{ r.pending|join('; ') }}</span>
+              {% else %}
+                <span class="ip-pill ip-pill--ok">All done</span>
+              {% endif %}
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <div class="ip-empty">
+      <div class="ip-empty__title">No checklists are live yet</div>
+      <div class="ip-empty__hint">
+        Add a task to any role below. Once a role has at least one task, every staff
+        member in that role appears here with their progress for the day.
+      </div>
+    </div>
+    {% endif %}
+  </section>
+
+  <!-- ============ ADD A TASK ============ -->
+  <section class="ip-card">
+    <div class="ip-card__head">
+      <div>
+        <div class="ip-card__title">Add a Task</div>
+        <div class="ip-card__sub">It applies to everyone in the role you choose, starting today.</div>
+      </div>
+    </div>
+    <div class="ip-card__body">
+      <form method="POST" action="{{ url_for('admin_checklist') }}" autocomplete="off">
+        <input type="hidden" name="action" value="add">
+        <div class="ip-row">
+          <div style="flex:0 0 190px;">
+            <label class="ip-label" for="cl-role">Role</label>
+            <select class="ip-select" name="staff_type" id="cl-role" required>
+              {% for r in valid_roles %}
+              <option value="{{ r }}">{{ role_names.get(r, r|title) }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div style="flex:1 1 300px;">
+            <label class="ip-label" for="cl-text">Task</label>
+            <input class="ip-input" type="text" name="text" id="cl-text" maxlength="200" required
+                   placeholder="e.g. Wipe down the packing bench before leaving">
+          </div>
+          <div>
+            <button type="submit" class="ip-btn ip-btn--primary">Add Task</button>
+          </div>
+        </div>
+      </form>
+    </div>
+  </section>
+
+  <!-- ============ PER-ROLE LISTS ============ -->
+  {% for role in valid_roles %}
+  {% set live = by_role.get(role, []) %}
+  {% set gone = archived_by_role.get(role, []) %}
+  {% if live or gone %}
+  <section class="ip-card">
+    <div class="ip-card__head">
+      <div class="ip-card__title">{{ role_names.get(role, role|title) }}</div>
+      <span class="ip-count">{{ live|length }} active</span>
+    </div>
+    {% if live %}
+    <div class="ip-tablewrap">
+      <table class="ip-table">
+        <thead>
+          <tr><th style="width:52px;" class="num">#</th><th>Task</th><th style="width:150px;">Order</th><th style="width:96px;"></th></tr>
+        </thead>
+        <tbody>
+          {% for t in live %}
+          <tr>
+            <td class="num ip-muted">{{ loop.index }}</td>
+            <td>{{ t.text }}</td>
+            <td class="nowrap">
+              <form method="POST" action="{{ url_for('admin_checklist') }}" style="display:inline;">
+                <input type="hidden" name="action" value="move">
+                <input type="hidden" name="template_id" value="{{ t.id }}">
+                <input type="hidden" name="dir" value="up">
+                <button type="submit" class="ip-btn ip-btn--sm" {% if loop.first %}disabled{% endif %}
+                        aria-label="Move up">Up</button>
+              </form>
+              <form method="POST" action="{{ url_for('admin_checklist') }}" style="display:inline;">
+                <input type="hidden" name="action" value="move">
+                <input type="hidden" name="template_id" value="{{ t.id }}">
+                <input type="hidden" name="dir" value="down">
+                <button type="submit" class="ip-btn ip-btn--sm" {% if loop.last %}disabled{% endif %}
+                        aria-label="Move down">Down</button>
+              </form>
+            </td>
+            <td class="nowrap">
+              <form method="POST" action="{{ url_for('admin_checklist') }}" style="display:inline;">
+                <input type="hidden" name="action" value="archive">
+                <input type="hidden" name="template_id" value="{{ t.id }}">
+                <button type="submit" class="ip-btn ip-btn--sm ip-btn--danger">Remove</button>
+              </form>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <div class="ip-empty">
+      <div class="ip-empty__title">No active tasks for this role</div>
+      <div class="ip-empty__hint">Removed tasks are listed below and can be restored.</div>
+    </div>
+    {% endif %}
+
+    {% if gone %}
+    <div class="ip-card__body" style="border-top:1px solid var(--line);background:var(--surface-2);">
+      <div class="ip-label">Removed tasks</div>
+      <div class="ip-stack">
+        {% for t in gone %}
+        <div class="ip-between">
+          <span class="ip-small ip-muted">{{ t.text }}</span>
+          <form method="POST" action="{{ url_for('admin_checklist') }}">
+            <input type="hidden" name="action" value="restore">
+            <input type="hidden" name="template_id" value="{{ t.id }}">
+            <button type="submit" class="ip-btn ip-btn--sm">Restore</button>
+          </form>
+        </div>
+        {% endfor %}
+      </div>
+      <div class="ip-hint">
+        Removing a task only takes it off the daily list. Past completion records are kept.
+      </div>
+    </div>
+    {% endif %}
+  </section>
+  {% endif %}
+  {% endfor %}
+
+  {% if not staff_rows %}
+  <section class="ip-card">
+    <div class="ip-card__body">
+      <div class="ip-label">How this works</div>
+      <ul class="ip-small ip-muted" style="margin:var(--s2) 0 0;padding-left:var(--s5);line-height:1.8;">
+        <li>Tasks are defined per role, so a new employee needs no setup — they inherit their role's list.</li>
+        <li>Staff tick items off on their own dashboard; each tick is stamped with the time.</li>
+        <li>The list resets each day. Yesterday's record stays on the staff member's profile.</li>
+        <li>Removing a task hides it from tomorrow's list without deleting history.</li>
+      </ul>
+    </div>
+  </section>
+  {% endif %}
+
+</main>
+</body>
+</html>

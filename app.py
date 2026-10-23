@@ -574,6 +574,47 @@ class Notification(db.Model):
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
 
+class ChecklistTemplate(db.Model):
+    """A daily task the admin defines for a whole staff type.
+
+    Every employee of that staff_type sees these items on their dashboard each
+    day and ticks them off. Items are per-role rather than per-person so adding
+    a new employee needs no extra setup, and so completion is comparable between
+    staff doing the same job.
+    """
+    __tablename__ = "checklist_templates"
+    id          = db.Column(db.Integer, primary_key=True)
+    staff_type  = db.Column(db.String(20), nullable=False, index=True)
+    text        = db.Column(db.String(200), nullable=False)
+    sort_order  = db.Column(db.Integer, default=0)
+    is_active   = db.Column(db.Integer, default=1)   # 0 archived, 1 live
+    created_by  = db.Column(db.Integer, db.ForeignKey("employees.id"), nullable=True)
+    created_at  = db.Column(db.DateTime, default=datetime.utcnow)
+    __table_args__ = (
+        db.Index("idx_cl_tmpl_role", "staff_type", "is_active"),
+    )
+
+
+class ChecklistCompletion(db.Model):
+    """One employee ticking one checklist item on one day.
+
+    A row exists only once an item has been ticked at least once; un-ticking
+    sets done=0 rather than deleting, so the audit trail of when it was first
+    completed survives.
+    """
+    __tablename__ = "checklist_completions"
+    id           = db.Column(db.Integer, primary_key=True)
+    emp_id       = db.Column(db.Integer, db.ForeignKey("employees.id", ondelete="CASCADE"), nullable=False)
+    template_id  = db.Column(db.Integer, db.ForeignKey("checklist_templates.id", ondelete="CASCADE"), nullable=False)
+    entry_date   = db.Column(db.Date, nullable=False)
+    done         = db.Column(db.Integer, default=0)
+    completed_at = db.Column(db.DateTime, nullable=True)
+    __table_args__ = (
+        db.UniqueConstraint("emp_id", "template_id", "entry_date", name="_cl_emp_tmpl_date_uc"),
+        db.Index("idx_cl_done_date", "entry_date", "emp_id"),
+    )
+
+
 class SupervisorBill(db.Model):
     """Authoritative ('super') bill count entered by a supervisor for a staff member on a date.
     Admin-validated source of truth; staff self-reports are checked against this."""
@@ -2953,6 +2994,7 @@ def dashboard():
             current_month=today.strftime("%B %Y"),
             month_str=today.strftime("%Y-%m"),
             today_multitask=today_multitask,
+            my_checklist=checklist_for(emp_id, staff_type, today),
             today_db_note=None,
             primary_staff_type=session.get("primary_staff_type") or staff_type,
             secondary_staff_type=session.get("secondary_staff_type"),
@@ -2983,7 +3025,7 @@ def dashboard():
             active_announcements=[], unread_count=0, current_goal=None,
             pending_requests=[], my_staff_badges=[], all_auto_badges=[],
             earned_badge_ids=set(), current_month="", month_str="",
-            today_multitask=[], today_db_note=None,
+            today_multitask=[], today_db_note=None, my_checklist=[],
             primary_staff_type="picker", secondary_staff_type=None,
             my_assignments=[], purchaser_delivery_staff=[], my_deliveries_today=[],
             trip_map={}, stops_map={}, my_dispatches=[],
@@ -5810,6 +5852,154 @@ def supervisor_strike_summary(emp_id, month_str):
     except Exception as e:
         logger.warning(f"supervisor_strike_summary: {e}")
         return {"mismatches": 0, "free": SUPERVISOR_STRIKE_FREE, "penalty": 0.0, "details": []}
+
+
+def checklist_for(emp_id, staff_type, on_date=None):
+    """Return this employee's checklist for a date: [(template, done_bool)].
+
+    Driven by the live templates for their staff_type, so an item the admin adds
+    today appears for everyone in that role immediately, and an item they
+    archive disappears without destroying past completion history.
+    """
+    on_date = on_date or date.today()
+    try:
+        tmpls = (ChecklistTemplate.query
+                 .filter_by(staff_type=staff_type, is_active=1)
+                 .order_by(ChecklistTemplate.sort_order, ChecklistTemplate.id)
+                 .all())
+        if not tmpls:
+            return []
+        done_ids = {c.template_id for c in ChecklistCompletion.query.filter_by(
+            emp_id=emp_id, entry_date=on_date).all() if c.done}
+        return [(t, t.id in done_ids) for t in tmpls]
+    except Exception as e:
+        logger.warning(f"checklist_for({emp_id}, {staff_type}): {e}")
+        return []
+
+
+def checklist_pct(emp_id, staff_type, on_date=None):
+    """Percentage of today's checklist this employee has ticked (0.0 when none)."""
+    items = checklist_for(emp_id, staff_type, on_date)
+    if not items:
+        return None          # None means "no checklist defined for this role"
+    done = sum(1 for _t, d in items if d)
+    return round(done / len(items) * 100, 1)
+
+
+@app.route("/admin/checklist", methods=["GET", "POST"])
+@admin_required
+def admin_checklist():
+    """Admin defines the daily checklist items for each staff type."""
+    try:
+        if request.method == "POST":
+            action = (request.form.get("action", "") or "").strip()
+            if action == "add":
+                role = (request.form.get("staff_type", "") or "").strip()
+                text = (request.form.get("text", "") or "").strip()[:200]
+                if role not in VALID_STAFF_TYPES:
+                    flash("Pick a valid staff type.", "warning")
+                elif not text:
+                    flash("Enter the task text.", "warning")
+                else:
+                    nxt = db.session.query(db.func.coalesce(
+                        db.func.max(ChecklistTemplate.sort_order), 0)).filter_by(
+                        staff_type=role).scalar() or 0
+                    db.session.add(ChecklistTemplate(
+                        staff_type=role, text=text, sort_order=nxt + 1,
+                        created_by=session.get("user_id")))
+                    db.session.commit()
+                    log_audit("checklist_add", role, text)
+                    flash(f"Task added for {ROLE_DISPLAY_NAMES.get(role, role.title())}.", "success")
+            elif action == "archive":
+                tid = int(request.form.get("template_id", 0) or 0)
+                row = db.session.get(ChecklistTemplate, tid)
+                if row:
+                    row.is_active = 0
+                    db.session.commit()
+                    log_audit("checklist_archive", row.staff_type, row.text)
+                    flash("Task removed from the daily list.", "success")
+            elif action == "restore":
+                tid = int(request.form.get("template_id", 0) or 0)
+                row = db.session.get(ChecklistTemplate, tid)
+                if row:
+                    row.is_active = 1
+                    db.session.commit()
+                    flash("Task restored.", "success")
+            elif action == "move":
+                tid = int(request.form.get("template_id", 0) or 0)
+                delta = -1 if request.form.get("dir") == "up" else 1
+                row = db.session.get(ChecklistTemplate, tid)
+                if row:
+                    row.sort_order = max(0, (row.sort_order or 0) + delta)
+                    db.session.commit()
+            return redirect(url_for("admin_checklist"))
+
+        today = date.today()
+        by_role, archived_by_role = {}, {}
+        for role in VALID_STAFF_TYPES:
+            by_role[role] = (ChecklistTemplate.query
+                             .filter_by(staff_type=role, is_active=1)
+                             .order_by(ChecklistTemplate.sort_order, ChecklistTemplate.id).all())
+            archived_by_role[role] = (ChecklistTemplate.query
+                                      .filter_by(staff_type=role, is_active=0)
+                                      .order_by(ChecklistTemplate.id).all())
+        # Today's completion for every non-admin employee whose role has a list.
+        staff_rows = []
+        for emp in Employee.query.filter_by(is_admin=False).order_by(Employee.name).all():
+            items = checklist_for(emp.id, emp.staff_type, today)
+            if not items:
+                continue
+            staff_rows.append({
+                "emp": emp,
+                "total": len(items),
+                "done": sum(1 for _t, d in items if d),
+                "pct": round(sum(1 for _t, d in items if d) / len(items) * 100),
+                "pending": [t.text for t, d in items if not d],
+            })
+        return render_template("admin_checklist.html",
+                               by_role=by_role, archived_by_role=archived_by_role,
+                               staff_rows=staff_rows, today=today,
+                               valid_roles=VALID_STAFF_TYPES,
+                               role_names=ROLE_DISPLAY_NAMES)
+    except Exception as e:
+        db.session.rollback()
+        logger.error(f"admin_checklist: {e}")
+        flash("Error loading the checklist manager.", "danger")
+        return redirect(url_for("admin_dashboard"))
+
+
+@app.route("/checklist/toggle", methods=["POST"])
+@login_required
+def checklist_toggle():
+    """Staff ticks or un-ticks one of today's checklist items."""
+    emp_id = session.get("user_id")
+    staff_type = session.get("staff_type", "")
+    try:
+        data = request.get_json(silent=True) or {}
+        tid = int(data.get("template_id", 0) or 0)
+        want = bool(data.get("done"))
+        tmpl = db.session.get(ChecklistTemplate, tid)
+        # Only an item belonging to the role the employee is currently working.
+        if not tmpl or tmpl.is_active != 1 or tmpl.staff_type != staff_type:
+            return jsonify({"ok": False, "error": "That task is not on your list."}), 403
+        today = date.today()
+        row = ChecklistCompletion.query.filter_by(
+            emp_id=emp_id, template_id=tid, entry_date=today).first()
+        if not row:
+            row = ChecklistCompletion(emp_id=emp_id, template_id=tid, entry_date=today)
+            db.session.add(row)
+        row.done = 1 if want else 0
+        if want and not row.completed_at:
+            row.completed_at = datetime.utcnow()
+        db.session.commit()
+        items = checklist_for(emp_id, staff_type, today)
+        return jsonify({"ok": True, "done": bool(row.done),
+                        "total": len(items),
+                        "completed": sum(1 for _t, d in items if d)})
+    except Exception as e:
+        db.session.rollback()
+        logger.error(f"checklist_toggle: {e}")
+        return jsonify({"ok": False, "error": "Could not save."}), 500
 
 
 @app.route("/supervisor", methods=["GET", "POST"])

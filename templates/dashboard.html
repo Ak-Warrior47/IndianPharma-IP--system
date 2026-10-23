@@ -861,6 +861,83 @@ tbody tr:hover { background: rgba(165,180,252,0.18) !important; }
     {% endif %}
   </div>
 
+  {# ════ TODAY'S CHECKLIST — admin-defined per role, ticked off here ════ #}
+  {% if my_checklist %}
+  <div class="card" style="margin-bottom:20px;border-left:4px solid #1e40af;">
+    <div class="section-label" style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;">
+      <span>Today's Checklist</span>
+      <span id="cl-progress" style="font-size:12px;font-weight:700;color:#55657d;">
+        {{ my_checklist | selectattr('1') | list | length }} of {{ my_checklist | length }} done
+      </span>
+    </div>
+    <p style="font-size:12px;color:#55657d;margin:-4px 0 12px;">
+      Set by your manager for your role. Tick each item once you have done it today.
+    </p>
+    <div id="cl-list">
+      {% for tmpl, done in my_checklist %}
+      <div class="cl-item{% if done %} cl-done{% endif %}" data-tid="{{ tmpl.id }}"
+           style="display:flex;align-items:flex-start;gap:12px;padding:11px 0;border-bottom:1px solid #e3e8f0;">
+        <input type="checkbox" id="cl-{{ tmpl.id }}" {% if done %}checked{% endif %}
+               onchange="toggleChecklist({{ tmpl.id }}, this)"
+               style="width:18px;height:18px;margin:1px 0 0;flex:0 0 auto;accent-color:#1e40af;cursor:pointer;">
+        <label for="cl-{{ tmpl.id }}" class="cl-text"
+               style="font-size:13px;cursor:pointer;{% if done %}color:#55657d;text-decoration:line-through;{% else %}color:#0f172a;{% endif %}">
+          {{ tmpl.text }}
+        </label>
+      </div>
+      {% endfor %}
+    </div>
+    <div id="cl-msg" style="font-size:12px;margin-top:10px;display:none;"></div>
+  </div>
+
+  <script>
+  function toggleChecklist(tid, box) {
+    var row  = box.closest('.cl-item');
+    var lbl  = row ? row.querySelector('.cl-text') : null;
+    var msg  = document.getElementById('cl-msg');
+    var want = box.checked;
+    box.disabled = true;
+    fetch('/checklist/toggle', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({template_id: tid, done: want})
+    })
+    .then(function (r) { return r.json().catch(function () { return {ok: false, error: 'Server error.'}; }); })
+    .then(function (d) {
+      box.disabled = false;
+      if (!d.ok) {
+        box.checked = !want;                       // roll the tick back
+        if (msg) {
+          msg.textContent = d.error || 'Could not save. Please try again.';
+          msg.style.color = '#991b1b';
+          msg.style.display = 'block';
+        }
+        return;
+      }
+      if (msg) { msg.style.display = 'none'; }
+      if (lbl) {
+        lbl.style.textDecoration = d.done ? 'line-through' : 'none';
+        lbl.style.color = d.done ? '#55657d' : '#0f172a';
+      }
+      if (row) { row.classList.toggle('cl-done', d.done); }
+      var p = document.getElementById('cl-progress');
+      if (p && typeof d.completed === 'number') {
+        p.textContent = d.completed + ' of ' + d.total + ' done';
+      }
+    })
+    .catch(function () {
+      box.disabled = false;
+      box.checked = !want;
+      if (msg) {
+        msg.textContent = 'No connection. Your tick was not saved.';
+        msg.style.color = '#991b1b';
+        msg.style.display = 'block';
+      }
+    });
+  }
+  </script>
+  {% endif %}
+
   {# Multitask is available to EVERY role and can be changed every day #}
   <!-- ════ MULTITASK (ROLE 2) REPORT — fill default role above, second role here ════ -->
   <div class="card multitask-section" style="margin-bottom:20px;border-left:4px solid #7c3aed;">
