@@ -2034,12 +2034,84 @@ def run_migrations():
         logger.error(f"Migration error: {e}")
 
 
+def reconcile_schema():
+    """Add any column a model declares that the live table is missing.
+
+    The hand-written migration blocks above list columns explicitly, so every
+    time a model gained a field someone had to remember to add it there too.
+    When that was missed the table stayed behind and every query touching the
+    new column raised, which the callers swallow into an empty list -- the
+    symptom being a panel that renders blank with no error on screen.
+
+    This closes that gap generically: whatever the models declare is what the
+    database gets. It only ever ADDS columns, never drops or retypes one, so it
+    is safe to run on every boot and safe to run twice. New columns are added
+    nullable regardless of the model's nullable flag, because an existing table
+    with rows in it cannot take a NOT NULL column without a backfill.
+    """
+    from sqlalchemy import inspect as sa_inspect
+    try:
+        insp = sa_inspect(db.engine)
+        existing = set(insp.get_table_names())
+    except Exception as e:
+        logger.error(f"reconcile_schema: cannot inspect database: {e}")
+        return []
+
+    prep = db.engine.dialect.identifier_preparer
+    added = []
+    for mapper in db.Model.registry.mappers:
+        table = mapper.class_.__table__
+        if table.name not in existing:
+            continue  # db.create_all() builds missing tables in full
+        try:
+            live = {c["name"] for c in insp.get_columns(table.name)}
+        except Exception as e:
+            logger.warning(f"reconcile_schema: cannot read {table.name}: {e}")
+            continue
+        for col in table.columns:
+            if col.name in live:
+                continue
+            try:
+                col_type = col.type.compile(db.engine.dialect)
+            except Exception:
+                col_type = "VARCHAR(255)"
+            clause = f"{prep.quote(table.name)} ADD COLUMN {prep.quote(col.name)} {col_type}"
+            # Carry over a simple scalar default so existing rows get a sane value.
+            default = getattr(col.default, "arg", None) if col.default is not None else None
+            if isinstance(default, bool):
+                clause += f" DEFAULT {'TRUE' if default else 'FALSE'}"
+            elif isinstance(default, (int, float)):
+                clause += f" DEFAULT {default}"
+            elif isinstance(default, str):
+                clause += " DEFAULT " + sa_text_literal(default)
+            try:
+                db.session.execute(db.text(f"ALTER TABLE {clause}"))
+                db.session.commit()
+                added.append(f"{table.name}.{col.name}")
+            except Exception as e:
+                db.session.rollback()
+                logger.warning(f"reconcile_schema: {table.name}.{col.name} not added: {e}")
+
+    if added:
+        logger.warning("reconcile_schema added missing columns: " + ", ".join(added))
+    else:
+        logger.info("reconcile_schema: database schema matches the models")
+    return added
+
+
+def sa_text_literal(value):
+    """Quote a string for inline use in DDL (defaults only, never user input)."""
+    return "'" + str(value).replace("'", "''") + "'"
+
+
 def init_db():
     with app.app_context():
         try:
             db.create_all()
             # Run migrations for existing DBs
             run_migrations()
+            # Backstop: add anything the migrations above still do not cover.
+            reconcile_schema()
             if not Employee.query.first():
                 _admin_pw = os.environ.get("ADMIN_PASSWORD", "admin123")
                 if _admin_pw == "admin123":
