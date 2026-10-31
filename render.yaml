@@ -30,6 +30,16 @@ services:
         value: "true"
       - key: PORT
         value: "10000"
+      # runtime.txt used to pin python-3.11.6. Render retires old patch releases,
+      # and when that exact build is gone it falls back to a newer Python -- at
+      # which point the old Pillow==10.1.0 pin had no wheel and the build failed
+      # with "Getting requirements to build wheel did not run successfully",
+      # even though nothing in the repository had changed. The pin is removed and
+      # requirements.txt now installs cleanly on 3.11, 3.12 and 3.13, so any
+      # Render default works. Set this only if you need a specific version, and
+      # check Render's currently supported list before you do.
+      # - key: PYTHON_VERSION
+      #   value: "3.13.4"
       # Supabase Postgres connection string. Set in the Environment tab.
       # postgresql://postgres:<password>@db.<project>.supabase.co:5432/postgres
       - key: DATABASE_URL

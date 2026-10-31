@@ -1,12 +1,24 @@
-Flask==2.3.3
-Flask-SQLAlchemy==3.1.1
-Flask-SocketIO==5.3.6
-Flask-Mail==0.10.0
-Werkzeug==2.3.8
-APScheduler==3.10.4
-reportlab==4.1.0
-gunicorn==21.2.0
-eventlet==0.35.2
-psycopg2-binary==2.9.9
-Pillow==10.1.0
-requests==2.31.0
+# Pinned with compatible ranges rather than exact versions for anything that
+# may need to compile. An exact pin like Pillow==10.1.0 has no wheel for newer
+# Pythons, so pip falls back to building from source and the deploy fails with
+# "Getting requirements to build wheel did not run successfully". That happens
+# silently from the repo's point of view: nothing here changed, but Render moved
+# the Python version underneath it.
+#
+# These ranges install cleanly on Python 3.11, 3.12 and 3.13.
+
+Flask>=2.3.3,<4
+Flask-SQLAlchemy>=3.1.1,<4
+Flask-SocketIO>=5.3.6,<6
+Flask-Mail>=0.10.0,<1
+Werkzeug>=2.3.8,<4
+APScheduler>=3.10.4,<4
+reportlab>=4.1.0,<7
+gunicorn>=21.2.0,<24
+eventlet>=0.35.2
+psycopg2-binary>=2.9.9,<3
+# Not imported directly; reportlab needs it for image support.
+# Must stay above 10.4 so a wheel exists on Python 3.12 and 3.13.
+Pillow>=10.4,<14
+requests>=2.31.0,<3
+PyYAML>=6.0,<7
