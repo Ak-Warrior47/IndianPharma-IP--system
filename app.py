@@ -76,6 +76,13 @@ socketio = SocketIO(app, cors_allowed_origins="*", async_mode="eventlet")
 # "biller" is internally kept but displayed as "Assigner". "supervisor" is a
 # hidden role (admin-assigned only, never on the login screen).
 VALID_STAFF_TYPES = ("picker", "checker", "purchaser", "delivery", "biller", "packer", "supervisor")
+
+# Hourly volume targets used by the scoring formulas. Set them to what this
+# warehouse can actually reach: a target nobody attains makes those points dead
+# weight and flattens everyone onto the same grade. tools_recommend_targets.py
+# derives a demanding-but-reachable value from real history.
+DEFAULT_PICKER_TARGET_HR  = float(os.environ.get("PICKER_TARGET_HR", "50"))
+DEFAULT_CHECKER_TARGET_HR = float(os.environ.get("CHECKER_TARGET_HR", "70"))
 ROLE_DISPLAY_NAMES = {
     "picker": "Operations Picker",
     "checker": "Operations Checker",
@@ -830,9 +837,11 @@ def build_analytics(entries: List[KPIEntry], staff_type: str = "picker", emp_id:
         # ─────────────────────────────────────────────────────────────
         # NEW HARD-LEVEL FORMULAS (Phase 1)
         # ─────────────────────────────────────────────────────────────
-        # Hourly targets (admin can override per-employee via custom_hourly_target)
-        PICKER_TARGET_HR  = 50.0   # items/hr (per spec: Picker Target 50/hr)
-        CHECKER_TARGET_HR = 70.0   # items/hr (per spec: Checker Target 70/hr)
+        # Hourly targets. Defaults come from env so they can be tuned to what
+        # this warehouse actually achieves without a code change; a per-employee
+        # custom_hourly_target still overrides them.
+        PICKER_TARGET_HR  = DEFAULT_PICKER_TARGET_HR
+        CHECKER_TARGET_HR = DEFAULT_CHECKER_TARGET_HR
         # Check for per-employee override
         try:
             if emp_id is not None:
@@ -958,7 +967,12 @@ def build_analytics(entries: List[KPIEntry], staff_type: str = "picker", emp_id:
             eff_score = round(
                 (vwcr            / 120) * 25 +    # NEW: VWCR (was Pick Accuracy×25)
                 (bill_fulfilment / 100) * 18 +    # was 20
-                min(pick_speed   / 250, 1.0) * 15 +  # was 18
+                # pick_speed is items per HOUR (ti / ts_total, ts_total being
+                # hours). It used to be divided by 250, a per-DAY figure, so the
+                # component was scored against a target roughly ten times the
+                # real one and almost nobody earned it. Scored against the
+                # hourly target, the same way the checker branch already does.
+                min(pick_speed   / PICKER_TARGET_HR, 1.0) * 15 +
                 efficiency_ratio           * 10 + # NEW: Efficiency Ratio (200/50)
                 (workspace_score / 100) * 10 +
                 min(cs_fulfilment/ 100, 1.0) * 8 +
