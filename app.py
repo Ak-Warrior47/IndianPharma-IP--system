@@ -6144,12 +6144,26 @@ def admin_checklist():
                     db.session.commit()
                     flash("Task restored.", "success")
             elif action == "move":
+                # Swap with the adjacent task in the same role, then renumber the
+                # whole list. The previous version just nudged sort_order by one
+                # without touching the neighbour, so two tasks ended up sharing a
+                # value, the order silently fell back to id, and the buttons
+                # looked like they did nothing.
                 tid = int(request.form.get("template_id", 0) or 0)
-                delta = -1 if request.form.get("dir") == "up" else 1
+                direction = (request.form.get("dir", "") or "").strip()
                 row = db.session.get(ChecklistTemplate, tid)
-                if row:
-                    row.sort_order = max(0, (row.sort_order or 0) + delta)
-                    db.session.commit()
+                if row and direction in ("up", "down"):
+                    sibs = (ChecklistTemplate.query
+                            .filter_by(staff_type=row.staff_type, is_active=1)
+                            .order_by(ChecklistTemplate.sort_order,
+                                      ChecklistTemplate.id).all())
+                    idx = next((i for i, t in enumerate(sibs) if t.id == row.id), None)
+                    swap = (idx - 1) if direction == "up" else (idx + 1)
+                    if idx is not None and 0 <= swap < len(sibs):
+                        sibs[idx], sibs[swap] = sibs[swap], sibs[idx]
+                        for i, t in enumerate(sibs, start=1):
+                            t.sort_order = i      # 1..n, no ties, no gaps
+                        db.session.commit()
             return redirect(url_for("admin_checklist"))
 
         today = date.today()
@@ -6161,22 +6175,49 @@ def admin_checklist():
             archived_by_role[role] = (ChecklistTemplate.query
                                       .filter_by(staff_type=role, is_active=0)
                                       .order_by(ChecklistTemplate.id).all())
-        # Today's completion for every non-admin employee whose role has a list.
-        staff_rows = []
-        for emp in Employee.query.filter_by(is_admin=False).order_by(Employee.name).all():
-            items = checklist_for(emp.id, emp.staff_type, today)
-            if not items:
+        # Today's completion, grouped by role so a manager can see at a glance
+        # which jobs are clear and which still have work outstanding, rather
+        # than scanning one flat alphabetical list.
+        completion_by_role = []
+        for role in VALID_STAFF_TYPES:
+            role_rows = []
+            for emp in (Employee.query.filter_by(is_admin=False, staff_type=role)
+                        .order_by(Employee.name).all()):
+                items = checklist_for(emp.id, emp.staff_type, today)
+                if not items:
+                    continue
+                done = sum(1 for _t, d in items if d)
+                role_rows.append({
+                    "emp": emp,
+                    "total": len(items),
+                    "done": done,
+                    "pct": round(done / len(items) * 100),
+                    "is_done": done == len(items),
+                    "not_started": done == 0,
+                    "pending": [t.text for t, d in items if not d],
+                    "completed": [t.text for t, d in items if d],
+                })
+            if not role_rows:
                 continue
-            staff_rows.append({
-                "emp": emp,
-                "total": len(items),
-                "done": sum(1 for _t, d in items if d),
-                "pct": round(sum(1 for _t, d in items if d) / len(items) * 100),
-                "pending": [t.text for t, d in items if not d],
+            finished = sum(1 for r in role_rows if r["is_done"])
+            completion_by_role.append({
+                "role": role,
+                "role_name": ROLE_DISPLAY_NAMES.get(role, role.title()),
+                "rows": role_rows,
+                "staff_count": len(role_rows),
+                "finished": finished,
+                "outstanding": len(role_rows) - finished,
+                "tasks": len(by_role.get(role, [])),
+                "all_clear": finished == len(role_rows),
             })
+
+        # Flat list kept for the overall counters.
+        staff_rows = [r for g in completion_by_role for r in g["rows"]]
         return render_template("admin_checklist.html",
                                by_role=by_role, archived_by_role=archived_by_role,
-                               staff_rows=staff_rows, today=today,
+                               staff_rows=staff_rows,
+                               completion_by_role=completion_by_role,
+                               today=today,
                                valid_roles=VALID_STAFF_TYPES,
                                role_names=ROLE_DISPLAY_NAMES)
     except Exception as e:
@@ -6184,7 +6225,6 @@ def admin_checklist():
         logger.error(f"admin_checklist: {e}")
         flash("Error loading the checklist manager.", "danger")
         return redirect(url_for("admin_dashboard"))
-
 
 @app.route("/checklist/toggle", methods=["POST"])
 @login_required

@@ -43,57 +43,106 @@
     {% endfor %}
   {% endwith %}
 
-  <!-- ============ TODAY'S COMPLETION ============ -->
+  <!-- ============ TODAY'S COMPLETION, BY ROLE ============ -->
+  {% if completion_by_role %}
+  {% set all_staff = staff_rows|length %}
+  {% set all_done  = staff_rows|selectattr('is_done')|list|length %}
   <section class="ip-card">
     <div class="ip-card__head">
       <div>
         <div class="ip-card__title">Today's Completion</div>
-        <div class="ip-card__sub">Where each person stands on their list right now.</div>
+        <div class="ip-card__sub">Who has finished their list and who has not, role by role.</div>
       </div>
-      {% if staff_rows %}<span class="ip-count">{{ staff_rows|length }} staff</span>{% endif %}
+      <span class="ip-pill {{ 'ip-pill--ok' if all_done == all_staff else 'ip-pill--warn' }}">
+        {{ all_done }} of {{ all_staff }} finished
+      </span>
     </div>
-    {% if staff_rows %}
-    <div class="ip-tablewrap">
-      <table class="ip-table">
-        <thead>
-          <tr>
-            <th>Staff</th>
-            <th>Role</th>
-            <th class="num">Done</th>
-            <th style="min-width:150px;">Progress</th>
-            <th>Still pending</th>
-          </tr>
-        </thead>
-        <tbody>
-          {% for r in staff_rows %}
-          <tr>
-            <td class="nowrap"><strong>{{ r.emp.name }}</strong></td>
-            <td class="nowrap">
-              <span class="ip-pill ip-pill--muted">{{ role_names.get(r.emp.staff_type, r.emp.staff_type|title) }}</span>
-            </td>
-            <td class="num nowrap">{{ r.done }} / {{ r.total }}</td>
-            <td>
-              <div class="ip-between" style="gap:var(--s2);">
-                <div class="ip-bar" style="flex:1;min-width:70px;">
-                  <div class="ip-bar__fill {% if r.pct == 100 %}ip-bar__fill--ok{% elif r.pct < 50 %}ip-bar__fill--warn{% endif %}"
-                       style="width:{{ r.pct }}%;"></div>
-                </div>
-                <span class="ip-small ip-muted" style="min-width:34px;text-align:right;">{{ r.pct }}%</span>
-              </div>
-            </td>
-            <td>
-              {% if r.pending %}
-                <span class="ip-small">{{ r.pending|join('; ') }}</span>
-              {% else %}
-                <span class="ip-pill ip-pill--ok">All done</span>
-              {% endif %}
-            </td>
-          </tr>
-          {% endfor %}
-        </tbody>
-      </table>
+    <div class="ip-card__body ip-card__body--flush">
+      {% for g in completion_by_role %}
+      <div style="border-bottom:1px solid var(--line);">
+
+        <!-- role header -->
+        <div class="ip-between" style="padding:var(--s3) var(--s5);background:var(--surface-2);">
+          <div style="display:flex;align-items:center;gap:var(--s3);">
+            <span class="ip-card__title" style="font-size:var(--fs-body);">{{ g.role_name }}</span>
+            <span class="ip-muted ip-small">
+              {{ g.tasks }} task{{ '' if g.tasks == 1 else 's' }} &middot;
+              {{ g.staff_count }} staff
+            </span>
+          </div>
+          {% if g.all_clear %}
+          <span class="ip-pill ip-pill--ok">All clear</span>
+          {% else %}
+          <span class="ip-pill ip-pill--warn">
+            {{ g.outstanding }} still working
+          </span>
+          {% endif %}
+        </div>
+
+        <!-- staff in this role -->
+        <div class="ip-tablewrap">
+          <table class="ip-table">
+            <thead>
+              <tr>
+                <th>Staff</th>
+                <th style="width:92px;">Status</th>
+                <th class="num" style="width:62px;">Done</th>
+                <th style="width:160px;">Progress</th>
+                <th>Work still to do</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for r in g.rows %}
+              <tr>
+                <td class="nowrap"><strong>{{ r.emp.name }}</strong>
+                  {% if r.emp.secondary_staff_type %}
+                  <div class="ip-muted" style="font-size:var(--fs-micro);">also {{ r.emp.secondary_staff_type|title }}</div>
+                  {% endif %}
+                </td>
+                <td class="nowrap">
+                  {% if r.is_done %}
+                    <span class="ip-pill ip-pill--ok">Done</span>
+                  {% elif r.not_started %}
+                    <span class="ip-pill ip-pill--bad">Not started</span>
+                  {% else %}
+                    <span class="ip-pill ip-pill--warn">In progress</span>
+                  {% endif %}
+                </td>
+                <td class="num nowrap">{{ r.done }} / {{ r.total }}</td>
+                <td>
+                  <div class="ip-between" style="gap:var(--s2);">
+                    <div class="ip-bar" style="flex:1;min-width:64px;">
+                      <div class="ip-bar__fill {% if r.is_done %}ip-bar__fill--ok{% elif r.pct < 50 %}ip-bar__fill--warn{% endif %}"
+                           style="width:{{ r.pct }}%;"></div>
+                    </div>
+                    <span class="ip-small ip-muted" style="min-width:34px;text-align:right;">{{ r.pct }}%</span>
+                  </div>
+                </td>
+                <td>
+                  {% if r.pending %}
+                    <ul style="margin:0;padding-left:16px;">
+                      {% for t in r.pending %}
+                      <li class="ip-small">{{ t }}</li>
+                      {% endfor %}
+                    </ul>
+                  {% else %}
+                    <span class="ip-small ip-muted">Nothing outstanding</span>
+                  {% endif %}
+                </td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+      {% endfor %}
     </div>
-    {% else %}
+  </section>
+  {% else %}
+  <section class="ip-card">
+    <div class="ip-card__head">
+      <div class="ip-card__title">Today's Completion</div>
+    </div>
     <div class="ip-empty">
       <div class="ip-empty__title">No checklists are live yet</div>
       <div class="ip-empty__hint">
@@ -101,8 +150,8 @@
         member in that role appears here with their progress for the day.
       </div>
     </div>
-    {% endif %}
   </section>
+  {% endif %}
 
   <!-- ============ ADD A TASK ============ -->
   <section class="ip-card">
