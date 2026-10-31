@@ -710,6 +710,33 @@ def get_complaint_deduction(staff_type: str, emp_id: int = None) -> float:
 def build_analytics(entries: List[KPIEntry], staff_type: str = "picker", emp_id: int = None) -> Optional[Dict[str, Any]]:
     try:
         if not entries: return None
+
+        # Only three roles have a KPI point system. Anything else used to fall
+        # through to the checker formula below, which scored a supervisor's or a
+        # packer's numbers with maths built for a different job -- producing a
+        # meaningless score and, worse, a false RE-TRAINING grade.
+        #
+        # Resolve what the figures should actually be scored as: the employee's
+        # own role when it is a scored one, otherwise the secondary role they
+        # multitask under (a supervisor who also picks enters picker numbers),
+        # and if neither applies the entries are reported but not graded.
+        SCORED_ROLES = ("picker", "checker", "purchaser")
+        primary_role = staff_type
+        is_scored = True
+        if staff_type not in SCORED_ROLES:
+            _sec = ""
+            try:
+                if emp_id is not None:
+                    _e = db.session.get(Employee, emp_id)
+                    _sec = (_e.secondary_staff_type or "") if _e else ""
+            except Exception:
+                _sec = ""
+            if _sec in SCORED_ROLES:
+                staff_type = _sec
+            else:
+                is_scored = False
+                staff_type = "picker"   # neutral basis; the result is flagged below
+
         tp   = sum(int(e.picked or 0) for e in entries)
         tm   = sum(int(e.missed or 0) for e in entries)
         ti   = tp + tm
@@ -939,7 +966,8 @@ def build_analytics(entries: List[KPIEntry], staff_type: str = "picker", emp_id:
                 (consistency     / 100) * 7,     # Log Consistency
                 1)
         else:
-            # ── CHECKER POINT SYSTEM (100 pts total) — Phase 1 rebalance ──
+            # CHECKER POINT SYSTEM (100 pts total). Reached only when staff_type
+            # resolved to "checker" above, never as a silent catch-all.
             speed_score     = min(safe_div(check_speed, 80.0), 1.0) * 22  # was 30
             clearance_score = (clearance_rate / 100.0) * 22  # was 25
             vwcr_score      = (vwcr / 120.0) * 20  # NEW: VWCR replaces "Normal %"
@@ -985,6 +1013,8 @@ def build_analytics(entries: List[KPIEntry], staff_type: str = "picker", emp_id:
         # dashboard route so the bonus reaches the admin view, the leaderboards and the
         # monthly reports as well as the staff member's own card.
         multitask_bonus = 0.0
+        multitask_days = 0            # days in this period with extra-role work
+        multitask_day_points = 0      # points earned on those days, before averaging
         try:
             if emp_id is not None:
                 _dates = {e.entry_date for e in entries if e.entry_date}
@@ -998,14 +1028,26 @@ def build_analytics(entries: List[KPIEntry], staff_type: str = "picker", emp_id:
                         _roles_by_day.setdefault(_mt.entry_date, set()).add(_mt.secondary_type)
                     if _roles_by_day:
                         _total = sum(min(10 * len(rs), 30) for rs in _roles_by_day.values())
+                        multitask_days = len(_roles_by_day)
+                        multitask_day_points = _total
                         multitask_bonus = round(_total / len(_dates), 1)
         except Exception as _mtb:
             logger.warning(f"multitask bonus: {_mtb}")
             multitask_bonus = 0.0
 
+        # Keep the raw formula output before any adjustment, so the admin can be
+        # shown exactly how the final number was reached instead of one opaque total.
+        base_score = round(eff_score, 1)
+
         eff_score = max(round(eff_score - complaint_deduction + total_adjustment
                               - supervisor_penalty + multitask_bonus, 1), 0.0)
         eff_score = min(eff_score, 100.0)
+
+        # A role with no KPI point system is reported, never graded on another
+        # role's maths.
+        if not is_scored:
+            base_score = 0.0
+            eff_score = 0.0
 
         # Auto-suggest: if error rate stays <1% over enough days, suggest raising the target
         auto_suggest = None
@@ -1023,6 +1065,9 @@ def build_analytics(entries: List[KPIEntry], staff_type: str = "picker", emp_id:
         elif eff_score >= 72: grade = "PROFICIENT"
         elif eff_score >= 52: grade = "SATISFACTORY"
         else:                 grade = "RE-TRAINING"
+        # Never label a role that has no point system as needing retraining.
+        if not is_scored:
+            grade = "NOT SCORED"
 
         if staff_type == "checker":
             feedback_map = {
@@ -1079,6 +1124,12 @@ def build_analytics(entries: List[KPIEntry], staff_type: str = "picker", emp_id:
             supervisor_penalty=round(supervisor_penalty, 1),
             supervisor_mismatches=supervisor_mismatches,
             multitask_bonus=multitask_bonus,
+            base_score=base_score,
+            is_scored=is_scored,
+            primary_role=primary_role,
+            scored_as=staff_type,
+            multitask_days=multitask_days,
+            multitask_day_points=multitask_day_points,
             vwcr=vwcr,
             cleaner_rate=cleaner_rate_score,
             efficiency_ratio=efficiency_ratio,
@@ -1372,6 +1423,8 @@ def _safe_stats(stats):
             "eff_score": 0.0, "grade": "NO DATA", "feedback": "No entries submitted yet.",
             "days": 0, "trend": "—", "consistency": 0,
             "complaint_deduction": 0, "admin_adjustment": 0,
+            "multitask_bonus": 0.0, "base_score": 0.0, "is_scored": True,
+            "supervisor_penalty": 0.0, "multitask_days": 0, "multitask_day_points": 0,
             "vwcr": 0, "cleaner_rate": 0, "efficiency_ratio": 0, "is_efficient": False,
             "items_daily": 0, "bills_daily": 0,
             "hard_target_items": 200, "hard_target_bills": 50,

@@ -542,7 +542,7 @@ tbody tr:hover { background: rgba(165,180,252,0.18) !important; }
       <div class="sc-value">#{{ emp_overall_rank or '—' }}</div>
       <div class="sc-sub">All staff combined</div>
     </div>
-    {% if emp.staff_type == 'checker' %}
+    {% if a_stats.scored_as == 'checker' %}
     <div class="sc-card">
       <div class="sc-label">Check Speed</div>
       <div class="sc-value">{{ a_stats.check_speed or a_stats.ck_speed }}<span class="suf">/hr</span></div>
@@ -558,7 +558,7 @@ tbody tr:hover { background: rgba(165,180,252,0.18) !important; }
       <div class="sc-value">{{ a_stats.consistency }}<span class="suf">%</span></div>
       <div class="sc-sub">Daily logging stability</div>
     </div>
-    {% elif emp.staff_type == 'purchaser' %}
+    {% elif a_stats.scored_as == 'purchaser' %}
     <div class="sc-card">
       <div class="sc-label">Bill Processing</div>
       <div class="sc-value">{{ a_stats.pur_bill_rate or 0 }}<span class="suf">%</span></div>
@@ -681,7 +681,7 @@ tbody tr:hover { background: rgba(165,180,252,0.18) !important; }
     {% if a_stats %}
     <section class="card">
       <div class="card-title"><span class="ico">▸</span>Points Breakdown</div>
-      <div class="card-sub">How the {{ a_stats.eff_score }}/100 score was earned.</div>
+      <div class="card-sub">How the {{ a_stats.eff_score }}/100 score was earned{% if a_stats.scored_as != a_stats.primary_role %}, scored on the {{ a_stats.scored_as|title }} point system because {{ emp.name.split()[0] }} enters {{ a_stats.scored_as|title }} numbers{% endif %}.</div>
       <div class="points-breakdown">
         {% if emp.staff_type == 'checker' %}
           {% set _pts = [
@@ -748,6 +748,64 @@ tbody tr:hover { background: rgba(165,180,252,0.18) !important; }
         </span>
       </div>
       {% endif %}
+
+      <!-- FINAL SCORE RECONCILIATION -->
+      <div style="margin-top:18px;padding-top:16px;border-top:1px solid var(--border);">
+        <div style="font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin-bottom:10px;">
+          Final Score Calculation
+        </div>
+        <table style="width:100%;border-collapse:collapse;font-size:13px;">
+          <tr>
+            <td style="padding:6px 0;color:var(--muted);">{{ a_stats.scored_as|title }} point system total</td>
+            <td style="padding:6px 0;text-align:right;font-weight:700;">{{ a_stats.base_score }}</td>
+          </tr>
+          {% if a_stats.multitask_bonus and a_stats.multitask_bonus > 0 %}
+          <tr>
+            <td style="padding:6px 0;color:var(--emerald);">
+              Multitask bonus
+              <div style="font-size:11px;color:var(--muted);font-weight:500;">
+                {{ a_stats.multitask_day_points }} pts earned across {{ a_stats.multitask_days }}
+                day{{ '' if a_stats.multitask_days == 1 else 's' }}, spread over the
+                {{ a_stats.days }} day{{ '' if a_stats.days == 1 else 's' }} in this period
+              </div>
+            </td>
+            <td style="padding:6px 0;text-align:right;font-weight:700;color:var(--emerald);">+{{ a_stats.multitask_bonus }}</td>
+          </tr>
+          {% endif %}
+          {% if a_stats.complaint_deduction and a_stats.complaint_deduction > 0 %}
+          <tr>
+            <td style="padding:6px 0;color:var(--rose);">Complaint deduction</td>
+            <td style="padding:6px 0;text-align:right;font-weight:700;color:var(--rose);">-{{ a_stats.complaint_deduction }}</td>
+          </tr>
+          {% endif %}
+          {% if a_stats.admin_adjustment and a_stats.admin_adjustment != 0 %}
+          <tr>
+            <td style="padding:6px 0;color:{% if a_stats.admin_adjustment > 0 %}var(--emerald){% else %}var(--rose){% endif %};">
+              Admin adjustment{% if emp.admin_adjustment_note %}
+              <div style="font-size:11px;color:var(--muted);font-weight:500;">{{ emp.admin_adjustment_note }}</div>{% endif %}
+            </td>
+            <td style="padding:6px 0;text-align:right;font-weight:700;color:{% if a_stats.admin_adjustment > 0 %}var(--emerald){% else %}var(--rose){% endif %};">
+              {% if a_stats.admin_adjustment > 0 %}+{% endif %}{{ a_stats.admin_adjustment }}</td>
+          </tr>
+          {% endif %}
+          {% if a_stats.supervisor_penalty and a_stats.supervisor_penalty > 0 %}
+          <tr>
+            <td style="padding:6px 0;color:var(--rose);">
+              Supervisor mismatch penalty
+              <div style="font-size:11px;color:var(--muted);font-weight:500;">{{ a_stats.supervisor_mismatches }} mismatching day(s) this month</div>
+            </td>
+            <td style="padding:6px 0;text-align:right;font-weight:700;color:var(--rose);">-{{ a_stats.supervisor_penalty }}</td>
+          </tr>
+          {% endif %}
+          <tr style="border-top:2px solid var(--border);">
+            <td style="padding:9px 0 0;font-weight:800;">Final score</td>
+            <td style="padding:9px 0 0;text-align:right;font-weight:800;font-size:16px;">{{ a_stats.eff_score }} / 100</td>
+          </tr>
+        </table>
+        {% if a_stats.eff_score >= 100 %}
+        <div style="font-size:11px;color:var(--muted);margin-top:8px;">Capped at 100.</div>
+        {% endif %}
+      </div>
     </section>
     {% endif %}
   </div>

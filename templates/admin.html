@@ -957,7 +957,7 @@ var NOTES_BY_EMP = {
             </td>
             <td>{{ r.count }}</td>
             <td class="score-cell">
-              {% if r.stats %}{{ r.stats.eff_score }}{% else %}<span style="color:var(--muted)">—</span>{% endif %}
+              {% if r.stats %}{{ r.stats.eff_score }}{% if r.stats.multitask_bonus and r.stats.multitask_bonus > 0 %}<div style="font-size:10px;font-weight:700;color:#14652f;" title="{{ r.stats.multitask_day_points }} multitask points across {{ r.stats.multitask_days }} day(s), spread over the {{ r.stats.days }} days in this period">incl. +{{ r.stats.multitask_bonus }} multitask</div>{% endif %}{% else %}<span style="color:var(--muted)">—</span>{% endif %}
             </td>
             <td class="score-cell">
               {% if r.week_stats %}{{ r.week_stats.eff_score }}{% else %}<span style="color:var(--muted)">—</span>{% endif %}
@@ -965,7 +965,7 @@ var NOTES_BY_EMP = {
             <td>
               {% if r.stats %}
                 {% set g = r.stats.grade %}
-                <span class="tag {% if g in ['ELITE','EXCELLENT'] %}tag-ex{% elif g in ['GOOD','PROFICIENT'] %}tag-good{% elif g in ['AVERAGE','SATISFACTORY'] %}tag-avg{% else %}tag-poor{% endif %}">{{ g }}</span>
+                <span class="tag {% if g in ['ELITE','EXCELLENT'] %}tag-ex{% elif g in ['GOOD','PROFICIENT'] %}tag-good{% elif g in ['AVERAGE','SATISFACTORY'] %}tag-avg{% elif g == 'NOT SCORED' %}tag-none{% else %}tag-poor{% endif %}">{{ g }}</span>
               {% else %}<span class="tag tag-none">No data</span>{% endif %}
             </td>
             <td class="last-entry-cell" data-emp-id="{{ r.emp.id }}">
