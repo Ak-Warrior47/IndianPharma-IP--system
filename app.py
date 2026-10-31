@@ -5038,13 +5038,35 @@ def api_analytics_range():
 
 # ─── FEATURE 12: MONTHLY PDF EMAIL (APScheduler) ─────────────────────────────
 
+def mail_config_status():
+    """What is missing before mail can send. Empty list means ready."""
+    missing = []
+    if not os.environ.get("MAIL_SERVER"):
+        missing.append("MAIL_SERVER")
+    if not os.environ.get("MAIL_USERNAME"):
+        missing.append("MAIL_USERNAME")
+    if not os.environ.get("MAIL_PASSWORD"):
+        missing.append("MAIL_PASSWORD")
+    if not os.environ.get("ADMIN_EMAIL_RECIPIENT"):
+        missing.append("ADMIN_EMAIL_RECIPIENT")
+    return missing
+
+
 def send_monthly_reports():
-    """Send monthly KPI PDF reports to admin email."""
+    """Email the monthly KPI PDFs to the admin.
+
+    Returns (ok, message). It used to return None whether it sent or silently
+    gave up, so the caller could not tell the difference and the admin was shown
+    a success message for an email that was never sent.
+    """
     with app.app_context():
+        missing = mail_config_status()
+        if missing:
+            msg = "Mail is not configured. Missing: " + ", ".join(missing)
+            logger.warning(msg + " — monthly reports not sent.")
+            return False, msg
+
         admin_email = os.environ.get("ADMIN_EMAIL_RECIPIENT", "")
-        if not admin_email or not os.environ.get("MAIL_SERVER"):
-            logger.warning("Mail env vars not set — skipping monthly reports.")
-            return
         try:
             from utils import generate_visual_pdf
             employees = Employee.query.filter_by(is_admin=False).all()
@@ -5056,22 +5078,53 @@ def send_monthly_reports():
                 body=f"Please find attached the monthly KPI reports for {month_label}.",
                 sender=app.config.get("MAIL_DEFAULT_SENDER", "noreply@pharmaip.com")
             )
+            # Most SMTP providers reject messages over ~25MB, and one oversized
+            # send would drop every report. Fill up to a safe budget and say
+            # plainly which staff did not fit rather than failing the whole send.
+            BUDGET = 18 * 1024 * 1024
+            used, attached, skipped, failed = 0, 0, [], []
             for emp in employees:
                 try:
                     payload = build_pdf_payload(emp)
                     pdf_buf = generate_visual_pdf(emp.name, payload)
+                    data = pdf_buf.getvalue()
+                    if used + len(data) > BUDGET:
+                        skipped.append(emp.name)
+                        continue
                     safe_name = emp.name.replace(" ", "_").replace("/", "-")
                     msg.attach(
                         f"KRA_{safe_name}_{now.strftime('%Y-%m')}.pdf",
                         "application/pdf",
-                        pdf_buf.getvalue()
+                        data
                     )
+                    used += len(data)
+                    attached += 1
                 except Exception as pe:
                     logger.error(f"PDF for {emp.name}: {pe}")
+                    failed.append(emp.name)
+
+            if not attached:
+                m = "No reports could be generated, so nothing was sent."
+                logger.error("send_monthly_reports: " + m)
+                return False, m
+
+            if skipped:
+                msg.body += ("\n\nNot attached, the message would have been too large: "
+                             + ", ".join(skipped))
+            if failed:
+                msg.body += "\n\nCould not be generated: " + ", ".join(failed)
+
             mail.send(msg)
-            logger.info(f"Monthly report email sent to {admin_email}")
+            note = f"Sent {attached} report(s) to {admin_email}"
+            if skipped:
+                note += f"; {len(skipped)} left out for size"
+            if failed:
+                note += f"; {len(failed)} failed to generate"
+            logger.info("send_monthly_reports: " + note)
+            return True, note
         except Exception as e:
             logger.error(f"send_monthly_reports: {e}")
+            return False, f"Mail server rejected the message: {e}"
 
 
 @app.route("/admin/send_monthly_report")
@@ -5079,12 +5132,110 @@ def send_monthly_reports():
 def admin_send_monthly_report():
     """Manual trigger for monthly PDF email."""
     try:
-        send_monthly_reports()
-        flash("Monthly reports sent (check server logs if mail not configured).", "success")
+        ok, note = send_monthly_reports()
+        flash(note, "success" if ok else "danger")
     except Exception as e:
         logger.error(f"admin_send_monthly_report: {e}")
-        flash("Error sending reports.", "danger")
+        flash(f"Error sending reports: {e}", "danger")
     return redirect(url_for("admin_dashboard"))
+
+
+@app.route("/admin/diagnostics")
+@admin_required
+def admin_diagnostics():
+    """What is and is not configured on this deployment.
+
+    Most of this app degrades quietly when an environment variable is missing:
+    mail silently does not send, the delivery geofence silently switches off,
+    SMS silently does nothing. That is good for uptime and terrible for working
+    out why a feature "does not work". This page states it plainly.
+    """
+    def status(var, needed_for, secret=True):
+        raw = os.environ.get(var, "")
+        return {"var": var, "set": bool(raw), "needed_for": needed_for,
+                "value": ("set" if secret else raw) if raw else ""}
+
+    mail_vars = [
+        status("MAIL_SERVER", "Monthly report email", secret=False),
+        status("MAIL_PORT", "Monthly report email", secret=False),
+        status("MAIL_USERNAME", "Monthly report email", secret=False),
+        status("MAIL_PASSWORD", "Monthly report email"),
+        status("ADMIN_EMAIL_RECIPIENT", "Who the monthly report goes to", secret=False),
+    ]
+    delivery_vars = [
+        status("STORE_LAT", "Geofence: riders must be at the store to start a trip", secret=False),
+        status("STORE_LNG", "Geofence: riders must be at the store to start a trip", secret=False),
+        status("TOMTOM_API_KEY", "Route distances on the delivery map"),
+    ]
+    sms_vars = [
+        status("TWILIO_ACCOUNT_SID", "Low-score and stale-validation SMS alerts"),
+        status("TWILIO_AUTH_TOKEN", "Low-score and stale-validation SMS alerts"),
+        status("TWILIO_FROM_NUMBER", "Low-score and stale-validation SMS alerts", secret=False),
+        status("ADMIN_PHONE", "Who the SMS alerts go to", secret=False),
+    ]
+    core_vars = [
+        status("DATABASE_URL", "Supabase database (SQLite is used when unset)"),
+        status("SECRET_KEY", "Login sessions survive a restart"),
+        status("ADMIN_PASSWORD", "Admin login (defaults to admin123 when unset)"),
+        status("PICKER_TARGET_HR", "Picker volume target", secret=False),
+        status("CHECKER_TARGET_HR", "Checker volume target", secret=False),
+    ]
+
+    warnings = []
+    if not os.environ.get("DATABASE_URL"):
+        warnings.append("No DATABASE_URL: this instance is on local SQLite, so data "
+                        "does not persist across restarts and is not your Supabase data.")
+    if os.environ.get("ADMIN_PASSWORD", "admin123") == "admin123":
+        warnings.append("The admin password is still the default 'admin123'. "
+                        "Set ADMIN_PASSWORD.")
+    if not os.environ.get("SECRET_KEY"):
+        warnings.append("No SECRET_KEY: a random one is generated on each boot, so "
+                        "every user is logged out whenever the service restarts.")
+    try:
+        if float(os.environ.get("STORE_LAT", "0") or 0) == 0.0:
+            warnings.append("STORE_LAT is unset, so the delivery geofence is switched "
+                            "off entirely: a rider can start a trip from anywhere.")
+    except ValueError:
+        warnings.append("STORE_LAT is not a number, so the geofence is off.")
+    if mail_config_status():
+        warnings.append("Mail is not configured, so the monthly report email cannot "
+                        "send. Missing: " + ", ".join(mail_config_status()))
+
+    try:
+        db.session.execute(db.text("SELECT 1"))
+        db_ok, db_note = True, ("PostgreSQL / Supabase" if os.environ.get("DATABASE_URL")
+                                else "SQLite (local file)")
+    except Exception as e:
+        db_ok, db_note = False, str(e)[:160]
+
+    return render_template("admin_diagnostics.html",
+                           groups=[("Email", mail_vars), ("Delivery", delivery_vars),
+                                   ("SMS alerts", sms_vars), ("Core", core_vars)],
+                           warnings=warnings, db_ok=db_ok, db_note=db_note,
+                           mail_missing=mail_config_status(),
+                           is_production=bool(IS_PRODUCTION))
+
+
+@app.route("/admin/test_mail", methods=["POST"])
+@admin_required
+def admin_test_mail():
+    """Send one small test email so mail can be proven without the full report."""
+    missing = mail_config_status()
+    if missing:
+        flash("Mail is not configured. Missing: " + ", ".join(missing), "danger")
+        return redirect(url_for("admin_diagnostics"))
+    try:
+        to = os.environ.get("ADMIN_EMAIL_RECIPIENT", "")
+        mail.send(MailMessage(
+            subject="Pharma IP System — test email",
+            recipients=[to],
+            body="Mail is configured correctly. This is a test from the diagnostics page.",
+            sender=app.config.get("MAIL_DEFAULT_SENDER", "noreply@pharmaip.com")))
+        flash(f"Test email sent to {to}.", "success")
+    except Exception as e:
+        logger.error(f"admin_test_mail: {e}")
+        flash(f"Mail server rejected it: {e}", "danger")
+    return redirect(url_for("admin_diagnostics"))
 
 
 # ─── FEATURE 14: Admin Staff Notes ───────────────────────────────────────────

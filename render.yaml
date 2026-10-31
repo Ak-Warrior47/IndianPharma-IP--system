@@ -1,18 +1,89 @@
+# Render deployment for the Indian Pharma IP System.
+#
+# Every environment variable the application reads is declared here. The ones
+# marked `sync: false` are NOT stored in this file -- Render shows them in the
+# service's Environment tab for you to fill in, and keeps secrets out of the
+# repository. Previously only four were declared, so the rest were simply absent
+# in production and the features that depend on them failed silently: no monthly
+# report email, no SMS alerts, and the delivery geofence switched off.
+#
+# After deploying, open /admin/diagnostics as an admin. It lists exactly which
+# of these are set and what each one controls.
+#
+# NOTE: there is deliberately no `databases:` block. This project uses Supabase.
+# DATABASE_URL must point at the Supabase Postgres instance and nothing here
+# should ever provision a Render-managed database.
+
 services:
   - type: web
     name: indianpharma-ip-system
     env: python
     buildCommand: pip install -r requirements.txt
+    # One worker on purpose: APScheduler runs in-process, so a second worker
+    # would fire the monthly report job twice and send duplicate email.
     startCommand: gunicorn -k eventlet -w 1 app:app --bind 0.0.0.0:$PORT --timeout 120
     envVars:
+      # ---- Core ----------------------------------------------------------
       - key: SECRET_KEY
-        generateValue: true
+        generateValue: true          # without it, every restart logs everyone out
       - key: RENDER
         value: "true"
       - key: PORT
         value: "10000"
-      # DATABASE_URL points to your Supabase Postgres.
-      # Set it in the Render dashboard (Environment tab) — not stored in this file.
-      # Format: postgresql://postgres:<password>@db.<project>.supabase.co:5432/postgres
+      # Supabase Postgres connection string. Set in the Environment tab.
+      # postgresql://postgres:<password>@db.<project>.supabase.co:5432/postgres
       - key: DATABASE_URL
+        sync: false
+      # Admin login. Without this the seeded admin password stays "admin123".
+      - key: ADMIN_PASSWORD
+        sync: false
+      - key: ADMIN_EMAIL
+        sync: false
+
+      # ---- Email: monthly KPI report ------------------------------------
+      # For Gmail use smtp.gmail.com / 587 and a Google App Password, not the
+      # account password. Without all four the report cannot send.
+      - key: MAIL_SERVER
+        sync: false
+      - key: MAIL_PORT
+        value: "587"
+      - key: MAIL_USE_TLS
+        value: "true"
+      - key: MAIL_USERNAME
+        sync: false
+      - key: MAIL_PASSWORD
+        sync: false
+      # Where the monthly report is delivered.
+      - key: ADMIN_EMAIL_RECIPIENT
+        sync: false
+
+      # ---- Delivery ------------------------------------------------------
+      # The store's coordinates. While these are unset the geofence is OFF and a
+      # rider can start a trip from anywhere, which is why trip start appeared to
+      # "work" from outside the warehouse.
+      - key: STORE_LAT
+        sync: false
+      - key: STORE_LNG
+        sync: false
+      - key: TOMTOM_API_KEY
+        sync: false
+
+      # ---- SMS alerts (optional) -----------------------------------------
+      - key: TWILIO_ACCOUNT_SID
+        sync: false
+      - key: TWILIO_AUTH_TOKEN
+        sync: false
+      - key: TWILIO_FROM_NUMBER
+        sync: false
+      - key: ADMIN_PHONE
+        sync: false
+
+      # ---- Scoring targets ------------------------------------------------
+      # Items per hour. Defaults are 50 and 70, which are higher than this
+      # warehouse has ever achieved, so those scoring components were
+      # unreachable. Run tools_recommend_targets.py against the live database to
+      # get values derived from real history.
+      - key: PICKER_TARGET_HR
+        sync: false
+      - key: CHECKER_TARGET_HR
         sync: false
