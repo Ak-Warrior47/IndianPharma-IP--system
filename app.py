@@ -2649,6 +2649,7 @@ def dashboard():
                 staff_type=staff_type,
                 today=today,
                 today_entry=None,
+                my_checklist=checklist_for(emp_id, staff_type, today),
                 today_db_note=today_db_note,
                 d_stats=None, w_stats=None, m_stats=None, monthly_target=None,
                 recent=DeliveryBillerNote.query.filter_by(emp_id=emp_id).order_by(

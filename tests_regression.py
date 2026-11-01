@@ -42,7 +42,12 @@ with app.app_context():
         if emp:
             return emp
         emp = Employee(name=name, email=email, staff_type=staff_type,
-                       is_admin=admin, secondary_staff_type=secondary)
+                       is_admin=admin, secondary_staff_type=secondary,
+                       # The app blocks KPI entry on Sundays unless a staff
+                       # member is exempt. Without this the KPI checks below
+                       # fail every Sunday for a reason that has nothing to do
+                       # with what they are testing.
+                       sunday_override=True)
         emp.set_password(PW)
         db.session.add(emp)
         db.session.commit()
@@ -106,6 +111,34 @@ client.post("/dashboard", data={
 with app.app_context():
     e = KPIEntry.query.filter_by(emp_id=IDS["r_pur@x.com"], entry_date=date.today()).first()
 check("2.3 Purchaser KPI saved", e is not None)
+
+# ---- 2b. The Sunday holiday rule ---------------------------------------
+# Only assertable on an actual Sunday; on any other day the rule does not apply
+# and there is nothing to observe.
+if date.today().weekday() == 6:
+    with app.app_context():
+        blocked = Employee.query.filter_by(email="r_sunday@x.com").first()
+        if not blocked:
+            blocked = Employee(name="Reg Sunday", email="r_sunday@x.com",
+                               staff_type="picker", sunday_override=False)
+            blocked.set_password(PW)
+            db.session.add(blocked)
+            db.session.commit()
+        blocked_id = blocked.id
+    login("r_sunday@x.com")
+    r = client.post("/dashboard", data={
+        "total_bills_received": "20", "sales_bills_open": "18", "picked": "140",
+        "missed": "2", "cs_sales_open": "3", "packing_done": "9", "total_time": "8",
+        "rack_organized": "5", "table_clean": "1", "sweep_done": "1"},
+        follow_redirects=True)
+    with app.app_context():
+        saved = KPIEntry.query.filter_by(emp_id=blocked_id,
+                                         entry_date=date.today()).first()
+    check("2.4 Sunday entry is blocked without an override", saved is None)
+    check("2.5 Staff are told why", b"Sunday" in r.data)
+else:
+    check("2.4 Sunday rule not applicable today (skipped)", True)
+    check("2.5 Sunday rule not applicable today (skipped)", True)
 
 # ---- 3. Daily notes for delivery / biller / packer ----------------------
 for email, text in (("r_drv@x.com", "drove 12 stops"),
