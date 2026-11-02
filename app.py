@@ -5,6 +5,7 @@ import os
 import logging
 import io
 import csv
+import json
 import random
 import string
 import requests as _requests
@@ -83,6 +84,29 @@ VALID_STAFF_TYPES = ("picker", "checker", "purchaser", "delivery", "biller", "pa
 # derives a demanding-but-reachable value from real history.
 DEFAULT_PICKER_TARGET_HR  = float(os.environ.get("PICKER_TARGET_HR", "50"))
 DEFAULT_CHECKER_TARGET_HR = float(os.environ.get("CHECKER_TARGET_HR", "70"))
+
+# ─── PRIVACY SETTINGS ────────────────────────────────────────────────────────
+# Location is the most sensitive data here. Collect the least that still shows
+# a useful route, and keep it only as long as it is needed to review deliveries.
+GPS_RETENTION_DAYS = int(os.environ.get("GPS_RETENTION_DAYS", "30"))
+GPS_MIN_SECONDS    = int(os.environ.get("GPS_MIN_SECONDS", "25"))
+GPS_MIN_METRES     = int(os.environ.get("GPS_MIN_METRES", "40"))
+GPS_MAX_POINTS     = int(os.environ.get("GPS_MAX_POINTS", "1200"))
+
+
+def redact_email(addr):
+    """Log-safe form of an email: keeps enough to debug, not enough to identify.
+
+    Login attempts used to be logged with the full address, which puts a staff
+    member's personal email into every log aggregator and error report the host
+    forwards to.
+    """
+    addr = (addr or "").strip()
+    if "@" not in addr:
+        return "(none)" if not addr else (addr[:1] + "***")
+    local, _, domain = addr.partition("@")
+    head = local[:1] if local else ""
+    return f"{head}{'*' * max(len(local) - 1, 1)}@{domain}"
 ROLE_DISPLAY_NAMES = {
     "picker": "Operations Picker",
     "checker": "Operations Checker",
@@ -2312,7 +2336,7 @@ def login():
 
             if not user or not user.check_password(password):
                 _throttle_fail(_lk)
-                logger.warning(f"Failed login attempt for: {email} (ip={request.remote_addr})")
+                logger.warning(f"Failed login attempt for: {redact_email(email)} (ip={request.remote_addr})")
                 flash("Invalid Pharma ID or Password.", "danger")
                 return render_template("login.html")
             _throttle_clear(_lk)
@@ -2329,7 +2353,7 @@ def login():
             session["secondary_staff_type"] = user.secondary_staff_type
             session["is_admin"] = bool(user.is_admin)
 
-            logger.info(f"User login successful: {email}")
+            logger.info(f"User login successful: {redact_email(email)}")
             if user.is_admin:
                 return redirect(url_for("admin_dashboard"))
             # If staff has a secondary role, let them choose which role to work as today
@@ -5214,6 +5238,7 @@ def admin_diagnostics():
                                    ("SMS alerts", sms_vars), ("Core", core_vars)],
                            warnings=warnings, db_ok=db_ok, db_note=db_note,
                            mail_missing=mail_config_status(),
+                           location=location_data_summary(),
                            is_production=bool(IS_PRODUCTION))
 
 
@@ -5237,6 +5262,158 @@ def admin_test_mail():
         logger.error(f"admin_test_mail: {e}")
         flash(f"Mail server rejected it: {e}", "danger")
     return redirect(url_for("admin_diagnostics"))
+
+
+def purge_old_location_data():
+    """Delete GPS breadcrumbs older than the retention window.
+
+    Keeping a rider's minute-by-minute movements indefinitely is not needed to
+    review deliveries, and it is the hardest thing in this system to justify
+    holding. Trips, stops and delivery records are kept: those are the business
+    record. Only the fine-grained location trail expires.
+
+    Runs daily and on boot. Returns (deleted, cutoff).
+    """
+    with app.app_context():
+        try:
+            cutoff = datetime.utcnow() - timedelta(days=GPS_RETENTION_DAYS)
+            n = (BreadcrumbPoint.query
+                 .filter(BreadcrumbPoint.recorded_at < cutoff)
+                 .delete(synchronize_session=False))
+            db.session.commit()
+            if n:
+                logger.info("Privacy: purged %d GPS point(s) older than %d days"
+                            % (n, GPS_RETENTION_DAYS))
+            return n, cutoff
+        except Exception as e:
+            db.session.rollback()
+            logger.error(f"purge_old_location_data: {e}")
+            return 0, None
+
+
+def location_data_summary():
+    """How much location data is held, for the diagnostics page."""
+    try:
+        total = BreadcrumbPoint.query.count()
+        oldest = (BreadcrumbPoint.query
+                  .order_by(BreadcrumbPoint.recorded_at.asc()).first())
+        return {
+            "points": total,
+            "oldest": oldest.recorded_at if oldest else None,
+            "retention_days": GPS_RETENTION_DAYS,
+            "min_seconds": GPS_MIN_SECONDS,
+            "min_metres": GPS_MIN_METRES,
+        }
+    except Exception:
+        return {"points": 0, "oldest": None, "retention_days": GPS_RETENTION_DAYS,
+                "min_seconds": GPS_MIN_SECONDS, "min_metres": GPS_MIN_METRES}
+
+
+@app.route("/my-data")
+@login_required
+def my_data():
+    """What this system holds about the signed-in person, and who can see it.
+
+    Staff can be measured, scored and location-tracked by this app without ever
+    being shown what is recorded. This page states it plainly and lets them
+    take a copy.
+    """
+    emp_id = session.get("user_id")
+    emp = db.session.get(Employee, emp_id)
+    if not emp:
+        return redirect(url_for("logout"))
+
+    def count(model, **kw):
+        try:
+            return model.query.filter_by(**kw).count()
+        except Exception:
+            return 0
+
+    try:
+        trip_ids = [t.id for t in DeliveryTrip.query.filter_by(emp_id=emp_id).all()]
+        gps_points = (BreadcrumbPoint.query
+                      .filter(BreadcrumbPoint.trip_id.in_(trip_ids)).count()
+                      if trip_ids else 0)
+    except Exception:
+        gps_points = 0
+
+    held = [
+        {"what": "Name, email and role", "n": 1,
+         "why": "Identifies your account and decides which screens you see.",
+         "who": "You and the admin."},
+        {"what": "Phone number", "n": 1 if emp.phone else 0,
+         "why": "Used only to send a one-time code if you reset your password.",
+         "who": "You and the admin."},
+        {"what": "Daily KPI entries", "n": count(KPIEntry, emp_id=emp_id),
+         "why": "The numbers you submit each day, used to calculate your score.",
+         "who": "You and the admin."},
+        {"what": "Extra-role (multitask) reports", "n": count(MultitaskEntry, emp_id=emp_id),
+         "why": "Work you logged under a second role.",
+         "who": "You and the admin."},
+        {"what": "Daily work notes", "n": count(DeliveryBillerNote, emp_id=emp_id),
+         "why": "Your end-of-day note.", "who": "You and the admin."},
+        {"what": "Checklist completions", "n": count(ChecklistCompletion, emp_id=emp_id),
+         "why": "Which daily tasks you ticked off, and when.",
+         "who": "You and the admin."},
+        {"what": "Delivery trips", "n": count(DeliveryTrip, emp_id=emp_id),
+         "why": "Start and finish times of rounds you drove.",
+         "who": "You and the admin."},
+        {"what": "GPS location points", "n": gps_points,
+         "why": ("Recorded only while a delivery trip is running, to show the route "
+                 "taken. Never recorded before you start a trip or after you finish "
+                 "one. Automatically deleted after %d days." % GPS_RETENTION_DAYS),
+         "who": "You and the admin."},
+        {"what": "Admin notes about you", "n": count(AdminStaffNote, emp_id=emp_id),
+         "why": "Notes your manager recorded.", "who": "The admin."},
+    ]
+    return render_template("my_data.html", emp=emp, held=held,
+                           gps_retention_days=GPS_RETENTION_DAYS,
+                           gps_min_seconds=GPS_MIN_SECONDS,
+                           gps_min_metres=GPS_MIN_METRES)
+
+
+@app.route("/my-data/download")
+@login_required
+def my_data_download():
+    """Give the signed-in person a copy of their own records as JSON."""
+    emp_id = session.get("user_id")
+    emp = db.session.get(Employee, emp_id)
+    if not emp:
+        return redirect(url_for("logout"))
+    try:
+        def rows(model, **kw):
+            out = []
+            for r in model.query.filter_by(**kw).all():
+                d = {}
+                for c in r.__table__.columns:
+                    v = getattr(r, c.name, None)
+                    d[c.name] = v.isoformat() if hasattr(v, "isoformat") else v
+                out.append(d)
+            return out
+
+        payload = {
+            "generated_at": datetime.utcnow().isoformat(),
+            "about": {"name": emp.name, "email": emp.email, "role": emp.staff_type,
+                      "secondary_role": emp.secondary_staff_type, "phone": emp.phone},
+            "kpi_entries": rows(KPIEntry, emp_id=emp_id),
+            "multitask_entries": rows(MultitaskEntry, emp_id=emp_id),
+            "daily_notes": rows(DeliveryBillerNote, emp_id=emp_id),
+            "checklist_completions": rows(ChecklistCompletion, emp_id=emp_id),
+            "delivery_trips": rows(DeliveryTrip, emp_id=emp_id),
+            "note": ("Your password is stored only as a one-way hash and is not "
+                     "included here, because it cannot be read back by anyone, "
+                     "including the admin."),
+        }
+        return Response(
+            json.dumps(payload, indent=2, default=str),
+            mimetype="application/json",
+            headers={"Content-Disposition":
+                     'attachment; filename="my-data-%s.json"'
+                     % datetime.utcnow().strftime("%Y-%m-%d")})
+    except Exception as e:
+        logger.error(f"my_data_download: {e}")
+        flash("Could not build your data file.", "danger")
+        return redirect(url_for("my_data"))
 
 
 # ─── FEATURE 14: Admin Staff Notes ───────────────────────────────────────────
@@ -6444,7 +6621,16 @@ def delivery_start_trip(assignment_id):
 @app.route("/delivery/breadcrumb/<int:trip_id>", methods=["POST"])
 @login_required
 def delivery_breadcrumb(trip_id):
-    """Save a GPS breadcrumb point for an active trip."""
+    """Save a GPS breadcrumb point for an active trip.
+
+    Location is the most sensitive thing this system holds, so three limits
+    apply. Points are accepted only while the trip is actually in progress, so
+    a finished trip cannot keep reporting where someone is. Points closer than
+    GPS_MIN_SECONDS or GPS_MIN_METRES to the last one are discarded, because a
+    browser emits a fix every few seconds and storing all of them is a far more
+    detailed record of a person's movements than delivery tracking needs. And a
+    single trip cannot exceed GPS_MAX_POINTS.
+    """
     emp_id = session.get("user_id")
     try:
         data = request.get_json(force=True, silent=True) or {}
@@ -6455,10 +6641,25 @@ def delivery_breadcrumb(trip_id):
         trip = db.session.get(DeliveryTrip, trip_id)
         if not trip or trip.emp_id != emp_id:
             return jsonify({"ok": False, "reason": "not_found"}), 404
-        pt = BreadcrumbPoint(trip_id=trip_id, lat=lat, lng=lng)
-        db.session.add(pt)
+        # Tracking stops when the trip does.
+        if (trip.status or "") != "in_progress" or trip.arrival_time is not None:
+            return jsonify({"ok": False, "reason": "trip_not_active"}), 409
+
+        last = (BreadcrumbPoint.query.filter_by(trip_id=trip_id)
+                .order_by(BreadcrumbPoint.recorded_at.desc()).first())
+        if last:
+            if BreadcrumbPoint.query.filter_by(trip_id=trip_id).count() >= GPS_MAX_POINTS:
+                return jsonify({"ok": False, "reason": "cap_reached"}), 429
+            if last.recorded_at:
+                gap = (datetime.utcnow() - last.recorded_at).total_seconds()
+                if gap < GPS_MIN_SECONDS:
+                    return jsonify({"ok": True, "stored": False, "reason": "too_soon"})
+            if _haversine_m(lat, lng, last.lat, last.lng) < GPS_MIN_METRES:
+                return jsonify({"ok": True, "stored": False, "reason": "too_close"})
+
+        db.session.add(BreadcrumbPoint(trip_id=trip_id, lat=lat, lng=lng))
         db.session.commit()
-        return jsonify({"ok": True})
+        return jsonify({"ok": True, "stored": True})
     except Exception as e:
         db.session.rollback()
         logger.error(f"delivery_breadcrumb: {e}")
@@ -6807,8 +7008,21 @@ try:
         id="stale_validations_sms",
         replace_existing=True
     )
+    # Privacy: expire GPS location trails nightly, and once on boot so the
+    # retention window is honoured even if the service rarely stays up overnight.
+    _scheduler.add_job(
+        purge_old_location_data,
+        trigger="cron",
+        hour=3, minute=20,
+        id="purge_location_data",
+        replace_existing=True
+    )
     if not _scheduler.running:
         _scheduler.start()
+    try:
+        purge_old_location_data()
+    except Exception as _pe:
+        logger.warning(f"startup location purge skipped: {_pe}")
     logger.info("APScheduler started — monthly reports job scheduled.")
 except Exception as _sch_err:
     logger.warning(f"APScheduler init failed: {_sch_err}")

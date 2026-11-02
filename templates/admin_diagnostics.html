@@ -118,6 +118,46 @@
     </div>
   </section>
 
+
+  <!-- ============ LOCATION DATA HELD ============ -->
+  <section class="ip-card">
+    <div class="ip-card__head">
+      <div>
+        <div class="ip-card__title">Location data held</div>
+        <div class="ip-card__sub">GPS trails expire automatically; the delivery record itself is kept.</div>
+      </div>
+      <span class="ip-pill ip-pill--info">{{ location.retention_days }} day retention</span>
+    </div>
+    <div class="ip-card__body">
+      <div class="ip-metrics">
+        <div class="ip-metric">
+          <div class="ip-metric__label">Points stored</div>
+          <div class="ip-metric__value">{{ "{:,}".format(location.points) }}</div>
+          <div class="ip-metric__foot">across all riders</div>
+        </div>
+        <div class="ip-metric">
+          <div class="ip-metric__label">Oldest point</div>
+          <div class="ip-metric__value" style="font-size:var(--fs-h3);">
+            {{ location.oldest.strftime('%d %b %Y') if location.oldest else 'none' }}
+          </div>
+          <div class="ip-metric__foot">purged nightly past {{ location.retention_days }} days</div>
+        </div>
+        <div class="ip-metric">
+          <div class="ip-metric__label">Sampling</div>
+          <div class="ip-metric__value" style="font-size:var(--fs-h3);">
+            {{ location.min_seconds }}s / {{ location.min_metres }}m
+          </div>
+          <div class="ip-metric__foot">minimum gap before a point is kept</div>
+        </div>
+      </div>
+      <p class="ip-hint">
+        Location is recorded only while a trip is in progress and stops when the rider
+        finishes. Staff can see exactly this, for themselves, on their My Data page.
+        Change the window with GPS_RETENTION_DAYS.
+      </p>
+    </div>
+  </section>
+
   <!-- ============ SETTINGS ============ -->
   {% for group_name, vars in groups %}
   <section class="ip-card">

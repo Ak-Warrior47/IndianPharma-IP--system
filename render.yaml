@@ -97,3 +97,17 @@ services:
         sync: false
       - key: CHECKER_TARGET_HR
         sync: false
+
+      # ---- Privacy -------------------------------------------------------
+      # Location is the most sensitive data this app holds. Points are recorded
+      # only while a trip is running, thinned at capture, and deleted on a
+      # schedule. Staff are shown exactly these figures on their My Data page,
+      # so if you change them the wording they see changes with it.
+      - key: GPS_RETENTION_DAYS      # delete location trails after this many days
+        value: "30"
+      - key: GPS_MIN_SECONDS         # ignore a fix sooner than this after the last
+        value: "25"
+      - key: GPS_MIN_METRES          # ignore a fix closer than this to the last
+        value: "40"
+      - key: GPS_MAX_POINTS          # hard cap per trip
+        value: "1200"
