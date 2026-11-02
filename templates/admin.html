@@ -361,7 +361,7 @@ input:focus, select:focus, textarea:focus { outline: none; border-color: var(--b
       <div class="field">
         <label style="font-size:11px;font-weight:700;color:#374151;text-transform:uppercase;">Add New Note</label>
         <textarea name="note" maxlength="500" rows="3" required
-          style="width:100%;padding:10px 13px;border:1.5px solid #c7d9f5;border-radius:9px;font-size:13px;font-family:inherit;resize:vertical;"
+          style="width:100%;padding:10px 13px;border:1.5px solid #c7d9f5;border-radius:10px;font-size:13px;font-family:inherit;resize:vertical;"
           placeholder="Enter note (max 500 chars)…"></textarea>
       </div>
       <div class="modal-actions">
@@ -433,7 +433,7 @@ var NOTES_BY_EMP = {
   {% if stale_validations_count and stale_validations_count > 0 %}
   <div class="alert alert-danger" style="display:flex;align-items:center;justify-content:space-between;font-size:14px;">
     <span>Alert: <strong>{{ stale_validations_count }}</strong> bill validation(s) pending for over 24 hours</span>
-    <a href="/validations" style="background:#dc2626;color:#fff;padding:5px 14px;border-radius:7px;font-size:12px;font-weight:700;text-decoration:none;">View Validations →</a>
+    <a href="/validations" style="background:var(--bad);color:var(--surface);padding:5px 14px;border-radius:6px;font-size:12px;font-weight:700;text-decoration:none;">View Validations →</a>
   </div>
   {% endif %}
 
@@ -487,7 +487,7 @@ var NOTES_BY_EMP = {
         <div style="flex:1;">
           <div style="font-size:13px;font-weight:700;color:var(--ink);">{{ ann.title }}</div>
           {% if ann.body %}<div style="font-size:12px;color:var(--ink-3);margin-top:2px;">{{ ann.body }}</div>{% endif %}
-          <div style="font-size:10px;color:var(--ink-3);margin-top:4px;">
+          <div style="font-size:11px;color:var(--ink-3);margin-top:4px;">
             Posted {{ ann.created_at.strftime('%d %b %Y') }}
             &nbsp;·&nbsp;
             Read by <strong>{{ ann_read_counts.get(ann.id, 0) }}</strong> / {{ total_staff_count }} staff
@@ -509,10 +509,10 @@ var NOTES_BY_EMP = {
 
   <!-- FEATURE 4: PENDING PAST ENTRY REQUESTS -->
   {% if pending_past_requests %}
-  <div class="card" style="margin-bottom:20px;border-left:4px solid #d97706;">
+  <div class="card" style="margin-bottom:20px;border-left:4px solid var(--warn);">
     <div class="card-header">
       <div class="card-title">Pending Past Entry Requests
-        <span class="cnt" style="background:#fffbeb;color:#b45309;border-color:#fcd34d;">{{ pending_past_requests|length }} pending</span>
+        <span class="cnt" style="background:#fffbeb;color:var(--warn);border-color:#fcd34d;">{{ pending_past_requests|length }} pending</span>
       </div>
     </div>
     <div style="display:flex;flex-direction:column;gap:8px;">
@@ -529,7 +529,7 @@ var NOTES_BY_EMP = {
         </div>
         <div style="display:flex;gap:8px;">
           <form method="POST" action="/admin/past_request/{{ req.id }}/approve" style="margin:0;">
-            <button type="submit" class="btn-sm" style="background:#f0fdf4;color:#16a34a;border:1px solid #bbf7d0;">Approve</button>
+            <button type="submit" class="btn-sm" style="background:#f0fdf4;color:var(--ok);border:1px solid var(--ok-line);">Approve</button>
           </form>
           <form method="POST" action="/admin/past_request/{{ req.id }}/reject" style="margin:0;">
             <button type="submit" class="btn-sm btn-delete">Reject</button>
@@ -543,20 +543,20 @@ var NOTES_BY_EMP = {
 
   <!-- DELIVERY / BILLER NOTES PANEL -->
   {% if recent_db_notes %}
-  <div class="card anim-fade-in" style="margin-bottom:20px;border-left:4px solid #7c3aed;">
+  <div class="card anim-fade-in" style="margin-bottom:20px;border-left:4px solid var(--accent);">
     <div class="card-header">
       <div class="card-title">Delivery &amp; Biller Daily Notes
-        <span class="cnt" style="background:#f5f3ff;color:#7c3aed;border-color:#ddd6fe;">{{ recent_db_notes|length }} (30 days)</span>
+        <span class="cnt" style="background:#f5f3ff;color:var(--accent);border-color:var(--accent-line);">{{ recent_db_notes|length }} (30 days)</span>
       </div>
     </div>
     <div style="display:flex;flex-direction:column;gap:6px;max-height:320px;overflow-y:auto;">
       {% for note in recent_db_notes %}
       {% set ne = emp_map.get(note.emp_id) %}
-      <div style="display:flex;align-items:flex-start;gap:12px;padding:10px 13px;background:{% if note.note_type == 'delivery' %}#f5f3ff{% else %}#eff6ff{% endif %};border:1px solid {% if note.note_type == 'delivery' %}#ddd6fe{% else %}#bfdbfe{% endif %};border-radius:10px;">
-        <div style="flex:0 0 auto;width:36px;height:36px;border-radius:50%;background:{% if note.note_type == 'delivery' %}#7c3aed{% else %}#1d4ed8{% endif %};color:#fff;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;">{{ (ne.name[0] if ne else '?')|upper }}</div>
+      <div style="display:flex;align-items:flex-start;gap:12px;padding:10px 13px;background:{% if note.note_type == 'delivery' %}#f5f3ff{% else %}var(--brand-tint){% endif %};border:1px solid {% if note.note_type == 'delivery' %}var(--accent-line){% else %}#bfdbfe{% endif %};border-radius:10px;">
+        <div style="flex:0 0 auto;width:36px;height:36px;border-radius:50%;background:{% if note.note_type == 'delivery' %}var(--accent){% else %}var(--brand){% endif %};color:var(--surface);display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;">{{ (ne.name[0] if ne else '?')|upper }}</div>
         <div style="flex:1;min-width:0;">
           <div style="font-size:13px;font-weight:700;color:var(--ink);">{{ ne.name if ne else 'Unknown' }}
-            <span style="font-size:10px;font-weight:600;padding:2px 8px;border-radius:20px;background:{% if note.note_type == 'delivery' %}#ede9fe{% else %}#dbeafe{% endif %};color:{% if note.note_type == 'delivery' %}#6d28d9{% else %}#1d4ed8{% endif %};text-transform:uppercase;letter-spacing:.5px;">{{ note.note_type|title }}</span>
+            <span style="font-size:11px;font-weight:600;padding:2px 8px;border-radius:999px;background:{% if note.note_type == 'delivery' %}var(--accent-tint){% else %}var(--brand-tint-2){% endif %};color:{% if note.note_type == 'delivery' %}var(--accent-ink){% else %}var(--brand){% endif %};text-transform:uppercase;letter-spacing:.5px;">{{ note.note_type|title }}</span>
           </div>
           <div style="font-size:12px;color:var(--ink-3);margin-top:1px;">{{ note.entry_date.strftime('%d %b %Y') }} &nbsp;·&nbsp; {{ note.quantity }} processed &nbsp;·&nbsp; {{ note.issues_count }} issues</div>
           <div style="font-size:13px;color:var(--ink);margin-top:4px;line-height:1.4;">{{ note.note_text }}</div>
@@ -568,10 +568,10 @@ var NOTES_BY_EMP = {
   {% endif %}
 
   <!-- MULTITASK (ROLE 2) REPORTS PANEL — always visible -->
-  <div class="card anim-fade-in" style="margin-bottom:20px;border-left:4px solid #7c3aed;">
+  <div class="card anim-fade-in" style="margin-bottom:20px;border-left:4px solid var(--accent);">
     <div class="card-header">
       <div class="card-title">Multitask (Role 2) Reports
-        <span class="cnt" style="background:#f5f3ff;color:#7c3aed;border-color:#ddd6fe;">{{ recent_multitask|length }} (30 days)</span>
+        <span class="cnt" style="background:#f5f3ff;color:var(--accent);border-color:var(--accent-line);">{{ recent_multitask|length }} (30 days)</span>
       </div>
     </div>
     {% if recent_multitask %}
@@ -590,7 +590,7 @@ var NOTES_BY_EMP = {
               {% if me %}<div style="font-size:11px;color:var(--ink-3);">Default: {{ me.staff_type|title }}{% if me.secondary_staff_type %} (+ {{ me.secondary_staff_type|title }}){% endif %}</div>{% endif %}
             </td>
             <td>{{ mt.entry_date.strftime('%d %b %Y') }}</td>
-            <td><span style="padding:3px 10px;background:#ede9fe;color:#6d28d9;border-radius:20px;font-size:11px;font-weight:700;text-transform:uppercase;">{{ mt.secondary_type }}</span></td>
+            <td><span style="padding:3px 10px;background:var(--accent-tint);color:var(--accent-ink);border-radius:999px;font-size:11px;font-weight:700;text-transform:uppercase;">{{ mt.secondary_type }}</span></td>
             <td style="font-size:12px;color:var(--ink);">{{ mt.summary }}</td>
             <td style="font-size:12px;color:var(--ink-3);">{{ mt.note or '—' }}</td>
             <td>{% if me %}<a href="/staff/{{ me.id }}" class="btn-sm btn-view">View</a>{% endif %}</td>
@@ -622,7 +622,7 @@ var NOTES_BY_EMP = {
         <form method="POST" action="/admin/badge/award" autocomplete="off" style="display:grid;gap:10px;">
           <div class="field" style="margin:0;">
             <label>Badge</label>
-            <select name="badge_id" required style="padding:9px 12px;border:1.5px solid var(--line);border-radius:9px;font-size:13px;font-family:inherit;">
+            <select name="badge_id" required style="padding:9px 12px;border:1.5px solid var(--line);border-radius:10px;font-size:13px;font-family:inherit;">
               {% for b in all_badges %}
               <option value="{{ b.id }}">{{ b.icon }} {{ b.name }}</option>
               {% endfor %}
@@ -630,7 +630,7 @@ var NOTES_BY_EMP = {
           </div>
           <div class="field" style="margin:0;">
             <label>Staff Member</label>
-            <select name="employee_id" required style="padding:9px 12px;border:1.5px solid var(--line);border-radius:9px;font-size:13px;font-family:inherit;">
+            <select name="employee_id" required style="padding:9px 12px;border:1.5px solid var(--line);border-radius:10px;font-size:13px;font-family:inherit;">
               {% for r in rows %}
               <option value="{{ r.emp.id }}">{{ r.emp.name }} ({{ r.emp.staff_type }})</option>
               {% endfor %}
@@ -646,7 +646,7 @@ var NOTES_BY_EMP = {
           <div style="display:grid;grid-template-columns:60px 1fr;gap:10px;">
             <div class="field" style="margin:0;">
               <label>Icon</label>
-              <input type="text" name="icon" placeholder="*" maxlength="4" required style="padding:9px;border:1.5px solid var(--line);border-radius:9px;font-size:16px;text-align:center;">
+              <input type="text" name="icon" placeholder="*" maxlength="4" required style="padding:9px;border:1.5px solid var(--line);border-radius:10px;font-size:16px;text-align:center;">
             </div>
             <div class="field" style="margin:0;">
               <label>Name</label>
@@ -657,7 +657,7 @@ var NOTES_BY_EMP = {
             <label>Description</label>
             <input type="text" name="description" placeholder="How to earn this badge" required maxlength="200">
           </div>
-          <button type="submit" class="btn-add" style="background:linear-gradient(135deg,#7c3aed,#6d28d9);width:fit-content;">Create Badge</button>
+          <button type="submit" class="btn-add" style="background:linear-gradient(135deg,var(--accent),var(--accent-ink));width:fit-content;">Create Badge</button>
         </form>
       </div>
     </div>
@@ -667,8 +667,8 @@ var NOTES_BY_EMP = {
       <div style="background:var(--surface-2);border:1px solid var(--line);border-radius:10px;padding:12px;text-align:center;">
         <div style="font-size:24px;margin-bottom:4px;">{{ b.icon }}</div>
         <div style="font-size:12px;font-weight:700;color:var(--ink);">{{ b.name }}</div>
-        <div style="font-size:10px;color:var(--ink-3);margin-top:2px;">{{ b.description[:50] }}{% if b.description|length > 50 %}...{% endif %}</div>
-        <div style="font-size:10px;color:{% if b.badge_type == 'auto' %}var(--brand){% else %}#7c3aed{% endif %};margin-top:4px;font-weight:600;text-transform:uppercase;">{{ b.badge_type }}</div>
+        <div style="font-size:11px;color:var(--ink-3);margin-top:2px;">{{ b.description[:50] }}{% if b.description|length > 50 %}...{% endif %}</div>
+        <div style="font-size:11px;color:{% if b.badge_type == 'auto' %}var(--brand){% else %}var(--accent){% endif %};margin-top:4px;font-weight:600;text-transform:uppercase;">{{ b.badge_type }}</div>
       </div>
       {% endfor %}
     </div>
@@ -747,7 +747,7 @@ var NOTES_BY_EMP = {
           <div class="field" style="flex:1;min-width:180px;">
             <label>Months (hold Ctrl/Cmd to pick many)</label>
             <select name="months" multiple size="5"
-              style="width:100%;padding:8px 10px;border:1.5px solid var(--line);border-radius:9px;font-size:13px;font-family:inherit;">
+              style="width:100%;padding:8px 10px;border:1.5px solid var(--line);border-radius:10px;font-size:13px;font-family:inherit;">
               {% for m in selectable_months %}
               <option value="{{ m.value }}">{{ m.label }}</option>
               {% endfor %}
@@ -755,7 +755,7 @@ var NOTES_BY_EMP = {
           </div>
           <button type="submit" class="btn-open-win" formaction="/admin/past_window_bulk"
             onclick="document.getElementById('bulkAction').value='open'">Open All Days</button>
-          <button type="submit" class="btn-open-win" style="background:#fee2e2;color:#991b1b;border:1px solid #fca5a5;"
+          <button type="submit" class="btn-open-win" style="background:var(--bad-tint);color:var(--bad-ink);border:1px solid var(--bad-line);"
             onclick="document.getElementById('bulkAction').value='close'">Close All Days</button>
         </div>
         <input type="hidden" name="action" id="bulkAction" value="open">
@@ -799,7 +799,7 @@ var NOTES_BY_EMP = {
             <th>Employee</th>
             <th>Type</th>
             <th>Entries</th>
-            <th>Monthly Score <small style="font-weight:400;font-size:10px;">{{ current_month }}</small></th>
+            <th>Monthly Score <small style="font-weight:400;font-size:11px;">{{ current_month }}</small></th>
             <th>Week Score</th>
             <th>Grade</th>
             <th>Last Entry</th>
@@ -822,7 +822,7 @@ var NOTES_BY_EMP = {
             </td>
             <td>{{ r.count }}</td>
             <td class="score-cell">
-              {% if r.stats %}{{ r.stats.eff_score }}{% if r.stats.multitask_bonus and r.stats.multitask_bonus > 0 %}<div style="font-size:10px;font-weight:700;color:#14652f;" title="{{ r.stats.multitask_day_points }} multitask points across {{ r.stats.multitask_days }} day(s), spread over the {{ r.stats.days }} days in this period">incl. +{{ r.stats.multitask_bonus }} multitask</div>{% endif %}{% else %}<span style="color:var(--ink-3)">—</span>{% endif %}
+              {% if r.stats %}{{ r.stats.eff_score }}{% if r.stats.multitask_bonus and r.stats.multitask_bonus > 0 %}<div style="font-size:11px;font-weight:700;color:var(--ok-ink);" title="{{ r.stats.multitask_day_points }} multitask points across {{ r.stats.multitask_days }} day(s), spread over the {{ r.stats.days }} days in this period">incl. +{{ r.stats.multitask_bonus }} multitask</div>{% endif %}{% else %}<span style="color:var(--ink-3)">—</span>{% endif %}
             </td>
             <td class="score-cell">
               {% if r.week_stats %}{{ r.week_stats.eff_score }}{% else %}<span style="color:var(--ink-3)">—</span>{% endif %}
@@ -854,7 +854,7 @@ var NOTES_BY_EMP = {
                   onclick="openEditFromBtn(this)">
                   Edit
                 </button>
-                <button class="btn-sm" style="background:#fef3c7;color:#b45309;border:1px solid #fcd34d;"
+                <button class="btn-sm" style="background:var(--warn-tint);color:var(--warn);border:1px solid #fcd34d;"
                   onclick="openNotesModal({{ r.emp.id }}, {{ r.emp.name|tojson }})">
                   Notes
                 </button>
@@ -885,7 +885,7 @@ var NOTES_BY_EMP = {
 
 
   <!-- COMPLAINT / MINUS MARKING SECTION -->
-  <div class="card" style="margin-bottom:20px;border-left:4px solid #dc2626;">
+  <div class="card" style="margin-bottom:20px;border-left:4px solid var(--bad);">
     <div class="card-header">
       <div class="card-title">Post-Delivery Complaint — Minus Marking</div>
     </div>
@@ -902,7 +902,7 @@ var NOTES_BY_EMP = {
         </div>
         <div class="field">
           <label>Target Staff (optional)</label>
-          <select name="target_emp_id" id="cmp_target" style="width:100%;padding:10px 13px;border:1.5px solid var(--line);border-radius:9px;background:rgba(255,255,255,0.8);font-size:14px;font-family:inherit;color:var(--ink);">
+          <select name="target_emp_id" id="cmp_target" style="width:100%;padding:10px 13px;border:1.5px solid var(--line);border-radius:10px;background:rgba(255,255,255,0.8);font-size:14px;font-family:inherit;color:var(--ink);">
             <option value="">— Apply to whole role —</option>
             {% if all_staff %}
               {% for s in all_staff %}
@@ -923,48 +923,48 @@ var NOTES_BY_EMP = {
       </div>
 
       <!-- AUTO-SUGGESTION BOX -->
-      <div style="background:rgba(254,242,242,0.7);border:1.5px solid #fecaca;border-radius:12px;padding:14px;margin-bottom:12px;">
-        <div style="font-size:11px;font-weight:800;color:#dc2626;text-transform:uppercase;margin-bottom:10px;">
+      <div style="background:rgba(254,242,242,0.7);border:1.5px solid #fecaca;border-radius:14px;padding:14px;margin-bottom:12px;">
+        <div style="font-size:11px;font-weight:800;color:var(--bad);text-transform:uppercase;margin-bottom:10px;">
           System Suggested Deductions (based on mistake type &amp; count)
         </div>
         <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:12px;">
-          <div style="background:#fff;border:1px solid #fecaca;border-radius:10px;padding:10px;text-align:center;">
-            <div style="font-size:10px;font-weight:800;color:#1d4ed8;margin-bottom:4px;">PICKER</div>
-            <div style="font-size:24px;font-weight:900;color:#dc2626;" id="sug_picker">0</div>
-            <div style="font-size:9px;color:var(--ink-3);">suggested pts</div>
-            <div style="font-size:9px;color:#6b7280;margin-top:4px;" id="sug_picker_reason">—</div>
+          <div style="background:var(--surface);border:1px solid #fecaca;border-radius:10px;padding:10px;text-align:center;">
+            <div style="font-size:11px;font-weight:800;color:var(--brand);margin-bottom:4px;">PICKER</div>
+            <div style="font-size:24px;font-weight:900;color:var(--bad);" id="sug_picker">0</div>
+            <div style="font-size:11px;color:var(--ink-3);">suggested pts</div>
+            <div style="font-size:11px;color:#6b7280;margin-top:4px;" id="sug_picker_reason">—</div>
           </div>
-          <div style="background:#fff;border:1px solid #fecaca;border-radius:10px;padding:10px;text-align:center;">
-            <div style="font-size:10px;font-weight:800;color:#6d28d9;margin-bottom:4px;">CHECKER</div>
-            <div style="font-size:24px;font-weight:900;color:#dc2626;" id="sug_checker">0</div>
-            <div style="font-size:9px;color:var(--ink-3);">suggested pts</div>
-            <div style="font-size:9px;color:#6b7280;margin-top:4px;" id="sug_checker_reason">—</div>
+          <div style="background:var(--surface);border:1px solid #fecaca;border-radius:10px;padding:10px;text-align:center;">
+            <div style="font-size:11px;font-weight:800;color:var(--accent-ink);margin-bottom:4px;">CHECKER</div>
+            <div style="font-size:24px;font-weight:900;color:var(--bad);" id="sug_checker">0</div>
+            <div style="font-size:11px;color:var(--ink-3);">suggested pts</div>
+            <div style="font-size:11px;color:#6b7280;margin-top:4px;" id="sug_checker_reason">—</div>
           </div>
-          <div style="background:#fff;border:1px solid #fecaca;border-radius:10px;padding:10px;text-align:center;">
-            <div style="font-size:10px;font-weight:800;color:#16a34a;margin-bottom:4px;">PURCHASER</div>
-            <div style="font-size:24px;font-weight:900;color:#dc2626;" id="sug_purchaser">0</div>
-            <div style="font-size:9px;color:var(--ink-3);">suggested pts</div>
-            <div style="font-size:9px;color:#6b7280;margin-top:4px;" id="sug_purchaser_reason">—</div>
+          <div style="background:var(--surface);border:1px solid #fecaca;border-radius:10px;padding:10px;text-align:center;">
+            <div style="font-size:11px;font-weight:800;color:var(--ok);margin-bottom:4px;">PURCHASER</div>
+            <div style="font-size:24px;font-weight:900;color:var(--bad);" id="sug_purchaser">0</div>
+            <div style="font-size:11px;color:var(--ink-3);">suggested pts</div>
+            <div style="font-size:11px;color:#6b7280;margin-top:4px;" id="sug_purchaser_reason">—</div>
           </div>
         </div>
-        <div style="font-size:10px;font-weight:800;color:#374151;margin-bottom:8px;">Admin Final Deductions (override if needed):</div>
+        <div style="font-size:11px;font-weight:800;color:#374151;margin-bottom:8px;">Admin Final Deductions (override if needed):</div>
         <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;">
           <div class="field">
-            <label style="color:#1d4ed8;font-size:11px;">Picker (pts)</label>
+            <label style="color:var(--brand);font-size:11px;">Picker (pts)</label>
             <input type="number" name="picker_final" id="inp_picker" min="0" max="30" step="0.5" placeholder="Use suggestion">
           </div>
           <div class="field">
-            <label style="color:#6d28d9;font-size:11px;">Checker (pts)</label>
+            <label style="color:var(--accent-ink);font-size:11px;">Checker (pts)</label>
             <input type="number" name="checker_final" id="inp_checker" min="0" max="30" step="0.5" placeholder="Use suggestion">
           </div>
           <div class="field">
-            <label style="color:#16a34a;font-size:11px;">Purchaser (pts)</label>
+            <label style="color:var(--ok);font-size:11px;">Purchaser (pts)</label>
             <input type="number" name="purchaser_final" id="inp_purchaser" min="0" max="30" step="0.5" placeholder="Use suggestion">
           </div>
         </div>
       </div>
       <div style="display:flex;justify-content:flex-end;">
-        <button type="submit" style="background:#dc2626;color:#fff;border:none;padding:10px 28px;border-radius:10px;font-weight:700;cursor:pointer;font-size:13px;">Record Complaint &amp; Apply Minus Points</button>
+        <button type="submit" style="background:var(--bad);color:var(--surface);border:none;padding:10px 28px;border-radius:10px;font-weight:700;cursor:pointer;font-size:13px;">Record Complaint &amp; Apply Minus Points</button>
       </div>
     </form>
 
@@ -1008,20 +1008,20 @@ var NOTES_BY_EMP = {
 
     {% if open_complaints %}
     <div style="margin-top:16px;border-top:1px solid var(--line);padding-top:14px;">
-      <div style="font-size:11px;font-weight:800;color:#dc2626;text-transform:uppercase;margin-bottom:8px;">Active Complaints (affecting scores)</div>
+      <div style="font-size:11px;font-weight:800;color:var(--bad);text-transform:uppercase;margin-bottom:8px;">Active Complaints (affecting scores)</div>
       {% for c in open_complaints %}
       <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 14px;background:#fef2f2;border:1px solid #fecaca;border-radius:10px;margin-bottom:6px;">
         <div>
-          <div style="font-size:13px;font-weight:700;color:#991b1b;">{{ c.complaint_type|title }}: {{ c.description[:60] }}{% if c.description|length > 60 %}...{% endif %}</div>
+          <div style="font-size:13px;font-weight:700;color:var(--bad-ink);">{{ c.complaint_type|title }}: {{ c.description[:60] }}{% if c.description|length > 60 %}...{% endif %}</div>
           <div style="font-size:11px;color:var(--ink-3);margin-top:2px;">
             {{ c.entry_date.strftime('%d %b') }} · 
-            Picker: <strong style="color:#1d4ed8;">-{{ c.picker_final }}pts</strong> · 
-            Checker: <strong style="color:#6d28d9;">-{{ c.checker_final }}pts</strong> · 
-            Purchaser: <strong style="color:#16a34a;">-{{ c.purchaser_final }}pts</strong>
+            Picker: <strong style="color:var(--brand);">-{{ c.picker_final }}pts</strong> · 
+            Checker: <strong style="color:var(--accent-ink);">-{{ c.checker_final }}pts</strong> · 
+            Purchaser: <strong style="color:var(--ok);">-{{ c.purchaser_final }}pts</strong>
           </div>
         </div>
         <form method="POST" action="/admin/complaint/{{ c.id }}/resolve" style="margin:0;">
-          <button type="submit" style="background:#16a34a;color:#fff;border:none;padding:6px 12px;border-radius:7px;font-size:11px;font-weight:700;cursor:pointer;">Resolve</button>
+          <button type="submit" style="background:var(--ok);color:var(--surface);border:none;padding:6px 12px;border-radius:6px;font-size:11px;font-weight:700;cursor:pointer;">Resolve</button>
         </form>
       </div>
       {% endfor %}
@@ -1040,7 +1040,7 @@ var NOTES_BY_EMP = {
     </div>
     <p style="font-size:11px;color:var(--ink-3);margin:0 0 14px 0;">
       Hard difficulty scoring — ELITE≥88pts · PROFICIENT≥72pts · SATISFACTORY≥50pts · RE-TRAINING&lt;50pts<br>
-      <span style="color:#dc2626;font-weight:700;">Minus marking active — complaints deducted from scores</span>
+      <span style="color:var(--bad);font-weight:700;">Minus marking active — complaints deducted from scores</span>
     </p>
 
     <!-- ALL TIME PANEL -->
@@ -1050,88 +1050,88 @@ var NOTES_BY_EMP = {
         <!-- PICKER SCORECARD -->
         <div>
           <div style="font-size:11px;font-weight:800;color:var(--brand);text-transform:uppercase;letter-spacing:.7px;margin-bottom:10px;">Picker Scorecard</div>
-          <div style="font-size:9px;color:var(--ink-3);margin-bottom:8px;">VWCR×25 + Fulfilment×18 + Speed÷250×15 + EffRatio×10 + Workspace×10 + CS×8 + Cleaner×7 + LogCons×7</div>
+          <div style="font-size:11px;color:var(--ink-3);margin-bottom:8px;">VWCR×25 + Fulfilment×18 + Speed÷250×15 + EffRatio×10 + Workspace×10 + CS×8 + Cleaner×7 + LogCons×7</div>
           {% if picker_lb %}{% for r in picker_lb %}
-          <div style="background:{% if loop.index0==0 %}rgba(255,215,0,0.12){% elif loop.index0==1 %}rgba(192,192,192,0.12){% elif loop.index0==2 %}rgba(205,127,50,0.1){% else %}rgba(238,244,255,0.4){% endif %};border:1px solid {% if loop.index0==0 %}rgba(255,215,0,0.4){% elif loop.index0==1 %}rgba(192,192,192,0.4){% elif loop.index0==2 %}rgba(205,127,50,0.25){% else %}var(--line){% endif %};border-radius:12px;padding:10px 12px;margin-bottom:6px;">
+          <div style="background:{% if loop.index0==0 %}rgba(255,215,0,0.12){% elif loop.index0==1 %}rgba(192,192,192,0.12){% elif loop.index0==2 %}rgba(205,127,50,0.1){% else %}rgba(238,244,255,0.4){% endif %};border:1px solid {% if loop.index0==0 %}rgba(255,215,0,0.4){% elif loop.index0==1 %}rgba(192,192,192,0.4){% elif loop.index0==2 %}rgba(205,127,50,0.25){% else %}var(--line){% endif %};border-radius:14px;padding:10px 12px;margin-bottom:6px;">
             <div style="display:flex;align-items:center;gap:8px;">
               <div style="font-size:18px;width:24px;">{{ loop.index }}</div>
               <div style="flex:1;">
                 <div style="font-size:13px;font-weight:700;">{{ r.emp.name }}</div>
-                <div style="font-size:10px;color:var(--ink-3);">{{ r.stats.days }}d · Acc {{ r.stats.pick_acc }}% · Fulfilment {{ r.stats.bill_fulfilment or 0 }}%</div>
+                <div style="font-size:11px;color:var(--ink-3);">{{ r.stats.days }}d · Acc {{ r.stats.pick_acc }}% · Fulfilment {{ r.stats.bill_fulfilment or 0 }}%</div>
               </div>
               <div style="text-align:right;">
                 <div style="font-size:18px;font-weight:800;color:var(--brand);">{{ r.stats.eff_score }}</div>
-                <div style="font-size:9px;color:var(--ink-3);">pts</div>
+                <div style="font-size:11px;color:var(--ink-3);">pts</div>
               </div>
             </div>
-            <div style="margin-top:7px;display:grid;grid-template-columns:repeat(4,1fr);gap:3px;font-size:9px;text-align:center;">
-              <div style="background:rgba(29,78,216,0.07);border-radius:5px;padding:3px;"><div style="color:var(--ink-3);">Accuracy</div><div style="font-weight:700;">{{ r.stats.pick_acc }}%</div></div>
-              <div style="background:rgba(29,78,216,0.07);border-radius:5px;padding:3px;"><div style="color:var(--ink-3);">Speed/hr</div><div style="font-weight:700;">{{ r.stats.pick_speed }}</div></div>
-              <div style="background:rgba(29,78,216,0.07);border-radius:5px;padding:3px;"><div style="color:var(--ink-3);">Workspace</div><div style="font-weight:700;">{{ r.stats.workspace_score }}%</div></div>
-              <div style="background:rgba(29,78,216,0.07);border-radius:5px;padding:3px;"><div style="color:var(--ink-3);">VWCR</div><div style="font-weight:700;">{{ r.stats.vwcr or 0 }}%</div></div>
+            <div style="margin-top:7px;display:grid;grid-template-columns:repeat(4,1fr);gap:3px;font-size:11px;text-align:center;">
+              <div style="background:rgba(29,78,216,0.07);border-radius:6px;padding:3px;"><div style="color:var(--ink-3);">Accuracy</div><div style="font-weight:700;">{{ r.stats.pick_acc }}%</div></div>
+              <div style="background:rgba(29,78,216,0.07);border-radius:6px;padding:3px;"><div style="color:var(--ink-3);">Speed/hr</div><div style="font-weight:700;">{{ r.stats.pick_speed }}</div></div>
+              <div style="background:rgba(29,78,216,0.07);border-radius:6px;padding:3px;"><div style="color:var(--ink-3);">Workspace</div><div style="font-weight:700;">{{ r.stats.workspace_score }}%</div></div>
+              <div style="background:rgba(29,78,216,0.07);border-radius:6px;padding:3px;"><div style="color:var(--ink-3);">VWCR</div><div style="font-weight:700;">{{ r.stats.vwcr or 0 }}%</div></div>
             </div>
             {% set g = r.stats.grade %}
-            <div style="margin-top:6px;text-align:right;"><span style="font-size:10px;font-weight:800;padding:2px 8px;border-radius:5px;background:{% if g=='ELITE' %}#ede9fe{% elif g=='PROFICIENT' %}#dcfce7{% elif g=='SATISFACTORY' %}#fef3c7{% else %}#fee2e2{% endif %};color:{% if g=='ELITE' %}#6d28d9{% elif g=='PROFICIENT' %}#16a34a{% elif g=='SATISFACTORY' %}#d97706{% else %}#dc2626{% endif %};">{{ g }}</span></div>
+            <div style="margin-top:6px;text-align:right;"><span style="font-size:11px;font-weight:800;padding:2px 8px;border-radius:6px;background:{% if g=='ELITE' %}var(--accent-tint){% elif g=='PROFICIENT' %}var(--ok-tint){% elif g=='SATISFACTORY' %}var(--warn-tint){% else %}var(--bad-tint){% endif %};color:{% if g=='ELITE' %}var(--accent-ink){% elif g=='PROFICIENT' %}var(--ok){% elif g=='SATISFACTORY' %}var(--warn){% else %}var(--bad){% endif %};">{{ g }}</span></div>
           </div>
           {% endfor %}{% else %}<div style="font-size:13px;color:var(--ink-3);padding:12px;">No picker data.</div>{% endif %}
         </div>
 
         <!-- CHECKER SCORECARD -->
         <div>
-          <div style="font-size:11px;font-weight:800;color:#6d28d9;text-transform:uppercase;letter-spacing:.7px;margin-bottom:10px;">Checker Scorecard</div>
-          <div style="font-size:9px;color:var(--ink-3);margin-bottom:8px;">Speed×22 + Clearance×22 + VWCR×20 + Cleaner×8 + EffRatio×8 + LogCons×8 + PotEff×5 + Workspace×4 + Sweep×3</div>
+          <div style="font-size:11px;font-weight:800;color:var(--accent-ink);text-transform:uppercase;letter-spacing:.7px;margin-bottom:10px;">Checker Scorecard</div>
+          <div style="font-size:11px;color:var(--ink-3);margin-bottom:8px;">Speed×22 + Clearance×22 + VWCR×20 + Cleaner×8 + EffRatio×8 + LogCons×8 + PotEff×5 + Workspace×4 + Sweep×3</div>
           {% if checker_lb %}{% for r in checker_lb %}
-          <div style="background:{% if loop.index0==0 %}rgba(255,215,0,0.12){% elif loop.index0==1 %}rgba(192,192,192,0.12){% elif loop.index0==2 %}rgba(205,127,50,0.1){% else %}rgba(245,243,255,0.4){% endif %};border:1px solid {% if loop.index0==0 %}rgba(255,215,0,0.4){% elif loop.index0==1 %}rgba(192,192,192,0.4){% elif loop.index0==2 %}rgba(205,127,50,0.25){% else %}rgba(167,139,250,0.2){% endif %};border-radius:12px;padding:10px 12px;margin-bottom:6px;">
+          <div style="background:{% if loop.index0==0 %}rgba(255,215,0,0.12){% elif loop.index0==1 %}rgba(192,192,192,0.12){% elif loop.index0==2 %}rgba(205,127,50,0.1){% else %}rgba(245,243,255,0.4){% endif %};border:1px solid {% if loop.index0==0 %}rgba(255,215,0,0.4){% elif loop.index0==1 %}rgba(192,192,192,0.4){% elif loop.index0==2 %}rgba(205,127,50,0.25){% else %}rgba(167,139,250,0.2){% endif %};border-radius:14px;padding:10px 12px;margin-bottom:6px;">
             <div style="display:flex;align-items:center;gap:8px;">
               <div style="font-size:18px;width:24px;">{{ loop.index }}</div>
               <div style="flex:1;">
                 <div style="font-size:13px;font-weight:700;">{{ r.emp.name }}</div>
-                <div style="font-size:10px;color:var(--ink-3);">{{ r.stats.days }}d · {{ r.stats.check_speed or r.stats.ck_speed }}/hr · Clr {{ r.stats.clearance_rate or 100 }}%</div>
+                <div style="font-size:11px;color:var(--ink-3);">{{ r.stats.days }}d · {{ r.stats.check_speed or r.stats.ck_speed }}/hr · Clr {{ r.stats.clearance_rate or 100 }}%</div>
               </div>
               <div style="text-align:right;">
-                <div style="font-size:18px;font-weight:800;color:#6d28d9;">{{ r.stats.eff_score }}</div>
-                <div style="font-size:9px;color:var(--ink-3);">pts</div>
+                <div style="font-size:18px;font-weight:800;color:var(--accent-ink);">{{ r.stats.eff_score }}</div>
+                <div style="font-size:11px;color:var(--ink-3);">pts</div>
               </div>
             </div>
-            <div style="margin-top:7px;display:grid;grid-template-columns:repeat(4,1fr);gap:3px;font-size:9px;text-align:center;">
-              <div style="background:rgba(109,40,217,0.07);border-radius:5px;padding:3px;"><div style="color:var(--ink-3);">Speed/hr</div><div style="font-weight:700;">{{ r.stats.check_speed or r.stats.ck_speed or 0 }}</div></div>
-              <div style="background:rgba(109,40,217,0.07);border-radius:5px;padding:3px;"><div style="color:var(--ink-3);">Normal%</div><div style="font-weight:700;">{{ r.stats.normal_pct or 0 }}%</div></div>
-              <div style="background:rgba(109,40,217,0.07);border-radius:5px;padding:3px;"><div style="color:var(--ink-3);">Clearance</div><div style="font-weight:700;">{{ r.stats.clearance_rate or 100 }}%</div></div>
-              <div style="background:rgba(109,40,217,0.07);border-radius:5px;padding:3px;"><div style="color:var(--ink-3);">Pending</div><div style="font-weight:700;">{{ r.stats.pending_bills or 0 }}</div></div>
+            <div style="margin-top:7px;display:grid;grid-template-columns:repeat(4,1fr);gap:3px;font-size:11px;text-align:center;">
+              <div style="background:rgba(109,40,217,0.07);border-radius:6px;padding:3px;"><div style="color:var(--ink-3);">Speed/hr</div><div style="font-weight:700;">{{ r.stats.check_speed or r.stats.ck_speed or 0 }}</div></div>
+              <div style="background:rgba(109,40,217,0.07);border-radius:6px;padding:3px;"><div style="color:var(--ink-3);">Normal%</div><div style="font-weight:700;">{{ r.stats.normal_pct or 0 }}%</div></div>
+              <div style="background:rgba(109,40,217,0.07);border-radius:6px;padding:3px;"><div style="color:var(--ink-3);">Clearance</div><div style="font-weight:700;">{{ r.stats.clearance_rate or 100 }}%</div></div>
+              <div style="background:rgba(109,40,217,0.07);border-radius:6px;padding:3px;"><div style="color:var(--ink-3);">Pending</div><div style="font-weight:700;">{{ r.stats.pending_bills or 0 }}</div></div>
             </div>
             {% if r.stats.complaint_deduction and r.stats.complaint_deduction > 0 %}
-            <div style="margin-top:4px;font-size:9px;color:#dc2626;font-weight:700;">-{{ r.stats.complaint_deduction }} pts minus marking</div>
+            <div style="margin-top:4px;font-size:11px;color:var(--bad);font-weight:700;">-{{ r.stats.complaint_deduction }} pts minus marking</div>
             {% endif %}
             {% set g = r.stats.grade %}
-            <div style="margin-top:6px;text-align:right;"><span style="font-size:10px;font-weight:800;padding:2px 8px;border-radius:5px;background:{% if g=='ELITE' %}#ede9fe{% elif g=='PROFICIENT' %}#dcfce7{% elif g=='SATISFACTORY' %}#fef3c7{% else %}#fee2e2{% endif %};color:{% if g=='ELITE' %}#6d28d9{% elif g=='PROFICIENT' %}#16a34a{% elif g=='SATISFACTORY' %}#d97706{% else %}#dc2626{% endif %};">{{ g }}</span></div>
+            <div style="margin-top:6px;text-align:right;"><span style="font-size:11px;font-weight:800;padding:2px 8px;border-radius:6px;background:{% if g=='ELITE' %}var(--accent-tint){% elif g=='PROFICIENT' %}var(--ok-tint){% elif g=='SATISFACTORY' %}var(--warn-tint){% else %}var(--bad-tint){% endif %};color:{% if g=='ELITE' %}var(--accent-ink){% elif g=='PROFICIENT' %}var(--ok){% elif g=='SATISFACTORY' %}var(--warn){% else %}var(--bad){% endif %};">{{ g }}</span></div>
           </div>
           {% endfor %}{% else %}<div style="font-size:13px;color:var(--ink-3);padding:12px;">No checker data.</div>{% endif %}
         </div>
 
         <!-- PURCHASER SCORECARD -->
         <div>
-          <div style="font-size:11px;font-weight:800;color:#16a34a;text-transform:uppercase;letter-spacing:.7px;margin-bottom:10px;">Purchaser Scorecard</div>
-          <div style="font-size:9px;color:var(--ink-3);margin-bottom:8px;">BillRate×25 + CS×20 + Racking×15 + Speed÷60×10 + Entry×8 + VWCR×8 + Pending×5 + EffRatio×4 + Workspace×3 + LogCons×2</div>
+          <div style="font-size:11px;font-weight:800;color:var(--ok);text-transform:uppercase;letter-spacing:.7px;margin-bottom:10px;">Purchaser Scorecard</div>
+          <div style="font-size:11px;color:var(--ink-3);margin-bottom:8px;">BillRate×25 + CS×20 + Racking×15 + Speed÷60×10 + Entry×8 + VWCR×8 + Pending×5 + EffRatio×4 + Workspace×3 + LogCons×2</div>
           {% if purchaser_lb is defined and purchaser_lb %}{% for r in purchaser_lb %}
-          <div style="background:{% if loop.index0==0 %}rgba(255,215,0,0.12){% else %}rgba(240,253,244,0.4){% endif %};border:1px solid {% if loop.index0==0 %}rgba(255,215,0,0.4){% else %}rgba(22,163,74,0.15){% endif %};border-radius:12px;padding:10px 12px;margin-bottom:6px;">
+          <div style="background:{% if loop.index0==0 %}rgba(255,215,0,0.12){% else %}rgba(240,253,244,0.4){% endif %};border:1px solid {% if loop.index0==0 %}rgba(255,215,0,0.4){% else %}rgba(22,163,74,0.15){% endif %};border-radius:14px;padding:10px 12px;margin-bottom:6px;">
             <div style="display:flex;align-items:center;gap:8px;">
               <div style="font-size:18px;width:24px;">{{ loop.index }}</div>
               <div style="flex:1;">
                 <div style="font-size:13px;font-weight:700;">{{ r.emp.name }}</div>
-                <div style="font-size:10px;color:var(--ink-3);">{{ r.stats.days }}d · BillRate {{ r.stats.pur_bill_rate or 0 }}%</div>
+                <div style="font-size:11px;color:var(--ink-3);">{{ r.stats.days }}d · BillRate {{ r.stats.pur_bill_rate or 0 }}%</div>
               </div>
               <div style="text-align:right;">
-                <div style="font-size:18px;font-weight:800;color:#16a34a;">{{ r.stats.eff_score }}</div>
-                <div style="font-size:9px;color:var(--ink-3);">pts</div>
+                <div style="font-size:18px;font-weight:800;color:var(--ok);">{{ r.stats.eff_score }}</div>
+                <div style="font-size:11px;color:var(--ink-3);">pts</div>
               </div>
             </div>
-            <div style="margin-top:7px;display:grid;grid-template-columns:repeat(3,1fr);gap:3px;font-size:9px;text-align:center;">
-              <div style="background:rgba(22,163,74,0.07);border-radius:5px;padding:3px;"><div style="color:var(--ink-3);">Bill Rate</div><div style="font-weight:700;">{{ r.stats.pur_bill_rate or 0 }}%</div></div>
-              <div style="background:rgba(22,163,74,0.07);border-radius:5px;padding:3px;"><div style="color:var(--ink-3);">CS Ful.</div><div style="font-weight:700;">{{ r.stats.pur_cs_fulfilment or 0 }}%</div></div>
-              <div style="background:rgba(22,163,74,0.07);border-radius:5px;padding:3px;"><div style="color:var(--ink-3);">Racking</div><div style="font-weight:700;">{{ r.stats.pur_racking_eff or 0 }}%</div></div>
+            <div style="margin-top:7px;display:grid;grid-template-columns:repeat(3,1fr);gap:3px;font-size:11px;text-align:center;">
+              <div style="background:rgba(22,163,74,0.07);border-radius:6px;padding:3px;"><div style="color:var(--ink-3);">Bill Rate</div><div style="font-weight:700;">{{ r.stats.pur_bill_rate or 0 }}%</div></div>
+              <div style="background:rgba(22,163,74,0.07);border-radius:6px;padding:3px;"><div style="color:var(--ink-3);">CS Ful.</div><div style="font-weight:700;">{{ r.stats.pur_cs_fulfilment or 0 }}%</div></div>
+              <div style="background:rgba(22,163,74,0.07);border-radius:6px;padding:3px;"><div style="color:var(--ink-3);">Racking</div><div style="font-weight:700;">{{ r.stats.pur_racking_eff or 0 }}%</div></div>
             </div>
             {% set g = r.stats.grade %}
-            <div style="margin-top:6px;text-align:right;"><span style="font-size:10px;font-weight:800;padding:2px 8px;border-radius:5px;background:{% if g=='ELITE' %}#ede9fe{% elif g=='PROFICIENT' %}#dcfce7{% elif g=='SATISFACTORY' %}#fef3c7{% else %}#fee2e2{% endif %};color:{% if g=='ELITE' %}#6d28d9{% elif g=='PROFICIENT' %}#16a34a{% elif g=='SATISFACTORY' %}#d97706{% else %}#dc2626{% endif %};">{{ g }}</span></div>
+            <div style="margin-top:6px;text-align:right;"><span style="font-size:11px;font-weight:800;padding:2px 8px;border-radius:6px;background:{% if g=='ELITE' %}var(--accent-tint){% elif g=='PROFICIENT' %}var(--ok-tint){% elif g=='SATISFACTORY' %}var(--warn-tint){% else %}var(--bad-tint){% endif %};color:{% if g=='ELITE' %}var(--accent-ink){% elif g=='PROFICIENT' %}var(--ok){% elif g=='SATISFACTORY' %}var(--warn){% else %}var(--bad){% endif %};">{{ g }}</span></div>
           </div>
           {% endfor %}{% else %}<div style="font-size:13px;color:var(--ink-3);padding:12px;">No purchaser data.</div>{% endif %}
         </div>
@@ -1143,12 +1143,12 @@ var NOTES_BY_EMP = {
         <div style="font-size:11px;font-weight:800;color:#374151;text-transform:uppercase;letter-spacing:.7px;margin-bottom:10px;">Overall Top 5 — All Roles</div>
         <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:8px;">
           {% for r in mixed_lb %}
-          <div style="background:{% if loop.index0==0 %}rgba(255,215,0,0.15){% else %}rgba(248,250,252,0.8){% endif %};border:1.5px solid {% if loop.index0==0 %}rgba(255,215,0,0.5){% else %}var(--line){% endif %};border-radius:12px;padding:10px;text-align:center;">
+          <div style="background:{% if loop.index0==0 %}rgba(255,215,0,0.15){% else %}rgba(248,250,252,0.8){% endif %};border:1.5px solid {% if loop.index0==0 %}rgba(255,215,0,0.5){% else %}var(--line){% endif %};border-radius:14px;padding:10px;text-align:center;">
             <div style="font-size:22px;">{{ loop.index }}</div>
             <div style="font-size:12px;font-weight:700;margin:4px 0;">{{ r.emp.name.split()[0] }}</div>
-            <div style="font-size:9px;background:{% if r.emp.staff_type=='picker' %}var(--brand-tint){% elif r.emp.staff_type=='checker' %}#ede9fe{% else %}#dcfce7{% endif %};color:{% if r.emp.staff_type=='picker' %}var(--brand){% elif r.emp.staff_type=='checker' %}#6d28d9{% else %}#16a34a{% endif %};padding:1px 5px;border-radius:4px;font-weight:700;display:inline-block;margin-bottom:4px;">{{ r.emp.staff_type }}</div>
-            <div style="font-size:20px;font-weight:800;color:{% if loop.index0==0 %}#b45309{% else %}var(--ink){% endif %};">{{ r.stats.eff_score }}</div>
-            <div style="font-size:9px;color:var(--ink-3);">pts</div>
+            <div style="font-size:11px;background:{% if r.emp.staff_type=='picker' %}var(--brand-tint){% elif r.emp.staff_type=='checker' %}var(--accent-tint){% else %}var(--ok-tint){% endif %};color:{% if r.emp.staff_type=='picker' %}var(--brand){% elif r.emp.staff_type=='checker' %}var(--accent-ink){% else %}var(--ok){% endif %};padding:1px 5px;border-radius:4px;font-weight:700;display:inline-block;margin-bottom:4px;">{{ r.emp.staff_type }}</div>
+            <div style="font-size:20px;font-weight:800;color:{% if loop.index0==0 %}var(--warn){% else %}var(--ink){% endif %};">{{ r.stats.eff_score }}</div>
+            <div style="font-size:11px;color:var(--ink-3);">pts</div>
           </div>
           {% endfor %}
         </div>
@@ -1164,17 +1164,17 @@ var NOTES_BY_EMP = {
           <div style="display:flex;align-items:center;gap:8px;padding:8px 10px;background:rgba(238,244,255,0.5);border:1px solid var(--line);border-radius:10px;margin-bottom:5px;">
             <div style="font-size:16px;">{{ loop.index }}</div>
             <div style="flex:1;font-size:12px;font-weight:700;">{{ r.emp.name }}</div>
-            <div style="font-size:15px;font-weight:800;color:var(--brand);">{{ r.week_stats.eff_score }}<span style="font-size:9px;color:var(--ink-3);">pts</span></div>
+            <div style="font-size:15px;font-weight:800;color:var(--brand);">{{ r.week_stats.eff_score }}<span style="font-size:11px;color:var(--ink-3);">pts</span></div>
           </div>
           {% else %}<div style="font-size:12px;color:var(--ink-3);">No data this week.</div>{% endfor %}
         </div>
         <div>
-          <div style="font-size:11px;font-weight:800;color:#6d28d9;text-transform:uppercase;margin-bottom:10px;">Checkers — This Week</div>
+          <div style="font-size:11px;font-weight:800;color:var(--accent-ink);text-transform:uppercase;margin-bottom:10px;">Checkers — This Week</div>
           {% for r in checker_week_lb %}
           <div style="display:flex;align-items:center;gap:8px;padding:8px 10px;background:rgba(245,243,255,0.5);border:1px solid rgba(167,139,250,0.2);border-radius:10px;margin-bottom:5px;">
             <div style="font-size:16px;">{{ loop.index }}</div>
             <div style="flex:1;font-size:12px;font-weight:700;">{{ r.emp.name }}</div>
-            <div style="font-size:15px;font-weight:800;color:#6d28d9;">{{ r.week_stats.eff_score }}<span style="font-size:9px;color:var(--ink-3);">pts</span></div>
+            <div style="font-size:15px;font-weight:800;color:var(--accent-ink);">{{ r.week_stats.eff_score }}<span style="font-size:11px;color:var(--ink-3);">pts</span></div>
           </div>
           {% else %}<div style="font-size:12px;color:var(--ink-3);">No data this week.</div>{% endfor %}
         </div>
@@ -1185,9 +1185,9 @@ var NOTES_BY_EMP = {
             <div style="font-size:16px;">{{ loop.index }}</div>
             <div style="flex:1;">
               <div style="font-size:12px;font-weight:700;">{{ r.emp.name }}</div>
-              <div style="font-size:9px;color:var(--ink-3);">{{ r.emp.staff_type }}</div>
+              <div style="font-size:11px;color:var(--ink-3);">{{ r.emp.staff_type }}</div>
             </div>
-            <div style="font-size:15px;font-weight:800;">{{ r.week_stats.eff_score }}<span style="font-size:9px;color:var(--ink-3);">pts</span></div>
+            <div style="font-size:15px;font-weight:800;">{{ r.week_stats.eff_score }}<span style="font-size:11px;color:var(--ink-3);">pts</span></div>
           </div>
           {% else %}<div style="font-size:12px;color:var(--ink-3);">No data this week.</div>{% endfor %}
         </div>
@@ -1249,17 +1249,17 @@ var NOTES_BY_EMP = {
       <div class="card-header"><div class="card-title">Team Health</div></div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px;">
         <div style="background:rgba(238,244,255,0.7);border:1px solid var(--line);border-radius:10px;padding:12px;text-align:center;">
-          <div style="font-size:10px;font-weight:800;color:var(--ink-3);text-transform:uppercase;margin-bottom:3px;">Avg Score</div>
+          <div style="font-size:11px;font-weight:800;color:var(--ink-3);text-transform:uppercase;margin-bottom:3px;">Avg Score</div>
           <div style="font-size:26px;font-weight:800;color:var(--brand);">{{ team_avg_eff or 0 }}</div>
-          <div style="font-size:10px;color:var(--ink-3);">pts</div>
+          <div style="font-size:11px;color:var(--ink-3);">pts</div>
         </div>
         <div style="background:rgba(238,244,255,0.7);border:1px solid var(--line);border-radius:10px;padding:12px;text-align:center;">
-          <div style="font-size:10px;font-weight:800;color:var(--ink-3);text-transform:uppercase;margin-bottom:3px;">Active Today</div>
+          <div style="font-size:11px;font-weight:800;color:var(--ink-3);text-transform:uppercase;margin-bottom:3px;">Active Today</div>
           <div style="font-size:26px;font-weight:800;color:var(--brand);">{{ active_today }}</div>
-          <div style="font-size:10px;color:var(--ink-3);">staff</div>
+          <div style="font-size:11px;color:var(--ink-3);">staff</div>
         </div>
       </div>
-      <div style="font-size:10px;font-weight:800;color:var(--ink-3);text-transform:uppercase;margin-bottom:8px;">Grade Distribution</div>
+      <div style="font-size:11px;font-weight:800;color:var(--ink-3);text-transform:uppercase;margin-bottom:8px;">Grade Distribution</div>
       {% set total_staff = grade_counts.ELITE + grade_counts.PROFICIENT + grade_counts.SATISFACTORY + grade_counts['RE-TRAINING'] %}
       {% for grade, color in [('ELITE','#6d28d9'),('PROFICIENT','#16a34a'),('SATISFACTORY','#d97706'),('RE-TRAINING','#dc2626')] %}
       <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">
@@ -1275,19 +1275,19 @@ var NOTES_BY_EMP = {
       <div class="card-header"><div class="card-title">Recommendations</div></div>
       {% if needs_attention %}
       <div style="margin-bottom:12px;">
-        <div style="font-size:10px;font-weight:800;color:#dc2626;text-transform:uppercase;margin-bottom:6px;">Needs Attention</div>
+        <div style="font-size:11px;font-weight:800;color:var(--bad);text-transform:uppercase;margin-bottom:6px;">Needs Attention</div>
         {% for r in needs_attention %}
-        <div style="display:flex;align-items:center;justify-content:space-between;padding:7px 10px;background:#fef2f2;border:1px solid #fecaca;border-radius:8px;margin-bottom:4px;">
-          <div><div style="font-size:12px;font-weight:700;">{{ r.emp.name }}</div><div style="font-size:10px;color:var(--ink-3);">{{ r.emp.staff_type|title }} · {{ r.stats.eff_score }}pts</div></div>
-          <a href="/staff/{{ r.emp.id }}" style="font-size:11px;font-weight:700;color:#dc2626;background:#fee2e2;padding:3px 8px;border-radius:5px;text-decoration:none;">View →</a>
+        <div style="display:flex;align-items:center;justify-content:space-between;padding:7px 10px;background:#fef2f2;border:1px solid #fecaca;border-radius:10px;margin-bottom:4px;">
+          <div><div style="font-size:12px;font-weight:700;">{{ r.emp.name }}</div><div style="font-size:11px;color:var(--ink-3);">{{ r.emp.staff_type|title }} · {{ r.stats.eff_score }}pts</div></div>
+          <a href="/staff/{{ r.emp.id }}" style="font-size:11px;font-weight:700;color:var(--bad);background:var(--bad-tint);padding:3px 8px;border-radius:6px;text-decoration:none;">View →</a>
         </div>
         {% endfor %}
       </div>
       {% endif %}
       {% if improving %}
-      <div style="font-size:10px;font-weight:800;color:#16a34a;text-transform:uppercase;margin-bottom:6px;">Improving</div>
+      <div style="font-size:11px;font-weight:800;color:var(--ok);text-transform:uppercase;margin-bottom:6px;">Improving</div>
       {% for r in improving %}
-      <div style="padding:7px 10px;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;margin-bottom:4px;">
+      <div style="padding:7px 10px;background:#f0fdf4;border:1px solid var(--ok-line);border-radius:10px;margin-bottom:4px;">
         <div style="font-size:12px;font-weight:700;">{{ r.emp.name }} ↑</div>
       </div>
       {% endfor %}
@@ -1296,9 +1296,9 @@ var NOTES_BY_EMP = {
       <div style="text-align:center;padding:20px;color:var(--ink-3);font-size:12px;">All staff performing well.</div>
       {% endif %}
       <div style="padding-top:10px;border-top:1px solid var(--line);display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;text-align:center;margin-top:10px;">
-        <div><div style="font-size:18px;font-weight:800;color:var(--brand);">{{ active_today }}</div><div style="font-size:9px;color:var(--ink-3);">Active Today</div></div>
-        <div><div style="font-size:18px;font-weight:800;color:#16a34a;">{{ improving|length }}</div><div style="font-size:9px;color:var(--ink-3);">Improving</div></div>
-        <div><div style="font-size:18px;font-weight:800;color:#dc2626;">{{ needs_attention|length }}</div><div style="font-size:9px;color:var(--ink-3);">Need Help</div></div>
+        <div><div style="font-size:18px;font-weight:800;color:var(--brand);">{{ active_today }}</div><div style="font-size:11px;color:var(--ink-3);">Active Today</div></div>
+        <div><div style="font-size:18px;font-weight:800;color:var(--ok);">{{ improving|length }}</div><div style="font-size:11px;color:var(--ink-3);">Improving</div></div>
+        <div><div style="font-size:18px;font-weight:800;color:var(--bad);">{{ needs_attention|length }}</div><div style="font-size:11px;color:var(--ink-3);">Need Help</div></div>
       </div>
     </div>
   </div>
@@ -1419,13 +1419,13 @@ function openNotesModal(empId, empName) {
   var list = document.getElementById('notesHistoryList');
   var notes = NOTES_BY_EMP[String(empId)] || [];
   if(notes.length === 0) {
-    list.innerHTML = '<div style="font-size:12px;color:#64748b;padding:10px 0;">No notes yet.</div>';
+    list.innerHTML = '<div style="font-size:12px;color:var(--ink-3);padding:10px 0;">No notes yet.</div>';
   } else {
     var html = '<div style="font-size:11px;font-weight:800;color:#374151;text-transform:uppercase;margin-bottom:8px;">History</div>';
     notes.forEach(function(n) {
-      html += '<div style="background:#f8fafc;border:1px solid #c7d9f5;border-radius:8px;padding:10px 13px;margin-bottom:7px;">'
-            + '<div style="font-size:12px;color:#0f172a;">' + escHtml(n.note) + '</div>'
-            + '<div style="font-size:10px;color:#64748b;margin-top:4px;">' + escHtml(n.created_at) + '</div>'
+      html += '<div style="background:var(--surface-2);border:1px solid #c7d9f5;border-radius:10px;padding:10px 13px;margin-bottom:7px;">'
+            + '<div style="font-size:12px;color:var(--ink);">' + escHtml(n.note) + '</div>'
+            + '<div style="font-size:11px;color:var(--ink-3);margin-top:4px;">' + escHtml(n.created_at) + '</div>'
             + '</div>';
     });
     list.innerHTML = html;
@@ -1497,7 +1497,7 @@ if (typeof io !== 'undefined') {
     el.style.cssText = 'position:fixed;top:70px;right:20px;z-index:999;max-width:360px;box-shadow:0 8px 24px rgba(0,0,0,0.15);animation:slideIn 0.3s ease;';
     el.innerHTML = '<strong>Bill count mismatch</strong> — ' + (data.date || '') + '<br>'
                  + 'Flagged: ' + ((data.wrong_names || []).join(', ') || 'check validations page')
-                 + '<br><a href="/validations" style="color:#dc2626;font-weight:700;">View validations →</a>';
+                 + '<br><a href="/validations" style="color:var(--bad);font-weight:700;">View validations →</a>';
     document.body.appendChild(el);
     setTimeout(() => el.remove(), 9000);
   });

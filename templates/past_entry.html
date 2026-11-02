@@ -49,14 +49,14 @@ body {
 .nav-pill {
   font-family: 'DM Sans', sans-serif; font-size: 11px; font-weight: 600;
   background: var(--purple-bg); color: var(--purple);
-  padding: 3px 10px; border-radius: 20px;
+  padding: 3px 10px; border-radius:999px;
   text-transform: uppercase; letter-spacing: 0.5px; border: 1px solid var(--purple-border);
 }
 .nav-right { display: flex; align-items: center; gap: 14px; }
 .nav-user { font-size: 13px; font-weight: 600; color: var(--muted); }
 .btn-back {
   padding: 7px 16px; background: var(--bg); color: var(--muted);
-  border: 1px solid var(--border); border-radius: 8px;
+  border: 1px solid var(--border); border-radius:10px;
   font-size: 12px; font-weight: 600; cursor: pointer;
   font-family: inherit; text-decoration: none; transition: all 0.2s;
 }
@@ -76,7 +76,7 @@ body {
 .card {
   background: rgba(255,255,255,0.85);
   border: 1px solid var(--border);
-  border-radius: 16px; padding: 28px; margin-bottom: 20px;
+  border-radius:14px; padding: 28px; margin-bottom: 20px;
   box-shadow: 0 2px 12px rgba(29,78,216,0.07), 0 1px 3px rgba(0,0,0,0.04);
   backdrop-filter: blur(8px);
 }
@@ -85,7 +85,7 @@ body {
 .date-banner {
   background: linear-gradient(135deg, var(--purple-bg), #ede9fe);
   border: 1px solid var(--purple-border);
-  border-radius: 12px; padding: 16px 20px;
+  border-radius:14px; padding: 16px 20px;
   margin-bottom: 24px;
   display: flex; align-items: center; gap: 12px;
 }
@@ -100,7 +100,7 @@ body {
 .field { display: flex; flex-direction: column; }
 .field label { font-size: 11px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: 0.6px; margin-bottom: 7px; }
 .field input {
-  padding: 10px 13px; border: 1.5px solid var(--border); border-radius: 9px;
+  padding: 10px 13px; border: 1.5px solid var(--border); border-radius:10px;
   background: rgba(255,255,255,0.8); font-size: 14px; font-family: 'DM Sans', sans-serif;
   color: var(--text); transition: all 0.2s;
 }
@@ -188,23 +188,23 @@ body {
         </div>
         <!-- LIVE TOTAL BANNER -->
         <div style="grid-column:span 2;display:flex;gap:10px;margin-bottom:4px;">
-          <div style="flex:1;background:rgba(219,234,254,0.85);border:1.5px solid rgba(29,78,216,0.25);border-radius:13px;padding:14px 18px;backdrop-filter:blur(10px);text-align:center;">
-            <div style="font-size:10px;font-weight:800;color:#1d4ed8;text-transform:uppercase;letter-spacing:.7px;margin-bottom:4px;">Total SB Checked</div>
+          <div style="flex:1;background:rgba(219,234,254,0.85);border:1.5px solid rgba(29,78,216,0.25);border-radius:14px;padding:14px 18px;backdrop-filter:blur(10px);text-align:center;">
+            <div style="font-size:11px;font-weight:800;color:#1d4ed8;text-transform:uppercase;letter-spacing:.7px;margin-bottom:4px;">Total SB Checked</div>
             <div style="font-size:30px;font-weight:800;color:#1e3a8a;" id="pe_total_sb">0</div>
             <div style="font-size:11px;color:#64748b;margin-top:2px;">Normal + Urgent</div>
           </div>
-          <div style="flex:1;background:rgba(240,253,244,0.85);border:1.5px solid rgba(22,163,74,0.25);border-radius:13px;padding:14px 18px;backdrop-filter:blur(10px);text-align:center;">
-            <div style="font-size:10px;font-weight:800;color:#16a34a;text-transform:uppercase;letter-spacing:.7px;margin-bottom:4px;">Total Items Checked</div>
+          <div style="flex:1;background:rgba(240,253,244,0.85);border:1.5px solid rgba(22,163,74,0.25);border-radius:14px;padding:14px 18px;backdrop-filter:blur(10px);text-align:center;">
+            <div style="font-size:11px;font-weight:800;color:#16a34a;text-transform:uppercase;letter-spacing:.7px;margin-bottom:4px;">Total Items Checked</div>
             <div style="font-size:30px;font-weight:800;color:#14532d;" id="pe_total_items">0</div>
             <div style="font-size:11px;color:#64748b;margin-top:2px;">Normal + Urgent</div>
           </div>
-          <div style="flex:1;background:rgba(254,242,242,0.85);border:1.5px solid rgba(220,38,38,0.25);border-radius:13px;padding:14px 18px;backdrop-filter:blur(10px);text-align:center;">
-            <div style="font-size:10px;font-weight:800;color:#dc2626;text-transform:uppercase;letter-spacing:.7px;margin-bottom:4px;">Pending Bills</div>
+          <div style="flex:1;background:rgba(254,242,242,0.85);border:1.5px solid rgba(220,38,38,0.25);border-radius:14px;padding:14px 18px;backdrop-filter:blur(10px);text-align:center;">
+            <div style="font-size:11px;font-weight:800;color:#dc2626;text-transform:uppercase;letter-spacing:.7px;margin-bottom:4px;">Pending Bills</div>
             <div style="font-size:30px;font-weight:800;color:#991b1b;" id="pe_pending">0</div>
             <div style="font-size:11px;color:#64748b;margin-top:2px;">Manually entered</div>
           </div>
-          <div style="flex:1;background:rgba(240,253,244,0.85);border:1.5px solid rgba(22,163,74,0.25);border-radius:13px;padding:14px 18px;backdrop-filter:blur(10px);text-align:center;">
-            <div style="font-size:10px;font-weight:800;color:#16a34a;text-transform:uppercase;letter-spacing:.7px;margin-bottom:4px;">Clearance Rate</div>
+          <div style="flex:1;background:rgba(240,253,244,0.85);border:1.5px solid rgba(22,163,74,0.25);border-radius:14px;padding:14px 18px;backdrop-filter:blur(10px);text-align:center;">
+            <div style="font-size:11px;font-weight:800;color:#16a34a;text-transform:uppercase;letter-spacing:.7px;margin-bottom:4px;">Clearance Rate</div>
             <div style="font-size:30px;font-weight:800;color:#14532d;" id="pe_clearance">100%</div>
             <div style="font-size:11px;color:#64748b;margin-top:2px;">Checked÷(Checked+Pending)</div>
           </div>
@@ -232,18 +232,18 @@ body {
         {% elif staff_type == 'purchaser' %}
         <!-- PURCHASER LIVE BANNER -->
         <div style="grid-column:span 2;display:flex;gap:10px;margin-bottom:8px;">
-          <div style="flex:1;background:rgba(238,244,255,0.85);border:1.5px solid rgba(29,78,216,0.25);border-radius:13px;padding:12px;text-align:center;">
-            <div style="font-size:10px;font-weight:800;color:var(--blue);text-transform:uppercase;margin-bottom:3px;">Bill Rate</div>
+          <div style="flex:1;background:rgba(238,244,255,0.85);border:1.5px solid rgba(29,78,216,0.25);border-radius:14px;padding:12px;text-align:center;">
+            <div style="font-size:11px;font-weight:800;color:var(--blue);text-transform:uppercase;margin-bottom:3px;">Bill Rate</div>
             <div style="font-size:24px;font-weight:800;color:#1e3a8a;" id="pe_pur_rate">0%</div>
           </div>
-          <div style="flex:1;background:rgba(240,253,244,0.85);border:1.5px solid rgba(22,163,74,0.25);border-radius:13px;padding:12px;text-align:center;">
-            <div style="font-size:10px;font-weight:800;color:#16a34a;text-transform:uppercase;margin-bottom:3px;">CS Fulfilment</div>
+          <div style="flex:1;background:rgba(240,253,244,0.85);border:1.5px solid rgba(22,163,74,0.25);border-radius:14px;padding:12px;text-align:center;">
+            <div style="font-size:11px;font-weight:800;color:#16a34a;text-transform:uppercase;margin-bottom:3px;">CS Fulfilment</div>
             <div style="font-size:24px;font-weight:800;color:#14532d;" id="pe_pur_cs">100%</div>
           </div>
         </div>
         <!-- PURCHASER PENDING BOX -->
-        <div style="grid-column:span 2;background:rgba(254,242,242,0.85);border:1.5px solid rgba(220,38,38,0.25);border-radius:13px;padding:12px;text-align:center;margin-bottom:8px;">
-          <div style="font-size:10px;font-weight:800;color:#dc2626;text-transform:uppercase;margin-bottom:3px;">Pending PO Bills (Auto)</div>
+        <div style="grid-column:span 2;background:rgba(254,242,242,0.85);border:1.5px solid rgba(220,38,38,0.25);border-radius:14px;padding:12px;text-align:center;margin-bottom:8px;">
+          <div style="font-size:11px;font-weight:800;color:#dc2626;text-transform:uppercase;margin-bottom:3px;">Pending PO Bills (Auto)</div>
           <div style="font-size:26px;font-weight:800;color:#991b1b;" id="pe_pur_pending">0</div>
           <div style="font-size:11px;color:var(--muted);">Bills Received − Bills Checked</div>
         </div>
@@ -340,7 +340,7 @@ body {
         {% endif %}
       </div>
 
-      <div style="background:rgba(240,253,244,0.85);border:1px solid rgba(22,163,74,0.2);border-radius:11px;padding:12px 16px;margin-bottom:20px;font-size:12px;color:#15803a;font-weight:600;">
+      <div style="background:rgba(240,253,244,0.85);border:1px solid rgba(22,163,74,0.2);border-radius:10px;padding:12px 16px;margin-bottom:20px;font-size:12px;color:#15803a;font-weight:600;">
         Working time is automatically set to <strong>9 hours</strong> for all calculations.
       </div>
 
