@@ -59,6 +59,7 @@ app.config.update(
     MAIL_DEFAULT_SENDER=os.environ.get("MAIL_USERNAME", "noreply@pharmaip.com"),
 )
 
+
 db_url = os.environ.get("DATABASE_URL")
 if not db_url:
     logger.warning("DATABASE_URL not set! Using SQLite (local development mode)")
@@ -5272,7 +5273,8 @@ def send_monthly_reports():
             if failed:
                 msg.body += "\n\nCould not be generated: " + ", ".join(failed)
 
-            mail.send(msg)
+            with mail_socket_timeout():
+                mail.send(msg)
             note = f"Sent {attached} report(s) to {admin_email}"
             if skipped:
                 note += f"; {len(skipped)} left out for size"
@@ -5375,6 +5377,99 @@ def admin_diagnostics():
                            is_production=bool(IS_PRODUCTION))
 
 
+
+MAIL_TIMEOUT = int(os.environ.get("MAIL_TIMEOUT", "15"))
+
+from contextlib import contextmanager as _contextmanager
+
+
+@_contextmanager
+def mail_socket_timeout():
+    """Bound SMTP socket waits, and only those.
+
+    Flask-Mail does not pass a timeout to smtplib, so a wrong host or a blocked
+    port hangs the worker instead of erroring. socket.setdefaulttimeout is the
+    only lever that reaches inside it, but it is process-wide: left on, it would
+    also cap database queries and kill any slow one. So it is raised only around
+    a send and restored immediately afterwards, even if the send raises.
+    """
+    import socket
+    previous = socket.getdefaulttimeout()
+    socket.setdefaulttimeout(MAIL_TIMEOUT)
+    try:
+        yield
+    finally:
+        socket.setdefaulttimeout(previous)
+
+
+
+
+def send_test_email(to):
+    """Send one small message, failing fast and saying exactly what went wrong.
+
+    Flask-Mail opens the SMTP socket with no timeout, so a wrong host or a
+    blocked port does not error -- it hangs. With one eventlet worker that
+    blocks the whole service until gunicorn kills the request at 120 seconds,
+    which is why the button appeared to do nothing for a long time and then
+    gave up. smtplib is used directly here so the timeout is ours, and so each
+    failure can be reported as something actionable rather than as a stall.
+
+    Returns (ok, message).
+    """
+    import smtplib
+    import socket
+    from email.message import EmailMessage
+
+    host = os.environ.get("MAIL_SERVER", "")
+    port = int(os.environ.get("MAIL_PORT", 587) or 587)
+    user = os.environ.get("MAIL_USERNAME", "")
+    pwd = os.environ.get("MAIL_PASSWORD", "")
+    sender = app.config.get("MAIL_DEFAULT_SENDER") or user
+    use_tls = os.environ.get("MAIL_USE_TLS", "true").lower() != "false"
+
+    msg = EmailMessage()
+    msg["Subject"] = "Pharma IP System - test email"
+    msg["From"] = sender
+    msg["To"] = to
+    msg.set_content("Mail is configured correctly. Sent from the diagnostics page.")
+
+    try:
+        # Port 465 is implicit SSL; 587 and 25 are plain with STARTTLS.
+        if port == 465:
+            server = smtplib.SMTP_SSL(host, port, timeout=MAIL_TIMEOUT)
+        else:
+            server = smtplib.SMTP(host, port, timeout=MAIL_TIMEOUT)
+        with server:
+            server.ehlo()
+            if port != 465 and use_tls:
+                server.starttls()
+                server.ehlo()
+            if user and pwd:
+                server.login(user, pwd)
+            server.send_message(msg)
+        logger.info("Test email sent to %s via %s:%s", to, host, port)
+        return True, f"Test email sent to {to}."
+    except socket.timeout:
+        return False, (f"Timed out after {MAIL_TIMEOUT}s connecting to {host}:{port}. "
+                       "The host or port is probably wrong, or outbound SMTP is blocked. "
+                       "For Gmail use smtp.gmail.com with port 587.")
+    except smtplib.SMTPAuthenticationError as e:
+        return False, ("The mail server rejected the username or password. For Gmail "
+                       "you must use a 16-character App Password, not the account "
+                       f"password. ({str(e)[:120]})")
+    except smtplib.SMTPSenderRefused:
+        return False, (f"The server refused '{sender}' as the sender. It usually has to "
+                       "match MAIL_USERNAME.")
+    except smtplib.SMTPRecipientsRefused:
+        return False, f"The server refused the recipient address '{to}'. Check ADMIN_EMAIL_RECIPIENT."
+    except (socket.gaierror, OSError) as e:
+        return False, (f"Could not reach {host}:{port} - {str(e)[:120]}. Check MAIL_SERVER "
+                       "and MAIL_PORT, and that the host allows outbound SMTP.")
+    except Exception as e:
+        logger.error(f"send_test_email: {e}")
+        return False, f"{type(e).__name__}: {str(e)[:160]}"
+
+
 @app.route("/admin/test_mail", methods=["POST"])
 @admin_required
 def admin_test_mail():
@@ -5383,17 +5478,9 @@ def admin_test_mail():
     if missing:
         flash("Mail is not configured. Missing: " + ", ".join(missing), "danger")
         return redirect(url_for("admin_diagnostics"))
-    try:
-        to = os.environ.get("ADMIN_EMAIL_RECIPIENT", "")
-        mail.send(MailMessage(
-            subject="Pharma IP System — test email",
-            recipients=[to],
-            body="Mail is configured correctly. This is a test from the diagnostics page.",
-            sender=app.config.get("MAIL_DEFAULT_SENDER", "noreply@pharmaip.com")))
-        flash(f"Test email sent to {to}.", "success")
-    except Exception as e:
-        logger.error(f"admin_test_mail: {e}")
-        flash(f"Mail server rejected it: {e}", "danger")
+    to = os.environ.get("ADMIN_EMAIL_RECIPIENT", "")
+    ok, detail = send_test_email(to)
+    flash(detail, "success" if ok else "danger")
     return redirect(url_for("admin_diagnostics"))
 
 

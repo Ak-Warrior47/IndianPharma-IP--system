@@ -172,7 +172,47 @@ check("6.5 A PostgreSQL driver is actually in requirements.txt",
       any(x in open(os.path.join(REPO, "requirements.txt")).read().lower()
           for x in ("psycopg2", "psycopg[")))
 
+
+# ---- 8. Mail fails fast and says why -----------------------------------
+# The "Send test email" button hung for about two minutes and then gave up.
+# Flask-Mail opens the SMTP socket with no timeout, so a wrong host or a
+# blocked port stalls rather than erroring, and with one worker that blocks the
+# whole service until gunicorn kills the request. These assert it now gives up
+# quickly with an actionable message.
+import time as _time  # noqa: E402
+
+os.environ["MAIL_SERVER"] = "10.255.255.1"      # routable but never answers
+os.environ["MAIL_PORT"] = "587"
+os.environ["MAIL_USERNAME"] = "x@example.com"
+os.environ["MAIL_PASSWORD"] = "x"
+os.environ["ADMIN_EMAIL_RECIPIENT"] = "owner@example.com"
+
+_t0 = _time.time()
+_ok, _msg = A.send_test_email("owner@example.com")
+_elapsed = _time.time() - _t0
+
+check("8.1 An unreachable mail host fails rather than hanging", _ok is False)
+check("8.2 It gives up within roughly the timeout, not minutes (%.0fs)" % _elapsed,
+      _elapsed < A.MAIL_TIMEOUT + 12)
+check("8.3 The message is actionable, not a bare traceback",
+      any(w in _msg.lower() for w in ("timed out", "could not reach", "blocked")))
+check("8.4 The message names the host and port", "10.255.255.1" in _msg)
+
+import socket as _socket  # noqa: E402
+check("8.5 The timeout is scoped, not left on globally",
+      _socket.getdefaulttimeout() is None)
+with A.mail_socket_timeout():
+    _inside = _socket.getdefaulttimeout()
+check("8.6 Inside the context the timeout applies", _inside == A.MAIL_TIMEOUT)
+check("8.7 It is restored afterwards", _socket.getdefaulttimeout() is None)
+
+os.environ["MAIL_SERVER"] = "no-such-host.invalid"
+_ok2, _msg2 = A.send_test_email("owner@example.com")
+check("8.8 An unresolvable host is reported clearly",
+      _ok2 is False and "could not reach" in _msg2.lower())
+
 clear_mail_env()
+
 print("\n" + "=" * 62)
 print("PASSED %d    FAILED %d" % (len(PASSED), len(FAILED)))
 if FAILED:

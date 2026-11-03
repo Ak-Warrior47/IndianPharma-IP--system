@@ -66,6 +66,11 @@ services:
       # Where the monthly report is delivered.
       - key: ADMIN_EMAIL_RECIPIENT
         sync: false
+      # Seconds to wait on the SMTP socket. Flask-Mail sets no timeout, so a
+      # wrong host or a blocked port would hang the worker until gunicorn
+      # killed the request.
+      - key: MAIL_TIMEOUT
+        value: "15"
 
       # ---- Delivery ------------------------------------------------------
       # The store's coordinates. While these are unset the geofence is OFF and a
