@@ -66,6 +66,19 @@ services:
       # Where the monthly report is delivered.
       - key: ADMIN_EMAIL_RECIPIENT
         sync: false
+      # Render BLOCKS outbound SMTP on free web services (ports 25, 465, 587),
+      # so no MAIL_* settings can work there however correct they are. Set one
+      # of these API keys to send over HTTPS instead, which is not blocked.
+      # Brevo is 300 emails/day free; Resend is 3000/month free. Only one is
+      # needed; the SMTP settings below are the fallback for a paid instance.
+      - key: BREVO_API_KEY
+        sync: false
+      - key: RESEND_API_KEY
+        sync: false
+      - key: EMAIL_PROVIDER        # auto | brevo | resend | smtp
+        value: "auto"
+      - key: EMAIL_FROM            # verified sender address for the API
+        sync: false
       # Seconds to wait on the SMTP socket. Flask-Mail sets no timeout, so a
       # wrong host or a blocked port would hang the worker until gunicorn
       # killed the request.

@@ -5198,14 +5198,20 @@ def api_analytics_range():
 # ─── FEATURE 12: MONTHLY PDF EMAIL (APScheduler) ─────────────────────────────
 
 def mail_config_status():
-    """What is missing before mail can send. Empty list means ready."""
+    """What is missing before mail can send. Empty list means ready.
+
+    An HTTP transport needs only an API key, so the SMTP variables are only
+    required when SMTP is the transport actually in use.
+    """
     missing = []
-    if not os.environ.get("MAIL_SERVER"):
-        missing.append("MAIL_SERVER")
-    if not os.environ.get("MAIL_USERNAME"):
-        missing.append("MAIL_USERNAME")
-    if not os.environ.get("MAIL_PASSWORD"):
-        missing.append("MAIL_PASSWORD")
+    transport = active_email_transport()
+    if transport is None:
+        missing.append("BREVO_API_KEY or RESEND_API_KEY (or MAIL_SERVER for SMTP)")
+    elif transport == "smtp":
+        if not os.environ.get("MAIL_USERNAME"):
+            missing.append("MAIL_USERNAME")
+        if not os.environ.get("MAIL_PASSWORD"):
+            missing.append("MAIL_PASSWORD")
     if not os.environ.get("ADMIN_EMAIL_RECIPIENT"):
         missing.append("ADMIN_EMAIL_RECIPIENT")
     return missing
@@ -5273,8 +5279,23 @@ def send_monthly_reports():
             if failed:
                 msg.body += "\n\nCould not be generated: " + ", ".join(failed)
 
-            with mail_socket_timeout():
-                mail.send(msg)
+            transport = active_email_transport()
+            if transport in ("brevo", "resend"):
+                # The HTTP path sends text only. Attachments would need base64
+                # encoding per provider; rather than silently drop the PDFs,
+                # the message says where to get them.
+                summary = (msg.body + "\n\nThe attached reports are not included "
+                           "when sending over the HTTP email API. Download them "
+                           "from Reports Archive in the admin dashboard.")
+                sender_addr = (os.environ.get("MAIL_USERNAME")
+                               or os.environ.get("EMAIL_FROM") or "noreply@pharmaip.com")
+                fn = _send_via_brevo if transport == "brevo" else _send_via_resend
+                sent_ok, sent_note = fn(admin_email, msg.subject, summary, sender_addr)
+                if not sent_ok:
+                    return False, sent_note
+            else:
+                with mail_socket_timeout():
+                    mail.send(msg)
             note = f"Sent {attached} report(s) to {admin_email}"
             if skipped:
                 note += f"; {len(skipped)} left out for size"
@@ -5373,12 +5394,73 @@ def admin_diagnostics():
                                    ("SMS alerts", sms_vars), ("Core", core_vars)],
                            warnings=warnings, db_ok=db_ok, db_note=db_note,
                            mail_missing=mail_config_status(),
+                           transport=active_email_transport() or 'none',
                            location=location_data_summary(),
                            is_production=bool(IS_PRODUCTION))
 
 
 
 MAIL_TIMEOUT = int(os.environ.get("MAIL_TIMEOUT", "15"))
+
+# ─── EMAIL TRANSPORT ─────────────────────────────────────────────────────────
+# Render blocks outbound SMTP on free web services (ports 25, 465 and 587,
+# since September 2025), so no SMTP credentials can work there however correct
+# they are: the connection simply never completes. Render's own guidance is to
+# use a transactional email API over HTTPS, which is not blocked.
+#
+# So mail goes out over HTTP when an API key is present, and falls back to SMTP
+# otherwise, which keeps working on a paid instance or any other host.
+# Set ONE of these:
+#   BREVO_API_KEY   - brevo.com, 300 emails/day free
+#   RESEND_API_KEY  - resend.com, 3000 emails/month free
+EMAIL_PROVIDER = (os.environ.get("EMAIL_PROVIDER", "auto") or "auto").lower()
+BREVO_API_KEY = os.environ.get("BREVO_API_KEY", "")
+RESEND_API_KEY = os.environ.get("RESEND_API_KEY", "")
+
+
+def active_email_transport():
+    """Which transport will actually be used: 'brevo', 'resend', 'smtp' or None."""
+    if EMAIL_PROVIDER == "brevo" and BREVO_API_KEY:
+        return "brevo"
+    if EMAIL_PROVIDER == "resend" and RESEND_API_KEY:
+        return "resend"
+    if EMAIL_PROVIDER == "smtp":
+        return "smtp" if os.environ.get("MAIL_SERVER") else None
+    if BREVO_API_KEY:
+        return "brevo"
+    if RESEND_API_KEY:
+        return "resend"
+    if os.environ.get("MAIL_SERVER"):
+        return "smtp"
+    return None
+
+
+def _send_via_brevo(to, subject, body, sender):
+    r = _requests.post(
+        "https://api.brevo.com/v3/smtp/email",
+        headers={"api-key": BREVO_API_KEY, "content-type": "application/json",
+                 "accept": "application/json"},
+        json={"sender": {"email": sender, "name": "Pharma IP System"},
+              "to": [{"email": to}], "subject": subject, "textContent": body},
+        timeout=MAIL_TIMEOUT)
+    if r.status_code in (200, 201, 202):
+        return True, f"Sent to {to} via Brevo."
+    return False, f"Brevo refused it ({r.status_code}): {r.text[:180]}"
+
+
+def _send_via_resend(to, subject, body, sender):
+    r = _requests.post(
+        "https://api.resend.com/emails",
+        headers={"Authorization": "Bearer " + RESEND_API_KEY,
+                 "Content-Type": "application/json"},
+        json={"from": sender, "to": [to], "subject": subject, "text": body},
+        timeout=MAIL_TIMEOUT)
+    if r.status_code in (200, 201, 202):
+        return True, f"Sent to {to} via Resend."
+    return False, f"Resend refused it ({r.status_code}): {r.text[:180]}"
+
+
+
 
 from contextlib import contextmanager as _contextmanager
 
@@ -5405,7 +5487,8 @@ def mail_socket_timeout():
 
 
 def send_test_email(to):
-    """Send one small message, failing fast and saying exactly what went wrong.
+    """Send one small message over the active transport, failing fast and
+    saying exactly what went wrong.
 
     Flask-Mail opens the SMTP socket with no timeout, so a wrong host or a
     blocked port does not error -- it hangs. With one eventlet worker that
@@ -5419,6 +5502,26 @@ def send_test_email(to):
     import smtplib
     import socket
     from email.message import EmailMessage
+
+    subject = "Pharma IP System - test email"
+    body = "Mail is configured correctly. Sent from the diagnostics page."
+    transport = active_email_transport()
+    sender_addr = (os.environ.get("MAIL_USERNAME")
+                   or os.environ.get("EMAIL_FROM") or "noreply@pharmaip.com")
+
+    if transport == "brevo":
+        try:
+            return _send_via_brevo(to, subject, body, sender_addr)
+        except Exception as e:
+            return False, f"Brevo request failed: {str(e)[:160]}"
+    if transport == "resend":
+        try:
+            return _send_via_resend(to, subject, body, sender_addr)
+        except Exception as e:
+            return False, f"Resend request failed: {str(e)[:160]}"
+    if transport is None:
+        return False, ("No email transport configured. Set BREVO_API_KEY or "
+                       "RESEND_API_KEY, or MAIL_SERVER for SMTP.")
 
     host = os.environ.get("MAIL_SERVER", "")
     port = int(os.environ.get("MAIL_PORT", 587) or 587)
@@ -5451,8 +5554,10 @@ def send_test_email(to):
         return True, f"Test email sent to {to}."
     except socket.timeout:
         return False, (f"Timed out after {MAIL_TIMEOUT}s connecting to {host}:{port}. "
-                       "The host or port is probably wrong, or outbound SMTP is blocked. "
-                       "For Gmail use smtp.gmail.com with port 587.")
+                       "Render blocks outbound SMTP on free web services (ports 25, "
+                       "465 and 587), so no SMTP settings can work there. Set "
+                       "BREVO_API_KEY or RESEND_API_KEY to send over HTTPS instead, "
+                       "or upgrade to a paid instance.")
     except smtplib.SMTPAuthenticationError as e:
         return False, ("The mail server rejected the username or password. For Gmail "
                        "you must use a 16-character App Password, not the account "

@@ -98,10 +98,19 @@
         <div class="ip-card__sub">Prove mail works without waiting for the monthly run.</div>
       </div>
       <span class="ip-pill {{ 'ip-pill--bad' if mail_missing else 'ip-pill--ok' }}">
-        {{ 'Not configured' if mail_missing else 'Configured' }}
+        {{ 'Not configured' if mail_missing else ('Configured via ' ~ transport) }}
       </span>
     </div>
     <div class="ip-card__body">
+      {% if transport == 'smtp' and is_production %}
+      <div class="ip-flash warning" style="margin-top:0;">
+        This is set up to send over SMTP, which Render blocks on free web
+        services (ports 25, 465 and 587). No SMTP settings will work there,
+        however correct they are. Set <strong>BREVO_API_KEY</strong> or
+        <strong>RESEND_API_KEY</strong> to send over HTTPS instead, or move to a
+        paid instance.
+      </div>
+      {% endif %}
       {% if mail_missing %}
       <p class="ip-small ip-muted" style="margin-top:0;">
         The monthly report cannot send until these are set on the server:

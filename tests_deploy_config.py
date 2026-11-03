@@ -58,8 +58,14 @@ client.post("/login", data={"email": "dc_adm@x.com", "password": PW},
 
 # ---- 1. Unconfigured mail reports failure, not success ------------------
 clear_mail_env()
+for _k in ("BREVO_API_KEY", "RESEND_API_KEY"):
+    os.environ.pop(_k, None)
 missing = A.mail_config_status()
-check("1.1 All four mail vars reported missing", set(missing) == set(MAIL_VARS))
+# With no transport at all, the first thing reported should be that there is
+# none -- naming the HTTP options first, since Render blocks SMTP on free.
+check("1.1 With nothing set, it says no transport is configured",
+      any("BREVO" in m or "RESEND" in m for m in missing) and
+      any("ADMIN_EMAIL_RECIPIENT" in m for m in missing))
 
 ok, note = A.send_monthly_reports()
 check("1.2 send_monthly_reports returns a status pair", isinstance(ok, bool))
