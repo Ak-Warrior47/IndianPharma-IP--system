@@ -2166,6 +2166,58 @@ def run_migrations():
         logger.error(f"Migration error: {e}")
 
 
+def secure_supabase_exposure():
+    """Close the Supabase Data API off from this app's tables. PostgreSQL only.
+
+    Supabase puts a public REST API (PostgREST) in front of the "public" schema
+    and hands out an anon key that is designed to be embedded in browsers. That
+    is safe only when Row-Level Security is on. With RLS off -- which is how
+    these tables were created, and what Supabase's advisor flagged as
+    rls_disabled_in_public -- anyone holding the project URL and that public key
+    can read, edit and delete every row: staff names, phone numbers, scores and
+    the riders' GPS trails.
+
+    This app never uses the Data API. It talks to Postgres directly over
+    DATABASE_URL, as the table owner, and an owner bypasses RLS. So enabling RLS
+    costs the app nothing and shuts the public door. The grants to anon and
+    authenticated are revoked as well, so the tables are not merely protected by
+    a policy check but absent from the API surface entirely.
+
+    FORCE ROW LEVEL SECURITY is deliberately NOT used: that would apply RLS to
+    the owner too and lock the application out of its own data.
+    """
+    if not os.environ.get("DATABASE_URL"):
+        return []          # SQLite locally; nothing is exposed
+    done, failed = [], []
+    try:
+        tables = sorted({m.class_.__table__.name for m in db.Model.registry.mappers})
+    except Exception as e:
+        logger.error(f"secure_supabase_exposure: cannot list tables: {e}")
+        return []
+    for t in tables:
+        q = '"%s"' % t.replace('"', '')
+        for stmt in (
+            f"ALTER TABLE public.{q} ENABLE ROW LEVEL SECURITY",
+            f"REVOKE ALL ON public.{q} FROM anon",
+            f"REVOKE ALL ON public.{q} FROM authenticated",
+        ):
+            try:
+                db.session.execute(db.text(stmt))
+                db.session.commit()
+            except Exception as e:
+                db.session.rollback()
+                # anon/authenticated may not exist outside Supabase; not an error.
+                if "does not exist" not in str(e).lower():
+                    failed.append(f"{t}: {str(e)[:70]}")
+        done.append(t)
+    if failed:
+        logger.warning("secure_supabase_exposure issues: " + "; ".join(failed[:5]))
+    logger.info("Supabase exposure closed on %d table(s): RLS on, anon/authenticated "
+                "revoked. The app is unaffected; it connects as the table owner."
+                % len(done))
+    return done
+
+
 def reconcile_schema():
     """Add any column a model declares that the live table is missing.
 
@@ -2244,6 +2296,8 @@ def init_db():
             run_migrations()
             # Backstop: add anything the migrations above still do not cover.
             reconcile_schema()
+            # Keep the tables off Supabase's public Data API.
+            secure_supabase_exposure()
             if not Employee.query.first():
                 _admin_pw = os.environ.get("ADMIN_PASSWORD", "admin123")
                 if _admin_pw == "admin123":
