@@ -5197,6 +5197,20 @@ def api_analytics_range():
 
 # ─── FEATURE 12: MONTHLY PDF EMAIL (APScheduler) ─────────────────────────────
 
+
+def report_recipient():
+    """Where the monthly report is sent.
+
+    Renamed from ADMIN_EMAIL_RECIPIENT, which sat next to ADMIN_EMAIL (the
+    admin's login account) and was easy to set by mistake. REPORT_EMAIL_TO says
+    what it does. The old name is still honoured so a deployment that has it set
+    keeps working through the change.
+    """
+    return (os.environ.get("REPORT_EMAIL_TO")
+            or os.environ.get("ADMIN_EMAIL_RECIPIENT")
+            or "")
+
+
 def mail_config_status():
     """What is missing before mail can send. Empty list means ready.
 
@@ -5212,8 +5226,8 @@ def mail_config_status():
             missing.append("MAIL_USERNAME")
         if not os.environ.get("MAIL_PASSWORD"):
             missing.append("MAIL_PASSWORD")
-    if not os.environ.get("ADMIN_EMAIL_RECIPIENT"):
-        missing.append("ADMIN_EMAIL_RECIPIENT")
+    if not report_recipient():
+        missing.append("REPORT_EMAIL_TO")
     return missing
 
 
@@ -5231,7 +5245,7 @@ def send_monthly_reports():
             logger.warning(msg + " — monthly reports not sent.")
             return False, msg
 
-        admin_email = os.environ.get("ADMIN_EMAIL_RECIPIENT", "")
+        admin_email = report_recipient()
         try:
             from utils import generate_visual_pdf
             employees = Employee.query.filter_by(is_admin=False).all()
@@ -5341,7 +5355,8 @@ def admin_diagnostics():
         status("MAIL_PORT", "Monthly report email", secret=False),
         status("MAIL_USERNAME", "Monthly report email", secret=False),
         status("MAIL_PASSWORD", "Monthly report email"),
-        status("ADMIN_EMAIL_RECIPIENT", "Who the monthly report goes to", secret=False),
+        {"var": "REPORT_EMAIL_TO", "set": bool(report_recipient()),
+         "needed_for": "Who the monthly report is sent to", "value": report_recipient()},
     ]
     delivery_vars = [
         status("STORE_LAT", "Geofence: riders must be at the store to start a trip", secret=False),
@@ -5566,7 +5581,7 @@ def send_test_email(to):
         return False, (f"The server refused '{sender}' as the sender. It usually has to "
                        "match MAIL_USERNAME.")
     except smtplib.SMTPRecipientsRefused:
-        return False, f"The server refused the recipient address '{to}'. Check ADMIN_EMAIL_RECIPIENT."
+        return False, f"The server refused the recipient address '{to}'. Check REPORT_EMAIL_TO."
     except (socket.gaierror, OSError) as e:
         return False, (f"Could not reach {host}:{port} - {str(e)[:120]}. Check MAIL_SERVER "
                        "and MAIL_PORT, and that the host allows outbound SMTP.")
@@ -5583,7 +5598,7 @@ def admin_test_mail():
     if missing:
         flash("Mail is not configured. Missing: " + ", ".join(missing), "danger")
         return redirect(url_for("admin_diagnostics"))
-    to = os.environ.get("ADMIN_EMAIL_RECIPIENT", "")
+    to = report_recipient()
     ok, detail = send_test_email(to)
     flash(detail, "success" if ok else "danger")
     return redirect(url_for("admin_diagnostics"))

@@ -63,8 +63,11 @@ services:
         sync: false
       - key: MAIL_PASSWORD
         sync: false
-      # Where the monthly report is delivered.
-      - key: ADMIN_EMAIL_RECIPIENT
+      # Where the monthly report is delivered. Named REPORT_EMAIL_TO so it is
+      # not confused with ADMIN_EMAIL above, which is the admin's LOGIN account.
+      # The old ADMIN_EMAIL_RECIPIENT is still read as a fallback, so an
+      # existing deployment keeps working until it is switched over.
+      - key: REPORT_EMAIL_TO
         sync: false
       # Render BLOCKS outbound SMTP on free web services (ports 25, 465, 587),
       # so no MAIL_* settings can work there however correct they are. Set one

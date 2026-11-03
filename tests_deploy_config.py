@@ -22,7 +22,7 @@ app.config["TESTING"] = True
 PW = "longpass123"
 PASSED, FAILED = [], []
 
-MAIL_VARS = ["MAIL_SERVER", "MAIL_USERNAME", "MAIL_PASSWORD", "ADMIN_EMAIL_RECIPIENT"]
+MAIL_VARS = ["MAIL_SERVER", "MAIL_USERNAME", "MAIL_PASSWORD", "REPORT_EMAIL_TO"]
 
 
 def check(name, cond):
@@ -39,7 +39,7 @@ def set_mail_env():
     os.environ["MAIL_SERVER"] = "smtp.example.com"
     os.environ["MAIL_USERNAME"] = "reports@example.com"
     os.environ["MAIL_PASSWORD"] = "app-password"
-    os.environ["ADMIN_EMAIL_RECIPIENT"] = "owner@example.com"
+    os.environ["REPORT_EMAIL_TO"] = "owner@example.com"
 
 
 with app.app_context():
@@ -65,7 +65,7 @@ missing = A.mail_config_status()
 # none -- naming the HTTP options first, since Render blocks SMTP on free.
 check("1.1 With nothing set, it says no transport is configured",
       any("BREVO" in m or "RESEND" in m for m in missing) and
-      any("ADMIN_EMAIL_RECIPIENT" in m for m in missing))
+      any("REPORT_EMAIL_TO" in m for m in missing))
 
 ok, note = A.send_monthly_reports()
 check("1.2 send_monthly_reports returns a status pair", isinstance(ok, bool))
@@ -136,7 +136,19 @@ check("5.2 No Render-managed database is provisioned", "databases" not in spec)
 check("5.3 DATABASE_URL stays out of the repo",
       any(v["key"] == "DATABASE_URL" and v.get("sync") is False
           for v in spec["services"][0]["envVars"]))
-undeclared = sorted(read_by_code - declared)
+# Deprecated names the code still reads only as a fallback, so an existing
+# deployment keeps working after a rename. They are deliberately NOT declared
+# in render.yaml, because new deployments should use the current name. Each
+# entry needs the replacement named beside it, so this cannot quietly become a
+# dumping ground for genuine drift.
+DEPRECATED_FALLBACKS = {
+    "ADMIN_EMAIL_RECIPIENT": "REPORT_EMAIL_TO",
+}
+for _old, _new in DEPRECATED_FALLBACKS.items():
+    check("5.3b %s is only a fallback; %s is what render.yaml declares"
+          % (_old, _new), _new in declared and _old not in declared)
+
+undeclared = sorted(read_by_code - declared - set(DEPRECATED_FALLBACKS))
 check("5.4 Every env var the code reads is declared (%s)"
       % (", ".join(undeclared) if undeclared else "none missing"),
       not undeclared)
@@ -191,7 +203,7 @@ os.environ["MAIL_SERVER"] = "10.255.255.1"      # routable but never answers
 os.environ["MAIL_PORT"] = "587"
 os.environ["MAIL_USERNAME"] = "x@example.com"
 os.environ["MAIL_PASSWORD"] = "x"
-os.environ["ADMIN_EMAIL_RECIPIENT"] = "owner@example.com"
+os.environ["REPORT_EMAIL_TO"] = "owner@example.com"
 
 _t0 = _time.time()
 _ok, _msg = A.send_test_email("owner@example.com")
