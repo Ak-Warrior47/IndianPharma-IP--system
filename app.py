@@ -63,8 +63,27 @@ db_url = os.environ.get("DATABASE_URL")
 if not db_url:
     logger.warning("DATABASE_URL not set! Using SQLite (local development mode)")
     db_url = "sqlite:///pharma_final.db"
-elif db_url.startswith("postgres://"):
-    db_url = db_url.replace("postgres://", "postgresql://", 1)
+else:
+    # Supabase and Heroku-style URLs use the legacy "postgres://" scheme.
+    if db_url.startswith("postgres://"):
+        db_url = db_url.replace("postgres://", "postgresql://", 1)
+    # Name the driver explicitly. A bare "postgresql://" lets SQLAlchemy pick,
+    # and SQLAlchemy 2.1 changed that default from psycopg2 to psycopg (v3).
+    # This project ships psycopg2-binary, so once SQLAlchemy reached 2.1 the app
+    # died at boot with "No module named 'psycopg'" and every deploy failed --
+    # without a line of app code changing. Pinning the driver in the URL makes
+    # the choice ours rather than a default that can move under us.
+    if db_url.startswith("postgresql://"):
+        try:
+            import psycopg2  # noqa: F401
+            db_url = db_url.replace("postgresql://", "postgresql+psycopg2://", 1)
+        except ImportError:
+            try:
+                import psycopg  # noqa: F401
+                db_url = db_url.replace("postgresql://", "postgresql+psycopg://", 1)
+            except ImportError:
+                logger.critical("No PostgreSQL driver installed. Add psycopg2-binary "
+                                "to requirements.txt.")
 
 app.config["SQLALCHEMY_DATABASE_URI"] = db_url
 logger.info(f"Using database: {db_url.split('@')[0] if '@' in db_url else 'SQLite (local)'}")

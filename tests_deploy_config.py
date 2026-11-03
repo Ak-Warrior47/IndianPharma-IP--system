@@ -138,6 +138,40 @@ check("5.5 Mail variables are declared", set(MAIL_VARS).issubset(declared))
 check("5.6 Single worker, so the monthly job cannot double-fire",
       "-w 1" in spec["services"][0]["startCommand"])
 
+
+# ---- 6. The app boots the way Render runs it ---------------------------
+# Three deploys failed in a row with no app-code change behind them: relaxing
+# the version pins let SQLAlchemy reach 2.1, which moved the default driver for
+# a bare "postgresql://" URL from psycopg2 to psycopg (v3). Only psycopg2-binary
+# is shipped, so the app died at boot. These assert the driver is named
+# explicitly rather than left to a default that can move.
+import subprocess  # noqa: E402
+
+def _boot(url):
+    """Import the app in a fresh process with DATABASE_URL set."""
+    code = ("import os,sys;"
+            "os.environ['DATABASE_URL']=%r;os.environ['RENDER']='true';"
+            "sys.path.insert(0,%r);"
+            "from app import app;"
+            "print(app.config['SQLALCHEMY_DATABASE_URI'].split('://')[0])" % (url, REPO))
+    r = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True, timeout=180)
+    return r.returncode, (r.stdout or "").strip().splitlines()[-1] if r.stdout.strip() else "", r.stderr
+
+rc, scheme, err = _boot("postgresql://u:p@localhost:5432/d")
+if rc:
+    print("   boot stderr:", err[-300:])
+check("6.1 App imports with a PostgreSQL URL set", rc == 0)
+check("6.2 The driver is named explicitly, not left to a default (%s)" % scheme,
+      scheme in ("postgresql+psycopg2", "postgresql+psycopg"))
+
+rc2, scheme2, err2 = _boot("postgres://u:p@localhost:5432/d")
+check("6.3 The legacy postgres:// scheme still works", rc2 == 0)
+check("6.4 Legacy scheme also gets an explicit driver", scheme2 in ("postgresql+psycopg2", "postgresql+psycopg"))
+
+check("6.5 A PostgreSQL driver is actually in requirements.txt",
+      any(x in open(os.path.join(REPO, "requirements.txt")).read().lower()
+          for x in ("psycopg2", "psycopg[")))
+
 clear_mail_env()
 print("\n" + "=" * 62)
 print("PASSED %d    FAILED %d" % (len(PASSED), len(FAILED)))
