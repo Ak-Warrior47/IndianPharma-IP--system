@@ -1,6 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
+<meta name="csrf-token" content="{{ csrf_token() }}">
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Bulk Import | Pharma IP System</title>
@@ -58,6 +59,7 @@ body { font-family: 'DM Sans', sans-serif; background: var(--page-bg); min-heigh
   <div class="nav-right">
     <a href="/admin_dashboard" class="btn-back">← Back to Admin</a>
     <form method="POST" action="/logout" style="display:inline;">
+<input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
       <button type="submit" class="btn-logout">Logout</button>
     </form>
   </div>
@@ -76,6 +78,7 @@ body { font-family: 'DM Sans', sans-serif; background: var(--page-bg); min-heigh
     <div class="card-sub">Upload a CSV file to add multiple employees at once. Rows with errors are skipped and reported.</div>
 
     <form method="POST" action="/admin/bulk_import" enctype="multipart/form-data">
+<input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
       <div class="field">
         <label>CSV File</label>
         <input type="file" name="csv_file" accept=".csv" required>

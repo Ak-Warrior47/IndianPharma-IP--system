@@ -1,6 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
+<meta name="csrf-token" content="{{ csrf_token() }}">
 <script>(function(){try{var t=localStorage.getItem('ip-theme');if(t)document.documentElement.setAttribute('data-theme',t);}catch(e){}})();</script>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -163,6 +164,7 @@
     </div>
     <div class="ip-card__body">
       <form method="POST" action="{{ url_for('admin_checklist') }}" autocomplete="off">
+<input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
         <input type="hidden" name="action" value="add">
         <div class="ip-row">
           <div style="flex:0 0 190px;">
@@ -209,6 +211,7 @@
             <td>{{ t.text }}</td>
             <td class="nowrap">
               <form method="POST" action="{{ url_for('admin_checklist') }}" style="display:inline;">
+<input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
                 <input type="hidden" name="action" value="move">
                 <input type="hidden" name="template_id" value="{{ t.id }}">
                 <input type="hidden" name="dir" value="up">
@@ -216,6 +219,7 @@
                         aria-label="Move up">Up</button>
               </form>
               <form method="POST" action="{{ url_for('admin_checklist') }}" style="display:inline;">
+<input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
                 <input type="hidden" name="action" value="move">
                 <input type="hidden" name="template_id" value="{{ t.id }}">
                 <input type="hidden" name="dir" value="down">
@@ -225,6 +229,7 @@
             </td>
             <td class="nowrap">
               <form method="POST" action="{{ url_for('admin_checklist') }}" style="display:inline;">
+<input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
                 <input type="hidden" name="action" value="archive">
                 <input type="hidden" name="template_id" value="{{ t.id }}">
                 <button type="submit" class="ip-btn ip-btn--sm ip-btn--danger">Remove</button>
@@ -250,6 +255,7 @@
         <div class="ip-between">
           <span class="ip-small ip-muted">{{ t.text }}</span>
           <form method="POST" action="{{ url_for('admin_checklist') }}">
+<input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
             <input type="hidden" name="action" value="restore">
             <input type="hidden" name="template_id" value="{{ t.id }}">
             <button type="submit" class="ip-btn ip-btn--sm">Restore</button>

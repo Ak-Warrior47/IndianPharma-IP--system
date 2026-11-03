@@ -16,6 +16,7 @@ sys.path.insert(0, REPO)
 
 import app as A  # noqa: E402
 from app import app, db, Employee  # noqa: E402
+from tests_helper import csrf_client  # noqa: E402
 
 app.config["TESTING"] = True
 PW = "longpass123"
@@ -51,7 +52,7 @@ with app.app_context():
         db.session.add(e)
         db.session.commit()
 
-client = app.test_client()
+client = csrf_client(app.test_client())
 client.post("/login", data={"email": "dc_adm@x.com", "password": PW},
             follow_redirects=True)
 

@@ -24,6 +24,7 @@ from app import (  # noqa: E402
     KPIEntry, redact_email, purge_old_location_data, location_data_summary,
 )
 
+from tests_helper import csrf_client  # noqa: E402
 app.config["TESTING"] = True
 PW = "longpass123"
 PASSED, FAILED = [], []
@@ -67,7 +68,7 @@ with app.app_context():
     db.session.commit()
     trip_id = trip.id
 
-client = app.test_client()
+client = csrf_client(app.test_client())
 
 
 def login(email):

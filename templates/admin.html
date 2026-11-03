@@ -1,6 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
+<meta name="csrf-token" content="{{ csrf_token() }}">
 <script>(function(){try{var t=localStorage.getItem('ip-theme');if(t)document.documentElement.setAttribute('data-theme',t);}catch(e){}})();</script>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -291,6 +292,7 @@ input:focus, select:focus, textarea:focus { outline: none; border-color: var(--b
   <div class="modal">
     <div class="modal-title">Edit Employee</div>
     <form method="POST" id="editForm" autocomplete="off">
+<input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
       <div class="modal-grid">
         <div class="field" style="grid-column: span 2;">
           <label>Full Name</label>
@@ -358,6 +360,7 @@ input:focus, select:focus, textarea:focus { outline: none; border-color: var(--b
     <div class="modal-title" id="notesModalTitle">Notes</div>
     <div id="notesHistoryList" style="margin-bottom:16px;"></div>
     <form method="POST" id="noteForm" autocomplete="off">
+<input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
       <div class="field">
         <label style="font-size:11px;font-weight:700;color:#374151;text-transform:uppercase;">Add New Note</label>
         <textarea name="note" maxlength="500" rows="3" required
@@ -415,6 +418,7 @@ var NOTES_BY_EMP = {
       </div>
     </details>
     <form method="POST" action="/logout" style="margin:0;">
+<input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
       <button type="submit" class="btn-logout">Logout</button>
     </form>
   </div>
@@ -470,6 +474,7 @@ var NOTES_BY_EMP = {
       <a href="/admin/send_monthly_report" class="btn-sm btn-view" style="font-size:12px;padding:7px 14px;" onclick="return confirm('Send monthly PDF reports now?')">Send Monthly Reports</a>
     </div>
     <form method="POST" action="/admin/announcement/create" autocomplete="off" style="display:grid;grid-template-columns:1fr 1fr auto;gap:12px;align-items:flex-end;margin-bottom:16px;">
+<input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
       <div class="field" style="margin:0;">
         <label>Title</label>
         <input type="text" name="title" placeholder="Announcement title" required maxlength="120">
@@ -496,6 +501,7 @@ var NOTES_BY_EMP = {
         </div>
         {% if ann.is_active %}
         <form method="POST" action="/admin/announcement/{{ ann.id }}/deactivate" style="margin:0;">
+<input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
           <button type="submit" class="btn-sm btn-delete" style="white-space:nowrap;font-size:11px;">&times; Archive</button>
         </form>
         {% endif %}
@@ -529,9 +535,11 @@ var NOTES_BY_EMP = {
         </div>
         <div style="display:flex;gap:8px;">
           <form method="POST" action="/admin/past_request/{{ req.id }}/approve" style="margin:0;">
+<input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
             <button type="submit" class="btn-sm" style="background:#f0fdf4;color:var(--ok);border:1px solid var(--ok-line);">Approve</button>
           </form>
           <form method="POST" action="/admin/past_request/{{ req.id }}/reject" style="margin:0;">
+<input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
             <button type="submit" class="btn-sm btn-delete">Reject</button>
           </form>
         </div>
@@ -620,6 +628,7 @@ var NOTES_BY_EMP = {
       <div>
         <div style="font-size:12px;font-weight:700;color:var(--ink-3);text-transform:uppercase;margin-bottom:8px;">Award Badge to Staff</div>
         <form method="POST" action="/admin/badge/award" autocomplete="off" style="display:grid;gap:10px;">
+<input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
           <div class="field" style="margin:0;">
             <label>Badge</label>
             <select name="badge_id" required style="padding:9px 12px;border:1.5px solid var(--line);border-radius:10px;font-size:13px;font-family:inherit;">
@@ -643,6 +652,7 @@ var NOTES_BY_EMP = {
       <div>
         <div style="font-size:12px;font-weight:700;color:var(--ink-3);text-transform:uppercase;margin-bottom:8px;">Create Custom Badge</div>
         <form method="POST" action="/admin/badge/create" autocomplete="off" style="display:grid;gap:10px;">
+<input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
           <div style="display:grid;grid-template-columns:60px 1fr;gap:10px;">
             <div class="field" style="margin:0;">
               <label>Icon</label>
@@ -681,6 +691,7 @@ var NOTES_BY_EMP = {
       <div class="card-title">Add New Employee</div>
     </div>
     <form method="POST" action="/admin/add_user" autocomplete="off">
+<input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
       <div class="add-form-grid">
         <div class="field">
           <label>Full Name</label>
@@ -725,6 +736,7 @@ var NOTES_BY_EMP = {
       Select any past date and open an entry window. All staff who have <strong>not yet submitted</strong> data for that day will be able to enter it from their dashboard.
     </p>
     <form method="POST" action="/admin/past_window" autocomplete="off">
+<input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
       <input type="hidden" name="action" value="open">
       <div class="pw-form-row">
         <div class="field">
@@ -743,6 +755,7 @@ var NOTES_BY_EMP = {
         Pick one or more months and open (or close) entry windows for every past day in those months at once.
       </p>
       <form method="POST" action="/admin/past_window_bulk" autocomplete="off" id="bulkMonthForm">
+<input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
         <div class="pw-form-row" style="flex-wrap:wrap;align-items:flex-end;gap:10px;">
           <div class="field" style="flex:1;min-width:180px;">
             <label>Months (hold Ctrl/Cmd to pick many)</label>
@@ -769,6 +782,7 @@ var NOTES_BY_EMP = {
       <span class="pw-chip">
         {{ w.past_date.strftime('%d %b %Y') }}
         <form method="POST" action="/admin/past_window" style="display:inline;margin:0;">
+<input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
           <input type="hidden" name="action" value="close">
           <input type="hidden" name="past_date" value="{{ w.past_date.strftime('%Y-%m-%d') }}">
           <button type="submit" class="pw-close" title="Close this window">&times;</button>
@@ -859,12 +873,14 @@ var NOTES_BY_EMP = {
                   Notes
                 </button>
                 <form method="POST" action="/admin/delete_user/{{ r.emp.id }}" style="display:inline;">
+<input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
                   <button type="submit" class="btn-sm btn-delete"
                     onclick="return confirmDelete({{ r.emp.name|tojson }})">
                     Delete
                   </button>
                 </form>
                 <form method="POST" action="/admin/toggle_sunday/{{ r.emp.id }}" style="display:inline;">
+<input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
                   <button type="submit" class="btn-sm btn-sunday {% if r.emp.sunday_override %}sun-on{% endif %}"
                     title="Sunday data entry override">
                     {% if r.emp.sunday_override %}Sun ON{% else %}Sun Off{% endif %}
@@ -890,6 +906,7 @@ var NOTES_BY_EMP = {
       <div class="card-title">Post-Delivery Complaint — Minus Marking</div>
     </div>
     <form method="POST" action="/admin/complaint" autocomplete="off" id="complaintForm">
+<input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
       <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-bottom:12px;">
         <div class="field">
           <label>Complaint Type</label>
@@ -1021,6 +1038,7 @@ var NOTES_BY_EMP = {
           </div>
         </div>
         <form method="POST" action="/admin/complaint/{{ c.id }}/resolve" style="margin:0;">
+<input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
           <button type="submit" style="background:var(--ok);color:var(--surface);border:none;padding:6px 12px;border-radius:6px;font-size:11px;font-weight:700;cursor:pointer;">Resolve</button>
         </form>
       </div>

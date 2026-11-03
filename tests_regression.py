@@ -24,6 +24,7 @@ from app import (  # noqa: E402
     DeliveryAssignment, DeliveryStop, SupervisorBill,
 )
 
+from tests_helper import csrf_client  # noqa: E402
 app.config["TESTING"] = True
 PASSED, FAILED = [], []
 PW = "longpass123"
@@ -63,7 +64,7 @@ with app.app_context():
     mk("Reg Super",  "r_sup@x.com",  "supervisor", secondary="picker")
     IDS = {e.email: e.id for e in Employee.query.all()}
 
-client = app.test_client()
+client = csrf_client(app.test_client())
 
 
 def login(email):

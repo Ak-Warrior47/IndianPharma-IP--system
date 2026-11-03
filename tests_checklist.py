@@ -20,6 +20,7 @@ from app import (  # noqa: E402
     checklist_for, checklist_pct,
 )
 
+from tests_helper import csrf_client  # noqa: E402
 app.config["TESTING"] = True
 PW = "longpass123"
 PASSED, FAILED = [], []
@@ -51,7 +52,7 @@ with app.app_context():
     dv = mk("CL Driver", "cl_drv@x.com", "delivery")
     p1_id, p2_id, dv_id = p1.id, p2.id, dv.id
 
-client = app.test_client()
+client = csrf_client(app.test_client())
 
 
 def login(email):

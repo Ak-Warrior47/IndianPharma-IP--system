@@ -14,6 +14,7 @@ REPO = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, REPO)
 
 from app import app, db, Employee, ChecklistTemplate, ChecklistCompletion  # noqa: E402
+from tests_helper import csrf_client  # noqa: E402
 from datetime import date, datetime  # noqa: E402
 
 app.config["TESTING"] = True
@@ -46,7 +47,7 @@ with app.app_context():
     dv = mk("CO Driver", "co_drv@x.com", "delivery")
     p1_id, p2_id, dv_id = p1.id, p2.id, dv.id
 
-client = app.test_client()
+client = csrf_client(app.test_client())
 
 
 def login(email):

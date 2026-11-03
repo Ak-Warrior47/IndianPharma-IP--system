@@ -1,6 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
+<meta name="csrf-token" content="{{ csrf_token() }}">
 <script>(function(){try{var t=localStorage.getItem('ip-theme');if(t)document.documentElement.setAttribute('data-theme',t);}catch(e){}})();</script>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -239,6 +240,7 @@ button[disabled] { opacity: .45; cursor: not-allowed; transform: none; }
     <a href="/export_pdf" style="padding:7px 14px;background:var(--green-bg);color:var(--ok-ink);border:1px solid var(--ok-line);border-radius:10px;font-size:12px;font-weight:600;text-decoration:none;">PDF Report</a>
     <a href="/my-data" class="btn-logout">My Data</a>
     <form method="POST" action="/logout" style="display:inline;">
+<input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
       <button type="submit" class="btn-logout">Logout</button>
     </form>
   </div>
@@ -289,6 +291,7 @@ button[disabled] { opacity: .45; cursor: not-allowed; transform: none; }
         <div style="font-size:11px;color:var(--ink-3);margin-top:5px;">{{ ann.created_at.strftime('%d %b %Y') }}</div>
       </div>
       <form method="POST" action="/announcement/{{ ann.id }}/dismiss" style="margin:0;">
+<input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
         <button type="submit" style="padding:5px 12px;background:rgba(255,255,255,0.7);border:1px solid var(--brand-tint-2);border-radius:6px;font-size:11px;font-weight:700;color:var(--ink-3);cursor:pointer;font-family:inherit;">Dismiss</button>
       </form>
     </div>
@@ -463,6 +466,7 @@ button[disabled] { opacity: .45; cursor: not-allowed; transform: none; }
     </div>
     {% else %}
     <form method="POST" autocomplete="off">
+<input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
       <div class="form-grid">
         <div class="field" style="grid-column:span 2;">
           <label>{% if staff_type == 'delivery' %}Deliveries Made{% elif staff_type == 'packer' %}Sales Bill Open{% else %}Bills Processed{% endif %}</label>
@@ -522,6 +526,7 @@ button[disabled] { opacity: .45; cursor: not-allowed; transform: none; }
 
     {% else %}
     <form method="POST" autocomplete="off" onsubmit="return validateAndSubmit(event)">
+<input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
       <div class="form-grid">
         {% if staff_type == 'checker' %}
         <div class="field">
@@ -844,6 +849,7 @@ button[disabled] { opacity: .45; cursor: not-allowed; transform: none; }
     {% endif %}
 
     <form method="POST" autocomplete="off">
+<input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
       <input type="hidden" name="multitask_only" value="1">
       <div class="field" style="margin-bottom:14px;">
         <label>Which role(s) did you also work today? <span style="color:var(--ink-3);font-weight:600;">— tick any number, you earn extra points for each</span></label>
@@ -1146,6 +1152,7 @@ button[disabled] { opacity: .45; cursor: not-allowed; transform: none; }
     </datalist>
 
     <form method="POST" action="{{ url_for('delivery_assign') }}" style="display:flex;flex-direction:column;gap:12px;">
+<input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
       <div style="display:flex;gap:12px;flex-wrap:wrap;">
         <div style="flex:1;min-width:200px;">
           <label style="font-size:12px;font-weight:600;color:var(--ink-3);display:block;margin-bottom:4px;">Delivery Employee *</label>
@@ -1235,6 +1242,7 @@ button[disabled] { opacity: .45; cursor: not-allowed; transform: none; }
               style="padding:5px 12px;background:#fef9c3;color:#854d0e;border:1px solid #fde047;border-radius:6px;font-size:12px;font-weight:700;cursor:pointer;">Edit</button>
             <form method="POST" action="{{ url_for('delivery_dispatch_delete', assignment_id=d.id) }}"
                   onsubmit="return confirm('Delete this dispatch?');" style="margin:0;">
+<input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
               <button type="submit" style="padding:5px 12px;background:var(--bad-tint);color:var(--bad-ink);border:1px solid var(--bad-line);border-radius:6px;font-size:12px;font-weight:700;cursor:pointer;">Delete</button>
             </form>
           </div>
@@ -1254,6 +1262,7 @@ button[disabled] { opacity: .45; cursor: not-allowed; transform: none; }
         {% if d.status == 'pending' %}
         <form method="POST" action="{{ url_for('delivery_dispatch_edit', assignment_id=d.id) }}"
               id="edit-form-{{ d.id }}" style="display:none;margin-top:10px;padding:10px;background:#fffbeb;border:1px dashed #fbbf24;border-radius:10px;">
+<input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
           <div style="font-size:11px;font-weight:700;color:var(--warn-ink);margin-bottom:6px;">Edit stores</div>
           <div id="edit-rows-{{ d.id }}" style="display:flex;flex-direction:column;gap:6px;">
             {% for st in dstops %}
@@ -1487,6 +1496,7 @@ button[disabled] { opacity: .45; cursor: not-allowed; transform: none; }
       <p style="font-size:13px;color:var(--ink-3);margin-bottom:14px;">Set a monthly target score to track your progress.</p>
     {% endif %}
     <form method="POST" action="/goal/set" style="display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap;">
+<input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
       <div class="field" style="flex:1;min-width:180px;">
         <label>Target Score (10-100)</label>
         <input type="number" name="target_score" min="10" max="100" step="1"
@@ -1555,6 +1565,7 @@ button[disabled] { opacity: .45; cursor: not-allowed; transform: none; }
     </div>
     {% endif %}
     <form method="POST" action="/past_entry_request" style="display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap;">
+<input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
       <div class="field" style="flex:1;min-width:160px;">
         <label>Date (past only)</label>
         <input type="date" name="requested_date" max="{{ today.strftime('%Y-%m-%d') }}"

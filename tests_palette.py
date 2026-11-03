@@ -15,6 +15,7 @@ REPO = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, REPO)
 
 from app import app, db, Employee  # noqa: E402
+from tests_helper import csrf_client  # noqa: E402
 
 app.config["TESTING"] = True
 PW = "longpass123"
@@ -47,7 +48,7 @@ with app.app_context():
     sup = mk("PK Super",  "pk_su@x.com", "supervisor")
     pick_id = pick.id
 
-client = app.test_client()
+client = csrf_client(app.test_client())
 
 
 def login(email):

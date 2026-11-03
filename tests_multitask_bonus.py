@@ -18,6 +18,7 @@ from app import (  # noqa: E402
     app, db, Employee, KPIEntry, MultitaskEntry, build_analytics,
 )
 
+from tests_helper import csrf_client  # noqa: E402
 app.config["TESTING"] = True
 PW = "longpass123"
 PASSED, FAILED = [], []
@@ -112,7 +113,7 @@ with app.app_context():
     check("3.1 Two-day window averages the daily bonus (30 over 2 days -> 15)",
           s_two_day.get("multitask_bonus") == 15.0)
 
-client = app.test_client()
+client = csrf_client(app.test_client())
 
 
 def login(email):

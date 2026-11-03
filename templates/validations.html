@@ -1,6 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
+<meta name="csrf-token" content="{{ csrf_token() }}">
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Bill Validations — Constant Protocol</title>
@@ -118,7 +119,8 @@ body{font-family:'Inter',sans-serif;background:#ffffff;color:var(--ink);min-heig
     {% else %}
       <a href="/dashboard" class="btn-nav">Dashboard</a>
     {% endif %}
-    <form method="POST" action="/logout" style="margin:0;"><button type="submit" class="btn-logout">Logout</button></form>
+    <form method="POST" action="/logout" style="margin:0;">
+<input type="hidden" name="_csrf_token" value="{{ csrf_token() }}"><button type="submit" class="btn-logout">Logout</button></form>
   </div>
 </nav>
 
@@ -187,6 +189,7 @@ body{font-family:'Inter',sans-serif;background:#ffffff;color:var(--ink);min-heig
             <span class="inline-note">All 3 checker slots filled — evaluating...</span>
           {% else %}
             <form method="POST" action="/validation/{{ bv.id }}/submit">
+<input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
               <label style="font-size:12px;font-weight:600;color:var(--navy);">Your count:</label>
               <input type="number" name="count" min="0" required autocomplete="off" placeholder="0">
               <button type="submit" class="btn-primary">Submit Count</button>
@@ -198,6 +201,7 @@ body{font-family:'Inter',sans-serif;background:#ffffff;color:var(--ink);min-heig
           <div class="admin-panel">
             <div class="admin-panel-title">Admin Override</div>
             <form method="POST" action="/admin/validation/{{ bv.id }}/override">
+<input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
               <input type="hidden" name="action" value="accept">
               <input type="text" name="note" placeholder="Note (e.g. short-staffed, accepted picker's count)" maxlength="200">
               <button type="submit" class="btn-primary btn-emerald">Accept</button>

@@ -24,6 +24,7 @@ from app import (  # noqa: E402
     Announcement, AuditLog, AdminStaffNote, Notification, SupervisorBill,
 )
 
+from tests_helper import csrf_client  # noqa: E402
 app.config["TESTING"] = True
 PW = "longpass123"
 PASSED, FAILED = [], []
@@ -96,7 +97,7 @@ with app.app_context():
     db.session.commit()
     check("0.2 Victim has references in every employee-referencing table", True)
 
-client = app.test_client()
+client = csrf_client(app.test_client())
 client.post("/login", data={"email": "fk_adm@x.com", "password": PW},
             follow_redirects=True)
 r = client.post("/admin/delete_user/%d" % vid, follow_redirects=True)

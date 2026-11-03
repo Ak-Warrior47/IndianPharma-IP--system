@@ -25,6 +25,7 @@ from app import (  # noqa: E402
     app, db, Employee, MultitaskEntry, reconcile_schema,
 )
 
+from tests_helper import csrf_client  # noqa: E402
 app.config["TESTING"] = True
 PW = "longpass123"
 PASSED, FAILED = [], []
@@ -90,7 +91,7 @@ with app.app_context():
     check("1.2 Querying the model raises while the table lags (the real symptom)", broke)
 
     # The admin dashboard swallows that error, so the panel goes blank silently.
-    client = app.test_client()
+    client = csrf_client(app.test_client())
     client.post("/login", data={"email": "sr_adm@x.com", "password": PW},
                 follow_redirects=True)
     r = client.get("/admin_dashboard")
@@ -130,7 +131,7 @@ with app.app_context():
     again = reconcile_schema()
     check("3.1 Second run is a no-op (idempotent)", again == [])
 
-with app.test_client() as client:
+with csrf_client(app.test_client()) as client:
     client.post("/login", data={"email": "sr_adm@x.com", "password": PW},
                 follow_redirects=True)
     r = client.get("/admin_dashboard")

@@ -10,6 +10,34 @@
   if (window.__ipUX) return;
   window.__ipUX = true;
 
+
+  /* ------------------------------------------------------------------ csrf
+     Every same-origin state-changing fetch carries the session's CSRF token.
+     Patching fetch once covers the calls that exist and any added later, which
+     is safer than remembering to add a header at each call site. The token is
+     read from the meta tag the server renders, so it is never guessable by a
+     cross-site page. */
+  var CSRF = (function () {
+    var m = document.querySelector('meta[name="csrf-token"]');
+    return m ? m.getAttribute("content") : "";
+  })();
+  if (CSRF && window.fetch) {
+    var _fetch = window.fetch;
+    window.fetch = function (input, init) {
+      init = init || {};
+      var url = typeof input === "string" ? input : (input && input.url) || "";
+      var method = (init.method || (input && input.method) || "GET").toUpperCase();
+      var sameOrigin = !/^https?:\/\//i.test(url) || url.indexOf(location.origin) === 0;
+      if (sameOrigin && ["POST", "PUT", "PATCH", "DELETE"].indexOf(method) > -1) {
+        var h = new Headers(init.headers || (input && input.headers) || {});
+        if (!h.has("X-CSRFToken")) h.set("X-CSRFToken", CSRF);
+        init.headers = h;
+        if (!init.credentials) init.credentials = "same-origin";
+      }
+      return _fetch.call(this, input, init);
+    };
+  }
+
   var reduced = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
   /* ---------------------------------------------------------------- theme */

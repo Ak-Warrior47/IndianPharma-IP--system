@@ -1,6 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
+<meta name="csrf-token" content="{{ csrf_token() }}">
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Choose Role | Pharma IP</title>
@@ -180,6 +181,7 @@ tbody tr:hover { background: rgba(165,180,252,0.18) !important; }
     {% set icons = {'picker': '', 'checker': '', 'purchaser': '', 'delivery': '', 'biller': '', 'packing': '', 'other': ''} %}
 
     <form method="POST" action="{{ url_for('switch_role') }}">
+<input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
       <input type="hidden" name="role" value="{{ primary_role }}">
       <button type="submit" class="role-btn" style="width:100%;font-family:inherit;">
         <span class="role-icon">{{ icons.get(primary_role, '') }}</span>
@@ -192,6 +194,7 @@ tbody tr:hover { background: rgba(165,180,252,0.18) !important; }
     </form>
 
     <form method="POST" action="{{ url_for('switch_role') }}">
+<input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
       <input type="hidden" name="role" value="{{ secondary_role }}">
       <button type="submit" class="role-btn" style="width:100%;font-family:inherit;border-color:rgba(167,139,250,0.35);">
         <span class="role-icon">{{ icons.get(secondary_role, '') }}</span>

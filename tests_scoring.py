@@ -26,6 +26,7 @@ from app import (  # noqa: E402
     app, db, Employee, KPIEntry, MultitaskEntry, build_analytics,
 )
 
+from tests_helper import csrf_client  # noqa: E402
 app.config["TESTING"] = True
 PW = "longpass123"
 PASSED, FAILED = [], []
@@ -126,7 +127,7 @@ with app.app_context():
           s["eff_score"] > s["base_score"])
     check("3.7 Score never exceeds 100", s["eff_score"] <= 100.0)
 
-client = app.test_client()
+client = csrf_client(app.test_client())
 client.post("/login", data={"email": "sc_adm@x.com", "password": PW},
             follow_redirects=True)
 

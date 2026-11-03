@@ -96,7 +96,6 @@ GPS_MAX_POINTS     = int(os.environ.get("GPS_MAX_POINTS", "1200"))
 
 def redact_email(addr):
     """Log-safe form of an email: keeps enough to debug, not enough to identify.
-
     Login attempts used to be logged with the full address, which puts a staff
     member's personal email into every log aggregator and error report the host
     forwards to.
@@ -107,6 +106,67 @@ def redact_email(addr):
     local, _, domain = addr.partition("@")
     head = local[:1] if local else ""
     return f"{head}{'*' * max(len(local) - 1, 1)}@{domain}"
+
+
+# ─── CSRF PROTECTION ─────────────────────────────────────────────────────────
+# Without this, any page on the internet can make a logged-in admin's browser
+# submit a form here -- deleting an employee, awarding points, opening a past
+# entry window -- because the session cookie is sent automatically. SameSite=Lax
+# blocks the obvious cross-site POST, but it is one browser setting standing
+# alone, and it does nothing against a same-site injection. A per-session token
+# that the attacker's page cannot read is the actual defence.
+#
+# Implemented directly rather than via Flask-WTF: this app's forms are
+# hand-written HTML, so a token helper and one before_request check cover them
+# without adding a dependency or rewriting 49 forms into WTForms objects.
+
+CSRF_FIELD = "_csrf_token"
+CSRF_HEADER = "X-CSRFToken"
+CSRF_EXEMPT = set()          # endpoint names that must not be checked
+
+
+def csrf_token():
+    """The current session's token, minted on first use."""
+    tok = session.get("_csrf")
+    if not tok:
+        import secrets as _s
+        tok = _s.token_urlsafe(32)
+        session["_csrf"] = tok
+    return tok
+
+
+def csrf_exempt(view):
+    """Mark a view as not requiring a token (machine callers, health checks)."""
+    CSRF_EXEMPT.add(view.__name__)
+    return view
+
+
+@app.before_request
+def _csrf_protect():
+    if request.method in ("GET", "HEAD", "OPTIONS", "TRACE"):
+        return None
+    if request.endpoint in CSRF_EXEMPT or request.endpoint == "static":
+        return None
+    sent = request.form.get(CSRF_FIELD) or request.headers.get(CSRF_HEADER)
+    if not sent and request.is_json:
+        sent = (request.get_json(silent=True) or {}).get(CSRF_FIELD)
+    expected = session.get("_csrf")
+    import hmac as _hmac
+    if not expected or not sent or not _hmac.compare_digest(str(sent), str(expected)):
+        logger.warning("CSRF token missing or wrong on %s %s (ip=%s)",
+                       request.method, request.path, request.remote_addr)
+        if request.is_json or request.headers.get("Accept", "").startswith("application/json"):
+            return jsonify({"ok": False, "error": "Session expired. Reload the page."}), 400
+        flash("Your session expired for security. Please try that again.", "warning")
+        return redirect(request.referrer or url_for("login"))
+    return None
+
+
+@app.context_processor
+def _inject_csrf():
+    """Makes csrf_token() callable from every template."""
+    return {"csrf_token": csrf_token}
+
 ROLE_DISPLAY_NAMES = {
     "picker": "Operations Picker",
     "checker": "Operations Checker",
