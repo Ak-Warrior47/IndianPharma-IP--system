@@ -14,7 +14,7 @@ from collections import Counter
 from functools import wraps
 from typing import List, Optional, Dict, Any
 
-from flask import Flask, render_template, request, redirect, url_for, flash, session, Response, jsonify
+from flask import Flask, render_template, request, redirect, url_for, flash, session, Response, jsonify, g, has_request_context
 from flask_sqlalchemy import SQLAlchemy
 from sqlalchemy import or_
 from flask_socketio import SocketIO, emit
@@ -104,6 +104,14 @@ VALID_STAFF_TYPES = ("picker", "checker", "purchaser", "delivery", "biller", "pa
 # derives a demanding-but-reachable value from real history.
 DEFAULT_PICKER_TARGET_HR  = float(os.environ.get("PICKER_TARGET_HR", "50"))
 DEFAULT_CHECKER_TARGET_HR = float(os.environ.get("CHECKER_TARGET_HR", "70"))
+
+# An urgent bill is harder than a normal one: it interrupts whatever the checker
+# was doing, it has a customer waiting on it, and it cannot be batched. Volume
+# used to count urgent and normal identically, so a checker who absorbed all the
+# urgent work scored the same as one who cherry-picked easy normal bills. Urgent
+# work is now credited at this multiple when volume is scored. 1.5 means one
+# urgent bill counts as one and a half normal ones.
+URGENT_BILL_WEIGHT = max(1.0, float(os.environ.get("URGENT_BILL_WEIGHT", "1.5")))
 
 # ─── PRIVACY SETTINGS ────────────────────────────────────────────────────────
 # Location is the most sensitive data here. Collect the least that still shows
@@ -785,6 +793,149 @@ def safe_div(a, b, default=0.0):
     except Exception: return default
 
 
+def checker_team_day_totals(dates):
+    """Team-wide checker bill figures for each of `dates`.
+
+    Pending bills are a TEAM number, not a personal one. Every checker on duty
+    types in the same figure for the day's total sales bills, then how many of
+    them they personally got through (urgent and normal). What is left over at
+    the end of the day is the day's total minus what the WHOLE team cleared --
+    which no single checker's row can tell you.
+
+        Lisa, Smriti and Deepti each enter "total bills: 100".
+        Lisa clears 30 (urgent + normal), Smriti 30, Deepti 30.
+        Pending for the day = 100 - (30 + 30 + 30) = 10.
+
+    This used to be a number each checker typed in by hand
+    (`pending_bills_manual`), so three checkers on one day produced three
+    different, usually wrong, answers and they were then summed -- inflating
+    pending threefold and dragging every checker's clearance score down with it.
+
+    The day's total is taken as the MAX of what the checkers entered rather than
+    the sum, because they are all reporting the same shared figure; one person
+    leaving it blank must not shrink the day's total.
+
+    Returns {date: {"total", "checked", "normal", "urgent", "pending",
+                    "by_emp": {emp_id: checked}}}.
+    """
+    out = {}
+    dates = sorted({d for d in dates if d})
+    if not dates:
+        return out
+
+    # One request can build analytics for every checker on the roster, and they
+    # all want the same team figures. Memoise per request so the roster costs
+    # two queries, not two per checker.
+    cache_key = tuple(dates)
+    if has_request_context():
+        cache = getattr(g, "_checker_team_cache", None)
+        if cache is None:
+            cache = g._checker_team_cache = {}
+    else:
+        cache = None           # a scheduled job or a script: no request to scope to
+    if cache is not None and cache_key in cache:
+        return cache[cache_key]
+    for d in dates:
+        out[d] = {"total": 0, "checked": 0, "normal": 0, "urgent": 0,
+                  "pending": 0, "by_emp": {}}
+
+    def _absorb(d, emp_id, total, normal, urgent):
+        row = out.get(d)
+        if row is None:
+            return
+        row["total"] = max(row["total"], int(total or 0))
+        row["normal"] += int(normal or 0)
+        row["urgent"] += int(urgent or 0)
+        n = int(normal or 0) + int(urgent or 0)
+        row["checked"] += n
+        row["by_emp"][emp_id] = row["by_emp"].get(emp_id, 0) + n
+
+    try:
+        # Checkers working their primary role.
+        rows = (db.session.query(KPIEntry, Employee)
+                .join(Employee, Employee.id == KPIEntry.emp_id)
+                .filter(KPIEntry.entry_date.in_(dates),
+                        Employee.staff_type == "checker")
+                .all())
+        for e, _emp in rows:
+            _absorb(e.entry_date, e.emp_id, e.bills_received,
+                    e.sales_bills_open or e.bills or 0, e.cs_sales_open)
+
+        # Anyone who checked as a SECOND role that day cleared real bills too,
+        # so their work has to come off the same pending pile.
+        for m in (MultitaskEntry.query
+                  .filter(MultitaskEntry.entry_date.in_(dates),
+                          MultitaskEntry.secondary_type == "checker").all()):
+            _absorb(m.entry_date, m.emp_id, m.bills_received,
+                    m.sales_bills_open, m.cs_sales_open)
+    except Exception as exc:
+        # Scoring depends on this, so it must not fail quietly. With no team
+        # figures the page shows "0 total - 0 checked", which is visibly
+        # wrong rather than a flattering clearance score.
+        logger.error("checker_team_day_totals failed: %s", exc)
+        return out
+
+    for row in out.values():
+        row["pending"] = max(row["total"] - row["checked"], 0)
+    if cache is not None:
+        cache[cache_key] = out
+    return out
+
+
+def checker_bill_problems(entry_date, emp_id, bills_received, sb_checked, cs_checked):
+    """Why a checker's bill figures cannot be right. Empty list means they add up.
+
+    Urgent bills are part of the day's total, not extra to it. If the day had
+    100 sales bills then normal + urgent checked can never come to more than
+    100. Nothing stopped that before, so a day could show 130 of 100 bills
+    cleared and a negative pending pile.
+
+    This is the refusal. The looser team-wide check is checker_bill_warnings().
+    """
+    problems = []
+    bills_received = int(bills_received or 0)
+    sb_checked     = int(sb_checked or 0)
+    cs_checked     = int(cs_checked or 0)
+    mine = sb_checked + cs_checked
+
+    if bills_received > 0 and mine > bills_received:
+        problems.append(
+            "Bills checked (%d normal + %d urgent = %d) is more than the day's "
+            "total sales bills (%d). Urgent bills are part of that total, not "
+            "extra to it." % (sb_checked, cs_checked, mine, bills_received))
+
+    return problems
+
+
+def checker_bill_warnings(entry_date, emp_id, bills_received, sb_checked, cs_checked):
+    """Why a checker's figures look wrong against the rest of the team's.
+
+    The same ceiling applies to the team as a whole -- the day's bills cannot
+    all be checked twice -- but this is deliberately NOT a refusal. If one
+    person mistypes the day's total, everyone who enters after them would be
+    locked out of submitting at all, which is worse than a wrong figure. So it
+    is said out loud and the entry is still saved.
+    """
+    warnings = []
+    mine = int(sb_checked or 0) + int(cs_checked or 0)
+    try:
+        # Validation runs around writes, so the per-request memo may be stale.
+        if has_request_context():
+            g._checker_team_cache = {}
+        day = checker_team_day_totals([entry_date]).get(entry_date) or {}
+        others = sum(v for eid, v in (day.get("by_emp") or {}).items() if eid != emp_id)
+        day_total = max(int(day.get("total") or 0), int(bills_received or 0))
+        if day_total > 0 and others + mine > day_total:
+            warnings.append(
+                "Saved, but the checking team is now at %d bills out of %d for "
+                "this day (%d already entered by other checkers, %d here). "
+                "Check the day's total, or whose bills these are."
+                % (others + mine, day_total, others, mine))
+    except Exception as exc:
+        logger.warning("checker_bill_warnings team check failed: %s", exc)
+    return warnings
+
+
 def grade_from_score(score):
     if score >= 90:   return "EXCELLENT"
     elif score >= 75: return "GOOD"
@@ -861,8 +1012,23 @@ def build_analytics(entries: List[KPIEntry], staff_type: str = "picker", emp_id:
         ttc  = sum(int(e.table_clean or 0) for e in entries)
         tct  = sum(float(e.check_time or 0) for e in entries)
         days = len(entries)
-        # Checker: bills received + pending (both manual entry)
-        tbr  = sum(int(e.bills_received or 0) for e in entries) if staff_type == "checker" else 0
+        # Checker: the day's total bills is a shared figure, so it is taken once
+        # per day (the max of what the checkers on duty entered) rather than
+        # summed across their rows -- three checkers each entering "100" for the
+        # same day means 100 bills, not 300.
+        if staff_type == "checker":
+            _team_days = checker_team_day_totals({e.entry_date for e in entries})
+            tbr  = sum(r["total"] for r in _team_days.values())
+            team_checked_bills = sum(r["checked"] for r in _team_days.values())
+            team_pending_bills = sum(r["pending"] for r in _team_days.values())
+            team_urgent_bills  = sum(r["urgent"] for r in _team_days.values())
+            team_checker_count = len({eid for r in _team_days.values() for eid in r["by_emp"]})
+        else:
+            _team_days = {}
+            tbr = team_checked_bills = team_pending_bills = 0
+            team_urgent_bills = team_checker_count = 0
+        # Kept only so an old hand-typed figure can still be shown beside the
+        # derived one while the team gets used to the change. It no longer scores.
         tpbm = sum(int(e.pending_bills_manual or 0) for e in entries) if staff_type == "checker" else 0
         # Picker: total bills received to pick
         tbr_picker = sum(int(e.total_bills_received or 0) for e in entries) if staff_type == "picker" else 0
@@ -876,11 +1042,32 @@ def build_analytics(entries: List[KPIEntry], staff_type: str = "picker", emp_id:
         tsb_urgent  = sum(int(e.cs_sales_open or 0) for e in entries) if staff_type == "checker" else 0
         tsb_total   = tsb_normal + tsb_urgent
 
-        # Checker: clearance = SB Checked / (SB Checked + Pending Manual)
+        # Checker: clearance is how much of the day's pile the TEAM got through.
+        #   pending     = day's total bills - every checker's checked bills
+        #   clearance % = team checked / day's total
+        # It is a shared figure on purpose: bills left on the counter are the
+        # checking team's result, not one person's, and scoring it per-person
+        # rewarded whoever happened to enter the smallest pending guess.
         tsb_checked_total = tsb_normal + tsb_urgent if staff_type == "checker" else 0
-        pending_bills  = tpbm  # now manually entered by checker
-        total_for_clearance = tsb_checked_total + pending_bills
-        clearance_rate = round(safe_div(tsb_checked_total, total_for_clearance) * 100, 1) if total_for_clearance > 0 else 100.0
+        pending_bills  = team_pending_bills
+        total_for_clearance = tbr
+        clearance_rate = (round(min(safe_div(team_checked_bills, total_for_clearance) * 100, 100.0), 1)
+                          if total_for_clearance > 0 else 100.0)
+        # This checker's share of what the team cleared — the part of the team
+        # result that is actually theirs.
+        team_share_pct = (round(safe_div(tsb_checked_total, team_checked_bills) * 100, 1)
+                          if team_checked_bills > 0 else 0.0)
+
+        # ── Urgent work counts for more than normal work ───────────────────
+        # Volume used to be a plain head-count, so an urgent bill and a normal
+        # bill earned the same. Urgent bills interrupt, cannot be batched and
+        # have someone waiting, so they are credited at URGENT_BILL_WEIGHT.
+        urgent_weight     = URGENT_BILL_WEIGHT
+        weighted_bills    = round(tsb_normal + tsb_urgent * urgent_weight, 1)
+        weighted_items    = round(tck_normal + tck_urgent * urgent_weight, 1)
+        # The extra credit urgent work earned, in plain "equivalent items".
+        urgent_item_bonus = round(tck_urgent * (urgent_weight - 1.0), 1)
+        urgent_bill_bonus = round(tsb_urgent * (urgent_weight - 1.0), 1)
         # Picker: bill fulfilment = SB Picked / Total Bills Received
         bill_fulfilment = round(min(safe_div(tsb_normal, tbr_picker) * 100, 100.0), 1) if tbr_picker > 0 else 0.0
 
@@ -896,6 +1083,10 @@ def build_analytics(entries: List[KPIEntry], staff_type: str = "picker", emp_id:
         workspace_score = round((rack_ws + table_ws + sweep_ws) / 10 * 100, 1) if days > 0 else 0.0
 
         check_speed = round(safe_div(tck_total, ts_total), 1)
+        # What the speed component is actually scored on: urgent items counted
+        # at their weight. Shown beside the raw figure so the difference between
+        # "items an hour" and "what it was worth" is visible.
+        check_speed_weighted = round(safe_div(weighted_items, ts_total), 1)
         normal_pct  = round(safe_div(tck_normal, tck_total) * 100, 1) if tck_total > 0 else 0.0
         urgent_pct  = round(safe_div(tck_urgent, tck_total) * 100, 1) if tck_total > 0 else 0.0
         check_acc   = round(min(safe_div(check_speed, 25.0), 1.0) * 100, 1)
@@ -990,12 +1181,22 @@ def build_analytics(entries: List[KPIEntry], staff_type: str = "picker", emp_id:
             return round(min(items_r, bills_r), 3)
 
         # Calculate VWCR for the role
-        daily_vol_items   = safe_div(ti, days) if staff_type == "picker" else safe_div(tck_total, days)
+        if staff_type == "picker":
+            daily_vol_items = safe_div(ti, days)
+        elif staff_type == "checker":
+            daily_vol_items = safe_div(weighted_items, days)
+        else:
+            daily_vol_items = safe_div(tck_total, days)
         daily_vol_per_hr  = safe_div(daily_vol_items, 9.0)  # 9-hr workday
         if staff_type == "picker":
             vwcr = _vwcr(tp, ti, daily_vol_per_hr, PICKER_TARGET_HR)
         elif staff_type == "checker":
-            vwcr = _vwcr(tck_normal, tck_total, daily_vol_per_hr, CHECKER_TARGET_HR)
+            # This used to be _vwcr(tck_normal, tck_total, ...), i.e. the share
+            # of work that was NOT urgent -- which quietly punished whoever took
+            # the urgent bills, the opposite of what we want. The ratio is now
+            # weighted items over raw items, so it sits at 1.0 for all-normal
+            # work and rises with the urgent share.
+            vwcr = _vwcr(weighted_items, max(tck_total, 1), daily_vol_per_hr, CHECKER_TARGET_HR)
         else:
             # Purchaser VWCR: racked items accuracy × volume vs target
             pur_items_daily = safe_div(tck_urgent, days)  # tck_urgent = pur_items for purchaser
@@ -1006,7 +1207,13 @@ def build_analytics(entries: List[KPIEntry], staff_type: str = "picker", emp_id:
         if staff_type == "picker":
             cleaner_rate_score = _cleaner_rate(tp, max(ti, 1), tsd, safe_div(tro, max(days, 1)))
         elif staff_type == "checker":
-            cleaner_rate_score = _cleaner_rate(tck_normal, max(tck_total, 1), tsd, 0)
+            # The first argument is "clean" volume. For a picker that is items
+            # picked rather than missed. For a checker it used to be tck_normal
+            # -- the items that were NOT urgent -- which made this a second,
+            # hidden penalty for taking urgent work on top of the VWCR one.
+            # Urgent items are harder work, not spoiled work, so they count here
+            # too, at their weight.
+            cleaner_rate_score = _cleaner_rate(weighted_items, max(tck_total, 1), tsd, 0)
         else:
             cleaner_rate_score = _cleaner_rate(tro, max(tck_urgent, 1), tsd, 0)
 
@@ -1023,6 +1230,7 @@ def build_analytics(entries: List[KPIEntry], staff_type: str = "picker", emp_id:
             workspace_score_checker = round((table_ws + sweep_ws) / 5 * 100, 1) if days > 0 else 0.0
             workspace_score = workspace_score_checker
 
+        point_breakdown = []   # filled per role where the arithmetic is published
         if staff_type == "purchaser":
             # Purchaser params using DB fields:
             # sales_bills_open = Total PO Bills Received
@@ -1086,7 +1294,11 @@ def build_analytics(entries: List[KPIEntry], staff_type: str = "picker", emp_id:
         else:
             # CHECKER POINT SYSTEM (100 pts total). Reached only when staff_type
             # resolved to "checker" above, never as a silent catch-all.
-            speed_score     = min(safe_div(check_speed, 80.0), 1.0) * 22  # was 30
+            # Volume: scored on the WEIGHTED speed, so urgent items pay more.
+            # The divisor used to be a hard-coded 80 while VWCR below scored the
+            # same person against CHECKER_TARGET_HR (70) -- two different targets
+            # for the same work. Both now use the configured target.
+            speed_score     = min(safe_div(check_speed_weighted, CHECKER_TARGET_HR), 1.0) * 22
             clearance_score = (clearance_rate / 100.0) * 22  # was 25
             vwcr_score      = (vwcr / 120.0) * 20  # NEW: VWCR replaces "Normal %"
             cleaner_score   = (cleaner_rate_score / 100.0) * 8  # NEW
@@ -1098,6 +1310,30 @@ def build_analytics(entries: List[KPIEntry], staff_type: str = "picker", emp_id:
             eff_score       = round(speed_score + clearance_score + vwcr_score +
                                     cleaner_score + eff_ratio_score + consist_score +
                                     poteff_score + workspace_ck + sweep_score, 1)
+            # Shown on the staff page so the arithmetic is inspectable rather
+            # than a number that appears from nowhere.
+            point_breakdown = [
+                {"name": "Weighted Speed", "max": 22, "got": round(speed_score, 1),
+                 "how": "%.1f weighted items/hr ÷ %.0f target (urgent counted ×%.2g)"
+                        % (check_speed_weighted, CHECKER_TARGET_HR, urgent_weight)},
+                {"name": "Team Clearance", "max": 22, "got": round(clearance_score, 1),
+                 "how": "%d of %d bills cleared by the team (%.1f%%), %d left pending"
+                        % (team_checked_bills, tbr, clearance_rate, team_pending_bills)},
+                {"name": "VWCR", "max": 20, "got": round(vwcr_score, 1),
+                 "how": "%.1f of 120 — volume against target, lifted by urgent share" % vwcr},
+                {"name": "Cleaner Rate", "max": 8, "got": round(cleaner_score, 1),
+                 "how": "%.1f%%" % cleaner_rate_score},
+                {"name": "Efficiency Ratio", "max": 8, "got": round(eff_ratio_score, 1),
+                 "how": "%.3f — weakest of items/day and bills/day against 200 / 50" % efficiency_ratio},
+                {"name": "Log Consistency", "max": 8, "got": round(consist_score, 1),
+                 "how": "%.1f%% — steadiness of the daily rate" % consistency},
+                {"name": "Potential Efficiency", "max": 5, "got": round(poteff_score, 1),
+                 "how": "%.1f%% of the theoretical ceiling" % potential_eff},
+                {"name": "Workspace", "max": 4, "got": round(workspace_ck, 1),
+                 "how": "%.1f%% — rack, table, sweep" % workspace_score},
+                {"name": "Sweep Days", "max": 3, "got": round(sweep_score, 1),
+                 "how": "%d of %d days" % (tsd, days)},
+            ]
         # Apply complaint deductions (minus marking)
         complaint_deduction = get_complaint_deduction(staff_type, emp_id=emp_id)
         # Apply ongoing employee admin adjustment
@@ -1223,6 +1459,19 @@ def build_analytics(entries: List[KPIEntry], staff_type: str = "picker", emp_id:
             tsb_urgent=tsb_urgent, tsb_total=tsb_total,
             tpk=tpk, tpd=tpk,
             tbr=tbr, pending_bills=pending_bills, clearance_rate=clearance_rate,
+            # Team-wide checker figures. pending_bills is the TEAM's leftover,
+            # the same number for every checker on the day, and pending_manual
+            # is only the old hand-typed figure kept for comparison.
+            team_total_bills=tbr, team_checked_bills=team_checked_bills,
+            team_pending_bills=team_pending_bills, team_urgent_bills=team_urgent_bills,
+            team_checker_count=team_checker_count, team_share_pct=team_share_pct,
+            pending_manual=tpbm,
+            # Urgent weighting
+            urgent_weight=urgent_weight, weighted_items=weighted_items,
+            weighted_bills=weighted_bills, urgent_item_bonus=urgent_item_bonus,
+            urgent_bill_bonus=urgent_bill_bonus,
+            check_speed_weighted=check_speed_weighted,
+            point_breakdown=point_breakdown,
             tbr_picker=tbr_picker, bill_fulfilment=bill_fulfilment,
             pur_bills_received=pur_bills_received if staff_type=="purchaser" else 0,
             pur_pending_bills=pur_pending_bills if staff_type=="purchaser" else 0,
@@ -1562,6 +1811,12 @@ def _safe_stats(stats):
             "pur_items_racked": 0, "pur_bill_rate": 0, "pur_cs_fulfilment": 0,
             "pur_racking_eff": 0, "pur_speed": 0, "pur_entry_rate": 0,
             "pur_pending_bills": 0,
+            "team_total_bills": 0, "team_checked_bills": 0, "team_pending_bills": 0,
+            "team_urgent_bills": 0, "team_checker_count": 0, "team_share_pct": 0,
+            "pending_manual": 0,
+            "urgent_weight": URGENT_BILL_WEIGHT, "weighted_items": 0,
+            "weighted_bills": 0, "urgent_item_bonus": 0, "urgent_bill_bonus": 0,
+            "check_speed_weighted": 0, "point_breakdown": [],
         }
     return stats
 
@@ -2627,6 +2882,18 @@ def _save_multitask_entry(emp_id, entry_date, primary_role):
         if not any(vals.values()) and not note:
             continue
 
+        # Checking as a second role still clears bills off the same pile, so the
+        # same ceiling applies: normal + urgent cannot exceed the day's total.
+        if role == "checker":
+            _bp = checker_bill_problems(entry_date, emp_id, vals["bills_received"],
+                                        vals["sales_bills_open"], vals["cs_sales_open"])
+            if _bp:
+                flash("Multitask checker figures not saved — " + " ".join(_bp), "danger")
+                continue
+            for _w in checker_bill_warnings(entry_date, emp_id, vals["bills_received"],
+                                            vals["sales_bills_open"], vals["cs_sales_open"]):
+                flash(_w, "warning")
+
         mt = MultitaskEntry.query.filter_by(
             emp_id=emp_id, entry_date=entry_date, secondary_type=role
         ).first()
@@ -2638,6 +2905,8 @@ def _save_multitask_entry(emp_id, entry_date, primary_role):
         mt.note = note or None
         saved += 1
     db.session.commit()
+    if has_request_context():
+        g._checker_team_cache = {}
     return saved
 
 
@@ -2914,6 +3183,13 @@ def dashboard():
                         flash(f"Cannot save — required fields missing or zero: {', '.join(missing_fields)}.", "danger")
                         return redirect(url_for("dashboard"))
 
+                    if staff_type == "checker":
+                        _bp = checker_bill_problems(today, emp_id, bills_received,
+                                                    sales_bills_open, cs_sales_open)
+                        if _bp:
+                            flash("Cannot save — " + " ".join(_bp), "danger")
+                            return redirect(url_for("dashboard"))
+
                     ne = KPIEntry(
                         emp_id               = emp_id,
                         sales_bills_open     = sales_bills_open,
@@ -2935,6 +3211,13 @@ def dashboard():
                     )
                     db.session.add(ne)
                     db.session.commit()
+                    # The team pending pile just changed.
+                    if has_request_context():
+                        g._checker_team_cache = {}
+                    if staff_type == "checker":
+                        for _w in checker_bill_warnings(today, emp_id, bills_received,
+                                                        sales_bills_open, cs_sales_open):
+                            flash(_w, "warning")
 
                     # ── Constant Protocol: create pending BillValidation for pickers
                     if staff_type == "picker" and total_bills_received > 0:
@@ -4125,6 +4408,13 @@ def past_entry(date_str):
                 flash(f"Cannot save — required fields missing or zero: {', '.join(missing_fields)}.", "danger")
                 return redirect(url_for("past_entry", date_str=date_str))
 
+            if staff_type == "checker":
+                _bp = checker_bill_problems(past_date, emp_id, bills_received,
+                                            sales_bills_open, cs_sales_open)
+                if _bp:
+                    flash("Cannot save — " + " ".join(_bp), "danger")
+                    return redirect(url_for("past_entry", date_str=date_str))
+
             ne = KPIEntry(
                 emp_id               = emp_id,
                 sales_bills_open     = sales_bills_open,
@@ -4146,6 +4436,12 @@ def past_entry(date_str):
             )
             db.session.add(ne)
             db.session.commit()
+            if has_request_context():
+                g._checker_team_cache = {}
+            if staff_type == "checker":
+                for _w in checker_bill_warnings(past_date, emp_id, bills_received,
+                                                sales_bills_open, cs_sales_open):
+                    flash(_w, "warning")
             log_audit("past_entry_submit", session.get("user_name", ""), f"Submitted past data for {past_date}")
             flash(f"Past entry for {past_date.strftime('%d %b %Y')} saved successfully.", "success")
             return redirect(url_for("dashboard"))

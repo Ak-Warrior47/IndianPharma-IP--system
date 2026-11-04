@@ -35,6 +35,13 @@ TODAY = date.today()
 
 with app.app_context():
     db.create_all()
+    # These suites both assume an empty checklist, and a shared development
+    # database means whichever ran first left its templates and completions
+    # behind -- so the second one failed on the first one's leftovers rather
+    # than on anything in the code. Start from a clean slate either way.
+    ChecklistCompletion.query.delete()
+    ChecklistTemplate.query.delete()
+    db.session.commit()
 
     def mk(name, email, staff_type, admin=False):
         e = Employee.query.filter_by(email=email).first()

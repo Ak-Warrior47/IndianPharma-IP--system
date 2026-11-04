@@ -104,6 +104,11 @@ body { display: grid; grid-template-columns: 236px minmax(0, 1fr); min-height: 1
 .pt-name { font-size: var(--fs-body); font-weight: var(--fw-med); color: var(--ink); }
 .pt-val { font-size: var(--fs-body); font-weight: var(--fw-heavy); color: var(--ink); }
 .pt-cap { font-size: var(--fs-small); color: var(--ink-3); }
+/* The arithmetic behind the bar, so a score is never a number from nowhere. */
+.pt-how { font-size: var(--fs-micro); color: var(--ink-3); line-height: 1.55;
+  margin-top: var(--s1); }
+.mini-foot { font-size: var(--fs-micro); color: var(--ink-3); line-height: 1.5;
+  margin-top: var(--s1); }
 .pt-bar-wrap { height: 7px; border-radius: var(--r-pill); background: var(--surface-3);
   box-shadow: inset 0 1px 2px rgba(11,18,32,.09); overflow: hidden; margin-top: var(--s2); }
 .pt-bar { height: 100%; border-radius: var(--r-pill);
@@ -450,18 +455,21 @@ body { display: grid; grid-template-columns: 236px minmax(0, 1fr); min-height: 1
       <div class="card-title"><span class="ico">▸</span>Points Breakdown</div>
       <div class="card-sub">How the {{ a_stats.eff_score }}/100 score was earned{% if a_stats.scored_as != a_stats.primary_role %}, scored on the {{ a_stats.scored_as|title }} point system because {{ emp.name.split()[0] }} enters {{ a_stats.scored_as|title }} numbers{% endif %}.</div>
       <div class="points-breakdown">
-        {% if emp.staff_type == 'checker' %}
-          {% set _pts = [
-            ('Check Speed',      a_stats.check_speed, 80.0, 22),
-            ('Clearance Rate',   a_stats.clearance_rate or 100, 100.0, 22),
-            ('VWCR',             a_stats.vwcr or 0, 120.0, 20),
-            ('Cleaner Rate',     a_stats.cleaner_rate or 0, 100.0, 8),
-            ('Efficiency Ratio', (a_stats.efficiency_ratio or 0) * 100, 100.0, 8),
-            ('Log Consistency',  a_stats.consistency, 100.0, 8),
-            ('Potential Eff.',   a_stats.potential_eff, 100.0, 5),
-            ('Workspace',        a_stats.workspace_score, 100.0, 4),
-            ('Sweep Bonus',      a_stats.tsd, (a_stats.days or 1), 3),
-          ] %}
+        {# The scoring code hands over its own arithmetic where it can, so this
+           page shows the points that were actually awarded rather than a second
+           copy of the formulas that can drift away from them. #}
+        {% if a_stats.point_breakdown %}
+          {% for row in a_stats.point_breakdown %}
+          {% set pct = ((row.got / row.max) * 100) if row.max else 0 %}
+          <div class="pt-row">
+            <span class="pt-name">{{ row.name }}</span>
+            <span class="pt-val">{{ row.got }}</span>
+            <span class="pt-cap">/ {{ row.max }} pts</span>
+            <div class="pt-bar-wrap"><div class="pt-bar" style="width:{{ pct|round }}%"></div></div>
+          </div>
+          <div class="pt-how">{{ row.how }}</div>
+          {% endfor %}
+          {% set _pts = [] %}
         {% elif emp.staff_type == 'purchaser' %}
           {% set _pts = [
             ('Bill Processing Rate', a_stats.pur_bill_rate or 0, 100.0, 25),
@@ -475,11 +483,17 @@ body { display: grid; grid-template-columns: 236px minmax(0, 1fr); min-height: 1
             ('Workspace',            a_stats.workspace_score, 100.0, 3),
             ('Log Consistency',      a_stats.consistency, 100.0, 2),
           ] %}
+        {% elif emp.staff_type == 'checker' %}
+          {# No entries yet, so there is nothing to break down. #}
+          {% set _pts = [] %}
         {% else %}
+          {# Pick Speed is scored against the hourly target, the same figure the
+             scoring code uses. This row said 250 — a per-DAY number — so the
+             bar read near zero however fast the picker actually was. #}
           {% set _pts = [
             ('VWCR',             a_stats.vwcr or 0, 120.0, 25),
             ('Bill Fulfilment',  a_stats.bill_fulfilment or 0, 100.0, 18),
-            ('Pick Speed',       a_stats.pick_speed, 250.0, 15),
+            ('Pick Speed',       a_stats.pick_speed, (a_stats.hourly_target or 50), 15),
             ('Efficiency Ratio', (a_stats.efficiency_ratio or 0) * 100, 100.0, 10),
             ('Workspace',        a_stats.workspace_score, 100.0, 10),
             ('CS Fulfilment',    a_stats.cs_fulfilment, 100.0, 8),
@@ -623,8 +637,13 @@ body { display: grid; grid-template-columns: 236px minmax(0, 1fr); min-height: 1
           <div class="mini"><div class="mini-lbl">Total Items Checked</div><div class="mini-val">{{ pstats.tck_total or pstats.tck or 0 }}</div></div>
           <div class="mini"><div class="mini-lbl">Check Speed/hr</div><div class="mini-val">{{ pstats.check_speed or pstats.ck_speed or 0 }}</div></div>
           <div class="mini"><div class="mini-lbl">Clearance Rate</div><div class="mini-val">{{ pstats.clearance_rate or 100 }}<span class="suf">%</span></div></div>
-          <div class="mini {% if (pstats.pending_bills or 0) > 0 %}danger{% endif %}"><div class="mini-lbl">Pending Bills</div><div class="mini-val">{{ pstats.pending_bills or 0 }}</div></div>
-          <div class="mini"><div class="mini-lbl">Clean Check %</div><div class="mini-val">{{ pstats.normal_pct or 0 }}<span class="suf">%</span></div></div>
+          <div class="mini {% if (pstats.pending_bills or 0) > 0 %}danger{% endif %}">
+            <div class="mini-lbl">Pending Bills (team)</div>
+            <div class="mini-val">{{ pstats.pending_bills or 0 }}</div>
+            <div class="mini-foot">{{ pstats.team_total_bills or 0 }} total − {{ pstats.team_checked_bills or 0 }} checked by {{ pstats.team_checker_count or 0 }} checker{{ '' if pstats.team_checker_count == 1 else 's' }}</div>
+          </div>
+          <div class="mini"><div class="mini-lbl">Own Share of Team</div><div class="mini-val">{{ pstats.team_share_pct or 0 }}<span class="suf">%</span></div></div>
+          <div class="mini"><div class="mini-lbl">Urgent Bills Taken</div><div class="mini-val">{{ pstats.tsb_urgent or 0 }}<span class="suf">× {{ pstats.urgent_weight or 1 }}</span></div></div>
           <div class="mini"><div class="mini-lbl">Packing Done</div><div class="mini-val">{{ pstats.tpk }}</div></div>
           <div class="mini"><div class="mini-lbl">Log Consistency</div><div class="mini-val">{{ pstats.consistency }}<span class="suf">%</span></div></div>
           <div class="mini"><div class="mini-lbl">Potential Eff.</div><div class="mini-val">{{ pstats.potential_eff }}<span class="suf">%</span></div></div>

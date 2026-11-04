@@ -118,6 +118,11 @@ services:
         sync: false
       - key: CHECKER_TARGET_HR
         sync: false
+      # How much an urgent bill is worth against a normal one when volume is
+      # scored. 1.5 means one urgent bill counts as one and a half normal ones.
+      # Raise it if urgent work is being avoided; 1.0 switches the weighting off.
+      - key: URGENT_BILL_WEIGHT
+        value: "1.5"
 
       # ---- Privacy -------------------------------------------------------
       # Location is the most sensitive data this app holds. Points are recorded

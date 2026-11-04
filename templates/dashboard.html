@@ -535,10 +535,21 @@ button[disabled] { opacity: .45; cursor: not-allowed; transform: none; }
           <small>All bills given to you today</small>
         </div>
         <div class="field">
-          <label>Pending Bills (not checked yet)</label>
-          <input type="number" name="pending_bills_manual" id="f_pending" min="0" value="0" oninput="updateCheckerTotals()">
-          <small>Bills you could not complete today</small>
+          <label>Pending Bills (worked out for you)</label>
+          {# This used to be typed in by hand. Three checkers on one day gave
+             three different guesses and they were added together, so pending
+             came out at three times life size. The real pending is a TEAM
+             figure -- the day's total minus what every checker got through --
+             so it is calculated, not asked for. #}
+          <input type="number" id="f_pending" value="0" readonly tabindex="-1"
+                 style="background:var(--surface-3);color:var(--ink-2);">
+          <input type="hidden" name="pending_bills_manual" value="0">
+          <small>Your bills received minus what you checked. The real pending
+            pile is the whole checking team's and is shown on your report.</small>
         </div>
+        <!-- Shown the moment urgent + normal goes past the day's total. -->
+        <div id="checker_over" class="ip-flash danger"
+             style="grid-column:span 2;display:none;margin:0 0 4px;"></div>
         <!-- LIVE TOTAL BANNER — updates as checker types -->
         <div style="grid-column:span 2;display:flex;gap:10px;margin-bottom:4px;">
           <div style="flex:1;background:rgba(219,234,254,0.85);border:1.5px solid rgba(29,78,216,0.25);border-radius:14px;padding:14px 18px;backdrop-filter:blur(10px);text-align:center;">
@@ -554,7 +565,7 @@ button[disabled] { opacity: .45; cursor: not-allowed; transform: none; }
           <div style="flex:1;background:rgba(254,242,242,0.85);border:1.5px solid rgba(220,38,38,0.25);border-radius:14px;padding:14px 18px;backdrop-filter:blur(10px);text-align:center;">
             <div style="font-size:11px;font-weight:800;color:var(--bad);text-transform:uppercase;letter-spacing:.7px;margin-bottom:4px;">Pending Bills</div>
             <div style="font-size:30px;font-weight:800;color:var(--bad-ink);" id="live_pending">0</div>
-            <div style="font-size:11px;color:var(--ink-3);margin-top:2px;">Manually entered</div>
+            <div style="font-size:11px;color:var(--ink-3);margin-top:2px;">Yours, not yet checked</div>
           </div>
           <div style="flex:1;background:rgba(240,253,244,0.85);border:1.5px solid rgba(22,163,74,0.25);border-radius:14px;padding:14px 18px;backdrop-filter:blur(10px);text-align:center;">
             <div style="font-size:11px;font-weight:800;color:var(--ok);text-transform:uppercase;letter-spacing:.7px;margin-bottom:4px;">Clearance Rate</div>
@@ -1781,10 +1792,25 @@ function updateCheckerTotals(){
   var sbU = parseInt(document.getElementById('f_sb_urgent')?.value||0)||0;
   var itN = parseInt(document.getElementById('f_item_normal')?.value||0)||0;
   var itU = parseInt(document.getElementById('f_item_urgent')?.value||0)||0;
-  var pd  = parseInt(document.getElementById('f_pending')?.value||0)||0;
+  var rec = parseInt(document.getElementById('f_bills_received')?.value||0)||0;
   var totalSB = sbN + sbU;
-  var totalForClearance = totalSB + pd;
-  var clearance = totalForClearance > 0 ? Math.round(totalSB / totalForClearance * 100) : 100;
+  // Pending is derived, not typed: what you were given minus what you checked.
+  var pd  = Math.max(rec - totalSB, 0);
+  var pdBox = document.getElementById('f_pending');
+  if(pdBox) pdBox.value = pd;
+  var clearance = rec > 0 ? Math.min(Math.round(totalSB / rec * 100), 100) : 100;
+  // Urgent bills are part of the day's total, never extra to it.
+  var over = document.getElementById('checker_over');
+  if(over){
+    if(rec > 0 && totalSB > rec){
+      over.style.display = '';
+      over.textContent = 'Normal (' + sbN + ') + Urgent (' + sbU + ') = ' + totalSB +
+        ' bills, which is more than the ' + rec + ' you received. Urgent bills are ' +
+        'part of that total, not extra to it.';
+    } else {
+      over.style.display = 'none';
+    }
+  }
   var tSB = document.getElementById('live_total_sb');
   var tIT = document.getElementById('live_total_items');
   var tPD = document.getElementById('live_pending');
@@ -2067,6 +2093,16 @@ window.addEventListener('pagehide', function() {
 function validateAndSubmit(e){
   var form = e.target.tagName === 'FORM' ? e.target : document.querySelector('form[method="POST"]');
   if(!form) return true;
+
+  // Urgent + normal cannot exceed the day's total. The server refuses it too;
+  // catching it here saves the trip and keeps the typed figures on screen.
+  var over = document.getElementById('checker_over');
+  if(over && over.style.display !== 'none' && over.textContent.trim()){
+    alert(over.textContent.trim());
+    over.scrollIntoView({behavior:'smooth', block:'center'});
+    e.preventDefault();
+    return false;
+  }
 
   // Collect fields that are empty (not just zero — zero is a valid value)
   var empty = [];

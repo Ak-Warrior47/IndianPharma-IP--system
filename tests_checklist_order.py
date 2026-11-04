@@ -30,6 +30,13 @@ def check(name, cond):
 
 with app.app_context():
     db.create_all()
+    # These suites both assume an empty checklist, and a shared development
+    # database means whichever ran first left its templates and completions
+    # behind -- so the second one failed on the first one's leftovers rather
+    # than on anything in the code. Start from a clean slate either way.
+    ChecklistCompletion.query.delete()
+    ChecklistTemplate.query.delete()
+    db.session.commit()
 
     def mk(name, email, staff_type, admin=False):
         e = Employee.query.filter_by(email=email).first()
@@ -149,9 +156,13 @@ with app.app_context():
                                            completed_at=datetime.utcnow()))
     d_tid = ChecklistTemplate.query.filter_by(staff_type="delivery",
                                               is_active=1).first().id
-    db.session.add(ChecklistCompletion(emp_id=dv_id, template_id=d_tid,
-                                       entry_date=TODAY, done=1,
-                                       completed_at=datetime.utcnow()))
+    # "All clear" is a statement about the whole role, so every delivery staff
+    # member has to be done -- including any the other suites left in this
+    # shared development database, not just the driver created here.
+    for _dv in Employee.query.filter_by(staff_type="delivery").all():
+        db.session.add(ChecklistCompletion(emp_id=_dv.id, template_id=d_tid,
+                                           entry_date=TODAY, done=1,
+                                           completed_at=datetime.utcnow()))
     db.session.commit()
 
 r = client.get("/admin/checklist")

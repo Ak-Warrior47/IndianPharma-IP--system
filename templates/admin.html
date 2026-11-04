@@ -1115,7 +1115,9 @@ var NOTES_BY_EMP = {
               <div style="background:rgba(109,40,217,0.07);border-radius:6px;padding:3px;"><div style="color:var(--ink-3);">Speed/hr</div><div style="font-weight:700;">{{ r.stats.check_speed or r.stats.ck_speed or 0 }}</div></div>
               <div style="background:rgba(109,40,217,0.07);border-radius:6px;padding:3px;"><div style="color:var(--ink-3);">Normal%</div><div style="font-weight:700;">{{ r.stats.normal_pct or 0 }}%</div></div>
               <div style="background:rgba(109,40,217,0.07);border-radius:6px;padding:3px;"><div style="color:var(--ink-3);">Clearance</div><div style="font-weight:700;">{{ r.stats.clearance_rate or 100 }}%</div></div>
-              <div style="background:rgba(109,40,217,0.07);border-radius:6px;padding:3px;"><div style="color:var(--ink-3);">Pending</div><div style="font-weight:700;">{{ r.stats.pending_bills or 0 }}</div></div>
+              <div style="background:rgba(109,40,217,0.07);border-radius:6px;padding:3px;"
+                   title="Team pending: the day's total bills minus what every checker got through. The same figure for every checker on the day.">
+                <div style="color:var(--ink-3);">Pending (team)</div><div style="font-weight:700;">{{ r.stats.pending_bills or 0 }}</div></div>
             </div>
             {% if r.stats.complaint_deduction and r.stats.complaint_deduction > 0 %}
             <div style="margin-top:4px;font-size:11px;color:var(--bad);font-weight:700;">-{{ r.stats.complaint_deduction }} pts minus marking</div>
