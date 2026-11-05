@@ -853,7 +853,8 @@ var NOTES_BY_EMP = {
           <button type="submit" class="btn-open-win" formaction="/admin/past_window_bulk"
             onclick="document.getElementById('bulkAction').value='open'">Open All Days</button>
           <button type="submit" class="btn-open-win" style="background:var(--bad-tint);color:var(--bad-ink);border:1px solid var(--bad-line);"
-            onclick="document.getElementById('bulkAction').value='close'">Close All Days</button>
+            onclick="document.getElementById('bulkAction').value='close'"
+            title="Closes every day in the months picked -- or, with none picked, every open day">Close All Days</button>
         </div>
         <input type="hidden" name="action" id="bulkAction" value="open">
       </form>
@@ -862,6 +863,12 @@ var NOTES_BY_EMP = {
     {% if open_windows %}
     <div class="pw-active-list">
       <div class="pw-active-title">Currently Open Windows</div>
+      <form method="POST" action="/admin/past_window_bulk" style="display:inline;margin:0 8px 0 0;">
+        <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="action" value="close">
+        <button type="submit" class="btn-sm" style="background:var(--bad-tint);color:var(--bad-ink);border:1px solid var(--bad-line);"
+          onclick="return confirm('Close all {{ open_windows|length }} open day(s)?')">Close all {{ open_windows|length }}</button>
+      </form>
       {% for w in open_windows %}
       <span class="pw-chip">
         {{ w.past_date.strftime('%d %b %Y') }}
@@ -1443,6 +1450,12 @@ var NOTES_BY_EMP = {
     catch (e) { initial = names[0]; }
   }
   show(initial, false);
+  // A link to #today / #admin from this same page must switch tabs too; the
+  // browser does not reload for a hash change.
+  window.addEventListener('hashchange', function () {
+    var h = (location.hash || '').replace('#', '');
+    if (names.indexOf(h) !== -1) show(h, false);
+  });
 
   tabs.forEach(function (t, i) {
     t.addEventListener('click', function () { show(t.dataset.tab, true); });

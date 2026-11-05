@@ -8,7 +8,6 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;450;500;550;600;650;700;750&display=swap">
@@ -185,7 +184,7 @@ body { display: grid; grid-template-columns: 236px minmax(0, 1fr); min-height: 1
 .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: var(--s5); }
 
 @media (max-width: 980px) {
-  body { grid-template-columns: 1fr; }
+  body { grid-template-columns: minmax(0, 1fr); }
   .two-col { grid-template-columns: 1fr; }
   .sidebar { position: static; height: auto;
              border-right: 0; border-bottom: 1px solid var(--line); }
@@ -510,6 +509,34 @@ body { display: grid; grid-template-columns: 236px minmax(0, 1fr); min-height: 1
           {{ 'Raise' if a_stats.target_suggestion.kind == 'raise' else 'Set' }} target to
           {{ a_stats.target_suggestion.suggested }}/hr</button>
       </form>
+    </section>
+    {% endif %}
+
+    {# Everyone who covers other roles gets the explanation -- including people
+       with no KPI score (supervisors), where the Final Score block has no
+       multitask line to hang it on. #}
+    {% if mt_days and not (a_stats and a_stats.multitask_breakdown) %}
+    <section class="card">
+      <div class="card-title"><span class="ico">▸</span>Extra Roles — Last 30 Days</div>
+      <div class="card-sub">{{ mt_days|length }} day{{ '' if mt_days|length == 1 else 's' }} covering another role.</div>
+      <details class="mt-explain" style="margin-top:10px;">
+        <summary class="mt-explain__btn">How are multitask points added?</summary>
+        <div class="mt-explain__body">
+          <p><b>The rule:</b> each extra role worked on a day earns 10 points, up to 30 for that day.
+            {% if not a_stats or not a_stats.is_scored or not a_stats.days %}{{ emp.name.split()[0] }}'s
+            role has no KPI point system, so these days are recorded here but not added to a score.{% endif %}</p>
+          <table class="mt-explain__table">
+            <thead><tr><th>Date</th><th>Extra roles worked</th><th class="r">Points</th></tr></thead>
+            <tbody>{% for d in mt_days %}
+              <tr><td>{{ d.date.strftime('%a %d %b') }}</td>
+                  <td>{{ d.roles|map('title')|join(', ') }}
+                    <span class="mt-explain__sub">{{ d.roles|length }} × 10 = {{ d.raw }}{% if d.raw > 30 %}, capped at 30{% endif %}</span></td>
+                  <td class="r">{{ d.points }}</td></tr>
+            {% endfor %}</tbody>
+          </table>
+          <p class="mt-explain__sum">Total over these days: <b>{{ mt_days|sum(attribute='points') }} points</b>.</p>
+        </div>
+      </details>
     </section>
     {% endif %}
 
@@ -865,13 +892,14 @@ body { display: grid; grid-template-columns: 236px minmax(0, 1fr); min-height: 1
     <div style="position:relative;height:200px;margin-top:12px;">
       <canvas id="monthlyChart"></canvas>
     </div>
-    <script>
+    <script src="{{ url_for('static', filename='js/chart.umd.min.js') }}"></script>
+<script>
     (function(){
       var ctx = document.getElementById('monthlyChart');
       if(!ctx) return;
       var labels = {{ monthly_scores | map(attribute='month') | list | tojson }};
       var data   = {{ monthly_scores | map(attribute='score') | list | tojson }};
-      new Chart(ctx, {
+      window.Chart && new Chart(ctx, {
         type: 'bar',
         data: {
           labels: labels,

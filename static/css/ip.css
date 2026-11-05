@@ -579,6 +579,16 @@ a:hover { color: var(--brand-deep); }
 /* ---------- Animated counters ---------- */
 .ip-num { font-variant-numeric: tabular-nums; }
 
+/* ---------- Phones: nothing pushes the page sideways ----------
+   A long CSV sample line, a chart canvas or an over-wide card used to make
+   whole pages scroll sideways on a phone. */
+pre { white-space: pre-wrap; overflow-wrap: anywhere; }
+canvas { max-width: 100%; }
+@media (max-width: 640px) {
+  /* A wide table scrolls inside itself rather than dragging the page. */
+  table:not(.ip-table) { display: block; max-width: 100%; overflow-x: auto; }
+}
+
 /* ---------- Minimize ---------- */
 .mz-head { display: flex; align-items: center; gap: var(--s2); }
 .mz-btn { margin-left: auto; flex: none; width: 28px; height: 28px; border-radius: var(--r-sm);

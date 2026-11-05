@@ -6,7 +6,6 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Delivery Dashboard | Admin</title>
-<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -48,7 +47,7 @@
                  color: var(--ink); letter-spacing: -.01em; text-transform: none;
                  margin-bottom: var(--s4); }
 
-.two-col { display: grid; grid-template-columns: 1fr 1fr; gap: var(--s5); margin-bottom: var(--s5); }
+.two-col { display: grid; grid-template-columns: minmax(0,1fr) minmax(0,1fr); gap: var(--s5); margin-bottom: var(--s5); }
 
 table { width: 100%; border-collapse: collapse; font-size: var(--fs-small); }
 th { font-size: var(--fs-micro); font-weight: var(--fw-bold); color: var(--ink-3);
@@ -117,7 +116,7 @@ tbody tr:hover td { background: var(--surface-2); }
   .hero { padding: var(--s4); }
   .container { padding: var(--s4) var(--s4) var(--s8); }
   .card { padding: var(--s4); }
-  .two-col { grid-template-columns: 1fr; gap: var(--s4); }
+  .two-col { grid-template-columns: minmax(0,1fr); gap: var(--s4); }
 }
 @media (max-width: 560px) {
   .container { padding: var(--s3) var(--s3) var(--s8); }
@@ -518,12 +517,13 @@ tbody tr:hover td { background: var(--surface-2); }
 
 </div>
 
+<script src="{{ url_for('static', filename='js/chart.umd.min.js') }}"></script>
 <script>
 var labels  = {{ chart_labels | tojson }};
 var totals  = {{ chart_total | tojson }};
 var ontimes = {{ chart_ontime | tojson }};
 
-new Chart(document.getElementById('deliveryChart'), {
+window.Chart && new Chart(document.getElementById('deliveryChart'), {
   type: 'bar',
   data: {
     labels: labels,

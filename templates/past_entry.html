@@ -187,9 +187,9 @@ tbody tr:hover { background: var(--brand-tint); }
             the whole checking team's and is shown on your report.</small>
         </div>
         <div id="pe_over" class="ip-flash danger"
-             style="grid-column:span 2;display:none;margin:0 0 4px;"></div>
+             style="grid-column:1/-1;display:none;margin:0 0 4px;"></div>
         <!-- LIVE TOTAL BANNER -->
-        <div style="grid-column:span 2;display:flex;gap:10px;margin-bottom:4px;">
+        <div style="grid-column:1/-1;display:flex;flex-wrap:wrap;gap:10px;margin-bottom:4px;">
           <div style="flex:1;background:rgba(219,234,254,0.85);border:1.5px solid rgba(29,78,216,0.25);border-radius:14px;padding:14px 18px;backdrop-filter:blur(10px);text-align:center;">
             <div style="font-size:11px;font-weight:800;color:#1d4ed8;text-transform:uppercase;letter-spacing:.7px;margin-bottom:4px;">Total SB Checked</div>
             <div style="font-size:30px;font-weight:800;color:#1e3a8a;" id="pe_total_sb">0</div>
@@ -233,7 +233,7 @@ tbody tr:hover { background: var(--brand-tint); }
         </div>
         {% elif staff_type == 'purchaser' %}
         <!-- PURCHASER LIVE BANNER -->
-        <div style="grid-column:span 2;display:flex;gap:10px;margin-bottom:8px;">
+        <div style="grid-column:1/-1;display:flex;flex-wrap:wrap;gap:10px;margin-bottom:8px;">
           <div style="flex:1;background:rgba(238,244,255,0.85);border:1.5px solid rgba(29,78,216,0.25);border-radius:14px;padding:12px;text-align:center;">
             <div style="font-size:11px;font-weight:800;color:var(--blue);text-transform:uppercase;margin-bottom:3px;">Bill Rate</div>
             <div style="font-size:24px;font-weight:800;color:#1e3a8a;" id="pe_pur_rate">0%</div>
@@ -244,7 +244,7 @@ tbody tr:hover { background: var(--brand-tint); }
           </div>
         </div>
         <!-- PURCHASER PENDING BOX -->
-        <div style="grid-column:span 2;background:rgba(254,242,242,0.85);border:1.5px solid rgba(220,38,38,0.25);border-radius:14px;padding:12px;text-align:center;margin-bottom:8px;">
+        <div style="grid-column:1/-1;background:rgba(254,242,242,0.85);border:1.5px solid rgba(220,38,38,0.25);border-radius:14px;padding:12px;text-align:center;margin-bottom:8px;">
           <div style="font-size:11px;font-weight:800;color:#dc2626;text-transform:uppercase;margin-bottom:3px;">Pending PO Bills (Auto)</div>
           <div style="font-size:26px;font-weight:800;color:#991b1b;" id="pe_pur_pending">0</div>
           <div style="font-size:11px;color:var(--muted);">Bills Received − Bills Checked</div>

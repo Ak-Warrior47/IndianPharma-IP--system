@@ -1142,6 +1142,23 @@ def multitask_report(days=30):
     return out
 
 
+def multitask_days_for(emp_id, days=30):
+    """Extra-role days in the last `days` days, one row per day, by the same
+    rule the score uses (10 per role, capped at 30). For the explanation on
+    the staff profile -- including people with no KPI score, like supervisors,
+    whose extra roles still deserve to be shown and explained."""
+    since = date.today() - timedelta(days=days)
+    by_day = {}
+    try:
+        for m in MultitaskEntry.query.filter(MultitaskEntry.emp_id == emp_id,
+                                             MultitaskEntry.entry_date >= since).all():
+            by_day.setdefault(m.entry_date, set()).add(m.secondary_type)
+    except Exception as exc:
+        logger.error("multitask_days_for: %s", exc)
+    return [{"date": d, "roles": sorted(rs), "raw": 10 * len(rs), "points": min(10 * len(rs), 30)}
+            for d, rs in sorted(by_day.items(), reverse=True)]
+
+
 def checker_month_bests(emp_id, today=None):
     """A checker's best day this month and last month, with the day-wise list.
 
@@ -1152,17 +1169,34 @@ def checker_month_bests(emp_id, today=None):
     today = today or date.today()
     this_start = today.replace(day=1)
     prev_start = (this_start - timedelta(days=1)).replace(day=1)
+    # Checking done as a primary role (KPI rows) and as a second role
+    # (multitask rows) both count; one day's total is the two added together.
+    class _Day:
+        __slots__ = ("entry_date", "b", "i")
+        def __init__(self, d): self.entry_date, self.b, self.i = d, 0, 0
+    per = {}
     try:
-        rows = (KPIEntry.query.filter(KPIEntry.emp_id == emp_id,
-                                      KPIEntry.entry_date >= prev_start,
-                                      KPIEntry.entry_date <= today)
-                .order_by(KPIEntry.entry_date).all())
+        emp = db.session.get(Employee, emp_id)
+        if emp and emp.staff_type == "checker":
+            for e in KPIEntry.query.filter(KPIEntry.emp_id == emp_id,
+                                           KPIEntry.entry_date >= prev_start,
+                                           KPIEntry.entry_date <= today).all():
+                r = per.setdefault(e.entry_date, _Day(e.entry_date))
+                r.b += int(e.sales_bills_open or 0) + int(e.cs_sales_open or 0)
+                r.i += int(e.checked or 0) + int(e.errors_found or 0)
+        for m in MultitaskEntry.query.filter(MultitaskEntry.emp_id == emp_id,
+                                             MultitaskEntry.secondary_type == "checker",
+                                             MultitaskEntry.entry_date >= prev_start,
+                                             MultitaskEntry.entry_date <= today).all():
+            r = per.setdefault(m.entry_date, _Day(m.entry_date))
+            r.b += int(m.sales_bills_open or 0) + int(m.cs_sales_open or 0)
+            r.i += int(m.checked or 0) + int(m.errors_found or 0)
     except Exception as exc:
         logger.error("checker_month_bests: %s", exc)
-        rows = []
+    rows = sorted(per.values(), key=lambda r: r.entry_date)
 
-    def bills(e): return int(e.sales_bills_open or 0) + int(e.cs_sales_open or 0)
-    def items(e): return int(e.checked or 0) + int(e.errors_found or 0)
+    def bills(e): return e.b
+    def items(e): return e.i
 
     def best(rs, fn):
         rs = [r for r in rs if fn(r) > 0]
@@ -1193,10 +1227,15 @@ def checker_month_bests(emp_id, today=None):
             out["message"] = "New record! Today's %s is your best day this month." % " and ".join(wins)
     if not out["message"]:
         tb, ti = out["this"]["bills"], out["this"]["items"]
+        # Bills and items are recorded separately; either can be missing on a
+        # day (a second-role checker may log bills but no item count).
+        parts = []
         if tb:
-            out["message"] = ("Your best this month: %d bills on %s and %d items on %s. Beat it today!"
-                              % (tb["value"], tb["date"].strftime("%d %b"),
-                                 ti["value"], ti["date"].strftime("%d %b")))
+            parts.append("%d bills on %s" % (tb["value"], tb["date"].strftime("%d %b")))
+        if ti:
+            parts.append("%d items on %s" % (ti["value"], ti["date"].strftime("%d %b")))
+        if parts:
+            out["message"] = "Your best this month: %s. Beat it today!" % " and ".join(parts)
         elif out["prev"]["bills"]:
             pb = out["prev"]["bills"]
             out["message"] = ("Last month's best was %d bills on %s. Set this month's first record."
@@ -3790,7 +3829,9 @@ def dashboard():
             trip_map = {}
 
         return render_template("dashboard.html",
-            checker_bests=checker_month_bests(emp_id) if staff_type == "checker" else None,
+            checker_bests=(checker_month_bests(emp_id)
+                           if staff_type == "checker" or session.get("secondary_staff_type") == "checker"
+                           else None),
             user_name=session.get("user_name", "User"),
             user_id=emp_id,
             staff_type=staff_type,
@@ -4205,7 +4246,9 @@ def staff_detail(emp_id):
             staff_trips = []
 
         return render_template("staff_detail.html",
-            checker_bests=checker_month_bests(emp.id) if emp.staff_type == "checker" else None,
+            checker_bests=(checker_month_bests(emp.id)
+                           if "checker" in (emp.staff_type, emp.secondary_staff_type) else None),
+            mt_days=multitask_days_for(emp.id),
             emp=emp,
             emp_overall_rank=emp_overall_rank,
             emp_role_rank=emp_role_rank,
@@ -4594,9 +4637,21 @@ def admin_past_window_bulk():
         if single:
             months.append(single)
         months = [m.strip() for m in months if m and m.strip()]
+        if not months and action == "close":
+            # "Close All Days" with no month picked means exactly that: close
+            # every window that is open. It used to refuse with "Pick at least
+            # one month", which read as the button not working -- especially
+            # on a phone, where picking from a multi-select list is awkward.
+            n = (PastEntryWindow.query.filter(PastEntryWindow.is_active.is_(True))
+                 .update({"is_active": False}, synchronize_session=False))
+            db.session.commit()
+            log_audit("bulk_close_past_windows", "all", f"{n} days closed")
+            flash(f"Closed all {n} open past-entry day(s)." if n else "No past-entry days were open.",
+                  "success" if n else "info")
+            return redirect(url_for("admin_dashboard") + "#admin")
         if not months:
-            flash("Pick at least one month.", "warning")
-            return redirect(url_for("admin_dashboard"))
+            flash("Pick at least one month to open.", "warning")
+            return redirect(url_for("admin_dashboard") + "#admin")
 
         today = date.today()
         opened = closed = 0
@@ -6322,6 +6377,40 @@ def admin_test_mail():
     ok, detail = send_test_email(to)
     flash(detail, "success" if ok else "danger")
     return redirect(url_for("admin_diagnostics"))
+
+
+def auto_raise_targets():
+    """Raise personal targets automatically when performance has risen.
+
+    Runs on the 1st of each month. For every picker and checker who already
+    has a personal target, if their 75th-percentile day over the last 30 days
+    is above it, the target moves up to meet it. It only ever moves up, and
+    only for people on a personal target: replacing the role default with a
+    first personal target lowers the bar, so that stays a one-click decision
+    for the admin on the staff profile.
+    """
+    raised = []
+    with app.app_context():
+        try:
+            staff = Employee.query.filter(Employee.is_admin.is_(False),
+                                          Employee.custom_hourly_target.isnot(None),
+                                          Employee.staff_type.in_(("picker", "checker"))).all()
+            for emp in staff:
+                st = build_analytics(get_period_entries(emp.id, "month"), emp.staff_type, emp_id=emp.id)
+                sug = (st or {}).get("target_suggestion")
+                if sug and sug.get("kind") == "raise" and sug["suggested"] > (emp.custom_hourly_target or 0):
+                    old = emp.custom_hourly_target
+                    emp.custom_hourly_target = sug["suggested"]
+                    db.session.add(AuditLog(admin_id=None, action="auto_raise_target", target=emp.name,
+                                            details="Pace rose: target %g -> %g/hr" % (old, sug["suggested"])))
+                    raised.append((emp.name, old, sug["suggested"]))
+            db.session.commit()
+        except Exception as exc:
+            db.session.rollback()
+            logger.error("auto_raise_targets: %s", exc)
+    if raised:
+        logger.info("auto_raise_targets: %s", raised)
+    return raised
 
 
 def purge_old_location_data():
@@ -8075,6 +8164,13 @@ try:
         trigger="cron",
         hour=3, minute=20,
         id="purge_location_data",
+        replace_existing=True
+    )
+    _scheduler.add_job(
+        auto_raise_targets,
+        trigger="cron",
+        day=1, hour=8, minute=10,
+        id="auto_raise_targets",
         replace_existing=True
     )
     if not _scheduler.running:

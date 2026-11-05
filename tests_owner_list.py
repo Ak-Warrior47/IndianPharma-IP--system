@@ -162,6 +162,21 @@ with app.app_context():
 check("5.1 Closing three months takes under 10 queries (%d)" % close_q, close_q < 10)
 check("5.2 And every window really is closed", still == 0, "%d still open" % still)
 
+# ---- 5a. Close All Days with no month picked closes everything open ---
+with app.app_context():
+    for d in (TODAY - timedelta(days=3), TODAY - timedelta(days=40), TODAY - timedelta(days=90)):
+        w = PastEntryWindow.query.filter_by(past_date=d).first()
+        if w: w.is_active = True
+        else: db.session.add(PastEntryWindow(past_date=d, is_active=True))
+    db.session.commit()
+r = c.post("/admin/past_window_bulk", data={"action": "close"}, follow_redirects=True)
+with app.app_context():
+    left = PastEntryWindow.query.filter(PastEntryWindow.is_active.is_(True)).count()
+check("5.2b Close All Days with no month picked closes every open day", left == 0, "%d open" % left)
+check("5.2c It says how many it closed", b"Closed all" in r.data or b"No past-entry days" in r.data)
+check("5.2d The open-windows row has a one-click Close all button",
+      b"Close all" in open(os.path.join(REPO, "templates", "admin.html"), "rb").read())
+
 # ---- 5b. Page loads do not re-ask the database per staff member --------
 # The admin dashboard used to make ~3 queries per staff member per period
 # (open complaints, supervisor strikes, multitask), 97 for 23 staff.
@@ -184,6 +199,40 @@ css = open(os.path.join(REPO, "static", "css", "ip.css")).read()
 check("6.1 The shared script adds a minimize button to cards", "mz-btn" in ux and "is-min" in ux)
 check("6.2 Minimized cards fold to their title", ".is-min > :not(.mz-head)" in css)
 check("6.3 The staff profile loads the shared script", b"js/ux.js" in p)
+
+# ---- 6b. Second-pass gaps -------------------------------------------------
+with app.app_context():
+    # supervisors: extra roles explained even with no score
+    sup = mk("OL Sup", "ol_sup@x.com", "supervisor"); MAILS.append("ol_sup@x.com")
+    MultitaskEntry.query.filter_by(emp_id=sup.id).delete()
+    db.session.add(MultitaskEntry(emp_id=sup.id, entry_date=DAYS[0], secondary_type="picker", picked=40))
+    db.session.commit(); SUP = sup.id
+    md = A.multitask_days_for(SUP)
+    check("6b.1 Multitask days are found for someone with no KPI entries", len(md) == 1 and md[0]["points"] == 10)
+    # second-role checker gets a best-day record from their checker-role rows
+    pb = A.checker_month_bests(PK)
+    check("6b.2 Staff who check as a second role get a best-day record",
+          pb["this"]["bills"] is not None or pb["prev"]["bills"] is not None)
+    # targets rise automatically, only up, only for personal targets
+    e = db.session.get(Employee, PK); e.custom_hourly_target = 5.0; db.session.commit()
+    raised = A.auto_raise_targets()
+    e = db.session.get(Employee, PK)
+    check("6b.3 The monthly job raises a personal target when pace has risen", e.custom_hourly_target > 5.0)
+    check("6b.4 Running it twice changes nothing more", A.auto_raise_targets() == [])
+    check("6b.5 It is scheduled monthly", "id=\"auto_raise_targets\"" in open(os.path.join(REPO, "app.py")).read())
+sp = c.get("/staff/%d" % SUP).data
+check("6b.6 Supervisor profile has the multitask explanation button", b"How are multitask points added?" in sp)
+# phones and charts
+for t in ("dashboard.html", "past_entry.html"):
+    src = open(os.path.join(REPO, "templates", t)).read()
+    check("6b.7 %s banners span all columns, never a fixed 2" % t, "span 2" not in src)
+for t in ("dashboard.html", "staff_detail.html", "admin_delivery.html"):
+    src = open(os.path.join(REPO, "templates", t)).read()
+    check("6b.8 %s loads charts from the app, not an outside site" % t,
+          "js/chart.umd.min.js" in src and "cdn.jsdelivr.net/npm/chart.js" not in src
+          and "cdnjs.cloudflare.com/ajax/libs/Chart.js" not in src)
+    check("6b.9 %s cannot crash if charts fail to load" % t, "window.Chart && new Chart(" in src)
+check("6b.10 The chart library is in the app", os.path.getsize(os.path.join(REPO, "static", "js", "chart.umd.min.js")) > 100000)
 
 # ---- 7. The Jinja trap that broke the checker pages once ---------------
 for t in ("staff_detail.html", "dashboard.html"):
