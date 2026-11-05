@@ -162,6 +162,22 @@ with app.app_context():
 check("5.1 Closing three months takes under 10 queries (%d)" % close_q, close_q < 10)
 check("5.2 And every window really is closed", still == 0, "%d still open" % still)
 
+# ---- 5b. Page loads do not re-ask the database per staff member --------
+# The admin dashboard used to make ~3 queries per staff member per period
+# (open complaints, supervisor strikes, multitask), 97 for 23 staff.
+with app.app_context():
+    n_staff = Employee.query.filter_by(is_admin=False).count()
+Q[0] = 0
+c.get("/admin_dashboard")
+adq = Q[0]
+check("5.3 Admin dashboard stays near one query per staff member (%d for %d staff)"
+      % (adq, n_staff), adq <= 2 * n_staff + 20)
+Q[0] = 0
+c.get("/staff/%d" % CHK)
+spq = Q[0]
+check("5.4 Staff profile stays near one query per colleague (%d for %d staff)"
+      % (spq, n_staff), spq <= 2 * n_staff + 25)
+
 # ---- 6. Minimize is wired on every page that uses the shared script ----
 ux = open(os.path.join(REPO, "static", "js", "ux.js")).read()
 css = open(os.path.join(REPO, "static", "css", "ip.css")).read()

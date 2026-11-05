@@ -801,6 +801,35 @@ def safe_div(a, b, default=0.0):
     except Exception: return default
 
 
+def req_memo(name, key, fn):
+    """Answer the same lookup once per page load.
+
+    Building the admin dashboard runs the scoring for every staff member three
+    times (today, week, month), and each run used to ask the database the same
+    three questions again -- open complaints, supervisor strikes, multitask
+    entries -- 83 of the page's 97 queries. Outside a request (scheduled jobs)
+    it simply calls fn().
+    """
+    if not has_request_context():
+        return fn()
+    store = getattr(g, "_memo_" + name, None)
+    if store is None:
+        store = {}
+        setattr(g, "_memo_" + name, store)
+    if key not in store:
+        store[key] = fn()
+    return store[key]
+
+
+def invalidate_request_memos():
+    """Forget per-request answers after a write, so a page built in the same
+    request after saving sees the new data."""
+    if not has_request_context():
+        return
+    for k in [k for k in vars(g) if k.startswith("_memo_") or k == "_checker_team_cache"]:
+        delattr(g, k)
+
+
 def checker_team_day_totals(dates):
     """Team-wide checker bill figures for each of `dates`.
 
@@ -1193,8 +1222,8 @@ def get_complaint_deduction(staff_type: str, emp_id: int = None) -> float:
     - Complaints with target_emp_id = NULL (unpinned) -> apply to whole role (legacy).
     """
     try:
-        q = Complaint.query.filter_by(is_resolved=False)
-        complaints = q.all()
+        complaints = req_memo("open_complaints", 0,
+                              lambda: Complaint.query.filter_by(is_resolved=False).all())
         total = 0.0
         for c in complaints:
             # Skip if pinned to someone else
@@ -1596,7 +1625,9 @@ def build_analytics(entries: List[KPIEntry], staff_type: str = "picker", emp_id:
         supervisor_mismatches = 0
         try:
             if emp_id is not None:
-                _ss = supervisor_strike_summary(emp_id, date.today().strftime("%Y-%m"))
+                _ym = date.today().strftime("%Y-%m")
+                _ss = req_memo("strikes", (emp_id, _ym),
+                               lambda: supervisor_strike_summary(emp_id, _ym))
                 supervisor_penalty = float(_ss.get("penalty", 0.0))
                 supervisor_mismatches = int(_ss.get("mismatches", 0))
         except Exception:
@@ -1616,10 +1647,19 @@ def build_analytics(entries: List[KPIEntry], staff_type: str = "picker", emp_id:
             if emp_id is not None:
                 _dates = {e.entry_date for e in entries if e.entry_date}
                 if _dates:
-                    _mts = MultitaskEntry.query.filter(
-                        MultitaskEntry.emp_id == emp_id,
-                        MultitaskEntry.entry_date.in_(list(_dates)),
-                    ).all()
+                    if has_request_context():
+                        def _load_mt():
+                            by = {}
+                            for _m in MultitaskEntry.query.all():
+                                by.setdefault(_m.emp_id, []).append(_m)
+                            return by
+                        _mts = [m for m in req_memo("mt_by_emp", 0, _load_mt).get(emp_id, [])
+                                if m.entry_date in _dates]
+                    else:
+                        _mts = MultitaskEntry.query.filter(
+                            MultitaskEntry.emp_id == emp_id,
+                            MultitaskEntry.entry_date.in_(list(_dates)),
+                        ).all()
                     _roles_by_day = {}
                     for _mt in _mts:
                         _roles_by_day.setdefault(_mt.entry_date, set()).add(_mt.secondary_type)
@@ -3180,8 +3220,7 @@ def _save_multitask_entry(emp_id, entry_date, primary_role):
         mt.note = note or None
         saved += 1
     db.session.commit()
-    if has_request_context():
-        g._checker_team_cache = {}
+    invalidate_request_memos()
     return saved
 
 
@@ -3487,8 +3526,7 @@ def dashboard():
                     db.session.add(ne)
                     db.session.commit()
                     # The team pending pile just changed.
-                    if has_request_context():
-                        g._checker_team_cache = {}
+                    invalidate_request_memos()
                     if staff_type == "checker":
                         for _w in checker_bill_warnings(today, emp_id, bills_received,
                                                         sales_bills_open, cs_sales_open):
@@ -3844,9 +3882,12 @@ def admin_dashboard():
                 'last_entry': max((e.entry_date for e in ents), default=None),
             })
 
-        all_ents = KPIEntry.query.all()
-        total_picked = sum(e.picked or 0 for e in all_ents)
-        total_entries = len(all_ents)
+        # Summed by the database. This loaded every entry ever made into memory
+        # on every visit -- a cost that grew every single day.
+        from sqlalchemy import func as _f
+        total_picked, total_entries = db.session.query(
+            _f.coalesce(_f.sum(KPIEntry.picked), 0), _f.count(KPIEntry.id)).one()
+        total_picked, total_entries = int(total_picked or 0), int(total_entries or 0)
         active_today = KPIEntry.query.filter_by(entry_date=today).count()
         open_windows = PastEntryWindow.query.filter_by(is_active=True).order_by(PastEntryWindow.past_date.desc()).all()
         # Last 12 months (incl. current) for the bulk open/close month picker
@@ -4039,8 +4080,12 @@ def staff_detail(emp_id):
             all_sc, role_sc = [], []
             _stats_by_id = {}
             _name_by_id  = {s.id: (s.name, s.staff_type) for s in all_staff}
+            # Every colleague's entries in one query, not one query each.
+            _ents_by_id = {}
+            for _e in KPIEntry.query.filter(KPIEntry.emp_id.in_([x.id for x in all_staff])).all():
+                _ents_by_id.setdefault(_e.emp_id, []).append(_e)
             for s in all_staff:
-                s_stats = build_analytics(KPIEntry.query.filter_by(emp_id=s.id).all(), s.staff_type, emp_id=s.id)
+                s_stats = build_analytics(_ents_by_id.get(s.id, []), s.staff_type, emp_id=s.id)
                 if s_stats:
                     _stats_by_id[s.id] = s_stats
                     all_sc.append((s.id, s_stats['eff_score']))
@@ -4735,8 +4780,7 @@ def past_entry(date_str):
             )
             db.session.add(ne)
             db.session.commit()
-            if has_request_context():
-                g._checker_team_cache = {}
+            invalidate_request_memos()
             if staff_type == "checker":
                 for _w in checker_bill_warnings(past_date, emp_id, bills_received,
                                                 sales_bills_open, cs_sales_open):
