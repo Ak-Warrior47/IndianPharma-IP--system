@@ -25,6 +25,41 @@
 /* ---- Shell ---- */
 .main { max-width: 1320px; margin: 0 auto; padding: var(--s6) var(--s5) var(--s10); }
 
+/* ---- Tabs ----
+   A flex column so each panel can be ordered independently of where it sits
+   in the file: the staff table shows above the Add Employee form without the
+   markup having to move. Panels outside the open tab are display:none, so the
+   browser skips laying them out entirely -- which is most of why this page
+   felt slow. */
+.main { display: flex; flex-direction: column; }
+.tabs { display: flex; gap: var(--s1); order: -1; margin-bottom: var(--s5);
+        padding: var(--s1); border-radius: var(--r-lg);
+        background: var(--surface-2); box-shadow: var(--sh-0);
+        overflow-x: auto; scrollbar-width: none; }
+.tabs::-webkit-scrollbar { display: none; }
+.tab { flex: 1 1 0; min-width: 92px; border: 0; cursor: pointer;
+       padding: var(--s3) var(--s4); border-radius: var(--r);
+       background: transparent; color: var(--ink-3);
+       font: inherit; font-size: var(--fs-body); font-weight: var(--fw-bold);
+       letter-spacing: var(--tr-body); white-space: nowrap;
+       transition: background var(--t) var(--ease), color var(--t) var(--ease); }
+.tab:hover { color: var(--ink); background: var(--surface-3); }
+.tab[aria-selected="true"] { background: var(--surface); color: var(--brand-ink);
+                             box-shadow: var(--sh-1), var(--gloss); }
+.tab:focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; }
+/* Until the script runs, only the default tab's panels are laid out, so the
+   page never flashes all seven screens on load. */
+.main[data-tab] > [data-pane] { display: none; }
+.main[data-tab="staff"]  > [data-pane="staff"],
+.main[data-tab="today"]  > [data-pane="today"],
+.main[data-tab="scores"] > [data-pane="scores"],
+.main[data-tab="admin"]  > [data-pane="admin"] { display: block; }
+[data-ord="1"] { order: 1; } [data-ord="2"] { order: 2; }
+[data-ord="3"] { order: 3; } [data-ord="4"] { order: 4; }
+/* Flash messages, the stale-validation alert and the overview stats are not
+   in any tab -- they are true of the whole page, so they stay above it. */
+.alert, .overview-grid { order: -2; }
+
 /* ---- Nav ---- */
 .nav {
   background: rgba(255,255,255,.82);
@@ -137,6 +172,9 @@
              border-bottom: 1px solid var(--line); white-space: nowrap;
              position: sticky; top: 0; z-index: 1; }
 [data-theme="dark"] .ptable th { background: linear-gradient(180deg,var(--surface-2) 0%,#19202c 100%); }
+/* A qualifier under the column name rather than trailing off the end of it. */
+.th-sub { display: block; font-weight: var(--fw-normal); text-transform: none;
+          letter-spacing: 0; color: var(--ink-3); margin-top: 1px; }
 .ptable td { padding: var(--s3) var(--s4); border-bottom: 1px solid var(--line);
              vertical-align: middle; color: var(--ink); }
 .ptable tbody tr { transition: background var(--t-fast) var(--ease); }
@@ -424,7 +462,7 @@ var NOTES_BY_EMP = {
   </div>
 </nav>
 
-<div class="main">
+<div class="main" data-tab="staff">
 
   <!-- FLASH -->
   {% with messages = get_flashed_messages(with_categories=true) %}
@@ -465,8 +503,23 @@ var NOTES_BY_EMP = {
     </div>
   </div>
 
+  <!-- ============ TABS ============
+       This page used to be seven screens of scroll with everything at the
+       same weight: the announcement form you use once a month sat above the
+       staff table you open every day, and the "Add Employee" and "Open Past
+       Date" forms were parked in the middle of the data. Same panels, same
+       features, four groups -- and the browser now lays out one screen
+       instead of seven.
+       Staff is first because that is what this page is opened for. -->
+  <nav class="tabs" role="tablist" aria-label="Admin sections">
+    <button class="tab" role="tab" data-tab="staff"  aria-selected="true">Staff</button>
+    <button class="tab" role="tab" data-tab="today"  aria-selected="false">Today</button>
+    <button class="tab" role="tab" data-tab="scores" aria-selected="false">Scores</button>
+    <button class="tab" role="tab" data-tab="admin"  aria-selected="false">Setup</button>
+  </nav>
+
   <!-- FEATURE 2: ANNOUNCEMENT / NOTICE BOARD -->
-  <div class="card" style="margin-bottom:20px;border-left:4px solid var(--brand);">
+  <div data-pane="admin" data-ord="2" class="card" style="margin-bottom:20px;border-left:4px solid var(--brand);">
     <div class="card-header">
       <div class="card-title">Announcements / Notice Board
         {% if all_announcements %}<span class="cnt">{{ all_announcements|length }} notices</span>{% endif %}
@@ -515,7 +568,7 @@ var NOTES_BY_EMP = {
 
   <!-- FEATURE 4: PENDING PAST ENTRY REQUESTS -->
   {% if pending_past_requests %}
-  <div class="card" style="margin-bottom:20px;border-left:4px solid var(--warn);">
+  <div data-pane="today" data-ord="1" class="card" style="margin-bottom:20px;border-left:4px solid var(--warn);">
     <div class="card-header">
       <div class="card-title">Pending Past Entry Requests
         <span class="cnt" style="background:#fffbeb;color:var(--warn);border-color:#fcd34d;">{{ pending_past_requests|length }} pending</span>
@@ -551,7 +604,7 @@ var NOTES_BY_EMP = {
 
   <!-- DELIVERY / BILLER NOTES PANEL -->
   {% if recent_db_notes %}
-  <div class="card anim-fade-in" style="margin-bottom:20px;border-left:4px solid var(--accent);">
+  <div data-pane="today" data-ord="2" class="card anim-fade-in" style="margin-bottom:20px;border-left:4px solid var(--accent);">
     <div class="card-header">
       <div class="card-title">Delivery &amp; Biller Daily Notes
         <span class="cnt" style="background:#f5f3ff;color:var(--accent);border-color:var(--accent-line);">{{ recent_db_notes|length }} (30 days)</span>
@@ -576,7 +629,7 @@ var NOTES_BY_EMP = {
   {% endif %}
 
   <!-- MULTITASK (ROLE 2) REPORTS PANEL — always visible -->
-  <div class="card anim-fade-in" style="margin-bottom:20px;border-left:4px solid var(--accent);">
+  <div data-pane="today" data-ord="3" class="card anim-fade-in" style="margin-bottom:20px;border-left:4px solid var(--accent);">
     <div class="card-header">
       <div class="card-title">Multitask (Role 2) Reports
         <span class="cnt" style="background:#f5f3ff;color:var(--accent);border-color:var(--accent-line);">{{ recent_multitask|length }} (30 days)</span>
@@ -619,7 +672,7 @@ var NOTES_BY_EMP = {
   </div>
 
   <!-- FEATURE 5: BADGE MANAGEMENT -->
-  <div class="card" style="margin-bottom:20px;">
+  <div data-pane="admin" data-ord="4" class="card" style="margin-bottom:20px;">
     <div class="card-header">
       <div class="card-title">Badge Management
         {% if all_badges %}<span class="cnt">{{ all_badges|length }} badges</span>{% endif %}
@@ -688,7 +741,7 @@ var NOTES_BY_EMP = {
   </div>
 
   <!-- ADD EMPLOYEE -->
-  <div class="card">
+  <div data-pane="staff" data-ord="2" class="card">
     <div class="card-header">
       <div class="card-title">Add New Employee</div>
     </div>
@@ -730,7 +783,7 @@ var NOTES_BY_EMP = {
   </div>
 
   <!-- PAST DATE ENTRY WINDOW -->
-  <div class="card past-window-section">
+  <div data-pane="admin" data-ord="1" class="card past-window-section">
     <div class="card-header">
       <div class="card-title">Open Past Date Entry</div>
     </div>
@@ -798,7 +851,7 @@ var NOTES_BY_EMP = {
   </div>
 
   <!-- STAFF TABLE -->
-  <div class="card">
+  <div data-pane="staff" data-ord="1" class="card">
     <div class="card-header">
       <div class="card-title">
         Staff Management
@@ -809,13 +862,13 @@ var NOTES_BY_EMP = {
 
     {% if rows %}
     <div class="table-wrap">
-      <table id="staffTable">
+      <table id="staffTable" class="ptable">
         <thead>
           <tr>
             <th>Employee</th>
             <th>Type</th>
             <th>Entries</th>
-            <th>Monthly Score <small style="font-weight:400;font-size:11px;">{{ current_month }}</small></th>
+            <th>Monthly Score<span class="th-sub">{{ current_month }}</span></th>
             <th>Week Score</th>
             <th>Grade</th>
             <th>Last Entry</th>
@@ -903,7 +956,7 @@ var NOTES_BY_EMP = {
 
 
   <!-- COMPLAINT / MINUS MARKING SECTION -->
-  <div class="card" style="margin-bottom:20px;border-left:4px solid var(--bad);">
+  <div data-pane="admin" data-ord="3" class="card" style="margin-bottom:20px;border-left:4px solid var(--bad);">
     <div class="card-header">
       <div class="card-title">Post-Delivery Complaint — Minus Marking</div>
     </div>
@@ -1050,7 +1103,7 @@ var NOTES_BY_EMP = {
   </div>
 
   <!-- SCORECARD & LEADERBOARD — POINT SYSTEM -->
-  <div class="card" style="margin-bottom:20px;">
+  <div data-pane="scores" data-ord="1" class="card" style="margin-bottom:20px;">
     <div class="card-header">
       <div class="card-title">Scorecard &amp; Leaderboard — Point System</div>
       <div style="display:flex;gap:8px;">
@@ -1220,12 +1273,12 @@ var NOTES_BY_EMP = {
   <!-- ANALYTICS -->
 <!-- PERFORMANCE SUMMARY -->
   {% if rows %}
-  <div class="card">
+  <div data-pane="scores" data-ord="2" class="card">
     <div class="card-header">
       <div class="card-title">Performance Summary — All Time</div>
     </div>
     <div class="table-wrap">
-      <table>
+      <table class="ptable">
         <thead>
           <tr>
             <th>Name</th><th>Type</th>
@@ -1266,7 +1319,7 @@ var NOTES_BY_EMP = {
 
   <!-- TEAM ANALYTICS -->
   {% if grade_counts %}
-  <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:20px;">
+  <div data-pane="scores" data-ord="3" style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:20px;">
     <div class="card">
       <div class="card-header"><div class="card-title">Team Health</div></div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px;">
@@ -1329,6 +1382,58 @@ var NOTES_BY_EMP = {
 </div><!-- /main -->
 
 <script>
+/* ---- Tabs ----
+   The tab is kept in the URL so a tab can be linked or reloaded into, and in
+   localStorage so that posting a form -- which redirects back here -- returns
+   to the tab the form was on instead of dumping the admin back on Staff. */
+(function () {
+  var main = document.querySelector('.main');
+  var tabs = Array.prototype.slice.call(document.querySelectorAll('.tab'));
+  if (!main || !tabs.length) return;
+  var names = tabs.map(function (t) { return t.dataset.tab; });
+
+  function show(name, push) {
+    if (names.indexOf(name) === -1) name = names[0];
+    main.dataset.tab = name;
+    tabs.forEach(function (t) {
+      t.setAttribute('aria-selected', String(t.dataset.tab === name));
+    });
+    try { localStorage.setItem('ip-admin-tab', name); } catch (e) {}
+    if (push && window.history && history.replaceState) {
+      history.replaceState(null, '', '#' + name);
+    }
+  }
+
+  var initial = (location.hash || '').replace('#', '');
+  if (names.indexOf(initial) === -1) {
+    try { initial = localStorage.getItem('ip-admin-tab') || names[0]; }
+    catch (e) { initial = names[0]; }
+  }
+  show(initial, false);
+
+  tabs.forEach(function (t, i) {
+    t.addEventListener('click', function () { show(t.dataset.tab, true); });
+    t.addEventListener('keydown', function (e) {
+      var d = e.key === 'ArrowRight' ? 1 : e.key === 'ArrowLeft' ? -1 : 0;
+      if (!d) return;
+      e.preventDefault();
+      var n = tabs[(i + d + tabs.length) % tabs.length];
+      n.focus();
+      show(n.dataset.tab, true);
+    });
+  });
+
+  /* A link to a panel inside a closed tab must open that tab first, or it
+     scrolls to something the browser is not laying out. */
+  document.addEventListener('click', function (e) {
+    var a = e.target.closest && e.target.closest('a[href^="#"]');
+    if (!a) return;
+    var el = document.getElementById(a.getAttribute('href').slice(1));
+    var pane = el && el.closest('[data-pane]');
+    if (pane) show(pane.dataset.pane, true);
+  });
+})();
+
 function capName(input) {
   const pos = input.selectionStart;
   input.value = input.value.replace(/\b\w/g, c => c.toUpperCase());

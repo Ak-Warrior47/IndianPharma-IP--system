@@ -580,31 +580,39 @@ class MultitaskEntry(db.Model):
 
     @property
     def summary(self):
-        """Full human-readable summary — all role-specific parameters shown."""
+        """Human-readable summary of the figures this entry actually carries.
+
+        Every role's full field list used to be printed whether or not the
+        numbers were there, so the widest column in the admin panel was often
+        a row of zeros -- "PO Bills Rcvd: 0 · PO Checked: 0 · PO Entry: 0 ·
+        Items: 0 · CS Open: 0 · CS Rcvd: 0" -- which says nothing and crowds
+        out the entries that do carry work. Fields at zero are dropped; an
+        entry with nothing in it says so plainly.
+        """
         st = self.secondary_type
-        if st == "picker":
-            return (f"Bills Rcvd: {self.total_bills_received or 0} · "
-                    f"SB Picked: {self.sales_bills_open or 0} · "
-                    f"Items Picked: {self.picked or 0} · Missed: {self.missed or 0} · "
-                    f"CS Open: {self.cs_sales_open or 0} · Packing: {self.packing_done or 0}")
-        if st == "checker":
-            return (f"Bills Rcvd: {self.bills_received or 0} · "
-                    f"Pending: {self.pending_bills_manual or 0} · "
-                    f"SB Checked: {self.sales_bills_open or 0} · CS Checked: {self.cs_sales_open or 0} · "
-                    f"Items Checked: {self.checked or 0} · Urgent: {self.errors_found or 0}")
-        if st == "purchaser":
-            return (f"PO Bills Rcvd: {self.sales_bills_open or 0} · "
-                    f"PO Checked: {self.checked or 0} · "
-                    f"PO Entry: {self.picked or 0} · Items: {self.errors_found or 0} · "
-                    f"CS Open: {self.cs_sales_open or 0} · CS Rcvd: {self.packing_done or 0}")
-        if st == "billing":
-            return f"Bills Done: {self.bills_done or 0} · Items: {self.items_count or 0} · Qty: {self.quantity or 0}"
-        if st == "other":
-            return (f"Brkg Rcvd: {self.breakage_received or 0} · Exp Rcvd: {self.expire_received or 0} · "
-                    f"Processed: {self.breakage_expire_processed or 0} · "
-                    f"Item Recv: {self.item_receive_qty or 0} · Exp Return: {self.expire_return_qty or 0}")
-        # delivery / packing
-        return f"Qty Done: {self.quantity or 0}"
+        fields = {
+            "picker": [("Bills Rcvd", self.total_bills_received),
+                       ("SB Picked", self.sales_bills_open),
+                       ("Items Picked", self.picked), ("Missed", self.missed),
+                       ("CS Open", self.cs_sales_open), ("Packing", self.packing_done)],
+            "checker": [("Bills Rcvd", self.bills_received),
+                        ("SB Checked", self.sales_bills_open),
+                        ("CS Checked", self.cs_sales_open),
+                        ("Items Checked", self.checked), ("Urgent", self.errors_found)],
+            "purchaser": [("PO Bills Rcvd", self.sales_bills_open),
+                          ("PO Checked", self.checked), ("PO Entry", self.picked),
+                          ("Items", self.errors_found), ("CS Open", self.cs_sales_open),
+                          ("CS Rcvd", self.packing_done)],
+            "billing": [("Bills Done", self.bills_done), ("Items", self.items_count),
+                        ("Qty", self.quantity)],
+            "other": [("Brkg Rcvd", self.breakage_received),
+                      ("Exp Rcvd", self.expire_received),
+                      ("Processed", self.breakage_expire_processed),
+                      ("Item Recv", self.item_receive_qty),
+                      ("Exp Return", self.expire_return_qty)],
+        }.get(st, [("Qty Done", self.quantity)])
+        shown = [f"{label}: {value}" for label, value in fields if value]
+        return " · ".join(shown) if shown else "No figures entered"
 
 
 class DeliveryBillerNote(db.Model):

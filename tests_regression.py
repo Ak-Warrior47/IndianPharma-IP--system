@@ -195,7 +195,13 @@ check("4.9 Purchaser summary lists every parameter",
           "PO Bills Rcvd", "PO Checked", "PO Entry", "Items", "CS Open", "CS Rcvd")))
 check("4.10 Checker summary lists every parameter",
       bool(mts.get("checker")) and all(k in mts["checker"].summary for k in (
-          "Bills Rcvd", "Pending", "SB Checked", "Items Checked", "Urgent")))
+          "Bills Rcvd", "SB Checked", "CS Checked", "Items Checked", "Urgent")))
+# Pending stopped being a per-entry number: it is the whole checking team's
+# leftover for the day, worked out from the day's total minus what everyone
+# cleared. Printing a hand-typed figure beside the real one invited the two
+# to disagree, so the summary no longer carries it.
+check("4.11 The checker summary no longer prints a hand-typed pending",
+      "Pending:" not in mts["checker"].summary)
 
 # ---- 5. Supervisor console ---------------------------------------------
 login("r_sup@x.com")
