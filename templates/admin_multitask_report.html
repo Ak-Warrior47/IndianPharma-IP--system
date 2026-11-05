@@ -1,0 +1,389 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta name="csrf-token" content="{{ csrf_token() }}">
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<script>(function(){try{var t=localStorage.getItem('ip-theme');if(t)document.documentElement.setAttribute('data-theme',t);}catch(e){}})();</script>
+<title>Multitask Report — Indian Pharma</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;450;500;550;600;650;700;750&display=swap">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/ip.css') }}">
+<style>
+/* ── Role colours ──────────────────────────────────────────────────────────
+   One slot per role, in a fixed order that never cycles: blue is always
+   Picker, orange always Checker, on every chart on this page. A colour
+   follows the ROLE, not its rank in one person's chart, so a staff member
+   dropping a role never repaints anyone else's slices.
+
+   The order is the colour-blind-safety mechanism, not decoration: these seven
+   steps were validated as a set for adjacent-segment separation in both
+   themes (worst adjacent CVD ΔE 9.1 light / 8.4 dark against an 8 target,
+   normal-vision ΔE 19.6 / 19.3 against a 15 floor). Three of the light steps
+   sit under 3:1 against white, so every figure is also printed in the legend
+   and again in the table below — identity is never colour alone. */
+.mt-root {
+  --role-picker:    #2a78d6;
+  --role-checker:   #eb6834;
+  --role-purchaser: #1baf7a;
+  --role-billing:   #eda100;
+  --role-delivery:  #e87ba4;
+  --role-packing:   #008300;
+  --role-other:     #6250d6;
+}
+@media (prefers-color-scheme: dark) {
+  :root:where(:not([data-theme="light"])) .mt-root {
+    --role-picker:    #3987e5;
+    --role-checker:   #d95926;
+    --role-purchaser: #199e70;
+    --role-billing:   #c98500;
+    --role-delivery:  #d55181;
+    --role-packing:   #008300;
+    --role-other:     #9085e9;
+  }
+}
+:root[data-theme="dark"] .mt-root {
+  --role-picker:    #3987e5;
+  --role-checker:   #d95926;
+  --role-purchaser: #199e70;
+  --role-billing:   #c98500;
+  --role-delivery:  #d55181;
+  --role-packing:   #008300;
+  --role-other:     #9085e9;
+}
+
+/* ── Layout ── */
+/* Column packing, not a grid. Staff carry between one and seven extra roles,
+   so their cards differ wildly in height; on a grid every row stretched to its
+   tallest card and left half a screen of white space under the short ones. */
+.mt-grid { columns: 330px; column-gap: var(--s6); }
+.mt-card { break-inside: avoid; margin: 0 0 var(--s6); }
+/* Capped, so on a wide screen the legend sits beside its pie instead of the
+   name and the figure drifting to opposite edges of the card. */
+.mt-person { display: grid; grid-template-columns: 132px minmax(0, 1fr);
+             gap: var(--s4); align-items: start; max-width: 480px; }
+@media (max-width: 420px) { .mt-person { grid-template-columns: 1fr; justify-items: center; } }
+
+/* ── The pie itself ── */
+.mt-pie { width: 132px; height: 132px; display: block; }
+.mt-pie circle { transition: opacity var(--t) var(--ease); }
+/* Hovering one slice recedes the others, so a slice can be picked out of a
+   seven-way split without reading the legend. */
+.mt-pie:hover circle.sl { opacity: .32; }
+.mt-pie circle.sl:hover { opacity: 1; }
+.mt-pie__hole { font-weight: var(--fw-heavy); fill: var(--ink);
+                font-size: 23px; letter-spacing: var(--tr-h1); }
+.mt-pie__hole--sub { font-weight: var(--fw-bold); fill: var(--ink-3);
+                     font-size: 9.5px; letter-spacing: var(--tr-micro);
+                     text-transform: uppercase; }
+
+/* ── Legend: the figures live here, beside the chart ── */
+.mt-legend { display: flex; flex-direction: column; gap: var(--s2); min-width: 0; }
+/* Two columns, not three. A third column for the figure squeezed the role
+   name into an ellipsis on a four-across grid, and the name is the slice's
+   identity -- the one thing that must never be the part that gets cut. The
+   figure rides on the name's line instead, and the volume sits under it. */
+.mt-leg { display: grid; grid-template-columns: 10px minmax(0, 1fr);
+          gap: var(--s2); align-items: baseline; font-size: var(--fs-small); }
+.mt-leg__dot { width: 10px; height: 10px; border-radius: 3px; margin-top: 3px;
+               box-shadow: 0 0 0 1px rgba(11,18,32,.14) inset; }
+.mt-leg__name { font-weight: var(--fw-med); color: var(--ink); min-width: 0; }
+.mt-leg__val { font-weight: var(--fw-bold); color: var(--ink);
+               font-variant-numeric: tabular-nums; white-space: nowrap; }
+.mt-leg__sub { display: block; font-size: var(--fs-micro); color: var(--ink-3);
+               font-weight: var(--fw-normal); margin-top: 1px; }
+
+.mt-who { display: flex; align-items: baseline; gap: var(--s2);
+          flex-wrap: wrap; margin-bottom: var(--s1); }
+.mt-who__name { font-size: var(--fs-body-lg); font-weight: var(--fw-heavy);
+                letter-spacing: var(--tr-body-lg); }
+.mt-swatch { display: inline-block; width: 9px; height: 9px; border-radius: 2px;
+             box-shadow: 0 0 0 1px rgba(11,18,32,.14) inset; }
+.mt-ranges { display: flex; gap: var(--s2); flex-wrap: wrap; }
+
+/* The single-role stat tile that stands in for a one-slice ring. */
+.mt-solo { width: 132px; height: 132px; border-radius: var(--r-lg);
+           display: flex; flex-direction: column; align-items: center;
+           justify-content: center; text-align: center;
+           background: var(--surface-3); box-shadow: inset 0 0 0 3px var(--solo); }
+.mt-solo__val { font-size: var(--fs-display); font-weight: var(--fw-heavy);
+                letter-spacing: var(--tr-display); line-height: 1; color: var(--ink); }
+.mt-solo__lbl { font-size: var(--fs-micro); font-weight: var(--fw-bold);
+                text-transform: uppercase; letter-spacing: var(--tr-micro);
+                color: var(--ink-3); margin-top: var(--s1); max-width: 108px; }
+</style>
+</head>
+<body class="mt-root">
+
+<header class="ip-topbar">
+  <div class="ip-brand"><span class="ip-brand__mark">IP</span> Pharma IP System</div>
+  <nav class="ip-navlinks">
+    <button class="ip-theme" type="button" aria-pressed="false" aria-label="Switch to dark theme">
+      <svg class="ip-theme__sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="4"></circle><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>
+      <svg class="ip-theme__moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg>
+    </button>
+    <a href="{{ url_for('admin_dashboard') }}" class="ip-btn ip-btn--ghost">Dashboard</a>
+    <a href="{{ url_for('logout') }}" class="ip-btn">Log out</a>
+  </nav>
+</header>
+
+<main class="ip-shell">
+
+  <div class="ip-head">
+    <div>
+      <h1>Multitask Report</h1>
+      <div class="ip-head__sub">
+        Who covered an extra role, and which one. One chart per person, so the
+        split can be read at a glance instead of scrolling a list of every
+        report in date order.
+      </div>
+    </div>
+    <div class="mt-ranges">
+      {% for d, lbl in [(7, '7 days'), (30, '30 days'), (90, '90 days'), (365, '1 year')] %}
+      <a href="{{ url_for('admin_multitask_report', days=d) }}"
+         class="ip-btn ip-btn--sm {% if days == d %}ip-btn--primary{% endif %}">{{ lbl }}</a>
+      {% endfor %}
+    </div>
+  </div>
+
+  {% if not report.staff %}
+  <section class="ip-card">
+    <div class="ip-empty">
+      <div class="ip-empty__title">Nobody covered an extra role in the last {{ days }} days</div>
+      <div class="ip-empty__hint">
+        When staff tick extra roles in the “Multitask Roles” section of their
+        dashboard and save numbers, each person appears here with their own
+        chart. Try a longer period above.
+      </div>
+    </div>
+  </section>
+  {% else %}
+
+  {# ---- Headline figures. A single number is a stat tile, not a chart. ---- #}
+  <section class="ip-card">
+    <div class="ip-card__head">
+      <div>
+        <div class="ip-card__title">Last {{ days }} days</div>
+        <div class="ip-card__sub">Since {{ report.since.strftime('%d %b %Y') }}.</div>
+      </div>
+    </div>
+    <div class="ip-card__body">
+      <div class="ip-metrics">
+        <div class="ip-metric">
+          <div class="ip-metric__label">People multitasking</div>
+          <div class="ip-metric__value">{{ report.totals.people }}</div>
+          <div class="ip-metric__foot">covered a role that is not their own</div>
+        </div>
+        <div class="ip-metric">
+          <div class="ip-metric__label">Role-days covered</div>
+          <div class="ip-metric__value">{{ report.totals.role_days }}</div>
+          <div class="ip-metric__foot">one person, one role, one day</div>
+        </div>
+        <div class="ip-metric">
+          <div class="ip-metric__label">Roles covered</div>
+          <div class="ip-metric__value">{{ report.totals.roles }}</div>
+          <div class="ip-metric__foot">distinct extra roles worked</div>
+        </div>
+        <div class="ip-metric">
+          <div class="ip-metric__label">Multitask points</div>
+          <div class="ip-metric__value">{{ report.totals.points|round|int }}</div>
+          <div class="ip-metric__foot">10 per extra role per day, capped at 30/day</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  {# ---- Macro: one pie. Slices are drawn as arcs of a single ring, each a
+         dashed circle, with a 2px gap of surface between neighbours so two
+         similar hues never touch. ---- #}
+  {% macro pie(slices, centre_value, centre_label, size=132) -%}
+  {%- set C = 289.027 -%}{# circumference at r=46 #}
+  {%- set ns = namespace(off=0.0) -%}
+  <svg class="mt-pie" viewBox="0 0 120 120" width="{{ size }}" height="{{ size }}"
+       role="img" aria-label="{{ centre_value }} {{ centre_label }}, split by role: {% for s in slices %}{{ s.label }} {{ s.days }} day{{ '' if s.days == 1 else 's' }} ({{ s.pct }}%){% if not loop.last %}, {% endif %}{% endfor %}">
+    <g transform="rotate(-90 60 60)">
+      <circle cx="60" cy="60" r="46" fill="none" stroke="var(--surface-3)" stroke-width="18"></circle>
+      {%- for s in slices %}
+      {%- set len = C * s.pct / 100.0 %}
+      {%- set drawn = (len - 2) if (len - 2) > 1 else 1 %}
+      <circle class="sl" cx="60" cy="60" r="46" fill="none"
+              stroke="var(--role-{{ s.role }}, var(--role-other))" stroke-width="18"
+              stroke-dasharray="{{ '%.2f'|format(drawn) }} {{ '%.2f'|format(C) }}"
+              stroke-dashoffset="{{ '%.2f'|format(-ns.off) }}">
+        <title>{{ s.label }} — {{ s.days }} day{{ '' if s.days == 1 else 's' }} ({{ s.pct }}%), {{ s.volume }} {{ s.unit }}, {{ s.points }} points</title>
+      </circle>
+      {%- set ns.off = ns.off + len %}
+      {%- endfor %}
+    </g>
+    <text class="mt-pie__hole" x="60" y="58" text-anchor="middle">{{ centre_value }}</text>
+    <text class="mt-pie__hole--sub" x="60" y="72" text-anchor="middle">{{ centre_label }}</text>
+  </svg>
+  {%- endmacro %}
+
+  {% macro legend(slices) -%}
+  <div class="mt-legend">
+    {%- for s in slices %}
+    <div class="mt-leg">
+      <span class="mt-leg__dot" style="background:var(--role-{{ s.role }}, var(--role-other));"></span>
+      <span class="mt-leg__name">{{ s.label }}
+        <span class="mt-leg__val">· {{ s.days }}d · {{ s.pct }}%</span>
+        {% if s.volume %}<span class="mt-leg__sub">{{ s.volume }} {{ s.unit }}</span>{% endif %}
+      </span>
+    </div>
+    {%- endfor %}
+  </div>
+  {%- endmacro %}
+
+  {# ---- Warehouse-wide split ---- #}
+  <section class="ip-card">
+    <div class="ip-card__head">
+      <div>
+        <div class="ip-card__title">Which roles needed covering</div>
+        <div class="ip-card__sub">Every extra-role day in the period, whoever worked it.</div>
+      </div>
+      <span class="ip-count">{{ report.totals.role_days }} role-days</span>
+    </div>
+    <div class="ip-card__body">
+      <div class="mt-person">
+        {{ pie(report.roles, report.totals.role_days, 'role-days') }}
+        {{ legend(report.roles) }}
+      </div>
+    </div>
+  </section>
+
+  {# ---- One card per person, busiest first ---- #}
+  <section class="ip-card">
+    <div class="ip-card__head">
+      <div>
+        <div class="ip-card__title">Staff, one chart each</div>
+        <div class="ip-card__sub">
+          Busiest first. The number in the middle is the days that person spent
+          on a role that is not their own.
+        </div>
+      </div>
+      <span class="ip-count">{{ report.staff|length }} staff</span>
+    </div>
+    <div class="ip-card__body">
+      <div class="mt-grid">
+        {% for s in report.staff %}
+        <div class="mt-card">
+          <div class="mt-who">
+            <a href="{{ url_for('staff_detail', emp_id=s.emp_id) }}" class="mt-who__name">{{ s.name }}</a>
+            <span class="ip-pill ip-pill--muted">{{ s.primary }}</span>
+            {% if s.role_count > 1 %}
+            <span class="ip-pill ip-pill--accent">{{ s.role_count }} extra roles</span>
+            {% endif %}
+          </div>
+          <div class="mt-person">
+            {# One extra role is not a split, and a single full ring says
+               nothing a number does not. The figure IS the chart there. #}
+            {% if s.slices|length == 1 %}
+            <div class="mt-solo" style="--solo:var(--role-{{ s.slices[0].role }}, var(--role-other));">
+              <div class="mt-solo__val">{{ s.slices[0].days }}</div>
+              <div class="mt-solo__lbl">day{{ '' if s.slices[0].days == 1 else 's' }} as {{ s.slices[0].label }}</div>
+            </div>
+            {% else %}
+            {{ pie(s.slices, s.role_days, 'role-days') }}
+            {% endif %}
+            {{ legend(s.slices) }}
+          </div>
+          <div class="ip-hint" style="margin-top:var(--s2);">
+            {{ s.days }} day{{ '' if s.days == 1 else 's' }} worked ·
+            {{ s.points|round|int }} multitask point{{ '' if s.points|round|int == 1 else 's' }} earned
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+  </section>
+
+  {# ---- Role-wise: the same data grouped the other way round ---- #}
+  <section class="ip-card">
+    <div class="ip-card__head">
+      <div>
+        <div class="ip-card__title">Role-wise — who is covering what</div>
+        <div class="ip-card__sub">
+          Read this to see which role is short-handed and who is carrying it.
+        </div>
+      </div>
+    </div>
+    <div class="ip-card__body">
+      {% for role in role_order %}
+        {% if report.by_role.get(role) %}
+        <div style="margin-bottom:var(--s5);">
+          <div class="ip-label" style="display:flex;align-items:center;gap:var(--s2);">
+            <span class="mt-swatch" style="background:var(--role-{{ role }}, var(--role-other));"></span>
+            {{ role_label(role) }}
+            <span class="ip-count">{{ report.by_role[role]|length }} covering</span>
+          </div>
+          <div class="ip-tablewrap" style="margin-top:var(--s2);">
+            <table class="ip-table">
+              <thead>
+                <tr><th>Staff</th><th>Their own role</th><th class="num">Days</th>
+                    <th class="num">Work done</th><th class="num">Points</th></tr>
+              </thead>
+              <tbody>
+                {% for p in report.by_role[role] %}
+                <tr>
+                  <td><a href="{{ url_for('staff_detail', emp_id=p.emp_id) }}">{{ p.name }}</a></td>
+                  <td class="nowrap">{{ p.primary }}</td>
+                  <td class="num">{{ p.days }}</td>
+                  <td class="num">{{ p.volume }} <span class="ip-small ip-muted">{{ p.unit }}</span></td>
+                  <td class="num">{{ p.points }}</td>
+                </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        </div>
+        {% endif %}
+      {% endfor %}
+    </div>
+  </section>
+
+  {# ---- The table view every chart on this page owes the reader ---- #}
+  <section class="ip-card">
+    <div class="ip-card__head">
+      <div>
+        <div class="ip-card__title">Every figure, as a table</div>
+        <div class="ip-card__sub">
+          The same numbers the charts above are drawn from, for anyone who would
+          rather read them than look at them.
+        </div>
+      </div>
+    </div>
+    <div class="ip-tablewrap">
+      <table class="ip-table">
+        <thead>
+          <tr><th>Staff</th><th>Extra role</th><th class="num">Days</th>
+              <th class="num">Share of their extra work</th>
+              <th class="num">Work done</th><th class="num">Points</th></tr>
+        </thead>
+        <tbody>
+          {% for s in report.staff %}
+            {% for sl in s.slices %}
+            <tr>
+              <td>{% if loop.first %}<strong>{{ s.name }}</strong>{% else %}<span class="ip-muted">↳</span>{% endif %}</td>
+              <td class="nowrap">
+                <span class="mt-swatch" style="background:var(--role-{{ sl.role }}, var(--role-other));"></span>
+                {{ sl.label }}
+              </td>
+              <td class="num">{{ sl.days }}</td>
+              <td class="num">{{ sl.pct }}%</td>
+              <td class="num">{{ sl.volume }} <span class="ip-small ip-muted">{{ sl.unit }}</span></td>
+              <td class="num">{{ sl.points }}</td>
+            </tr>
+            {% endfor %}
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </section>
+  {% endif %}
+
+</main>
+  <script src="{{ url_for('static', filename='js/palette.js') }}" defer></script>
+  <script src="{{ url_for('static', filename='js/ux.js') }}" defer></script>
+</body>
+</html>

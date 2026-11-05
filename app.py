@@ -936,6 +936,175 @@ def checker_bill_warnings(entry_date, emp_id, bills_received, sb_checked, cs_che
     return warnings
 
 
+# ─── MULTITASK REPORT ────────────────────────────────────────────────────────
+# A fixed role order, used for both the slice colours and the legend. It is
+# fixed on purpose: a colour follows the ROLE, never its rank in one person's
+# chart, so purple means "purchaser" on every card on the page and a staff
+# member who stops doing a role does not repaint everyone else's slices.
+MULTITASK_ROLE_ORDER = ("picker", "checker", "purchaser", "billing",
+                        "delivery", "packing", "other")
+
+# One number per role that means something on the shop floor, so a slice can be
+# read as work done and not only as "a day".
+MULTITASK_HEADLINE = {
+    "picker":    ("items picked",    lambda m: int(m.picked or 0)),
+    "checker":   ("bills checked",   lambda m: int(m.sales_bills_open or 0) + int(m.cs_sales_open or 0)),
+    "purchaser": ("PO bills checked", lambda m: int(m.checked or 0)),
+    "billing":   ("bills billed",    lambda m: int(m.bills_done or 0)),
+    "delivery":  ("deliveries done", lambda m: int(m.quantity or 0)),
+    "packing":   ("packs done",      lambda m: int(m.quantity or 0)),
+    "other":     ("items processed", lambda m: int(m.breakage_expire_processed or 0)
+                                               + int(m.item_receive_qty or 0)
+                                               + int(m.expire_return_qty or 0)),
+}
+
+
+def multitask_role_label(role):
+    return (role or "other").replace("_", " ").title()
+
+
+def multitask_report(days=30):
+    """Who multitasked, in which roles, over the last `days` days -- per person.
+
+    The admin panel only ever had a flat list of every extra-role report in
+    date order. With a handful of staff each covering two or three roles that
+    is a wall of rows nobody reads, and it answers none of the questions worth
+    asking: who is carrying the extra load, which roles are short-handed, and
+    what did the cover actually produce.
+
+    Returns a dict with:
+      staff   -- one entry per person who covered an extra role, busiest first,
+                 each with its own role split ready to draw
+      roles   -- the same split for the warehouse as a whole
+      by_role -- role -> the people covering it, so a role-wise view costs no
+                 extra queries
+      totals  -- headline figures
+    Multitask points follow the same rule the score uses: 10 points per extra
+    role on a day, capped at 30 for the day, shared evenly between that day's
+    roles so the per-role figures still add up to the day's award.
+    """
+    out = {"staff": [], "roles": [], "by_role": {}, "days": days,
+           "totals": {"people": 0, "role_days": 0, "points": 0.0, "roles": 0},
+           "since": None}
+    try:
+        since = date.today() - timedelta(days=days)
+        out["since"] = since
+        entries = (MultitaskEntry.query
+                   .filter(MultitaskEntry.entry_date >= since)
+                   .order_by(MultitaskEntry.entry_date.desc()).all())
+        if not entries:
+            return out
+
+        emps = {e.id: e for e in Employee.query.all()}
+
+        # Points are awarded per DAY, so count each person's roles per day first.
+        roles_per_day = {}
+        for m in entries:
+            roles_per_day.setdefault((m.emp_id, m.entry_date), set()).add(m.secondary_type)
+
+        per_person = {}
+        for m in entries:
+            role = m.secondary_type or "other"
+            day_roles = roles_per_day.get((m.emp_id, m.entry_date)) or {role}
+            n = max(len(day_roles), 1)
+            day_award = min(10 * n, 30)
+            share = day_award / n          # so the roles still sum to the day
+
+            p = per_person.setdefault(m.emp_id, {"roles": {}, "dates": set()})
+            p["dates"].add(m.entry_date)
+            r = p["roles"].setdefault(role, {"days": 0, "points": 0.0,
+                                             "volume": 0, "notes": []})
+            r["days"] += 1
+            r["points"] += share
+            _label, _fn = MULTITASK_HEADLINE.get(role, ("entries", lambda _m: 0))
+            try:
+                r["volume"] += _fn(m)
+            except Exception:
+                pass
+            if m.note:
+                r["notes"].append(m.note)
+
+        def _slices(role_map, total_days):
+            """Role rows in the fixed role order, with the share each holds."""
+            rows = []
+            for role in MULTITASK_ROLE_ORDER:
+                r = role_map.get(role)
+                if not r:
+                    continue
+                unit, _ = MULTITASK_HEADLINE.get(role, ("entries", None))
+                rows.append({
+                    "role": role,
+                    "label": multitask_role_label(role),
+                    "slot": MULTITASK_ROLE_ORDER.index(role) + 1,
+                    "days": r["days"],
+                    "points": round(r["points"], 1),
+                    "volume": r["volume"],
+                    "unit": unit,
+                    "pct": round(safe_div(r["days"], total_days) * 100, 1),
+                })
+            # Roles the code does not know about must still be visible rather
+            # than silently dropped out of the chart.
+            for role, r in role_map.items():
+                if role in MULTITASK_ROLE_ORDER:
+                    continue
+                rows.append({
+                    "role": role, "label": multitask_role_label(role),
+                    "slot": len(MULTITASK_ROLE_ORDER), "days": r["days"],
+                    "points": round(r["points"], 1), "volume": r["volume"],
+                    "unit": "entries",
+                    "pct": round(safe_div(r["days"], total_days) * 100, 1),
+                })
+            return sorted(rows, key=lambda x: (-x["days"], x["label"]))
+
+        wide_roles = {}
+        for emp_id, p in per_person.items():
+            total_role_days = sum(r["days"] for r in p["roles"].values())
+            emp = emps.get(emp_id)
+            out["staff"].append({
+                "emp_id": emp_id,
+                "name": emp.name if emp else "Employee #%d" % emp_id,
+                "primary": multitask_role_label(emp.staff_type) if emp else "—",
+                "secondary": (multitask_role_label(emp.secondary_staff_type)
+                              if emp and emp.secondary_staff_type else None),
+                "days": len(p["dates"]),
+                "role_days": total_role_days,
+                "role_count": len(p["roles"]),
+                "points": round(sum(r["points"] for r in p["roles"].values()), 1),
+                "slices": _slices(p["roles"], total_role_days),
+            })
+            for role, r in p["roles"].items():
+                w = wide_roles.setdefault(role, {"days": 0, "points": 0.0,
+                                                 "volume": 0, "notes": []})
+                w["days"] += r["days"]
+                w["points"] += r["points"]
+                w["volume"] += r["volume"]
+
+        out["staff"].sort(key=lambda s: (-s["role_days"], -s["points"], s["name"]))
+        wide_total_days = sum(r["days"] for r in wide_roles.values())
+        out["roles"] = _slices(wide_roles, wide_total_days)
+
+        for s in out["staff"]:
+            for sl in s["slices"]:
+                out["by_role"].setdefault(sl["role"], []).append({
+                    "emp_id": s["emp_id"], "name": s["name"],
+                    "primary": s["primary"], "days": sl["days"],
+                    "points": sl["points"], "volume": sl["volume"],
+                    "unit": sl["unit"],
+                })
+        for role in out["by_role"]:
+            out["by_role"][role].sort(key=lambda x: (-x["days"], x["name"]))
+
+        out["totals"] = {
+            "people": len(out["staff"]),
+            "role_days": wide_total_days,
+            "points": round(sum(r["points"] for r in wide_roles.values()), 1),
+            "roles": len(wide_roles),
+        }
+    except Exception as exc:
+        logger.error("multitask_report failed: %s", exc)
+    return out
+
+
 def grade_from_score(score):
     if score >= 90:   return "EXCELLENT"
     elif score >= 75: return "GOOD"
@@ -5629,6 +5798,27 @@ def admin_send_monthly_report():
         logger.error(f"admin_send_monthly_report: {e}")
         flash(f"Error sending reports: {e}", "danger")
     return redirect(url_for("admin_dashboard"))
+
+
+@app.route("/admin/multitask_report")
+@admin_required
+def admin_multitask_report():
+    """Who covered which extra roles, one chart per person.
+
+    The admin panel's multitask panel is a flat list of every extra-role report
+    in date order, which answers none of the questions worth asking. This page
+    is the same data turned round: per person, then per role.
+    """
+    try:
+        days = int(request.args.get("days", 30))
+    except (TypeError, ValueError):
+        days = 30
+    days = days if days in (7, 30, 90, 365) else 30
+    report = multitask_report(days)
+    return render_template("admin_multitask_report.html",
+                           report=report, days=days,
+                           role_order=MULTITASK_ROLE_ORDER,
+                           role_label=multitask_role_label)
 
 
 @app.route("/admin/diagnostics")

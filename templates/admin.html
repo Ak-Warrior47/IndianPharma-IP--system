@@ -581,6 +581,8 @@ var NOTES_BY_EMP = {
       <div class="card-title">Multitask (Role 2) Reports
         <span class="cnt" style="background:#f5f3ff;color:var(--accent);border-color:var(--accent-line);">{{ recent_multitask|length }} (30 days)</span>
       </div>
+      <a href="{{ url_for('admin_multitask_report') }}" class="btn-sm btn-view"
+         style="white-space:nowrap;">User-wise charts →</a>
     </div>
     {% if recent_multitask %}
     <div style="overflow-x:auto;">
