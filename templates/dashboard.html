@@ -305,6 +305,26 @@ button[disabled] { opacity: .45; cursor: not-allowed; transform: none; }
     {% endfor %}{% endif %}
   {% endwith %}
 
+  {# A checker's own record: best day this month and last month, with a nudge. #}
+  {% if checker_bests is defined and checker_bests %}
+  <div class="ip-card" style="margin-bottom:var(--s4);">
+    <div class="ip-card__head"><div>
+      <div class="ip-card__title">{{ 'New record — ' if checker_bests.record }}Your best day</div>
+      <div class="ip-card__sub">{{ checker_bests.message }}</div></div></div>
+    <div class="ip-card__body">
+      <div class="ip-metrics">
+        {% for period in [checker_bests.this, checker_bests.prev] %}
+        <div class="ip-metric">
+          <div class="ip-metric__label">{{ period.label }} best</div>
+          <div class="ip-metric__value">{{ period.bills.value if period.bills else '—' }} <span style="font-size:var(--fs-small);color:var(--ink-3);">bills</span></div>
+          <div class="ip-metric__foot">{{ period.bills.date.strftime('%d %b') if period.bills else '' }}{% if period["items"] %} · {{ period["items"].value }} items on {{ period["items"].date.strftime('%d %b') }}{% endif %}</div>
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+  </div>
+  {% endif %}
+
 
   <!-- PENDING PAST ENTRY WINDOWS -->
   {% if pending_windows %}

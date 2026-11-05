@@ -102,16 +102,7 @@
              box-shadow: 0 0 0 1px rgba(11,18,32,.14) inset; }
 .mt-ranges { display: flex; gap: var(--s2); flex-wrap: wrap; }
 
-/* The single-role stat tile that stands in for a one-slice ring. */
-.mt-solo { width: 132px; height: 132px; border-radius: var(--r-lg);
-           display: flex; flex-direction: column; align-items: center;
-           justify-content: center; text-align: center;
-           background: var(--surface-3); box-shadow: inset 0 0 0 3px var(--solo); }
-.mt-solo__val { font-size: var(--fs-display); font-weight: var(--fw-heavy);
-                letter-spacing: var(--tr-display); line-height: 1; color: var(--ink); }
-.mt-solo__lbl { font-size: var(--fs-micro); font-weight: var(--fw-bold);
-                text-transform: uppercase; letter-spacing: var(--tr-micro);
-                color: var(--ink-3); margin-top: var(--s1); max-width: 108px; }
+
 </style>
 </head>
 <body class="mt-root">
@@ -276,16 +267,7 @@
             {% endif %}
           </div>
           <div class="mt-person">
-            {# One extra role is not a split, and a single full ring says
-               nothing a number does not. The figure IS the chart there. #}
-            {% if s.slices|length == 1 %}
-            <div class="mt-solo" style="--solo:var(--role-{{ s.slices[0].role }}, var(--role-other));">
-              <div class="mt-solo__val">{{ s.slices[0].days }}</div>
-              <div class="mt-solo__lbl">day{{ '' if s.slices[0].days == 1 else 's' }} as {{ s.slices[0].label }}</div>
-            </div>
-            {% else %}
             {{ pie(s.slices, s.role_days, 'role-days') }}
-            {% endif %}
             {{ legend(s.slices) }}
           </div>
           <div class="ip-hint" style="margin-top:var(--s2);">

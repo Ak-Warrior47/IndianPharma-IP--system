@@ -579,6 +579,18 @@ a:hover { color: var(--brand-deep); }
 /* ---------- Animated counters ---------- */
 .ip-num { font-variant-numeric: tabular-nums; }
 
+/* ---------- Minimize ---------- */
+.mz-head { display: flex; align-items: center; gap: var(--s2); }
+.mz-btn { margin-left: auto; flex: none; width: 28px; height: 28px; border-radius: var(--r-sm);
+  border: 1px solid var(--line-strong); background: var(--surface); color: var(--ink-2);
+  font: inherit; font-size: 16px; font-weight: var(--fw-heavy); line-height: 1; cursor: pointer;
+  display: inline-flex; align-items: center; justify-content: center;
+  transition: background var(--t-fast) var(--ease); }
+.mz-btn:hover { background: var(--surface-3); color: var(--ink); }
+.mz-btn:focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; }
+.card.is-min > :not(.mz-head), .ip-card.is-min > :not(.mz-head) { display: none !important; }
+.card.is-min > .mz-head, .ip-card.is-min > .mz-head { margin-bottom: 0; border-bottom: 0; }
+
 /* ---------- Toasts ---------- */
 .ip-toasts {
   position: fixed; z-index: 500; right: var(--s5); bottom: var(--s5);

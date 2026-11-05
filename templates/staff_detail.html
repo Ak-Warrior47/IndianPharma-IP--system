@@ -105,6 +105,27 @@ body { display: grid; grid-template-columns: 236px minmax(0, 1fr); min-height: 1
 .pt-val { font-size: var(--fs-body); font-weight: var(--fw-heavy); color: var(--ink); }
 .pt-cap { font-size: var(--fs-small); color: var(--ink-3); }
 /* The arithmetic behind the bar, so a score is never a number from nowhere. */
+/* Multitask explanation + best-day card */
+.mt-explain__btn { display: inline-flex; align-items: center; gap: 6px; cursor: pointer;
+  padding: 6px 12px; border-radius: var(--r-pill); font-size: var(--fs-small); font-weight: var(--fw-bold);
+  color: var(--brand-ink); background: var(--brand-tint); list-style: none; }
+.mt-explain__btn::-webkit-details-marker { display: none; }
+.mt-explain__btn::before { content: "+"; font-weight: var(--fw-heavy); }
+.mt-explain[open] .mt-explain__btn::before { content: "−"; }
+.mt-explain__body { margin-top: 10px; font-size: var(--fs-small); color: var(--ink-2); line-height: 1.6; }
+.mt-explain__table { width: 100%; border-collapse: collapse; margin: 8px 0; font-size: var(--fs-small); }
+.mt-explain__table th, .mt-explain__table td { padding: 6px 8px; border-bottom: 1px solid var(--line); text-align: left; }
+.mt-explain__table th { color: var(--ink-3); font-weight: var(--fw-bold); font-size: var(--fs-micro); text-transform: uppercase; }
+.mt-explain__table .r { text-align: right; font-variant-numeric: tabular-nums; }
+.mt-explain__sub { display: block; color: var(--ink-3); font-size: var(--fs-micro); }
+.mt-explain__sum { margin: 6px 0 0; }
+.cb-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 12px; }
+.cb-cell { padding: 12px; border-radius: var(--r); background: var(--surface-2); box-shadow: var(--sh-0); }
+.cb-lbl { font-size: var(--fs-micro); font-weight: var(--fw-bold); text-transform: uppercase; color: var(--ink-3); }
+.cb-val { font-size: var(--fs-h2); font-weight: var(--fw-heavy); margin-top: 6px; }
+.cb-val small { font-size: var(--fs-small); font-weight: var(--fw-med); color: var(--ink-3); }
+.cb-date { font-size: var(--fs-micro); color: var(--ink-3); }
+.cb-top td { font-weight: var(--fw-heavy); color: var(--ok-ink); }
 .pt-how { font-size: var(--fs-micro); color: var(--ink-3); line-height: 1.55;
   margin-top: var(--s1); }
 .mini-foot { font-size: var(--fs-micro); color: var(--ink-3); line-height: 1.5;
@@ -449,6 +470,49 @@ body { display: grid; grid-template-columns: 236px minmax(0, 1fr); min-height: 1
       </div>
     </section>
 
+    {% if checker_bests %}
+    <section class="card">
+      <div class="card-title"><span class="ico">▸</span>Best Day This Month</div>
+      <div class="card-sub">{{ checker_bests.message }}</div>
+      <div class="cb-grid">
+        {% for period in [checker_bests.this, checker_bests.prev] %}
+        <div class="cb-cell">
+          <div class="cb-lbl">{{ period.label }} best</div>
+          <div class="cb-val">{{ period.bills.value if period.bills else '—' }} <small>bills</small></div>
+          <div class="cb-date">{{ period.bills.date.strftime('%d %b') if period.bills else '' }}</div>
+          <div class="cb-val">{{ period["items"].value if period["items"] else '—' }} <small>items</small></div>
+          <div class="cb-date">{{ period["items"].date.strftime('%d %b') if period["items"] else '' }}</div>
+        </div>
+        {% endfor %}
+      </div>
+      {% if checker_bests.days %}
+      <details class="mt-explain" style="margin-top:12px;">
+        <summary class="mt-explain__btn">Day by day this month</summary>
+        <table class="mt-explain__table">
+          <thead><tr><th>Date</th><th class="r">Bills</th><th class="r">Items</th></tr></thead>
+          <tbody>{% for d in checker_bests.days %}
+            <tr{% if checker_bests.this.bills and d.date == checker_bests.this.bills.date %} class="cb-top"{% endif %}>
+              <td>{{ d.date.strftime('%a %d %b') }}</td><td class="r">{{ d.bills }}</td><td class="r">{{ d["items"] }}</td></tr>
+          {% endfor %}</tbody>
+        </table>
+      </details>
+      {% endif %}
+    </section>
+    {% endif %}
+
+    {% if a_stats and a_stats.target_suggestion %}
+    <section class="card">
+      <div class="card-title"><span class="ico">▸</span>Target</div>
+      <div class="card-sub">{{ a_stats.auto_suggest }}</div>
+      <form method="POST" action="/admin/accept_target_suggestion/{{ emp.id }}" style="margin-top:10px;">
+        <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+        <button type="submit" class="ip-btn ip-btn--primary">
+          {{ 'Raise' if a_stats.target_suggestion.kind == 'raise' else 'Set' }} target to
+          {{ a_stats.target_suggestion.suggested }}/hr</button>
+      </form>
+    </section>
+    {% endif %}
+
     <!-- POINTS BREAKDOWN -->
     {% if a_stats %}
     <section class="card">
@@ -552,6 +616,32 @@ body { display: grid; grid-template-columns: 236px minmax(0, 1fr); min-height: 1
             </td>
             <td style="padding:6px 0;text-align:right;font-weight:700;color:var(--emerald);">+{{ a_stats.multitask_bonus }}</td>
           </tr>
+          {% if a_stats.multitask_breakdown %}
+          <tr><td colspan="2" style="padding:4px 0 8px;">
+            <details class="mt-explain">
+              <summary class="mt-explain__btn">How were these multitask points added?</summary>
+              <div class="mt-explain__body">
+                <p><b>The rule:</b> each extra role worked on a day earns 10 points, up to
+                  30 for that day. The day points are then shared across every day in this
+                  period, so one busy day does not count as if it happened every day.</p>
+                <table class="mt-explain__table">
+                  <thead><tr><th>Date</th><th>Extra roles worked</th><th class="r">Points</th></tr></thead>
+                  <tbody>
+                  {% for d in a_stats.multitask_breakdown %}
+                    <tr><td>{{ d.date.strftime('%a %d %b') }}</td>
+                        <td>{{ d.roles|map('title')|join(', ') }}
+                          <span class="mt-explain__sub">{{ d.roles|length }} × 10 = {{ d.raw }}{% if d.raw > 30 %}, capped at 30{% endif %}</span></td>
+                        <td class="r">{{ d.points }}</td></tr>
+                  {% endfor %}
+                  </tbody>
+                </table>
+                <p class="mt-explain__sum">
+                  {{ a_stats.multitask_day_points }} points ÷ {{ a_stats.days }} day{{ '' if a_stats.days == 1 else 's' }}
+                  in this period = <b>+{{ a_stats.multitask_bonus }}</b> added to the score.</p>
+              </div>
+            </details>
+          </td></tr>
+          {% endif %}
           {% endif %}
           {% if a_stats.complaint_deduction and a_stats.complaint_deduction > 0 %}
           <tr>
@@ -949,7 +1039,6 @@ body { display: grid; grid-template-columns: 236px minmax(0, 1fr); min-height: 1
                 <span style="display:inline-block;"><b>Packing Done:</b> {{ mt.packing_done or 0 }}</span>
               {% elif mt.secondary_type == 'checker' %}
                 <span style="display:inline-block;margin-right:10px;"><b>Bills Rcvd:</b> {{ mt.bills_received or 0 }}</span>
-                <span style="display:inline-block;margin-right:10px;"><b>Pending:</b> {{ mt.pending_bills_manual or 0 }}</span>
                 <span style="display:inline-block;margin-right:10px;"><b>SB Checked:</b> {{ mt.sales_bills_open or 0 }}</span>
                 <span style="display:inline-block;margin-right:10px;"><b>CS Checked:</b> {{ mt.cs_sales_open or 0 }}</span>
                 <span style="display:inline-block;margin-right:10px;"><b>Items Checked:</b> {{ mt.checked or 0 }}</span>
@@ -1108,5 +1197,6 @@ body { display: grid; grid-template-columns: 236px minmax(0, 1fr); min-height: 1
   }catch(e){ /* silent */ }
 })();
 </script>
+<script src="{{ url_for('static', filename='js/ux.js') }}" defer></script>
 </body>
 </html>

@@ -1113,6 +1113,70 @@ def multitask_report(days=30):
     return out
 
 
+def checker_month_bests(emp_id, today=None):
+    """A checker's best day this month and last month, with the day-wise list.
+
+    Bills = normal + urgent bills checked that day; items = normal + urgent
+    items. The message tells the checker where they stand against their own
+    record -- the one comparison that is always fair.
+    """
+    today = today or date.today()
+    this_start = today.replace(day=1)
+    prev_start = (this_start - timedelta(days=1)).replace(day=1)
+    try:
+        rows = (KPIEntry.query.filter(KPIEntry.emp_id == emp_id,
+                                      KPIEntry.entry_date >= prev_start,
+                                      KPIEntry.entry_date <= today)
+                .order_by(KPIEntry.entry_date).all())
+    except Exception as exc:
+        logger.error("checker_month_bests: %s", exc)
+        rows = []
+
+    def bills(e): return int(e.sales_bills_open or 0) + int(e.cs_sales_open or 0)
+    def items(e): return int(e.checked or 0) + int(e.errors_found or 0)
+
+    def best(rs, fn):
+        rs = [r for r in rs if fn(r) > 0]
+        if not rs:
+            return None
+        top = max(rs, key=lambda r: (fn(r), r.entry_date))
+        return {"value": fn(top), "date": top.entry_date}
+
+    cur = [r for r in rows if r.entry_date >= this_start]
+    prev = [r for r in rows if r.entry_date < this_start]
+    before_today = [r for r in cur if r.entry_date < today]
+    today_row = next((r for r in cur if r.entry_date == today), None)
+    out = {
+        "this": {"label": this_start.strftime("%B"), "bills": best(cur, bills), "items": best(cur, items)},
+        "prev": {"label": prev_start.strftime("%B"), "bills": best(prev, bills), "items": best(prev, items)},
+        "days": [{"date": r.entry_date, "bills": bills(r), "items": items(r)} for r in reversed(cur)],
+        "message": "", "record": False,
+    }
+    if today_row:
+        b0, i0 = best(before_today, bills), best(before_today, items)
+        wins = []
+        if bills(today_row) > (b0["value"] if b0 else 0) and bills(today_row) > 0:
+            wins.append("%d bills" % bills(today_row))
+        if items(today_row) > (i0["value"] if i0 else 0) and items(today_row) > 0:
+            wins.append("%d items" % items(today_row))
+        if wins and before_today:
+            out["record"] = True
+            out["message"] = "New record! Today's %s is your best day this month." % " and ".join(wins)
+    if not out["message"]:
+        tb, ti = out["this"]["bills"], out["this"]["items"]
+        if tb:
+            out["message"] = ("Your best this month: %d bills on %s and %d items on %s. Beat it today!"
+                              % (tb["value"], tb["date"].strftime("%d %b"),
+                                 ti["value"], ti["date"].strftime("%d %b")))
+        elif out["prev"]["bills"]:
+            pb = out["prev"]["bills"]
+            out["message"] = ("Last month's best was %d bills on %s. Set this month's first record."
+                              % (pb["value"], pb["date"].strftime("%d %b")))
+        else:
+            out["message"] = "No checking recorded yet this month."
+    return out
+
+
 def grade_from_score(score):
     if score >= 90:   return "EXCELLENT"
     elif score >= 75: return "GOOD"
@@ -1315,6 +1379,7 @@ def build_analytics(entries: List[KPIEntry], staff_type: str = "picker", emp_id:
         PICKER_TARGET_HR  = DEFAULT_PICKER_TARGET_HR
         CHECKER_TARGET_HR = DEFAULT_CHECKER_TARGET_HR
         # Check for per-employee override
+        _emp_for_target = None
         try:
             if emp_id is not None:
                 _emp_for_target = db.session.get(Employee, emp_id)
@@ -1546,6 +1611,7 @@ def build_analytics(entries: List[KPIEntry], staff_type: str = "picker", emp_id:
         multitask_bonus = 0.0
         multitask_days = 0            # days in this period with extra-role work
         multitask_day_points = 0      # points earned on those days, before averaging
+        multitask_breakdown = []      # one row per day: which roles, how many points
         try:
             if emp_id is not None:
                 _dates = {e.entry_date for e in entries if e.entry_date}
@@ -1562,6 +1628,10 @@ def build_analytics(entries: List[KPIEntry], staff_type: str = "picker", emp_id:
                         multitask_days = len(_roles_by_day)
                         multitask_day_points = _total
                         multitask_bonus = round(_total / len(_dates), 1)
+                        for _d, _rs in sorted(_roles_by_day.items(), reverse=True):
+                            multitask_breakdown.append({
+                                "date": _d, "roles": sorted(_rs),
+                                "raw": 10 * len(_rs), "points": min(10 * len(_rs), 30)})
         except Exception as _mtb:
             logger.warning(f"multitask bonus: {_mtb}")
             multitask_bonus = 0.0
@@ -1580,14 +1650,37 @@ def build_analytics(entries: List[KPIEntry], staff_type: str = "picker", emp_id:
             base_score = 0.0
             eff_score = 0.0
 
-        # Auto-suggest: if error rate stays <1% over enough days, suggest raising the target
+        # Targets that rise with performance.
+        # The old rule raised a target by a flat 40% when the "error rate" was
+        # under 1% -- and for a checker it used the URGENT share as the error
+        # rate (urgent work is harder, not wrong) and needed picker item counts,
+        # so it could never fire for a checker at all. The suggestion is now the
+        # person's own 75th-percentile daily pace over the period: a bar they
+        # demonstrably reach on good days, which moves up as they improve.
         auto_suggest = None
-        if days >= 7 and ti > 100:  # enough signal
-            err_rate = safe_div(tm, ti) * 100 if staff_type == "picker" else urgent_pct
-            if err_rate < 1.0 and daily_vol_per_hr > 0:
-                current_target = PICKER_TARGET_HR if staff_type == "picker" else CHECKER_TARGET_HR
-                if daily_vol_per_hr > current_target * 0.9:
-                    auto_suggest = f"Error rate under 1% for {days} days — consider raising hourly target from {int(current_target)} to {int(current_target * 1.4)}/hr."
+        target_suggestion = None
+        if is_scored and staff_type in ("picker", "checker") and days >= 5:
+            if staff_type == "picker":
+                _rates = [((e.picked or 0) + (e.missed or 0)) / FIXED_HRS for e in entries]
+            else:
+                _rates = [((e.checked or 0) + (e.errors_found or 0) * urgent_weight) / FIXED_HRS
+                          for e in entries]
+            _rates = sorted(r for r in _rates if r > 0)
+            if len(_rates) >= 5:
+                _p75 = round(_rates[int(0.75 * (len(_rates) - 1))], 1)
+                _current = PICKER_TARGET_HR if staff_type == "picker" else CHECKER_TARGET_HR
+                _custom = bool(_emp_for_target and _emp_for_target.custom_hourly_target)
+                if _custom and _p75 > _current * 1.02:
+                    target_suggestion = {"current": round(_current, 1), "suggested": _p75,
+                                         "kind": "raise", "days": len(_rates)}
+                    auto_suggest = (f"Pace has risen: 75th-percentile day is {_p75}/hr over "
+                                    f"{len(_rates)} days. Raise target from {_current:g} to {_p75:g}/hr.")
+                elif not _custom and _p75 < _current:
+                    target_suggestion = {"current": round(_current, 1), "suggested": _p75,
+                                         "kind": "set", "days": len(_rates)}
+                    auto_suggest = (f"The role target of {_current:g}/hr is above anything reached. "
+                                    f"Set a personal target of {_p75:g}/hr (75th-percentile day over "
+                                    f"{len(_rates)} days); it will then rise as pace improves.")
 
         # Grade thresholds (unified across roles)
 
@@ -1685,7 +1778,8 @@ def build_analytics(entries: List[KPIEntry], staff_type: str = "picker", emp_id:
             hourly_target=(PICKER_TARGET_HR if staff_type == "picker"
                            else CHECKER_TARGET_HR if staff_type == "checker"
                            else 30.0),
-            auto_suggest=auto_suggest,
+            auto_suggest=auto_suggest, target_suggestion=target_suggestion,
+            multitask_breakdown=multitask_breakdown,
             tsd=tsd,
             eff_score=eff_score, grade=grade, days=days,
             consistency=consistency, trend=trend,
@@ -1972,7 +2066,8 @@ def _safe_stats(stats):
             "vwcr": 0, "cleaner_rate": 0, "efficiency_ratio": 0, "is_efficient": False,
             "items_daily": 0, "bills_daily": 0,
             "hard_target_items": 200, "hard_target_bills": 50,
-            "hourly_target": 50, "auto_suggest": None,
+            "hourly_target": 50, "auto_suggest": None, "target_suggestion": None,
+            "multitask_breakdown": [],
             "pick_acc": 0, "pick_speed": 0, "packing_eff": 0,
             "cs_fulfilment": 0, "workspace_score": 0, "bill_fulfilment": 0,
             "tp": 0, "tm": 0, "ti": 0, "tcs": 0, "tro": 0, "ttc": 0, "tsd": 0,
@@ -2698,8 +2793,11 @@ def secure_supabase_exposure():
     FORCE ROW LEVEL SECURITY is deliberately NOT used: that would apply RLS to
     the owner too and lock the application out of its own data.
     """
-    if not os.environ.get("DATABASE_URL"):
-        return []          # SQLite locally; nothing is exposed
+    try:
+        if db.engine.dialect.name != "postgresql":
+            return []      # SQLite (or anything else): there is no Data API to close
+    except Exception:
+        return []
     done, failed = [], []
     try:
         tables = sorted({m.class_.__table__.name for m in db.Model.registry.mappers})
@@ -3654,6 +3752,7 @@ def dashboard():
             trip_map = {}
 
         return render_template("dashboard.html",
+            checker_bests=checker_month_bests(emp_id) if staff_type == "checker" else None,
             user_name=session.get("user_name", "User"),
             user_id=emp_id,
             staff_type=staff_type,
@@ -3734,10 +3833,13 @@ def admin_dashboard():
             stats = build_analytics(month_ents, emp.staff_type, emp_id=emp.id)
             week_ents = [e for e in ents if e.entry_date >= today - timedelta(days=6)]
             week_stats = build_analytics(week_ents, emp.staff_type, emp_id=emp.id)
+            day_ents = [e for e in ents if e.entry_date == today]
+            day_stats = build_analytics(day_ents, emp.staff_type, emp_id=emp.id) if day_ents else None
             rows.append({
                 'emp': emp,
                 'stats': stats,
                 'week_stats': week_stats,
+                'day_stats': day_stats,
                 'count': len(ents),
                 'last_entry': max((e.entry_date for e in ents), default=None),
             })
@@ -3847,7 +3949,14 @@ def admin_dashboard():
         except Exception:
             all_badges = []
 
+        try:
+            mt_report = multitask_report(30)
+        except Exception as _mte2:
+            logger.error(f"admin mt_report: {_mte2}")
+            mt_report = {"by_role": {}, "staff": []}
         return render_template("admin.html",
+            mt_report=mt_report, role_order=MULTITASK_ROLE_ORDER,
+            role_label=multitask_role_label,
             rows=rows, total_picked=total_picked, total_entries=total_entries,
             active_today=active_today, emp_count=len(employees), today=today,
             current_month=today.strftime("%B %Y"),
@@ -4051,6 +4160,7 @@ def staff_detail(emp_id):
             staff_trips = []
 
         return render_template("staff_detail.html",
+            checker_bests=checker_month_bests(emp.id) if emp.staff_type == "checker" else None,
             emp=emp,
             emp_overall_rank=emp_overall_rank,
             emp_role_rank=emp_role_rank,
@@ -4445,16 +4555,27 @@ def admin_past_window_bulk():
 
         today = date.today()
         opened = closed = 0
+        # Every past day in the chosen months, gathered first. This used to ask
+        # the database about each day separately -- six months was ~180 round
+        # trips to Supabase, which is why "Close All Days" took seconds. Now it
+        # is one query for the lot.
+        all_days = []
         for ym in months:
             try:
                 year, mon = (int(x) for x in ym.split("-")[:2])
             except (ValueError, IndexError):
                 continue
-            # Every day in that month that is strictly before today
             d = date(year, mon, 1)
             while d.month == mon and d.year == year:
                 if d < today:
-                    window = PastEntryWindow.query.filter_by(past_date=d).first()
+                    all_days.append(d)
+                d += timedelta(days=1)
+        existing = {w.past_date: w for w in
+                    PastEntryWindow.query.filter(PastEntryWindow.past_date.in_(all_days)).all()} \
+            if all_days else {}
+        new_rows = []
+        for d in all_days:
+                    window = existing.get(d)
                     if action == "close":
                         if window and window.is_active:
                             window.is_active = False
@@ -4467,10 +4588,11 @@ def admin_past_window_bulk():
                                 window.opened_at = datetime.utcnow()
                                 opened += 1
                         else:
-                            db.session.add(PastEntryWindow(
-                                past_date=d, opened_by=session.get("user_id"), is_active=True))
+                            new_rows.append({"past_date": d, "opened_by": session.get("user_id"),
+                                             "opened_at": datetime.utcnow(), "is_active": True})
                             opened += 1
-                d += timedelta(days=1)
+        if new_rows:
+            db.session.execute(PastEntryWindow.__table__.insert(), new_rows)   # one statement
         db.session.commit()
 
         if action == "close":
@@ -5128,18 +5250,27 @@ def api_last_entry():
 @app.route("/admin/accept_target_suggestion/<int:emp_id>", methods=["POST"])
 @admin_required
 def admin_accept_target_suggestion(emp_id):
-    """Admin accepts the auto-suggest: raise this employee's hourly target by 40%."""
+    """Admin applies the performance-based target suggestion for this employee.
+
+    Recomputed here from the last 30 days rather than trusted from the form,
+    and it only ever moves a personal target UP -- a target that rises with
+    performance and never quietly drops.
+    """
     try:
         emp = db.session.get(Employee, emp_id)
         if not emp:
             flash("Employee not found.", "danger")
             return redirect(url_for("admin_dashboard"))
-        current = emp.custom_hourly_target or (
-            50.0 if emp.staff_type == "picker"
-            else 70.0 if emp.staff_type == "checker"
-            else 30.0
-        )
-        new_target = round(current * 1.4, 1)
+        stats = build_analytics(get_period_entries(emp.id, "month"), emp.staff_type, emp_id=emp.id)
+        sug = (stats or {}).get("target_suggestion")
+        if not sug:
+            flash(f"No target change is suggested for {emp.name} right now.", "info")
+            return redirect(url_for("staff_detail", emp_id=emp.id))
+        current = sug["current"]
+        new_target = sug["suggested"]
+        if emp.custom_hourly_target and new_target <= emp.custom_hourly_target:
+            flash(f"{emp.name}'s target is already {emp.custom_hourly_target:g}/hr.", "info")
+            return redirect(url_for("staff_detail", emp_id=emp.id))
         emp.custom_hourly_target = new_target
         db.session.commit()
         log_audit("raise_target", emp.name,
@@ -5806,6 +5937,57 @@ def admin_send_monthly_report():
         logger.error(f"admin_send_monthly_report: {e}")
         flash(f"Error sending reports: {e}", "danger")
     return redirect(url_for("admin_dashboard"))
+
+
+@app.route("/admin/day")
+@admin_required
+def admin_day_view():
+    """Every staff member's figures for one chosen date, with prev/next.
+
+    There was no way to look back at a particular day across the whole team:
+    history lived on each person's profile, one at a time. Defaults to the most
+    recent day that has entries, so it never opens on an empty page.
+    """
+    from sqlalchemy import func
+    try:
+        chosen = datetime.strptime(request.args.get("date", ""), "%Y-%m-%d").date()
+    except ValueError:
+        chosen = (db.session.query(func.max(KPIEntry.entry_date))
+                  .filter(KPIEntry.entry_date <= date.today()).scalar()) or date.today()
+    prev_day = (db.session.query(func.max(KPIEntry.entry_date))
+                .filter(KPIEntry.entry_date < chosen).scalar())
+    next_day = (db.session.query(func.min(KPIEntry.entry_date))
+                .filter(KPIEntry.entry_date > chosen, KPIEntry.entry_date <= date.today()).scalar())
+
+    rows = []
+    for e, emp in (db.session.query(KPIEntry, Employee)
+                   .join(Employee, Employee.id == KPIEntry.emp_id)
+                   .filter(KPIEntry.entry_date == chosen)
+                   .order_by(Employee.staff_type, Employee.name).all()):
+        st = emp.staff_type
+        stats = build_analytics([e], st, emp_id=emp.id) or {}
+        if st == "checker":
+            figs = [("Bills checked", (e.sales_bills_open or 0) + (e.cs_sales_open or 0)),
+                    ("of which urgent", e.cs_sales_open or 0),
+                    ("Items checked", (e.checked or 0) + (e.errors_found or 0))]
+        elif st == "purchaser":
+            figs = [("PO bills", e.sales_bills_open or 0), ("PO checked", e.checked or 0),
+                    ("Items", e.errors_found or 0)]
+        else:
+            figs = [("Bills given", e.total_bills_received or 0),
+                    ("Bills picked", e.sales_bills_open or 0),
+                    ("Items picked", e.picked or 0), ("Missed", e.missed or 0)]
+        rows.append({"emp": emp, "figs": figs,
+                     "score": stats.get("eff_score"), "grade": stats.get("grade")})
+
+    team = checker_team_day_totals([chosen]).get(chosen) or {}
+    mts = (db.session.query(MultitaskEntry, Employee)
+           .join(Employee, Employee.id == MultitaskEntry.emp_id)
+           .filter(MultitaskEntry.entry_date == chosen)
+           .order_by(MultitaskEntry.secondary_type, Employee.name).all())
+    return render_template("admin_day.html", chosen=chosen, prev_day=prev_day,
+                           next_day=next_day, rows=rows, team=team, mts=mts,
+                           role_label=multitask_role_label)
 
 
 @app.route("/admin/multitask_report")

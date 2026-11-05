@@ -180,3 +180,42 @@
     document.addEventListener("DOMContentLoaded", boot);
   } else { boot(); }
 })();
+
+/* ---------- Minimize ----------
+   Every card gets a button that folds it down to its title, so a page can be
+   cut to just the panels in use. Remembered per page, per card. */
+(function () {
+  "use strict";
+  function boot() {
+    var KEY = "ip-min:" + location.pathname, saved = {};
+    try { saved = JSON.parse(localStorage.getItem(KEY) || "{}"); } catch (e) {}
+    var cards = document.querySelectorAll(".card, .ip-card");
+    Array.prototype.forEach.call(cards, function (card, i) {
+      if (card.hasAttribute("data-no-min")) return;
+      var head = card.querySelector(":scope > .card-header, :scope > .ip-card__head, :scope > .card-title");
+      if (!head || head.querySelector(".mz-btn")) return;
+      var tEl = head.querySelector(".card-title, .ip-card__title") || head;
+      var title = (tEl.textContent || "").replace(/\s+/g, " ").trim().slice(0, 60) || ("card" + i);
+      head.classList.add("mz-head");
+      var b = document.createElement("button");
+      b.type = "button"; b.className = "mz-btn";
+      function set(min) {
+        card.classList.toggle("is-min", min);
+        b.setAttribute("aria-expanded", String(!min));
+        b.setAttribute("aria-label", (min ? "Expand " : "Minimize ") + title);
+        b.title = min ? "Expand" : "Minimize";
+        b.textContent = min ? "+" : "−";
+      }
+      b.addEventListener("click", function (ev) {
+        ev.preventDefault(); ev.stopPropagation();
+        var m = !card.classList.contains("is-min");
+        set(m); saved[title] = m;
+        try { localStorage.setItem(KEY, JSON.stringify(saved)); } catch (e) {}
+      });
+      head.appendChild(b);
+      set(!!saved[title]);
+    });
+  }
+  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", boot);
+  else boot();
+})();

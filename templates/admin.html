@@ -173,6 +173,18 @@
              position: sticky; top: 0; z-index: 1; }
 [data-theme="dark"] .ptable th { background: linear-gradient(180deg,var(--surface-2) 0%,#19202c 100%); }
 /* A qualifier under the column name rather than trailing off the end of it. */
+/* Role-wise multitask: who is covering each role, right on the dashboard. */
+.mt-rolewise { display: grid; gap: var(--s2); margin: 0 0 var(--s4); }
+.mt-rolewise__row { display: grid; grid-template-columns: 150px minmax(0,1fr); gap: var(--s3);
+                    align-items: start; padding: var(--s2) 0; border-bottom: 1px solid var(--line); }
+.mt-rolewise__role { font-weight: var(--fw-bold); color: var(--ink); font-size: var(--fs-body); }
+.mt-rolewise__role span { display: block; font-weight: var(--fw-normal); font-size: var(--fs-micro); color: var(--ink-3); }
+.mt-rolewise__people { display: flex; flex-wrap: wrap; gap: var(--s1); }
+.mt-chip { display: inline-flex; gap: 6px; align-items: baseline; padding: 4px 10px; border-radius: var(--r-pill);
+           background: var(--surface-2); box-shadow: var(--sh-0); color: var(--ink); text-decoration: none;
+           font-size: var(--fs-small); }
+.mt-chip b { color: var(--accent-ink); font-weight: var(--fw-bold); }
+@media (max-width: 560px) { .mt-rolewise__row { grid-template-columns: 1fr; } }
 .th-sub { display: block; font-weight: var(--fw-normal); text-transform: none;
           letter-spacing: 0; color: var(--ink-3); margin-top: 1px; }
 .ptable td { padding: var(--s3) var(--s4); border-bottom: 1px solid var(--line);
@@ -446,6 +458,7 @@ var NOTES_BY_EMP = {
     <details class="nav-menu">
       <summary class="btn-export" aria-label="More admin tools">More</summary>
       <div class="nav-menu__panel">
+        <a href="/admin/day">Day View (any date)</a>
         <a href="/admin/reports">Reports Archive</a>
         <a href="/admin/bulk_import">Bulk Import</a>
         <a href="/admin/diagnostics">Diagnostics</a>
@@ -637,6 +650,22 @@ var NOTES_BY_EMP = {
       <a href="{{ url_for('admin_multitask_report') }}" class="btn-sm btn-view"
          style="white-space:nowrap;">User-wise charts →</a>
     </div>
+    {% if mt_report and mt_report.by_role %}
+    <div class="mt-rolewise">
+      {% for role in role_order %}{% if mt_report.by_role.get(role) %}
+      <div class="mt-rolewise__row">
+        <div class="mt-rolewise__role">{{ role_label(role) }}
+          <span>{{ mt_report.by_role[role]|length }} staff</span></div>
+        <div class="mt-rolewise__people">
+          {% for p in mt_report.by_role[role] %}
+          <a class="mt-chip" href="/staff/{{ p.emp_id }}" title="{{ p.volume }} {{ p.unit }}, {{ p.points }} points">
+            {{ p.name }} <b>{{ p.days }}d</b></a>
+          {% endfor %}
+        </div>
+      </div>
+      {% endif %}{% endfor %}
+    </div>
+    {% endif %}
     {% if recent_multitask %}
     <div style="overflow-x:auto;">
       <table class="ptable" style="width:100%;">
@@ -868,8 +897,9 @@ var NOTES_BY_EMP = {
             <th>Employee</th>
             <th>Type</th>
             <th>Entries</th>
-            <th>Monthly Score<span class="th-sub">{{ current_month }}</span></th>
-            <th>Week Score</th>
+            <th>Today<span class="th-sub">{{ today.strftime('%d %b') }}</span></th>
+            <th>Week<span class="th-sub">last 7 days</span></th>
+            <th>Month<span class="th-sub">{{ current_month }}</span></th>
             <th>Grade</th>
             <th>Last Entry</th>
             <th>Actions</th>
@@ -891,10 +921,13 @@ var NOTES_BY_EMP = {
             </td>
             <td>{{ r.count }}</td>
             <td class="score-cell">
-              {% if r.stats %}{{ r.stats.eff_score }}{% if r.stats.multitask_bonus and r.stats.multitask_bonus > 0 %}<div style="font-size:11px;font-weight:700;color:var(--ok-ink);" title="{{ r.stats.multitask_day_points }} multitask points across {{ r.stats.multitask_days }} day(s), spread over the {{ r.stats.days }} days in this period">incl. +{{ r.stats.multitask_bonus }} multitask</div>{% endif %}{% else %}<span style="color:var(--ink-3)">—</span>{% endif %}
+              {% if r.day_stats %}{{ r.day_stats.eff_score }}{% else %}<span style="color:var(--ink-3)" title="No entry yet today">—</span>{% endif %}
             </td>
             <td class="score-cell">
               {% if r.week_stats %}{{ r.week_stats.eff_score }}{% else %}<span style="color:var(--ink-3)">—</span>{% endif %}
+            </td>
+            <td class="score-cell">
+              {% if r.stats %}{{ r.stats.eff_score }}{% if r.stats.multitask_bonus and r.stats.multitask_bonus > 0 %}<div style="font-size:11px;font-weight:700;color:var(--ok-ink);" title="{{ r.stats.multitask_day_points }} multitask points across {{ r.stats.multitask_days }} day(s), spread over the {{ r.stats.days }} days in this period">incl. +{{ r.stats.multitask_bonus }} multitask</div>{% endif %}{% else %}<span style="color:var(--ink-3)">—</span>{% endif %}
             </td>
             <td>
               {% if r.stats %}
