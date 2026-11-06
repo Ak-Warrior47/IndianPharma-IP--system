@@ -927,7 +927,11 @@ def checker_bill_problems(entry_date, emp_id, bills_received, sb_checked, cs_che
     100. Nothing stopped that before, so a day could show 130 of 100 bills
     cleared and a negative pending pile.
 
-    This is the refusal. The looser team-wide check is checker_bill_warnings().
+    The same ceiling applies to the whole checking team: everyone's checked
+    bills together cannot exceed the day's total. That is safe to enforce
+    because the day's total is the HIGHEST figure any checker entered -- one
+    person typing too low a total can never block a colleague who types the
+    right one.
     """
     problems = []
     bills_received = int(bills_received or 0)
@@ -941,6 +945,20 @@ def checker_bill_problems(entry_date, emp_id, bills_received, sb_checked, cs_che
             "total sales bills (%d). Urgent bills are part of that total, not "
             "extra to it." % (sb_checked, cs_checked, mine, bills_received))
 
+    try:
+        if has_request_context():
+            g._checker_team_cache = {}
+        day = checker_team_day_totals([entry_date]).get(entry_date) or {}
+        others = sum(v for eid, v in (day.get("by_emp") or {}).items() if eid != emp_id)
+        day_total = max(int(day.get("total") or 0), bills_received)
+        if day_total > 0 and others + mine > day_total and mine <= bills_received:
+            problems.append(
+                "The checking team would be at %d bills out of the day's %d "
+                "(%d already entered by other checkers + %d here). Only %d "
+                "bills are left to check today -- or correct the day's total if it is wrong."
+                % (others + mine, day_total, others, mine, max(day_total - others, 0)))
+    except Exception as exc:
+        logger.warning("checker_bill_problems team check failed: %s", exc)
     return problems
 
 
@@ -1528,8 +1546,16 @@ def build_analytics(entries: List[KPIEntry], staff_type: str = "picker", emp_id:
             cleaner_rate_score = _cleaner_rate(tro, max(tck_urgent, 1), tsd, 0)
 
         # Efficiency Ratio per day
-        items_daily = safe_div(ti if staff_type == "picker" else tck_total, max(days, 1))
-        bills_daily = safe_div(tsb, max(days, 1))
+        # For a checker, bills per day used to be `tsb` -- the NORMAL bills
+        # field only -- so urgent bills were not counted here at all, and a
+        # checker who took urgent bills scored LOWER than one who did the same
+        # number of normal bills. Both figures now count urgent work, weighted.
+        if staff_type == "checker":
+            items_daily = safe_div(weighted_items, max(days, 1))
+            bills_daily = safe_div(weighted_bills, max(days, 1))
+        else:
+            items_daily = safe_div(ti if staff_type == "picker" else tck_total, max(days, 1))
+            bills_daily = safe_div(tsb, max(days, 1))
         efficiency_ratio = _efficiency_ratio(items_daily, bills_daily)
         is_efficient = efficiency_ratio >= 1.0
 

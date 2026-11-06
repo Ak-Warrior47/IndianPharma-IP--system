@@ -160,6 +160,12 @@ with app.app_context():
     check("4.2 All-normal work is credited exactly at head-count",
           s_norm["weighted_items"] == s_norm["tck_total"],
           "%s vs %s" % (s_norm["weighted_items"], s_norm["tck_total"]))
+    _b1 = A.build_analytics([KPIEntry(emp_id=None, entry_date=OTHER, bills_received=100,
+        sales_bills_open=30, cs_sales_open=0, checked=200, total_time=9, check_time=9)], "checker")
+    _b2 = A.build_analytics([KPIEntry(emp_id=None, entry_date=OTHER, bills_received=100,
+        sales_bills_open=15, cs_sales_open=15, checked=200, total_time=9, check_time=9)], "checker")
+    check("4.3b Urgent BILLS also earn more than normal bills (%s vs %s)"
+          % (_b2["base_score"], _b1["base_score"]), _b2["base_score"] > _b1["base_score"])
     check("4.3 Same volume, but the one who took urgent scores higher",
           s_urg["eff_score"] > s_norm["eff_score"],
           "urgent %s vs normal %s" % (s_urg["eff_score"], s_norm["eff_score"]))
@@ -210,23 +216,28 @@ with app.app_context():
     # person mistyping the day's total must not lock everyone else out.
     # Lisa already has 60 of the day's 100.
     entry(lisa, 100, 50, 10, items=200, urgent_items=10, on=CLEAN)
-    check("6.6 Pushing the team past the day's total is warned about, not refused",
-          bool(A.checker_bill_warnings(CLEAN, smriti.id, 100, 30, 20)) and
-          A.checker_bill_problems(CLEAN, smriti.id, 100, 30, 20) == [])
-    check("6.7 The warning says how many the others already entered",
-          any("other checkers" in w
-              for w in A.checker_bill_warnings(CLEAN, smriti.id, 100, 30, 20)))
-    check("6.8 What still fits draws no warning",
-          A.checker_bill_warnings(CLEAN, smriti.id, 100, 30, 10) == [],
-          "got %s" % A.checker_bill_warnings(CLEAN, smriti.id, 100, 30, 10))
+    # The team as a whole cannot pass the day's total either: refused, and the
+    # message says how many bills are actually left.
+    check("6.6 Pushing the team past the day's total is refused",
+          bool(A.checker_bill_problems(CLEAN, smriti.id, 100, 30, 20)))
+    check("6.7 The refusal says what the others entered and what is left",
+          any("other checkers" in w and "Only 40" in w
+              for w in A.checker_bill_problems(CLEAN, smriti.id, 100, 30, 20)))
+    check("6.8 What still fits is accepted",
+          A.checker_bill_problems(CLEAN, smriti.id, 100, 30, 10) == [],
+          "got %s" % A.checker_bill_problems(CLEAN, smriti.id, 100, 30, 10))
     check("6.9 Re-saving your own entry does not count you twice",
-          A.checker_bill_warnings(CLEAN, lisa.id, 100, 50, 10) == [])
+          A.checker_bill_problems(CLEAN, lisa.id, 100, 50, 10) == [])
+    check("6.10 A checker typing the correct HIGHER total is never blocked by a low one",
+          A.checker_bill_problems(CLEAN, smriti.id, 150, 30, 20) == [])
 
 # ---- 7. The form refuses it too ----------------------------------------
 # Via the real past-entry window, as Lisa herself, so the whole route runs.
 from app import PastEntryWindow  # noqa: E402
 
 PAST = DAY - timedelta(days=7)
+while PAST.weekday() == 6:          # the app refuses Sunday entries
+    PAST -= timedelta(days=1)
 with app.app_context():
     lisa_id = Employee.query.filter_by(email="lisa_t@x.com").first().id
     KPIEntry.query.filter_by(entry_date=PAST).delete()
