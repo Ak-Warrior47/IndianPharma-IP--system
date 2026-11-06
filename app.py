@@ -920,8 +920,13 @@ def checker_team_day_totals(dates):
         # On such a day the only reading that adds up is that each figure was
         # that checker's own share, so the day's total is their sum.
         if row["checked"] > row["total"]:
-            summed = sum(row["entered"].values())
-            if summed >= row["checked"]:
+            entered = [v for v in row["entered"].values() if v > 0]
+            summed = sum(entered)
+            # Only if the checkers typed DIFFERENT figures can they have been
+            # their own shares. If everyone typed the same number it was the
+            # day's total, and adding them up would multiply the day by the
+            # head-count (5 x 129 = 645) -- so that is flagged instead.
+            if len(set(entered)) > 1 and summed >= row["checked"]:
                 row["total"], row["mode"] = summed, "per_person"
             else:
                 row["mode"] = "conflict"      # no reading of the figures adds up
@@ -1608,18 +1613,25 @@ def build_analytics(entries: List[KPIEntry], staff_type: str = "picker", emp_id:
             pur_pending_pct    = max(0.0, 1.0 - safe_div(pur_pending_bills, max(pur_bills_received,1)))
 
             # ── PURCHASER POINT SYSTEM (100 pts total) — Phase 1 rebalance ──
-            eff_score = round(
-                (pur_bill_rate     / 100) * 25 +  # was 28
-                (pur_cs_fulfilment / 100) * 20 +  # was 23
-                (pur_racking_eff   / 100) * 15 +  # was 18
-                min(pur_speed      / 60,  1.0) * 10 +  # was 12
-                (pur_entry_rate    / 100) * 8 +
-                pur_pending_pct              * 5 +
-                (vwcr              / 120) * 8 +   # NEW: VWCR (cap 120 → /120 to normalise)
-                efficiency_ratio             * 4 +    # NEW: Efficiency Ratio
-                (workspace_score   / 100) * 3 +   # was 4
-                (consistency       / 100) * 2,    # NEW: Log Consistency
-                1)
+            # Each component kept by name, so the profile and the PDF show the
+            # points actually awarded instead of each re-deriving the formula.
+            _pc = [
+                ("Bill Processing", 25, (pur_bill_rate / 100) * 25,
+                 "%d of %d PO bills checked (%.1f%%)" % (pur_bills_checked, pur_bills_received, pur_bill_rate)),
+                ("CS Fulfilment", 20, (pur_cs_fulfilment / 100) * 20,
+                 "%d of %d CS received (%.1f%%)" % (pur_cs_received, pur_cs_open, pur_cs_fulfilment)),
+                ("Racking", 15, (pur_racking_eff / 100) * 15,
+                 "%d of %d items racked (%.1f%%)" % (pur_items_racked, pur_items, pur_racking_eff)),
+                ("Speed", 10, min(pur_speed / 60, 1.0) * 10, "%.1f items/hr against 60" % pur_speed),
+                ("Bill Entry", 8, (pur_entry_rate / 100) * 8, "%.1f%% of PO bills entered" % pur_entry_rate),
+                ("Pending Bills", 5, pur_pending_pct * 5, "%d PO bills not yet checked" % pur_pending_bills),
+                ("VWCR", 8, (vwcr / 120) * 8, "%.1f of 120" % vwcr),
+                ("Efficiency Ratio", 4, efficiency_ratio * 4, "%.3f" % efficiency_ratio),
+                ("Workspace", 3, (workspace_score / 100) * 3, "%.1f%%" % workspace_score),
+                ("Consistency", 2, (consistency / 100) * 2, "%.1f%%" % consistency),
+            ]
+            eff_score = round(sum(c[2] for c in _pc), 1)
+            point_breakdown = [{"name": n, "max": m, "got": round(g, 1), "how": h} for n, m, g, h in _pc]
 
         elif staff_type == "picker":
             # ── PICKER POINT SYSTEM (100 pts total) — Phase 1 rebalance ──
@@ -1627,21 +1639,23 @@ def build_analytics(entries: List[KPIEntry], staff_type: str = "picker", emp_id:
             # NEW: VWCR×25 + Fulfil×18 + Speed×15 + EffRatio×10 + Workspace×10
             #    + CS×8 + Cleaner×7 + LogCons×7
             # (Packing Efficiency removed; 12 pts redistributed to VWCR+6, EffRatio+4, LogCons+2)
-            eff_score = round(
-                (vwcr            / 120) * 25 +    # NEW: VWCR (was Pick Accuracy×25)
-                (bill_fulfilment / 100) * 18 +    # was 20
-                # pick_speed is items per HOUR (ti / ts_total, ts_total being
-                # hours). It used to be divided by 250, a per-DAY figure, so the
-                # component was scored against a target roughly ten times the
-                # real one and almost nobody earned it. Scored against the
-                # hourly target, the same way the checker branch already does.
-                min(pick_speed   / PICKER_TARGET_HR, 1.0) * 15 +
-                efficiency_ratio           * 10 + # NEW: Efficiency Ratio (200/50)
-                (workspace_score / 100) * 10 +
-                min(cs_fulfilment/ 100, 1.0) * 8 +
-                (cleaner_rate_score / 100) * 7 + # NEW: Cleaner Rate (replaces some of packing)
-                (consistency     / 100) * 7,     # Log Consistency
-                1)
+            # pick_speed is items per HOUR, scored against the hourly target (it
+            # was once divided by 250, a per-DAY figure, so nobody earned it).
+            _pc = [
+                ("VWCR", 25, (vwcr / 120) * 25, "%.1f of 120 — accuracy x volume against target" % vwcr),
+                ("Bill Fulfilment", 18, (bill_fulfilment / 100) * 18,
+                 "%d of %d bills picked (%.1f%%)" % (tsb_normal, tbr_picker, bill_fulfilment)),
+                ("Pick Speed", 15, min(pick_speed / PICKER_TARGET_HR, 1.0) * 15,
+                 "%.1f items/hr against %.0f target" % (pick_speed, PICKER_TARGET_HR)),
+                ("Efficiency Ratio", 10, efficiency_ratio * 10,
+                 "%.3f — weakest of items/day and bills/day against 200 / 50" % efficiency_ratio),
+                ("Workspace", 10, (workspace_score / 100) * 10, "%.1f%% — rack, table, sweep" % workspace_score),
+                ("CS Fulfilment", 8, min(cs_fulfilment / 100, 1.0) * 8, "%.1f%%" % cs_fulfilment),
+                ("Cleaner Rate", 7, (cleaner_rate_score / 100) * 7, "%.1f%%" % cleaner_rate_score),
+                ("Consistency", 7, (consistency / 100) * 7, "%.1f%% — steadiness of daily accuracy" % consistency),
+            ]
+            eff_score = round(sum(c[2] for c in _pc), 1)
+            point_breakdown = [{"name": n, "max": m, "got": round(g, 1), "how": h} for n, m, g, h in _pc]
         else:
             # CHECKER POINT SYSTEM (100 pts total). Reached only when staff_type
             # resolved to "checker" above, never as a silent catch-all.
@@ -2038,57 +2052,10 @@ def build_pdf_payload(emp: "Employee") -> Dict[str, Any]:
         except Exception as ce:
             logger.warning(f"PDF complaint fetch: {ce}")
 
-        # 30-day heatmap + sparkline data (newest → oldest, so chart reads left→right as time forward)
-        today = date.today()
-        heatmap = {}
-        heatmap_errors = {}  # error-density map for Phase 3 PDF heat map
-        heatmap_volume = {}  # volume map for Phase 3 PDF heat map
-        for e in recent_30:
-            delta = (today - e.entry_date).days
-            if delta <= 29:
-                if emp.staff_type == "checker":
-                    tck_day = (e.checked or 0) + (e.errors_found or 0)
-                    spd = round(tck_day / 9.0, 1)
-                    heatmap[str(e.entry_date)] = min(round(spd / 50 * 100, 1), 100)
-                    # Error density for checker = urgent items / total
-                    err_total = (e.errors_found or 0)
-                    total_items = tck_day or 1
-                    heatmap_errors[str(e.entry_date)] = round(err_total / total_items * 100, 1)
-                    heatmap_volume[str(e.entry_date)] = tck_day
-                else:
-                    heatmap[str(e.entry_date)] = e.accuracy
-                    # Error density for picker = missed / total
-                    total_picks = (e.picked or 0) + (e.missed or 0) or 1
-                    heatmap_errors[str(e.entry_date)] = round((e.missed or 0) / total_picks * 100, 1)
-                    heatmap_volume[str(e.entry_date)] = total_picks
-
-        # Pending bill validations (Constant Protocol — Phase 3)
-        pending_validations = []
-        try:
-            # Only pickers have their own submissions pending; for all staff show role-relevant ones
-            if emp.staff_type == "picker":
-                bvs = BillValidation.query.filter_by(
-                    picker_id=emp.id
-                ).filter(
-                    BillValidation.status.in_(["pending", "mismatch"])
-                ).order_by(BillValidation.entry_date.desc()).limit(20).all()
-            else:
-                # For checkers/purchasers, show any pending validations they might help with
-                bvs = BillValidation.query.filter(
-                    BillValidation.status == "pending"
-                ).order_by(BillValidation.entry_date.desc()).limit(10).all()
-            for bv in bvs:
-                picker_emp = db.session.get(Employee, bv.picker_id)
-                pending_validations.append({
-                    "date": bv.entry_date,
-                    "picker_name": picker_emp.name if picker_emp else f"#{bv.picker_id}",
-                    "picker_count": bv.picker_count,
-                    "slots_filled": bv.checker_count_submitted,
-                    "status": bv.status,
-                    "is_mine": bv.picker_id == emp.id,
-                })
-        except Exception as ve:
-            logger.warning(f"PDF pending validations fetch: {ve}")
+        # Team figures per day for the log: pending is the day's total minus
+        # every checker's checked bills, the same as on the profile.
+        team_days = (checker_team_day_totals({e.entry_date for e in recent_30})
+                     if emp.staff_type == "checker" else {})
 
         return {
             "all_stats":    build_analytics(all_entries, emp.staff_type, emp_id=emp.id),
@@ -2104,10 +2071,7 @@ def build_pdf_payload(emp: "Employee") -> Dict[str, Any]:
             "total_staff":       total_staff,
             "complaints_targeted": complaints_targeted,
             "complaints_role":     complaints_role,
-            "heatmap":      heatmap,
-            "heatmap_errors": heatmap_errors,
-            "heatmap_volume": heatmap_volume,
-            "pending_validations": pending_validations,
+            "team_days":    team_days,
             "all_entries":  recent_30,
         }
     except Exception as e:

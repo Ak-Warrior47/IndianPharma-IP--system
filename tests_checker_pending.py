@@ -191,12 +191,13 @@ with app.app_context():
           any("urgent" in r["how"].lower() for r in bd))
     check("5.6 The pending figure is named in the clearance line",
           any("pending" in r["how"].lower() for r in bd))
-    check("5.7 No breakdown is published for a picker",
-          A.build_analytics(
+    _pk = A.build_analytics(
               [KPIEntry(emp_id=rahul.id, entry_date=OTHER, picked=100, missed=2,
                         total_bills_received=50, sales_bills_open=40,
                         total_time=9.0)],
-              "picker", emp_id=rahul.id)["point_breakdown"] == [])
+              "picker", emp_id=rahul.id)
+    check("5.7 Pickers get the same published breakdown, adding to their score",
+          len(_pk["point_breakdown"]) == 8 and abs(sum(r["got"] for r in _pk["point_breakdown"]) - _pk["base_score"]) < 0.3)
 
     # ---- 6. Urgent + normal cannot exceed the day's total --------------
     CLEAN = DAY - timedelta(days=5)        # a day with nothing on it yet
@@ -266,7 +267,10 @@ while PAST.weekday() == 6:          # the app refuses Sunday entries
 with app.app_context():
     lisa_id = Employee.query.filter_by(email="lisa_t@x.com").first().id
     KPIEntry.query.filter_by(entry_date=PAST).delete()
-    if not PastEntryWindow.query.filter_by(past_date=PAST).first():
+    _w = PastEntryWindow.query.filter_by(past_date=PAST).first()
+    if _w:
+        _w.is_active = True      # another suite's "Close All Days" may have closed it
+    else:
         db.session.add(PastEntryWindow(past_date=PAST, is_active=True))
     db.session.commit()
 

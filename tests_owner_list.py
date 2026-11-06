@@ -246,6 +246,41 @@ check("6c.3 Pickers' submissions no longer create validations", "bv = BillValida
 check("6c.4 The overdue-validations SMS is no longer scheduled", "stale_validations_sms" not in _src)
 check("6c.5 Past validation records are kept (table still defined)", "class BillValidation(db.Model)" in _src)
 
+# ---- 6d. The PDF report ------------------------------------------------
+import subprocess as _sp, tempfile as _tf
+from utils import generate_visual_pdf as _gpdf
+with app.app_context(), app.test_request_context():
+    for _em in ("ol_chk@x.com", "ol_pick@x.com"):
+        _e = Employee.query.filter_by(email=_em).first()
+        _pl = A.build_pdf_payload(_e)
+        _b = _gpdf(_e.name, _pl).getvalue()
+        with _tf.NamedTemporaryFile(suffix=".pdf") as _f:
+            _f.write(_b); _f.flush()
+            _txt = _sp.run(["pdftotext", "-layout", _f.name, "-"], capture_output=True, text=True).stdout
+        _r = _e.staff_type
+        check("6d.1 %s PDF builds" % _r, len(_b) > 3000 and "could not be generated" not in _txt)
+        check("6d.2 %s PDF has no Bill Validations section" % _r, "VALIDATION" not in _txt.upper())
+        check("6d.3 %s PDF carries no old formula (speed / 80, typed pending)" % _r,
+              "80 target" not in _txt and "Speed÷80" not in _txt and "SB Checked + Pending" not in _txt)
+        check("6d.4 %s PDF never calls urgent work an error" % _r,
+              "Error Density" not in _txt and "Clean Check" not in _txt)
+        check("6d.5 %s PDF reconciles to the final score" % _r, "Final score" in _txt and "KPI points" in _txt)
+        if _r == "checker":
+            check("6d.6 checker PDF states the team pending rule", "Team pending" in _txt)
+        check("6d.7 %s payload no longer carries validations" % _r, "pending_validations" not in _pl)
+
+# ---- 6e. Same figure from everyone + over-checked = flagged, not multiplied
+with app.app_context():
+    _d = TODAY - timedelta(days=200)
+    for _x in Employee.query.filter(Employee.email.in_(("ol_chk@x.com",))).all():
+        KPIEntry.query.filter_by(emp_id=_x.id, entry_date=_d).delete()
+        db.session.add(KPIEntry(emp_id=_x.id, entry_date=_d, bills_received=50,
+                                sales_bills_open=40, cs_sales_open=20, total_time=9, check_time=9))
+    db.session.commit()
+    _row = A.checker_team_day_totals([_d])[_d]
+    check("6e.1 One figure, more checked than it: flagged, never multiplied up",
+          _row["mode"] == "conflict" and _row["total"] == 50, _row)
+
 # ---- 7. The Jinja trap that broke the checker pages once ---------------
 for t in ("staff_detail.html", "dashboard.html"):
     src = open(os.path.join(REPO, "templates", t)).read()

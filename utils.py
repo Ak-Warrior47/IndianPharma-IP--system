@@ -1,1008 +1,476 @@
 """
-Pharma IP System — PDF report generator.
-Produces a polished A4 KRA report per staff member with:
-  • Header (grade, points, trend, complaint deduction)
-  • Formula reference (aligned with the scoring in app.py)
-  • Points breakdown — visual bars per component
-  • KPI table (Today / Week / Month / All-Time)
-  • Pie charts (volume / points earned vs remaining / role-specific)
-  • Period trend bars
-  • Daily entry log (role-aware columns, sorted newest first)
+Pharma IP System — KRA performance report (PDF).
 
-Keep formulas and grade thresholds in sync with `build_analytics` in app.py.
+Every number in this report comes from build_analytics() in app.py: the points
+table is the `point_breakdown` the scoring code returns, pending and clearance
+are the checking TEAM's figures, and urgent work is counted at its weight. The
+report used to carry its own copy of the formulas, which drifted -- it still
+divided speed by 80, took clearance from a hand-typed pending, treated urgent
+work as "errors", and printed a section for a feature that had been removed.
+There is deliberately no formula here that the app does not also use.
+
+Layout: one summary page (score, how it was reached, points table), then the
+figures by period with the work mix, multitask and deductions, then the daily
+log and a short formula reference. A footer on every page.
 """
 
 import io
 import logging
 from datetime import date
 
-from reportlab.lib.pagesizes import A4
 from reportlab.lib import colors
+from reportlab.lib.enums import TA_LEFT, TA_RIGHT
+from reportlab.lib.pagesizes import A4
+from reportlab.lib.styles import ParagraphStyle
 from reportlab.lib.units import cm
-from reportlab.platypus import (
-    SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle,
-    HRFlowable, PageBreak, KeepTogether
-)
-from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
-from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_RIGHT
-from reportlab.graphics.shapes import Drawing, String, Rect, Line
 from reportlab.graphics.charts.piecharts import Pie
+from reportlab.graphics.shapes import Drawing, Rect, String
+from reportlab.platypus import (
+    KeepTogether, PageBreak, Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle,
+)
 
 logger = logging.getLogger(__name__)
 
-# ── Color palette — matches staff_detail.html ──────────────────────────
-NAVY     = "#0a1628"
-NAVY_2   = "#1a2942"
-BRAND    = "#1e40af"
-BRAND_2  = "#2563eb"
-BRAND_LT = "#dbeafe"
-EMERALD  = "#059669"
-EM_LT    = "#d1fae5"
-AMBER    = "#d97706"
-AM_LT    = "#fef3c7"
-ROSE     = "#dc2626"
-RO_LT    = "#fee2e2"
-GOLD     = "#b45309"
-PURPLE   = "#6d28d9"
-GRAY     = "#64748b"
-GRAY_2   = "#94a3b8"
-LGRAY    = "#e2e8f0"
-WHITE    = "#ffffff"
-SURFACE  = "#f7f9fc"
-SURF_2   = "#f1f5fa"
+# ── A restrained palette: one brand colour, greys, and status colours used
+#    only where a value is good or bad. ─────────────────────────────────────
+INK = colors.HexColor("#0f172a")
+INK_2 = colors.HexColor("#334155")
+MUTED = colors.HexColor("#64748b")
+LINE = colors.HexColor("#e2e8f0")
+ZEBRA = colors.HexColor("#f8fafc")
+HEAD = colors.HexColor("#1e293b")
+BRAND = colors.HexColor("#1d4ed8")
+BRAND_LT = colors.HexColor("#dbeafe")
+OK = colors.HexColor("#15803d")
+WARN = colors.HexColor("#b45309")
+BAD = colors.HexColor("#b91c1c")
+URGENT = colors.HexColor("#c2410c")
 
-GRADE_COLORS = {
-    "ELITE":        PURPLE,
-    "PROFICIENT":   EMERALD,
-    "SATISFACTORY": AMBER,
-    "RE-TRAINING":  ROSE,
+GRADE_COLOR = {"ELITE": colors.HexColor("#6d28d9"), "PROFICIENT": OK,
+               "SATISFACTORY": WARN, "RE-TRAINING": BAD, "NOT SCORED": MUTED}
+
+PAGE_W, PAGE_H = A4
+MARGIN = 1.6 * cm
+CONTENT_W = PAGE_W - 2 * MARGIN
+
+
+def _st(name, **kw):
+    base = dict(fontName="Helvetica", fontSize=9, leading=12, textColor=INK_2)
+    base.update(kw)
+    return ParagraphStyle(name, **base)
+
+
+S = {
+    "title": _st("t", fontName="Helvetica-Bold", fontSize=18, leading=22, textColor=INK),
+    "sub": _st("s", fontSize=9, textColor=MUTED),
+    "h2": _st("h2", fontName="Helvetica-Bold", fontSize=11.5, leading=15, textColor=INK,
+              spaceBefore=14, spaceAfter=6),
+    "body": _st("b"),
+    "small": _st("sm", fontSize=7.5, leading=10, textColor=MUTED),
+    "cell": _st("c", fontSize=8, leading=10),
+    "cellb": _st("cb", fontName="Helvetica-Bold", fontSize=8, leading=10, textColor=INK),
+    "cellr": _st("cr", fontSize=8, leading=10, alignment=TA_RIGHT),
+    "head": _st("hd", fontName="Helvetica-Bold", fontSize=7.5, leading=9, textColor=colors.white),
+    "headr": _st("hr", fontName="Helvetica-Bold", fontSize=7.5, leading=9, textColor=colors.white,
+                 alignment=TA_RIGHT),
 }
 
 
-# ── small helpers ──────────────────────────────────────────────────────
-def _ps(S, name, **kw):
-    return ParagraphStyle(name, parent=S["Normal"], **kw)
-
-
-def _gv(stats, key, default=0):
-    """Safe stat getter — returns default if stats is None or key missing."""
-    if not stats:
+def _g(stats, key, default=0):
+    try:
+        v = (stats or {}).get(key, default)
+        return default if v is None else v
+    except Exception:
         return default
-    v = stats.get(key)
-    return default if v is None else v
 
 
-def _sv(stats, key, suffix=""):
-    """Safe stat getter formatted for table cells."""
-    if not stats:
+def _num(v, dp=0, suffix=""):
+    """Format a number for print: no 8.09999999 floats, thousands separated."""
+    if v is None or v == "":
         return "—"
-    v = stats.get(key)
-    return f"{v}{suffix}" if v is not None else "—"
-
-
-# ── chart helpers ──────────────────────────────────────────────────────
-def _make_pie(labels, vals, hex_colors, title, w=175, h=145):
-    """Donut-style pie with colored legend swatches below."""
     try:
-        d = Drawing(w, h)
-        safe_vals = [max(float(v), 0.01) for v in vals]
-        pie = Pie()
-        pie.x, pie.y = 30, 24
-        pie.width = pie.height = 88
-        pie.data = safe_vals
-        pie.simpleLabels = True
-        pie.sideLabels   = False
-        pie.labels       = None  # we draw our own legend
-        pie.slices.strokeWidth = 1.2
-        pie.slices.strokeColor = colors.HexColor(WHITE)
-        for i, c in enumerate(hex_colors):
-            if i < len(pie.slices):
-                pie.slices[i].fillColor = colors.HexColor(c)
-        d.add(pie)
-        # Title
-        d.add(String(w / 2, h - 9, title, fontSize=8, fontName="Helvetica-Bold",
-                     fillColor=colors.HexColor(NAVY), textAnchor="middle"))
-        # Legend
-        for i, (lbl, v) in enumerate(zip(labels, vals)):
-            y = h - 28 - i * 13
-            d.add(Rect(4, y - 2, 9, 9,
-                       fillColor=colors.HexColor(hex_colors[i]), strokeColor=None))
-            d.add(String(17, y + 3, f"{lbl}: {v}", fontSize=7,
-                         fillColor=colors.HexColor(GRAY), textAnchor="start"))
-        return d
-    except Exception as e:
-        logger.error(f"Pie error: {e}")
-        d2 = Drawing(w, h)
-        d2.add(String(w / 2, h / 2, "Chart error", fontSize=8,
-                      textAnchor="middle", fillColor=colors.HexColor(GRAY)))
-        return d2
+        f = float(v)
+    except (TypeError, ValueError):
+        return str(v)
+    s = ("{:,.%df}" % dp).format(f)
+    return s + suffix
 
 
-def _make_bars(vals, labels, title, w=350, h=110, max_val=100):
-    """Vertical bar chart. Bars for 0-values render as a faint baseline tick, not a fake bar."""
-    try:
-        d = Drawing(w, h)
-        d.add(String(w / 2, h - 8, title, fontSize=8, fontName="Helvetica-Bold",
-                     fillColor=colors.HexColor(NAVY), textAnchor="middle"))
-        bar_w  = 52
-        gap    = 16
-        x0     = 28
-        area_h = h - 40
-        baseline_y = 22
-        # baseline
-        d.add(Line(x0 - 4, baseline_y, w - 4, baseline_y,
-                   strokeColor=colors.HexColor(LGRAY), strokeWidth=0.5))
-        shades = [BRAND, BRAND_2, "#3b82f6", "#60a5fa"]
-        for i, (v, lbl) in enumerate(zip(vals, labels)):
-            sv = max(float(v) if v else 0, 0)
-            x  = x0 + i * (bar_w + gap)
-            if sv <= 0:
-                d.add(String(x + bar_w / 2, baseline_y + 8, "—",
-                             fontSize=8, fillColor=colors.HexColor(GRAY_2),
-                             textAnchor="middle"))
-            else:
-                bh = max(int(sv / max(float(max_val), 1) * area_h), 3)
-                d.add(Rect(x, baseline_y, bar_w, bh,
-                           fillColor=colors.HexColor(shades[min(i, 3)]),
-                           strokeColor=None))
-                d.add(String(x + bar_w / 2, baseline_y + bh + 3, str(round(sv, 1)),
-                             fontSize=7, fontName="Helvetica-Bold",
-                             fillColor=colors.HexColor(NAVY), textAnchor="middle"))
-            d.add(String(x + bar_w / 2, 8, lbl, fontSize=7,
-                         fillColor=colors.HexColor(GRAY), textAnchor="middle"))
-        return d
-    except Exception as e:
-        logger.error(f"Bar error: {e}")
-        d2 = Drawing(w, h)
-        d2.add(String(w / 2, h / 2, "Chart error", fontSize=8,
-                      textAnchor="middle", fillColor=colors.HexColor(GRAY)))
-        return d2
+def _has(stats):
+    return bool(stats) and _g(stats, "days", 0) > 0
 
 
-def _points_bar_row(label, earned, cap, width_cm=14):
-    """Horizontal progress bar for one scoring component. Returns a Drawing."""
-    w = width_cm * cm
-    h = 18
-    d = Drawing(w, h)
-    cap_f = max(float(cap), 0.01)
-    earned_f = max(min(float(earned), cap_f), 0)
-    pct = earned_f / cap_f
-    # track
-    d.add(Rect(0, 4, w, 8, fillColor=colors.HexColor(SURF_2),
-               strokeColor=colors.HexColor(LGRAY), strokeWidth=0.3))
-    # fill
-    if pct > 0:
-        d.add(Rect(0, 4, w * pct, 8, fillColor=colors.HexColor(BRAND_2),
-                   strokeColor=None))
-    # label on the left (above bar)
-    # (we place text separately via Paragraph — this just draws the bar)
+def _table(rows, widths, head=True, zebra=True, align_right_from=1, bold_last=False):
+    """A plain, consistent table: dark header, hairlines, light zebra rows."""
+    t = Table(rows, colWidths=widths, repeatRows=1 if head else 0)
+    style = [
+        ("FONT", (0, 0), (-1, -1), "Helvetica", 8),
+        ("TEXTCOLOR", (0, 0), (-1, -1), INK_2),
+        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+        ("TOPPADDING", (0, 0), (-1, -1), 4),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
+        ("LEFTPADDING", (0, 0), (-1, -1), 5),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 5),
+        ("LINEBELOW", (0, 0), (-1, -1), 0.4, LINE),
+    ]
+    if align_right_from is not None:
+        style.append(("ALIGN", (align_right_from, 0), (-1, -1), "RIGHT"))
+    if head:
+        style += [("BACKGROUND", (0, 0), (-1, 0), HEAD),
+                  ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+                  ("FONT", (0, 0), (-1, 0), "Helvetica-Bold", 7.5)]
+    if zebra:
+        for r in range(1 if head else 0, len(rows)):
+            if r % 2 == 0:
+                style.append(("BACKGROUND", (0, r), (-1, r), ZEBRA))
+    if bold_last:
+        style += [("FONT", (0, -1), (-1, -1), "Helvetica-Bold", 8.5),
+                  ("TEXTCOLOR", (0, -1), (-1, -1), INK),
+                  ("LINEABOVE", (0, -1), (-1, -1), 0.8, INK)]
+    t.setStyle(TableStyle(style))
+    return t
+
+
+def _bar(got, cap, w=3.2 * cm, h=5):
+    """A small progress bar for the points table."""
+    d = Drawing(w, h + 2)
+    d.add(Rect(0, 1, w, h, fillColor=colors.HexColor("#eef2f7"), strokeColor=None))
+    frac = max(0.0, min(float(got) / float(cap), 1.0)) if cap else 0
+    if frac > 0:
+        d.add(Rect(0, 1, w * frac, h, fillColor=BRAND, strokeColor=None))
     return d
 
 
-# ── main entry point ──────────────────────────────────────────────────
+def _pie(title, parts, size=3.4 * cm):
+    """A pie with the legend BESIDE it (never on top of the slices)."""
+    total = sum(v for _, v, _ in parts)
+    w, h = CONTENT_W / 2 - 0.3 * cm, size + 0.9 * cm
+    d = Drawing(w, h)
+    d.add(String(0, h - 10, title, fontName="Helvetica-Bold", fontSize=8.5, fillColor=INK))
+    if total <= 0:
+        d.add(String(0, h - 26, "No figures for this period", fontName="Helvetica",
+                     fontSize=8, fillColor=MUTED))
+        return d
+    p = Pie()
+    p.x, p.y, p.width, p.height = 0, 4, size, size
+    p.data = [max(v, 0.0001) for _, v, _ in parts]
+    p.labels = None
+    p.slices.strokeColor = colors.white
+    p.slices.strokeWidth = 1.2
+    for i, (_, _, c) in enumerate(parts):
+        p.slices[i].fillColor = c
+    d.add(p)
+    lx, ly = size + 0.5 * cm, size - 6
+    for label, v, c in parts:
+        d.add(Rect(lx, ly - 1, 7, 7, fillColor=c, strokeColor=None))
+        d.add(String(lx + 11, ly, label, fontName="Helvetica", fontSize=8, fillColor=INK_2))
+        d.add(String(lx + 11, ly - 10, "%s  ·  %s%%" % (_num(v), _num(v / total * 100, 1)),
+                     fontName="Helvetica-Bold", fontSize=8, fillColor=INK))
+        ly -= 26
+    return d
+
+
+# ── role-specific figure rows: (label, key-or-function, decimals, suffix) ──
+def _checker_rows():
+    return [
+        ("Bills checked — normal", "tsb_normal", 0, ""),
+        ("Bills checked — urgent", "tsb_urgent", 0, ""),
+        ("Items checked — normal", "tck_normal", 0, ""),
+        ("Items checked — urgent", "tck_urgent", 0, ""),
+        ("Weighted items (urgent × 1.5)", "weighted_items", 0, ""),
+        ("Weighted speed / hr", "check_speed_weighted", 1, ""),
+        ("Team: day's total bills", "team_total_bills", 0, ""),
+        ("Team: bills checked", "team_checked_bills", 0, ""),
+        ("Team: pending bills", "team_pending_bills", 0, ""),
+        ("Team: clearance", lambda s: _g(s, "clearance_rate") if _g(s, "team_total_bills") else None, 1, "%"),
+        ("Own share of team's work", "team_share_pct", 1, "%"),
+        ("Consistency", "consistency", 1, "%"),
+    ]
+
+
+def _picker_rows():
+    return [
+        ("Bills given to pick", "tbr_picker", 0, ""),
+        ("Bills picked", "tsb_normal", 0, ""),
+        ("Bill fulfilment", "bill_fulfilment", 1, "%"),
+        ("Items picked", "tp", 0, ""),
+        ("Items missed", "tm", 0, ""),
+        ("Pick accuracy", "pick_acc", 1, "%"),
+        ("Pick speed / hr", "pick_speed", 1, ""),
+        ("CS fulfilment", "cs_fulfilment", 1, "%"),
+        ("Workspace", "workspace_score", 1, "%"),
+        ("Consistency", "consistency", 1, "%"),
+    ]
+
+
+def _purchaser_rows():
+    return [
+        ("PO bills received", "pur_bills_received", 0, ""),
+        ("PO bills checked", "pur_bills_checked", 0, ""),
+        ("Bill processing", "pur_bill_rate", 1, "%"),
+        ("PO bill entry", "pur_bill_entry", 0, ""),
+        ("Items", "pur_items", 0, ""),
+        ("Items racked", "pur_items_racked", 0, ""),
+        ("Racking", "pur_racking_eff", 1, "%"),
+        ("CS fulfilment", "pur_cs_fulfilment", 1, "%"),
+        ("Pending PO bills", "pur_pending_bills", 0, ""),
+        ("Speed / hr", "pur_speed", 1, ""),
+        ("Consistency", "consistency", 1, "%"),
+    ]
+
+
+def _val(stats, key):
+    if not _has(stats):
+        return None
+    return key(stats) if callable(key) else _g(stats, key, None)
+
+
+# ── the report ─────────────────────────────────────────────────────────────
 def generate_visual_pdf(emp_name, payload):
-    _buf = io.BytesIO()
+    payload = payload or {}
+    st_type = (payload.get("staff_type") or "").lower()
+    week, month, alls = payload.get("week_stats"), payload.get("month_stats"), payload.get("all_stats")
+    today = date.today()
+
+    # The headline is THIS MONTH -- the period a KRA is judged on. If nothing
+    # was entered this month yet, fall back to all time and say so.
+    head_stats, head_label = (month, today.strftime("%B %Y")) if _has(month) else (alls, "All time")
+    hs = head_stats or {}
+
+    buf = io.BytesIO()
+    doc = SimpleDocTemplate(buf, pagesize=A4, leftMargin=MARGIN, rightMargin=MARGIN,
+                            topMargin=1.4 * cm, bottomMargin=1.6 * cm,
+                            title="KRA Report — %s" % emp_name, author="Pharma IP System")
+
+    def footer(canvas, doc_):
+        canvas.saveState()
+        canvas.setStrokeColor(LINE)
+        canvas.line(MARGIN, 1.1 * cm, PAGE_W - MARGIN, 1.1 * cm)
+        canvas.setFont("Helvetica", 7)
+        canvas.setFillColor(MUTED)
+        canvas.drawString(MARGIN, 0.75 * cm, "Pharma IP System  ·  KRA report for %s  ·  Generated %s  ·  Confidential"
+                          % (emp_name, today.strftime("%d %b %Y")))
+        canvas.drawRightString(PAGE_W - MARGIN, 0.75 * cm, "Page %d" % doc_.page)
+        canvas.restoreState()
+
+    E = []
     try:
-        _doc = SimpleDocTemplate(
-            _buf, pagesize=A4,
-            rightMargin=1.6 * cm, leftMargin=1.6 * cm,
-            topMargin=1.6 * cm,   bottomMargin=1.6 * cm,
-            title=f"KRA Report — {emp_name}",
-            author="Pharma IP System",
-        )
-        S = getSampleStyleSheet()
+        # ── Header ──────────────────────────────────────────────────────
+        role = (payload.get("emp_role") or st_type or "").title()
+        rank_bits = []
+        if payload.get("emp_role_rank") and payload.get("total_role"):
+            rank_bits.append("#%s of %s %ss" % (payload["emp_role_rank"], payload["total_role"], st_type or "staff"))
+        if payload.get("emp_overall_rank") and payload.get("total_staff"):
+            rank_bits.append("#%s of %s overall" % (payload["emp_overall_rank"], payload["total_staff"]))
+        E += [Paragraph("KRA Performance Report", S["sub"]),
+              Paragraph(emp_name, S["title"]),
+              Paragraph("%s  ·  Assessed period: <b>%s</b>%s" % (
+                  role, head_label, ("  ·  " + "  ·  ".join(rank_bits)) if rank_bits else ""), S["sub"]),
+              Spacer(1, 0.35 * cm)]
 
-        def p(n, **kw):
-            return _ps(S, n, **kw)
+        # ── Score summary tiles ─────────────────────────────────────────
+        grade = _g(hs, "grade", "NO DATA")
+        gcol = GRADE_COLOR.get(grade, MUTED)
 
-        # Typography
-        title_st = p("T1", fontSize=18, fontName="Helvetica-Bold", alignment=TA_CENTER,
-                     textColor=colors.HexColor(NAVY), spaceAfter=2, leading=22)
-        sub_st   = p("T2", fontSize=9, alignment=TA_CENTER,
-                     textColor=colors.HexColor(GRAY), spaceAfter=2, leading=12)
-        h2_st    = p("H2", fontSize=11, fontName="Helvetica-Bold",
-                     textColor=colors.HexColor(NAVY), spaceBefore=10, spaceAfter=6,
-                     leading=14)
-        body_st  = p("B1", fontSize=9, textColor=colors.HexColor(NAVY),
-                     spaceAfter=4, leading=13)
-        formula_st = p("FM", fontSize=7.8, textColor=colors.HexColor(GRAY),
-                       fontName="Helvetica", spaceAfter=2, leading=11)
-        pt_label_st = p("PL", fontSize=9, textColor=colors.HexColor(NAVY),
-                        fontName="Helvetica-Bold", leading=11)
-        pt_val_st   = p("PV", fontSize=9, textColor=colors.HexColor(GRAY),
-                        alignment=TA_RIGHT, leading=11)
-
-        # ── pull payload ─────────────────────────────────────────────
-        all_s   = payload.get("all_stats")
-        d_s     = payload.get("day_stats")
-        w_s     = payload.get("week_stats")
-        m_s     = payload.get("month_stats")
-        stype   = payload.get("staff_type", "picker")
-        entries = payload.get("all_entries", []) or []
-        # Ensure entries are newest-first
-        try:
-            entries = sorted(entries, key=lambda e: e.entry_date, reverse=True)
-        except Exception:
-            pass
-
-        elems = []
-
-        # ── NO DATA CASE ─────────────────────────────────────────────
-        if not all_s:
-            elems += [
-                Paragraph("PHARMA IP SYSTEM", title_st),
-                Paragraph(f"KRA Performance Report — {emp_name}", sub_st),
-                Spacer(1, 0.6 * cm),
-                HRFlowable(width="100%", thickness=1, color=colors.HexColor(LGRAY)),
-                Spacer(1, 0.6 * cm),
-                Paragraph("No performance data available yet for this staff member.", body_st),
-                Paragraph("Once they submit daily metrics, a full analytics report will appear here.",
-                          p("NB", fontSize=9, textColor=colors.HexColor(GRAY))),
-            ]
-            _doc.build(elems)
-            _buf.seek(0)
-            return _buf
-
-        # ── HEADER ───────────────────────────────────────────────────
-        grade     = all_s.get("grade", "N/A")
-        grade_clr = GRADE_COLORS.get(grade, NAVY)
-        score     = all_s.get("eff_score", 0)
-        deduction = all_s.get("complaint_deduction", 0) or 0
-
-        # Big grade + score block
-        grade_para = Paragraph(
-            f"<font size='10' color='{GRAY}'>KRA GRADE</font><br/>"
-            f"<font size='22' color='{grade_clr}'><b>{grade}</b></font>",
-            p("GR", alignment=TA_LEFT, leading=26))
-        score_para = Paragraph(
-            f"<font size='10' color='{GRAY}'>POINTS SCORE</font><br/>"
-            f"<font size='28' color='{NAVY}'><b>{score}</b></font>"
-            f"<font size='13' color='{GRAY}'> / 100</font>",
-            p("SC", alignment=TA_RIGHT, leading=32))
-
-        header_tbl = Table(
-            [[grade_para, score_para]],
-            colWidths=[9 * cm, 8 * cm]
-        )
-        header_tbl.setStyle(TableStyle([
-            ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
-            ("BOX",    (0, 0), (-1, -1), 1.2, colors.HexColor(BRAND)),
-            ("BACKGROUND", (0, 0), (-1, -1), colors.HexColor(SURFACE)),
-            ("LEFTPADDING",   (0, 0), (-1, -1), 16),
-            ("RIGHTPADDING",  (0, 0), (-1, -1), 16),
-            ("TOPPADDING",    (0, 0), (-1, -1), 12),
-            ("BOTTOMPADDING", (0, 0), (-1, -1), 12),
-        ]))
-
-        consistency = all_s.get("consistency", 0)
-        trend = all_s.get("trend", "stable").upper()
-        trend_sym = {"IMPROVING": "↑", "DECLINING": "↓", "STABLE": "→"}.get(trend, "→")
-        trend_clr = {"IMPROVING": EMERALD, "DECLINING": ROSE, "STABLE": GRAY}.get(trend, GRAY)
-        days = all_s.get("days", 0)
-
-        meta_line = (
-            f"<b>Specialist:</b> {emp_name}  &nbsp;&nbsp; "
-            f"<b>Role:</b> {stype.title()}  &nbsp;&nbsp; "
-            f"<b>Days Logged:</b> {days}  &nbsp;&nbsp; "
-            f"<b>Consistency:</b> {consistency}%  &nbsp;&nbsp; "
-            f"<b>Trend:</b> <font color='{trend_clr}'>{trend_sym} {trend}</font>"
-        )
-        if deduction > 0:
-            meta_line += f"  &nbsp;&nbsp; <b><font color='{ROSE}'>Minus Marking: −{deduction} pts</font></b>"
-        # Admin adjustment
-        admin_adj = all_s.get("admin_adjustment", 0) or 0
-        if admin_adj and admin_adj != 0:
-            adj_clr = EMERALD if admin_adj > 0 else ROSE
-            adj_sign = "+" if admin_adj > 0 else ""
-            meta_line += f"  &nbsp;&nbsp; <b><font color='{adj_clr}'>Admin Adj: {adj_sign}{admin_adj} pts</font></b>"
-
-        elems += [
-            Paragraph("PHARMA IP SYSTEM", title_st),
-            Paragraph("Official KRA Performance Analysis Report", sub_st),
-            Paragraph(f"Generated: {date.today():%d %B %Y}", sub_st),
-            Spacer(1, 0.25 * cm),
-            HRFlowable(width="100%", thickness=2, color=colors.HexColor(BRAND)),
-            Spacer(1, 0.35 * cm),
-            header_tbl,
-            Spacer(1, 0.2 * cm),
-            Paragraph(meta_line, p("MT", fontSize=9, alignment=TA_CENTER,
-                                   textColor=colors.HexColor(NAVY), leading=14)),
-            Spacer(1, 0.15 * cm),
-            Paragraph(
-                f"<i>{all_s.get('feedback', '')}</i>",
-                p("FB", fontSize=9, alignment=TA_CENTER,
-                  textColor=colors.HexColor(GRAY), spaceAfter=8)
-            ),
-            Spacer(1, 0.15 * cm),
-            HRFlowable(width="100%", thickness=0.5, color=colors.HexColor(LGRAY)),
-            Spacer(1, 0.3 * cm),
+        def tile(label, value, sub, vcolor=INK):
+            return [Paragraph(label.upper(), _st("tl", fontName="Helvetica-Bold", fontSize=6.5, textColor=MUTED)),
+                    Paragraph(value, _st("tv", fontName="Helvetica-Bold", fontSize=17, leading=21, textColor=vcolor)),
+                    Paragraph(sub, S["small"])]
+        tiles = [
+            tile("Score — " + head_label, "%s<font size=9 color='#64748b'> / 100</font>" % _num(_g(hs, "eff_score"), 1),
+                 "Grade: <font color='%s'><b>%s</b></font>" % (gcol.hexval().replace("0x", "#"), grade)),
+            tile("This week", _num(_g(week, "eff_score"), 1) if _has(week) else "—",
+                 "%s day(s) entered" % _g(week, "days", 0)),
+            tile("All time", _num(_g(alls, "eff_score"), 1) if _has(alls) else "—",
+                 "%s day(s) entered" % _g(alls, "days", 0)),
         ]
+        tt = Table([tiles], colWidths=[CONTENT_W * 0.40, CONTENT_W * 0.30, CONTENT_W * 0.30])
+        tt.setStyle(TableStyle([
+            ("BOX", (0, 0), (-1, -1), 0.6, LINE), ("LINEAFTER", (0, 0), (-2, -1), 0.6, LINE),
+            ("BACKGROUND", (0, 0), (0, 0), BRAND_LT),
+            ("VALIGN", (0, 0), (-1, -1), "TOP"),
+            ("TOPPADDING", (0, 0), (-1, -1), 8), ("BOTTOMPADDING", (0, 0), (-1, -1), 8),
+            ("LEFTPADDING", (0, 0), (-1, -1), 10)]))
+        E.append(tt)
 
-        # ── POINTS BREAKDOWN (role-aware, matches app.py) ────────────
-        elems.append(Paragraph("POINTS BREAKDOWN", h2_st))
-        elems.append(Paragraph(
-            f"How the {score}/100 score was earned. Grades: ELITE ≥88 · PROFICIENT ≥72 · SATISFACTORY ≥52 · RE-TRAINING &lt;52.",
-            p("PS", fontSize=8, textColor=colors.HexColor(GRAY), spaceAfter=6)
-        ))
+        # ── How the score was reached (reconciles every point) ──────────
+        if _has(hs):
+            E.append(Paragraph("How the %s score was reached" % head_label
+                               if head_label != "All time" else "How the score was reached", S["h2"]))
+            recon = [["", "Points"],
+                     ["KPI points (table below)", _num(_g(hs, "base_score"), 1)]]
+            if _g(hs, "multitask_bonus"):
+                recon.append(["+ Multitask bonus  (%s pts over %s extra-role days, spread over %s days)"
+                              % (_num(_g(hs, "multitask_day_points")), _g(hs, "multitask_days"), _g(hs, "days")),
+                              "+" + _num(_g(hs, "multitask_bonus"), 1)])
+            if _g(hs, "admin_adjustment"):
+                a = float(_g(hs, "admin_adjustment"))
+                recon.append(["%s Admin adjustment" % ("+" if a > 0 else "−"), ("+" if a > 0 else "") + _num(a, 1)])
+            if _g(hs, "complaint_deduction"):
+                recon.append(["− Complaint deductions", "−" + _num(_g(hs, "complaint_deduction"), 1)])
+            if _g(hs, "supervisor_penalty"):
+                recon.append(["− Supervisor count mismatches", "−" + _num(_g(hs, "supervisor_penalty"), 1)])
+            recon.append(["Final score (capped at 100)", _num(_g(hs, "eff_score"), 1)])
+            E.append(_table(recon, [CONTENT_W * 0.80, CONTENT_W * 0.20], bold_last=True))
 
-        if stype == "checker":
-            pts_def = [
-                ("Check Speed",          _gv(all_s, "check_speed"),                 80.0, 22),
-                ("Clearance Rate",       _gv(all_s, "clearance_rate", 100),        100.0, 22),
-                ("VWCR",                 _gv(all_s, "vwcr"),                       120.0, 20),
-                ("Cleaner Rate",         _gv(all_s, "cleaner_rate"),               100.0, 8),
-                ("Efficiency Ratio",     _gv(all_s, "efficiency_ratio") * 100,     100.0, 8),
-                ("Log Consistency",      _gv(all_s, "consistency"),                100.0, 8),
-                ("Potential Efficiency", _gv(all_s, "potential_eff"),              100.0, 5),
-                ("Workspace",            _gv(all_s, "workspace_score"),            100.0, 4),
-                ("Sweep Bonus",          _gv(all_s, "tsd"),                        max(days, 1), 3),
-            ]
-        elif stype == "purchaser":
-            pts_def = [
-                ("Bill Processing Rate", _gv(all_s, "pur_bill_rate"),              100.0, 25),
-                ("CS Fulfilment",        _gv(all_s, "pur_cs_fulfilment"),          100.0, 20),
-                ("Racking Efficiency",   _gv(all_s, "pur_racking_eff"),            100.0, 15),
-                ("Processing Speed",     _gv(all_s, "pur_speed"),                   60.0, 10),
-                ("Bill Entry Rate",      _gv(all_s, "pur_entry_rate"),             100.0, 8),
-                ("VWCR",                 _gv(all_s, "vwcr"),                       120.0, 8),
-                ("Pending Control",      max(0, 100 - (_gv(all_s, "pur_pending_bills") / max(_gv(all_s, "pur_bills_received", 1), 1) * 100)), 100.0, 5),
-                ("Efficiency Ratio",     _gv(all_s, "efficiency_ratio") * 100,     100.0, 4),
-                ("Workspace",            _gv(all_s, "workspace_score"),            100.0, 3),
-                ("Log Consistency",      _gv(all_s, "consistency"),                100.0, 2),
-            ]
-        else:  # picker
-            pts_def = [
-                ("VWCR",                 _gv(all_s, "vwcr"),                       120.0, 25),
-                ("Bill Fulfilment",      _gv(all_s, "bill_fulfilment"),            100.0, 18),
-                ("Pick Speed",           _gv(all_s, "pick_speed"),                 250.0, 15),
-                ("Efficiency Ratio",     _gv(all_s, "efficiency_ratio") * 100,     100.0, 10),
-                ("Workspace",            _gv(all_s, "workspace_score"),            100.0, 10),
-                ("CS Fulfilment",        _gv(all_s, "cs_fulfilment"),              100.0, 8),
-                ("Cleaner Rate",         _gv(all_s, "cleaner_rate"),               100.0, 7),
-                ("Log Consistency",      _gv(all_s, "consistency"),                100.0, 7),
-            ]
+            # ── Points table: straight from the scoring code ─────────────
+            bd = _g(hs, "point_breakdown", []) or []
+            if bd:
+                E.append(Paragraph("KPI points, component by component", S["h2"]))
+                rows = [[Paragraph("Component", S["head"]), "", Paragraph("Points", S["headr"]),
+                         Paragraph("How it was worked out", S["head"])]]
+                for r in bd:
+                    rows.append([Paragraph(r["name"], S["cellb"]), _bar(r["got"], r["max"]),
+                                 Paragraph("<b>%s</b> / %s" % (_num(r["got"], 1), r["max"]), S["cellr"]),
+                                 Paragraph(r.get("how", ""), S["cell"])])
+                rows.append([Paragraph("KPI points", S["cellb"]), "",
+                             Paragraph("<b>%s</b> / 100" % _num(sum(r["got"] for r in bd), 1), S["cellr"]), ""])
+                t = _table(rows, [3.6 * cm, 3.4 * cm, 2.0 * cm, CONTENT_W - 9.0 * cm],
+                           align_right_from=None, bold_last=True)
+                E.append(t)
+        else:
+            E += [Spacer(1, 0.4 * cm), Paragraph("No entries yet, so there is no score to report.", S["body"])]
 
-        # Render each component as one row: [label, bar, earned/cap]
-        pts_rows = []
-        for label, val, denom, cap in pts_def:
-            pct = (val / denom) if denom > 0 else 0
-            if pct > 1:
-                pct = 1
-            earned = round(pct * cap, 1)
-            pts_rows.append([
-                Paragraph(f"<b>{label}</b>", pt_label_st),
-                _points_bar_row(label, earned, cap, width_cm=9),
-                Paragraph(f"{earned} <font color='{GRAY_2}'>/ {cap} pts</font>", pt_val_st),
-            ])
+        # ── Figures by period ───────────────────────────────────────────
+        E.append(PageBreak())
+        E.append(Paragraph("Figures by period", S["h2"]))
+        defs = _checker_rows() if st_type == "checker" else (
+            _purchaser_rows() if st_type == "purchaser" else _picker_rows())
+        rows = [["", "This week", "This month", "All time"]]
+        for label, key, dp, suf in defs:
+            rows.append([label] + [_num(_val(s, key), dp, suf) if _val(s, key) is not None else "—"
+                                   for s in (week, month, alls)])
+        rows.append(["Score"] + [_num(_g(s, "eff_score"), 1) if _has(s) else "—" for s in (week, month, alls)])
+        rows.append(["Grade"] + [_g(s, "grade", "—") if _has(s) else "—" for s in (week, month, alls)])
+        E.append(_table(rows, [CONTENT_W * 0.40] + [CONTENT_W * 0.20] * 3))
+        if st_type == "checker":
+            note = ("Pending and clearance are the checking TEAM's figures: the day's total sales bills minus the "
+                    "bills checked by all checkers. The same numbers for every checker on the day.")
+            if _g(alls, "team_per_person_days"):
+                note += (" On %s earlier day(s) each checker typed their own bills instead of the day's total; "
+                         "those figures are added together." % _g(alls, "team_per_person_days"))
+            E.append(Paragraph(note, S["small"]))
 
-        pt_tbl = Table(pts_rows, colWidths=[5 * cm, 9 * cm, 3.5 * cm])
-        pt_tbl.setStyle(TableStyle([
-            ("VALIGN",        (0, 0), (-1, -1), "MIDDLE"),
-            ("LEFTPADDING",   (0, 0), (-1, -1), 4),
-            ("RIGHTPADDING",  (0, 0), (-1, -1), 4),
-            ("TOPPADDING",    (0, 0), (-1, -1), 4),
-            ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
-            ("LINEBELOW",     (0, 0), (-1, -2), 0.3, colors.HexColor(LGRAY)),
-        ]))
-        elems.append(pt_tbl)
+        # ── Work mix (one or two honest charts, legends beside) ─────────
+        ms = head_stats or {}
+        charts = []
+        if st_type == "checker":
+            charts.append(_pie("Items checked — %s" % head_label, [
+                ("Normal", float(_g(ms, "tck_normal")), BRAND),
+                ("Urgent (worth 1.5×)", float(_g(ms, "tck_urgent")), URGENT)]))
+            charts.append(_pie("Team bills — %s" % head_label, [
+                ("Checked", float(_g(ms, "team_checked_bills")), OK),
+                ("Pending", float(_g(ms, "team_pending_bills")), colors.HexColor("#cbd5e1"))]))
+        elif st_type == "picker":
+            charts.append(_pie("Items — %s" % head_label, [
+                ("Picked", float(_g(ms, "tp")), BRAND), ("Missed", float(_g(ms, "tm")), BAD)]))
+            given, picked = float(_g(ms, "tbr_picker")), float(_g(ms, "tsb_normal"))
+            charts.append(_pie("Bills — %s" % head_label, [
+                ("Picked", min(picked, given) if given else picked, OK),
+                ("Not picked", max(given - picked, 0), colors.HexColor("#cbd5e1"))]))
+        elif st_type == "purchaser":
+            charts.append(_pie("PO bills — %s" % head_label, [
+                ("Checked", float(_g(ms, "pur_bills_checked")), OK),
+                ("Pending", float(_g(ms, "pur_pending_bills")), colors.HexColor("#cbd5e1"))]))
+        if charts:
+            E.append(Paragraph("Work mix", S["h2"]))
+            ct = Table([charts + ([""] if len(charts) == 1 else [])], colWidths=[CONTENT_W / 2] * 2)
+            ct.setStyle(TableStyle([("VALIGN", (0, 0), (-1, -1), "TOP"), ("LEFTPADDING", (0, 0), (-1, -1), 0)]))
+            E.append(ct)
 
-        if deduction > 0:
-            elems += [
-                Spacer(1, 0.15 * cm),
-                Table(
-                    [[Paragraph(f"<font color='{ROSE}'><b>Minus Marking (complaint deductions)</b></font>",
-                                p("DL", fontSize=9, leading=12)),
-                      Paragraph(f"<font color='{ROSE}'><b>−{deduction} pts</b></font>",
-                                p("DV", fontSize=11, alignment=TA_RIGHT, leading=12))]],
-                    colWidths=[14 * cm, 3.5 * cm],
-                    style=TableStyle([
-                        ("BACKGROUND",    (0, 0), (-1, -1), colors.HexColor(RO_LT)),
-                        ("BOX",           (0, 0), (-1, -1), 0.6, colors.HexColor("#fca5a5")),
-                        ("VALIGN",        (0, 0), (-1, -1), "MIDDLE"),
-                        ("LEFTPADDING",   (0, 0), (-1, -1), 10),
-                        ("RIGHTPADDING",  (0, 0), (-1, -1), 10),
-                        ("TOPPADDING",    (0, 0), (-1, -1), 7),
-                        ("BOTTOMPADDING", (0, 0), (-1, -1), 7),
-                    ])
-                ),
-            ]
+        # ── Multitask ───────────────────────────────────────────────────
+        mb = _g(ms, "multitask_breakdown", []) or []
+        if mb:
+            rows = [["Date", "Extra roles worked", "Rule", "Points"]]
+            for d in mb[:20]:
+                rows.append([d["date"].strftime("%d %b %Y"), ", ".join(r.title() for r in d["roles"]),
+                             "%d × 10%s" % (len(d["roles"]), ", capped at 30" if d["raw"] > 30 else ""),
+                             str(d["points"])])
+            E.append(KeepTogether([
+                Paragraph("Multitask — %s" % head_label, S["h2"]),
+                Paragraph("Each extra role on a day earns 10 points, up to 30 that day. The day points are spread "
+                          "over every day in the period: %s ÷ %s days = +%s."
+                          % (_num(_g(ms, "multitask_day_points")), _g(ms, "days"), _num(_g(ms, "multitask_bonus"), 1)),
+                          S["small"]),
+                Spacer(1, 4),
+                _table(rows, [3 * cm, CONTENT_W - 8.5 * cm, 3.5 * cm, 2 * cm], align_right_from=3)]))
 
-        elems += [Spacer(1, 0.35 * cm),
-                  HRFlowable(width="100%", thickness=0.5, color=colors.HexColor(LGRAY)),
-                  Spacer(1, 0.2 * cm)]
+        # ── Complaints that reduced the score ───────────────────────────
+        comps = payload.get("complaints_targeted") or []
+        if comps:
+            key = {"checker": "checker_pts", "purchaser": "purchaser_pts"}.get(st_type, "picker_pts")
+            rows = [["Date", "Type", "Detail", "Points"]]
+            for c in comps[:15]:
+                d = c.get("date")
+                rows.append([d.strftime("%d %b %Y") if hasattr(d, "strftime") else str(d or ""),
+                             str(c.get("type") or ""), Paragraph(str(c.get("description") or ""), S["cell"]),
+                             "−" + _num(c.get(key) or 0, 1)])
+            E.append(KeepTogether([Paragraph("Complaints", S["h2"]),
+                                   _table(rows, [2.6 * cm, 3 * cm, CONTENT_W - 7.6 * cm, 2 * cm],
+                                          align_right_from=3)]))
 
-        # ── CALCULATION METHODOLOGY (aligned with app.py) ────────────
-        elems.append(Paragraph("CALCULATION METHODOLOGY", h2_st))
-        if stype == "picker":
-            formula_lines = [
-                "VWCR (Volume-Weighted) = (Picked ÷ Total) × (Items/hr ÷ 50 target) × 100, capped at 120",
-                "Bill Fulfilment (%)    = Sales Bill Picked ÷ Total Bills Received × 100",
-                "Pick Speed (/hr)       = (Picked + Missed) ÷ (9 hrs × Days)",
-                "Cleaner Rate           = (Normal×100 + Sweep/Rack×10) ÷ Total Items Volume",
-                "CS Fulfilment (%)      = min(Packing Done ÷ CS Sales Open × 100, 100)",
-                "Workspace Score        = Rack×50% + Table×30% + Sweep×20%",
-                "Efficiency Ratio       = min(items÷200, bills÷50) — Efficient only when BOTH = 1.0",
-                "Points (max 100)       = VWCR×25 + Fulfilment×18 + Speed÷250×15 + EffRatio×10 + Workspace×10 + CS×8 + Cleaner×7 + LogCons×7",
-                "Minus Marking          = Complaint deductions (capped 30 pts) − admin adjustment",
-                "Log Consistency (%)    = max(0, 100 − std_dev(daily_accuracy) × 2)",
-                "Grade                  = ELITE ≥ 88 | PROFICIENT ≥ 72 | SATISFACTORY ≥ 52 | RE-TRAINING < 52",
-            ]
-        elif stype == "checker":
-            formula_lines = [
-                "VWCR (Volume-Weighted) = (Normal ÷ Total) × (Items/hr ÷ 70 target) × 100, capped at 120",
-                "Total SB Checked       = SB Normal + SB Urgent",
-                "Clearance Rate (%)     = SB Checked ÷ (SB Checked + Pending) × 100",
-                "Check Speed (/hr)      = Total Items Checked ÷ (9 hrs × Days)",
-                "Cleaner Rate           = (Normal×100 + Sweep/Rack×10) ÷ Total Items Volume",
-                "Efficiency Ratio       = min(items÷200, bills÷50)",
-                "Workspace Score        = Table×60% + Sweep×40% (checkers don't arrange racks)",
-                "Points (max 100)       = Speed÷80×22 + Clearance×22 + VWCR×20 + Cleaner×8 + EffRatio×8 + LogCons×8 + PotEff×5 + Workspace×4 + Sweep×3",
-                "Minus Marking          = Complaint deductions (capped 30 pts) − admin adjustment",
-                "Log Consistency (%)    = max(0, 100 − std_dev(daily_speed) × 2)",
-                "Grade                  = ELITE ≥ 88 | PROFICIENT ≥ 72 | SATISFACTORY ≥ 52 | RE-TRAINING < 52",
-            ]
-        else:  # purchaser
-            formula_lines = [
-                "Bill Processing Rate   = PO Bills Checked ÷ PO Bills Received × 100",
-                "CS Fulfilment (%)      = CS in PO Received ÷ CS in PO Open × 100",
-                "Racking Efficiency     = Items Racked ÷ Number of Items × 100",
-                "Processing Speed       = Number of Items ÷ (9 hrs × Days)",
-                "Bill Entry Rate        = PO Bill Entry ÷ PO Bills Received × 100",
-                "VWCR                   = (Racked ÷ Items) × (Items/hr ÷ 30 target) × 100, capped at 120",
-                "Efficiency Ratio       = min(items÷200, bills÷50)",
-                "Points (max 100)       = BillRate×25 + CS×20 + Racking×15 + Speed÷60×10 + Entry×8 + VWCR×8 + Pending×5 + EffRatio×4 + Workspace×3 + LogCons×2",
-                "Minus Marking          = Complaint deductions (capped 30 pts) − admin adjustment",
-                "Grade                  = ELITE ≥ 88 | PROFICIENT ≥ 72 | SATISFACTORY ≥ 52 | RE-TRAINING < 52",
-            ]
-        for line in formula_lines:
-            elems.append(Paragraph(line, formula_st))
-        elems.append(Spacer(1, 0.25 * cm))
-
-        # ── KPI TABLE (role-aware) ───────────────────────────────────
-        elems.append(Paragraph("KPI PERFORMANCE TABLE", h2_st))
-        if stype == "picker":
-            rows_data = [
-                ["Metric", "Today", "This Week", "This Month", "All-Time"],
-                ["Pick Accuracy",       _sv(d_s, "pick_acc", "%"),         _sv(w_s, "pick_acc", "%"),         _sv(m_s, "pick_acc", "%"),         _sv(all_s, "pick_acc", "%")],
-                ["Bill Fulfilment %",   _sv(d_s, "bill_fulfilment", "%"),  _sv(w_s, "bill_fulfilment", "%"),  _sv(m_s, "bill_fulfilment", "%"),  _sv(all_s, "bill_fulfilment", "%")],
-                ["Total Bills Rcvd",    _sv(d_s, "tbr_picker"),            _sv(w_s, "tbr_picker"),            _sv(m_s, "tbr_picker"),            _sv(all_s, "tbr_picker")],
-                ["Items Picked",        _sv(d_s, "tp"),                    _sv(w_s, "tp"),                    _sv(m_s, "tp"),                    _sv(all_s, "tp")],
-                ["Items Missed",        _sv(d_s, "tm"),                    _sv(w_s, "tm"),                    _sv(m_s, "tm"),                    _sv(all_s, "tm")],
-                ["Pick Speed /hr",      _sv(d_s, "pick_speed"),            _sv(w_s, "pick_speed"),            _sv(m_s, "pick_speed"),            _sv(all_s, "pick_speed")],
-                ["Sales Bill Picked",   _sv(d_s, "tsb"),                   _sv(w_s, "tsb"),                   _sv(m_s, "tsb"),                   _sv(all_s, "tsb")],
-                ["Packing Done",        _sv(d_s, "tpd"),                   _sv(w_s, "tpd"),                   _sv(m_s, "tpd"),                   _sv(all_s, "tpd")],
-                ["Packing Eff. %",      _sv(d_s, "packing_eff", "%"),      _sv(w_s, "packing_eff", "%"),      _sv(m_s, "packing_eff", "%"),      _sv(all_s, "packing_eff", "%")],
-                ["CS Sales Open",       _sv(d_s, "tcs"),                   _sv(w_s, "tcs"),                   _sv(m_s, "tcs"),                   _sv(all_s, "tcs")],
-                ["CS Fulfilment %",     _sv(d_s, "cs_fulfilment", "%"),    _sv(w_s, "cs_fulfilment", "%"),    _sv(m_s, "cs_fulfilment", "%"),    _sv(all_s, "cs_fulfilment", "%")],
-                ["Workspace Score %",   _sv(d_s, "workspace_score", "%"),  _sv(w_s, "workspace_score", "%"),  _sv(m_s, "workspace_score", "%"),  _sv(all_s, "workspace_score", "%")],
-                ["Consistency %",       _sv(d_s, "consistency", "%"),      _sv(w_s, "consistency", "%"),      _sv(m_s, "consistency", "%"),      _sv(all_s, "consistency", "%")],
-                ["Potential Items",     _sv(d_s, "potential_items"),       _sv(w_s, "potential_items"),       _sv(m_s, "potential_items"),       _sv(all_s, "potential_items")],
-                ["Gap Items",           _sv(d_s, "gap_items"),             _sv(w_s, "gap_items"),             _sv(m_s, "gap_items"),             _sv(all_s, "gap_items")],
-                ["Points Score",        _sv(d_s, "eff_score"),             _sv(w_s, "eff_score"),             _sv(m_s, "eff_score"),             _sv(all_s, "eff_score")],
-                ["Grade",               _sv(d_s, "grade"),                 _sv(w_s, "grade"),                 _sv(m_s, "grade"),                 _sv(all_s, "grade")],
-            ]
-        elif stype == "checker":
-            rows_data = [
-                ["Metric", "Today", "This Week", "This Month", "All-Time"],
-                ["SB Normal",           _sv(d_s, "tsb_normal"),            _sv(w_s, "tsb_normal"),            _sv(m_s, "tsb_normal"),            _sv(all_s, "tsb_normal")],
-                ["SB Urgent",           _sv(d_s, "tsb_urgent"),            _sv(w_s, "tsb_urgent"),            _sv(m_s, "tsb_urgent"),            _sv(all_s, "tsb_urgent")],
-                ["Total SB Checked",    _sv(d_s, "tsb_total"),             _sv(w_s, "tsb_total"),             _sv(m_s, "tsb_total"),             _sv(all_s, "tsb_total")],
-                ["Items Normal",        _sv(d_s, "tck_normal"),            _sv(w_s, "tck_normal"),            _sv(m_s, "tck_normal"),            _sv(all_s, "tck_normal")],
-                ["Items Urgent",        _sv(d_s, "tck_urgent"),            _sv(w_s, "tck_urgent"),            _sv(m_s, "tck_urgent"),            _sv(all_s, "tck_urgent")],
-                ["Total Items Checked", _sv(d_s, "tck_total"),             _sv(w_s, "tck_total"),             _sv(m_s, "tck_total"),             _sv(all_s, "tck_total")],
-                ["Clean Check %",       _sv(d_s, "normal_pct", "%"),       _sv(w_s, "normal_pct", "%"),       _sv(m_s, "normal_pct", "%"),       _sv(all_s, "normal_pct", "%")],
-                ["Urgent %",            _sv(d_s, "urgent_pct", "%"),       _sv(w_s, "urgent_pct", "%"),       _sv(m_s, "urgent_pct", "%"),       _sv(all_s, "urgent_pct", "%")],
-                ["Bills Received",      _sv(d_s, "tbr"),                   _sv(w_s, "tbr"),                   _sv(m_s, "tbr"),                   _sv(all_s, "tbr")],
-                ["Pending Bills",       _sv(d_s, "pending_bills"),         _sv(w_s, "pending_bills"),         _sv(m_s, "pending_bills"),         _sv(all_s, "pending_bills")],
-                ["Clearance Rate %",    _sv(d_s, "clearance_rate", "%"),   _sv(w_s, "clearance_rate", "%"),   _sv(m_s, "clearance_rate", "%"),   _sv(all_s, "clearance_rate", "%")],
-                ["Check Speed /hr",     _sv(d_s, "check_speed"),           _sv(w_s, "check_speed"),           _sv(m_s, "check_speed"),           _sv(all_s, "check_speed")],
-                ["Packing Done",        _sv(d_s, "tpk"),                   _sv(w_s, "tpk"),                   _sv(m_s, "tpk"),                   _sv(all_s, "tpk")],
-                ["Consistency %",       _sv(d_s, "consistency", "%"),      _sv(w_s, "consistency", "%"),      _sv(m_s, "consistency", "%"),      _sv(all_s, "consistency", "%")],
-                ["Potential Items",     _sv(d_s, "potential_items"),       _sv(w_s, "potential_items"),       _sv(m_s, "potential_items"),       _sv(all_s, "potential_items")],
-                ["Gap Items",           _sv(d_s, "gap_items"),             _sv(w_s, "gap_items"),             _sv(m_s, "gap_items"),             _sv(all_s, "gap_items")],
-                ["Points Score",        _sv(d_s, "eff_score"),             _sv(w_s, "eff_score"),             _sv(m_s, "eff_score"),             _sv(all_s, "eff_score")],
-                ["Grade",               _sv(d_s, "grade"),                 _sv(w_s, "grade"),                 _sv(m_s, "grade"),                 _sv(all_s, "grade")],
-            ]
-        else:  # purchaser
-            rows_data = [
-                ["Metric", "Today", "This Week", "This Month", "All-Time"],
-                ["PO Bills Received",   _sv(d_s, "pur_bills_received"),     _sv(w_s, "pur_bills_received"),     _sv(m_s, "pur_bills_received"),     _sv(all_s, "pur_bills_received")],
-                ["PO Bills Checked",    _sv(d_s, "pur_bills_checked"),      _sv(w_s, "pur_bills_checked"),      _sv(m_s, "pur_bills_checked"),      _sv(all_s, "pur_bills_checked")],
-                ["PO Bill Entry",       _sv(d_s, "pur_bill_entry"),         _sv(w_s, "pur_bill_entry"),         _sv(m_s, "pur_bill_entry"),         _sv(all_s, "pur_bill_entry")],
-                ["Pending PO Bills",    _sv(d_s, "pur_pending_bills"),      _sv(w_s, "pur_pending_bills"),      _sv(m_s, "pur_pending_bills"),      _sv(all_s, "pur_pending_bills")],
-                ["Number of Items",     _sv(d_s, "pur_items"),              _sv(w_s, "pur_items"),              _sv(m_s, "pur_items"),              _sv(all_s, "pur_items")],
-                ["CS in PO Open",       _sv(d_s, "pur_cs_open"),            _sv(w_s, "pur_cs_open"),            _sv(m_s, "pur_cs_open"),            _sv(all_s, "pur_cs_open")],
-                ["CS in PO Received",   _sv(d_s, "pur_cs_received"),        _sv(w_s, "pur_cs_received"),        _sv(m_s, "pur_cs_received"),        _sv(all_s, "pur_cs_received")],
-                ["Items Racked",        _sv(d_s, "pur_items_racked"),       _sv(w_s, "pur_items_racked"),       _sv(m_s, "pur_items_racked"),       _sv(all_s, "pur_items_racked")],
-                ["Bill Processing %",   _sv(d_s, "pur_bill_rate", "%"),     _sv(w_s, "pur_bill_rate", "%"),     _sv(m_s, "pur_bill_rate", "%"),     _sv(all_s, "pur_bill_rate", "%")],
-                ["CS Fulfilment %",     _sv(d_s, "pur_cs_fulfilment", "%"), _sv(w_s, "pur_cs_fulfilment", "%"), _sv(m_s, "pur_cs_fulfilment", "%"), _sv(all_s, "pur_cs_fulfilment", "%")],
-                ["Racking Eff. %",      _sv(d_s, "pur_racking_eff", "%"),   _sv(w_s, "pur_racking_eff", "%"),   _sv(m_s, "pur_racking_eff", "%"),   _sv(all_s, "pur_racking_eff", "%")],
-                ["Processing Speed",    _sv(d_s, "pur_speed"),              _sv(w_s, "pur_speed"),              _sv(m_s, "pur_speed"),              _sv(all_s, "pur_speed")],
-                ["Consistency %",       _sv(d_s, "consistency", "%"),       _sv(w_s, "consistency", "%"),       _sv(m_s, "consistency", "%"),       _sv(all_s, "consistency", "%")],
-                ["Points Score",        _sv(d_s, "eff_score"),              _sv(w_s, "eff_score"),              _sv(m_s, "eff_score"),              _sv(all_s, "eff_score")],
-                ["Grade",               _sv(d_s, "grade"),                  _sv(w_s, "grade"),                  _sv(m_s, "grade"),                  _sv(all_s, "grade")],
-            ]
-
-        ct = Table(rows_data, colWidths=[4.2 * cm, 2.75 * cm, 2.75 * cm, 2.75 * cm, 2.75 * cm])
-        ct.setStyle(TableStyle([
-            ("BACKGROUND",     (0, 0), (-1, 0),  colors.HexColor(NAVY)),
-            ("TEXTCOLOR",      (0, 0), (-1, 0),  colors.white),
-            ("FONTNAME",       (0, 0), (-1, 0),  "Helvetica-Bold"),
-            ("FONTNAME",       (0, 1), (-1, -1), "Helvetica"),
-            ("FONTSIZE",       (0, 0), (-1, -1), 8),
-            ("ALIGN",          (0, 0), (-1, -1), "CENTER"),
-            ("ALIGN",          (0, 1), (0, -1),  "LEFT"),
-            ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.HexColor(SURFACE), colors.white]),
-            ("GRID",           (0, 0), (-1, -1), 0.4, colors.HexColor(LGRAY)),
-            ("TOPPADDING",     (0, 0), (-1, -1), 5),
-            ("BOTTOMPADDING",  (0, 0), (-1, -1), 5),
-            # Highlight the last two rows (Points Score, Grade)
-            ("BACKGROUND",     (0, -2), (-1, -1), colors.HexColor(BRAND_LT)),
-            ("FONTNAME",       (0, -2), (-1, -1), "Helvetica-Bold"),
-            ("TEXTCOLOR",      (0, -2), (-1, -1), colors.HexColor(NAVY)),
-        ]))
-        elems += [ct, Spacer(1, 0.4 * cm)]
-
-        # ── PIE CHARTS ───────────────────────────────────────────────
-        elems.append(Paragraph("PERFORMANCE BREAKDOWN", h2_st))
-        cur_eff = all_s.get("eff_score", 0)
-
-        if stype == "checker":
-            tck_n = all_s.get("tck_normal", 0) or 0
-            tck_u = all_s.get("tck_urgent", 0) or 0
-            p1 = _make_pie(["Normal", "Urgent"], [tck_n, tck_u],
-                           [BRAND, PURPLE], "Normal vs Urgent Items")
-            tbr = all_s.get("tbr", 0) or 0
-            pending = all_s.get("pending_bills", 0) or 0
-            cleared = max(tbr - pending, 0)
-            p2 = _make_pie(["Cleared", "Pending"], [cleared, pending],
-                           [EMERALD, ROSE], "Bill Clearance")
-        elif stype == "purchaser":
-            pur_bc = all_s.get("pur_bills_checked", 0) or 0
-            pur_br = all_s.get("pur_bills_received", 0) or 0
-            p1 = _make_pie(["Checked", "Pending"], [pur_bc, max(pur_br - pur_bc, 0)],
-                           [BRAND, "#bfdbfe"], "Bill Processing")
-            cs_r = all_s.get("pur_cs_received", 0) or 0
-            cs_o = all_s.get("pur_cs_open", 0) or 0
-            p2 = _make_pie(["Received", "Pending"], [cs_r, max(cs_o - cs_r, 0)],
-                           [EMERALD, AM_LT], "CS Fulfilment")
-        else:  # picker
-            tp = all_s.get("tp", 0) or 0
-            tm = all_s.get("tm", 0) or 0
-            p1 = _make_pie(["Picked", "Missed"], [tp, tm],
-                           [BRAND, ROSE], "Items Picked vs Missed")
-            tpd = all_s.get("tpd", 0) or 0
-            tsb = all_s.get("tsb", 0) or 0
-            p2 = _make_pie(["Packed", "Remaining"], [tpd, max(tsb - tpd, 0)],
-                           [EMERALD, "#bfdbfe"], "Sales Bills vs Packed")
-
-        p3 = _make_pie(
-            ["Earned", "Gap"],
-            [cur_eff, max(100 - cur_eff, 0)],
-            [GRADE_COLORS.get(grade, NAVY), LGRAY],
-            "Points Earned vs Potential"
-        )
-
-        pt = Table([[p1, p2, p3]])
-        pt.setStyle(TableStyle([
-            ("ALIGN",  (0, 0), (-1, -1), "CENTER"),
-            ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
-        ]))
-        elems += [pt, Spacer(1, 0.3 * cm)]
-
-        # ── BAR CHARTS (role-aware) ──────────────────────────────────
-        elems.append(Paragraph("PERIOD TREND", h2_st))
-        lbls = ["Today", "Week", "Month", "All"]
-
-        def _series(k):
-            return [_gv(d_s, k), _gv(w_s, k), _gv(m_s, k), _gv(all_s, k)]
-
-        if stype == "checker":
-            bt_rows = [
-                [_make_bars(_series("check_speed"),    lbls, "Check Speed /hr",  max_val=80)],
-                [_make_bars(_series("clearance_rate"), lbls, "Clearance Rate %", max_val=100)],
-                [_make_bars(_series("normal_pct"),     lbls, "Clean Check %",    max_val=100)],
-                [_make_bars(_series("eff_score"),      lbls, "Points Score",     max_val=100)],
-            ]
-        elif stype == "purchaser":
-            bt_rows = [
-                [_make_bars(_series("pur_bill_rate"),     lbls, "Bill Processing %", max_val=100)],
-                [_make_bars(_series("pur_cs_fulfilment"), lbls, "CS Fulfilment %",   max_val=100)],
-                [_make_bars(_series("pur_racking_eff"),   lbls, "Racking Eff. %",    max_val=100)],
-                [_make_bars(_series("eff_score"),         lbls, "Points Score",      max_val=100)],
-            ]
-        else:  # picker
-            bt_rows = [
-                [_make_bars(_series("pick_acc"),        lbls, "Pick Accuracy %",   max_val=100)],
-                [_make_bars(_series("bill_fulfilment"), lbls, "Bill Fulfilment %", max_val=100)],
-                [_make_bars(_series("packing_eff"),     lbls, "Packing Eff. %",    max_val=100)],
-                [_make_bars(_series("eff_score"),       lbls, "Points Score",      max_val=100)],
-            ]
-
-        bt = Table(bt_rows)
-        bt.setStyle(TableStyle([
-            ("ALIGN",         (0, 0), (-1, -1), "CENTER"),
-            ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
-        ]))
-        elems += [bt, Spacer(1, 0.3 * cm)]
-
-        # ── DAILY LOG (role-aware) ───────────────────────────────────
+        # ── Daily log ───────────────────────────────────────────────────
+        entries = payload.get("all_entries") or []
         if entries:
-            elems += [
-                PageBreak(),
-                Paragraph("DAILY ENTRY LOG", h2_st),
-                Paragraph(
-                    f"Last {len(entries)} entries, newest first.",
-                    p("NT", fontSize=8, textColor=colors.HexColor(GRAY), spaceAfter=6)
-                ),
-            ]
-            if stype == "picker":
-                log = [["Date", "Bills Rcvd", "SB Picked", "Picked", "Missed", "Acc %",
-                        "Packing", "CS Open", "Rack", "Table", "Sweep", "Hrs"]]
+            E.append(PageBreak())
+            E.append(Paragraph("Daily entry log", S["h2"]))
+            E.append(Paragraph("Most recent %d entries, newest first." % len(entries), S["small"]))
+            E.append(Spacer(1, 4))
+            if st_type == "checker":
+                td = payload.get("team_days") or {}
+                rows = [["Date", "Bills\nnormal", "Bills\nurgent", "Items\nnormal", "Items\nurgent",
+                         "Day total\n(team)", "Team\nchecked", "Team\npending", "Team\nclearance"]]
                 for e in entries:
-                    log.append([
-                        str(e.entry_date),
-                        int(getattr(e, "total_bills_received", 0) or 0),
-                        int(e.sales_bills_open or 0),
-                        int(e.picked or 0),
-                        int(e.missed or 0),
-                        f"{e.accuracy}%",
-                        int(e.packing_done or 0),
-                        int(e.cs_sales_open or 0),
-                        int(e.rack_organized or 0),
-                        "Yes" if e.table_clean else "—",
-                        "Yes" if getattr(e, "sweep_done", 0) else "—",
-                        round(float(e.total_time or 9.0), 2),
-                    ])
-                cws = [2.0*cm, 1.6*cm, 1.5*cm, 1.3*cm, 1.3*cm, 1.3*cm,
-                       1.5*cm, 1.4*cm, 1.2*cm, 1.2*cm, 1.2*cm, 1.1*cm]
-
-            elif stype == "checker":
-                log = [["Date", "SB Normal", "SB Urgent", "Items", "Urgent",
-                        "Total SB", "Total Items", "Bills Rcvd", "Pending", "Clear %", "Speed/hr"]]
+                    t = td.get(e.entry_date) or {}
+                    tot = t.get("total") or 0
+                    mark = " *" if t.get("mode") == "per_person" else (" !" if t.get("mode") == "conflict" else "")
+                    rows.append([e.entry_date.strftime("%d %b %Y"), _num(e.sales_bills_open or 0),
+                                 _num(e.cs_sales_open or 0), _num(e.checked or 0), _num(e.errors_found or 0),
+                                 _num(tot) + mark, _num(t.get("checked") or 0), _num(t.get("pending") or 0),
+                                 _num(min(t.get("checked", 0) / tot * 100, 100), 1, "%") if tot else "—"])
+                E.append(_table(rows, [2.4 * cm] + [(CONTENT_W - 2.4 * cm) / 8] * 8))
+                E.append(Paragraph("* That day each checker typed their own bills, not the day's total; their "
+                                   "figures are added together.  ! The figures entered that day do not add up.",
+                                   S["small"]))
+            elif st_type == "purchaser":
+                rows = [["Date", "PO bills", "PO checked", "PO entry", "Items", "Racked", "CS open", "CS rcvd"]]
                 for e in entries:
-                    sb_total = (e.sales_bills_open or 0) + (e.cs_sales_open or 0)
-                    items_total = (e.checked or 0) + (e.errors_found or 0)
-                    br = int(getattr(e, "bills_received", 0) or 0)
-                    pending = max(br - sb_total, 0)
-                    clearance = round(sb_total / br * 100, 1) if br > 0 else 100.0
-                    speed = round(items_total / 9.0, 1)
-                    log.append([
-                        str(e.entry_date),
-                        int(e.sales_bills_open or 0),
-                        int(e.cs_sales_open or 0),
-                        int(e.checked or 0),
-                        int(e.errors_found or 0),
-                        sb_total,
-                        items_total,
-                        br,
-                        pending,
-                        f"{clearance}%",
-                        f"{speed}/hr",
-                    ])
-                cws = [2.0*cm, 1.5*cm, 1.5*cm, 1.3*cm, 1.3*cm, 1.5*cm,
-                       1.7*cm, 1.5*cm, 1.3*cm, 1.3*cm, 1.5*cm]
-
-            else:  # purchaser
-                log = [["Date", "PO Rcvd", "PO Chkd", "Bill Entry", "Items",
-                        "CS Open", "CS Rcvd", "Racked", "Bill %", "Rack %", "Hrs"]]
-                for e in entries:
-                    po_r = int(e.sales_bills_open or 0)
-                    po_c = int(e.checked or 0)
-                    items = int(e.errors_found or 0)
-                    racked = int(e.rack_organized or 0)
-                    bill_pct = round(po_c / po_r * 100, 1) if po_r > 0 else 0
-                    rack_pct = round(racked / items * 100, 1) if items > 0 else 0
-                    log.append([
-                        str(e.entry_date),
-                        po_r,
-                        po_c,
-                        int(e.picked or 0),
-                        items,
-                        int(e.cs_sales_open or 0),
-                        int(e.packing_done or 0),
-                        racked,
-                        f"{bill_pct}%",
-                        f"{rack_pct}%",
-                        round(float(e.total_time or 9.0), 2),
-                    ])
-                cws = [2.0*cm, 1.4*cm, 1.4*cm, 1.5*cm, 1.3*cm, 1.3*cm,
-                       1.3*cm, 1.3*cm, 1.3*cm, 1.3*cm, 1.1*cm]
-
-            lt = Table(log, colWidths=cws, repeatRows=1)
-            lt.setStyle(TableStyle([
-                ("BACKGROUND",     (0, 0), (-1, 0),  colors.HexColor(NAVY)),
-                ("TEXTCOLOR",      (0, 0), (-1, 0),  colors.white),
-                ("FONTNAME",       (0, 0), (-1, 0),  "Helvetica-Bold"),
-                ("FONTNAME",       (0, 1), (-1, -1), "Helvetica"),
-                ("FONTSIZE",       (0, 0), (-1, -1), 7.2),
-                ("ALIGN",          (0, 0), (-1, -1), "CENTER"),
-                ("ALIGN",          (0, 1), (0, -1),  "LEFT"),
-                ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.HexColor(SURFACE), colors.white]),
-                ("GRID",           (0, 0), (-1, -1), 0.3, colors.HexColor(LGRAY)),
-                ("TOPPADDING",     (0, 0), (-1, -1), 4),
-                ("BOTTOMPADDING",  (0, 0), (-1, -1), 4),
-            ]))
-            elems += [lt, Spacer(1, 0.3 * cm)]
-
-        # ── POINT DETECTION TABLE (Phase 3) ───────────────────────────
-        # Detailed ledger of where each point came from or was lost
-        elems += [PageBreak(), Paragraph("POINT DETECTION LEDGER", h2_st),
-                  Paragraph("Every point earned or deducted, with the reason.",
-                            p("PDL", fontSize=8, textColor=colors.HexColor(GRAY), spaceAfter=6))]
-
-        pdl_rows = [["Category", "Component", "Earned", "Out of", "Status", "Note"]]
-
-        # Build the ledger from the points breakdown data used above
-        if stype == "checker":
-            pdl_def = [
-                ("Performance", "Check Speed",          _gv(all_s, "check_speed"),       80.0, 22, "Items/hr vs 80 target"),
-                ("Performance", "Clearance Rate",       _gv(all_s, "clearance_rate", 100), 100.0, 22, "SB cleared ÷ assigned"),
-                ("Quality",     "VWCR",                 _gv(all_s, "vwcr"),              120.0, 20, "Volume-weighted clean rate"),
-                ("Quality",     "Cleaner Rate",         _gv(all_s, "cleaner_rate"),      100.0, 8,  "Normal×100 + Sweep/Rack×10 ÷ volume"),
-                ("Workload",    "Efficiency Ratio",     _gv(all_s, "efficiency_ratio")*100, 100.0, 8, "Hard level = 200 items/50 bills"),
-                ("Reliability", "Log Consistency",      _gv(all_s, "consistency"),       100.0, 8, "Daily logging stability"),
-                ("Performance", "Potential Efficiency", _gv(all_s, "potential_eff"),     100.0, 5, "Actual ÷ maximum possible"),
-                ("Workspace",   "Workspace Score",      _gv(all_s, "workspace_score"),   100.0, 4, "Table + Sweep"),
-                ("Workspace",   "Sweep Bonus",          _gv(all_s, "tsd"),               max(days,1), 3, "Days with sweeping done"),
-            ]
-        elif stype == "purchaser":
-            pdl_def = [
-                ("Performance", "Bill Processing Rate", _gv(all_s, "pur_bill_rate"),     100.0, 25, "PO checked ÷ received"),
-                ("Performance", "CS Fulfilment",        _gv(all_s, "pur_cs_fulfilment"), 100.0, 20, "CS received ÷ CS open"),
-                ("Performance", "Racking Efficiency",   _gv(all_s, "pur_racking_eff"),   100.0, 15, "Racked ÷ items"),
-                ("Performance", "Processing Speed",     _gv(all_s, "pur_speed"),         60.0,  10, "Items/hr vs 60 target"),
-                ("Performance", "Bill Entry Rate",      _gv(all_s, "pur_entry_rate"),    100.0, 8,  "Entries ÷ received"),
-                ("Quality",     "VWCR",                 _gv(all_s, "vwcr"),              120.0, 8,  "Volume-weighted clean rate"),
-                ("Workload",    "Pending Control",      max(0,100-(_gv(all_s, "pur_pending_bills")/max(_gv(all_s, "pur_bills_received",1),1)*100)), 100.0, 5, "Fewer pending = more points"),
-                ("Workload",    "Efficiency Ratio",     _gv(all_s, "efficiency_ratio")*100, 100.0, 4, "Hard level = 200 items/50 bills"),
-                ("Workspace",   "Workspace Score",      _gv(all_s, "workspace_score"),   100.0, 3, "Rack + Table + Sweep"),
-                ("Reliability", "Log Consistency",      _gv(all_s, "consistency"),       100.0, 2, "Daily logging stability"),
-            ]
-        else:  # picker
-            pdl_def = [
-                ("Quality",     "VWCR",                 _gv(all_s, "vwcr"),              120.0, 25, "Volume-weighted clean rate vs 50/hr target"),
-                ("Performance", "Bill Fulfilment",      _gv(all_s, "bill_fulfilment"),   100.0, 18, "SB picked ÷ bills received"),
-                ("Performance", "Pick Speed",           _gv(all_s, "pick_speed"),        250.0, 15, "Items/hr vs 250 target"),
-                ("Workload",    "Efficiency Ratio",     _gv(all_s, "efficiency_ratio")*100, 100.0, 10, "Hard level = 200 items/50 bills"),
-                ("Workspace",   "Workspace Score",      _gv(all_s, "workspace_score"),   100.0, 10, "Rack + Table + Sweep"),
-                ("Performance", "CS Fulfilment",        _gv(all_s, "cs_fulfilment"),     100.0, 8,  "CS demands fulfilled"),
-                ("Quality",     "Cleaner Rate",         _gv(all_s, "cleaner_rate"),      100.0, 7,  "Normal×100 + Sweep/Rack×10 ÷ volume"),
-                ("Reliability", "Log Consistency",      _gv(all_s, "consistency"),       100.0, 7,  "Daily logging stability"),
-            ]
-
-        total_earned = 0.0
-        for cat, name, val, denom, cap, note in pdl_def:
-            pct = (val / denom) if denom > 0 else 0
-            if pct > 1: pct = 1
-            earned = round(pct * cap, 1)
-            total_earned += earned
-            # Status icon based on % of cap earned
-            if pct >= 0.85:
-                status_txt = "● Earned"; status_clr = EMERALD
-            elif pct >= 0.50:
-                status_txt = "● Partial"; status_clr = AMBER
+                    rows.append([e.entry_date.strftime("%d %b %Y")] + [_num(x or 0) for x in (
+                        e.sales_bills_open, e.checked, e.picked, e.errors_found, e.rack_organized,
+                        e.cs_sales_open, e.packing_done)])
+                E.append(_table(rows, [2.6 * cm] + [(CONTENT_W - 2.6 * cm) / 7] * 7))
             else:
-                status_txt = "● Lost"; status_clr = ROSE
-            pdl_rows.append([
-                cat, name,
-                Paragraph(f"<b>{earned}</b>", p("PDE", fontSize=8, alignment=TA_CENTER, textColor=colors.HexColor(NAVY))),
-                f"{cap}",
-                Paragraph(f"<font color='{status_clr}'>{status_txt}</font>", p("PDS", fontSize=7.5, alignment=TA_LEFT)),
-                Paragraph(note, p("PDN", fontSize=7.5, textColor=colors.HexColor(GRAY), leading=10)),
-            ])
+                rows = [["Date", "Bills given", "Bills picked", "Items picked", "Missed", "Accuracy", "Speed / hr"]]
+                for e in entries:
+                    tot = (e.picked or 0) + (e.missed or 0)
+                    rows.append([e.entry_date.strftime("%d %b %Y"), _num(e.total_bills_received or 0),
+                                 _num(e.sales_bills_open or 0), _num(e.picked or 0), _num(e.missed or 0),
+                                 _num((e.picked or 0) / tot * 100, 1, "%") if tot else "—",
+                                 _num(tot / 9.0, 1)])
+                E.append(_table(rows, [2.6 * cm] + [(CONTENT_W - 2.6 * cm) / 6] * 6))
 
-        # Totals row
-        pdl_rows.append([
-            "TOTAL", "Points earned from KPIs",
-            Paragraph(f"<b>{round(total_earned,1)}</b>", p("PDT", fontSize=9, alignment=TA_CENTER, fontName="Helvetica-Bold", textColor=colors.HexColor(NAVY))),
-            "100", "", ""
-        ])
-        # Deductions / adjustments
-        if deduction and deduction > 0:
-            pdl_rows.append([
-                "Deduction", "Complaint Minus Marking",
-                Paragraph(f"<b><font color='{ROSE}'>−{deduction}</font></b>", p("PDM", fontSize=9, alignment=TA_CENTER)),
-                "", Paragraph(f"<font color='{ROSE}'>Penalty</font>", p("PDMS", fontSize=7.5)),
-                Paragraph("Complaint deductions (capped 30)", p("PDMN", fontSize=7.5, textColor=colors.HexColor(GRAY))),
-            ])
-        if admin_adj and admin_adj != 0:
-            sign = "+" if admin_adj > 0 else ""
-            clr = EMERALD if admin_adj > 0 else ROSE
-            label = "Bonus" if admin_adj > 0 else "Penalty"
-            pdl_rows.append([
-                "Adjustment", "Admin Adjustment",
-                Paragraph(f"<b><font color='{clr}'>{sign}{admin_adj}</font></b>", p("PDA", fontSize=9, alignment=TA_CENTER)),
-                "", Paragraph(f"<font color='{clr}'>{label}</font>", p("PDAS", fontSize=7.5)),
-                Paragraph("Manual ± override by admin", p("PDAN", fontSize=7.5, textColor=colors.HexColor(GRAY))),
-            ])
-        # Final row
-        pdl_rows.append([
-            "FINAL", "Points Score",
-            Paragraph(f"<b>{score}</b>", p("PDF_", fontSize=11, alignment=TA_CENTER, fontName="Helvetica-Bold", textColor=colors.HexColor(grade_clr))),
-            "100",
-            Paragraph(f"<b><font color='{grade_clr}'>{grade}</font></b>", p("PDFS", fontSize=8, alignment=TA_LEFT, fontName="Helvetica-Bold")),
-            "",
-        ])
+        # ── Formula reference: exactly what the app computes ────────────
+        refs = ["Each component's points and working are listed on page 1 — they are the figures the app "
+                "itself awarded.",
+                "Final score = KPI points + multitask bonus ± admin adjustment − complaint deductions "
+                "− supervisor mismatches, capped at 100.",
+                "Multitask: 10 points per extra role per day, up to 30 a day, spread over every day in the period.",
+                "Grades: ELITE 88+  ·  PROFICIENT 72+  ·  SATISFACTORY 52+  ·  RE-TRAINING below 52."]
+        if st_type == "checker":
+            refs[1:1] = [
+                "Urgent work counts 1.5×: weighted bills = normal + urgent × 1.5; weighted items likewise.",
+                "Team pending = the day's total sales bills − bills checked by ALL checkers (normal + urgent).",
+                "Team clearance = bills checked by all checkers ÷ the day's total × 100.",
+                "Normal + urgent bills can never exceed the day's total — for one checker or the team together."]
+        E.append(KeepTogether([Paragraph("How the figures are calculated", S["h2"])] +
+                              [Paragraph("•  " + r, S["small"]) for r in refs]))
 
-        pdl_table = Table(pdl_rows, colWidths=[2.5*cm, 4.5*cm, 1.8*cm, 1.2*cm, 2.0*cm, 5.5*cm], repeatRows=1)
-        # Style: header row navy, totals highlighted
-        final_row_idx = len(pdl_rows) - 1
-        total_row_idx = final_row_idx - (1 if deduction > 0 else 0) - (1 if admin_adj else 0) - 1
-        pdl_style = [
-            ("BACKGROUND",     (0, 0), (-1, 0),  colors.HexColor(NAVY)),
-            ("TEXTCOLOR",      (0, 0), (-1, 0),  colors.white),
-            ("FONTNAME",       (0, 0), (-1, 0),  "Helvetica-Bold"),
-            ("FONTSIZE",       (0, 0), (-1, 0),  8),
-            ("FONTSIZE",       (0, 1), (-1, -1), 8),
-            ("VALIGN",         (0, 0), (-1, -1), "MIDDLE"),
-            ("ALIGN",          (0, 0), (-1, -1), "LEFT"),
-            ("ALIGN",          (2, 1), (3, -1),  "CENTER"),
-            ("ROWBACKGROUNDS", (0, 1), (-1, total_row_idx-1), [colors.HexColor(SURFACE), colors.white]),
-            ("GRID",           (0, 0), (-1, -1), 0.3, colors.HexColor(LGRAY)),
-            ("TOPPADDING",     (0, 0), (-1, -1), 5),
-            ("BOTTOMPADDING",  (0, 0), (-1, -1), 5),
-            ("BACKGROUND",     (0, total_row_idx), (-1, total_row_idx), colors.HexColor(BRAND_LT)),
-            ("FONTNAME",       (0, total_row_idx), (1, total_row_idx), "Helvetica-Bold"),
-            ("BACKGROUND",     (0, final_row_idx), (-1, final_row_idx), colors.HexColor("#fef3c7")),
-            ("FONTNAME",       (0, final_row_idx), (1, final_row_idx), "Helvetica-Bold"),
-            ("LINEABOVE",      (0, final_row_idx), (-1, final_row_idx), 1.5, colors.HexColor(BRAND)),
-        ]
-        pdl_table.setStyle(TableStyle(pdl_style))
-        elems += [pdl_table, Spacer(1, 0.35 * cm)]
-
-        # ── HEAT MAP — errors × volume (Phase 3) ──────────────────────
-        heatmap_errors = payload.get("heatmap_errors", {}) or {}
-        heatmap_volume = payload.get("heatmap_volume", {}) or {}
-        if heatmap_errors or heatmap_volume:
-            elems += [Spacer(1, 0.15 * cm), Paragraph("ERROR × VOLUME HEAT MAP (LAST 30 DAYS)", h2_st),
-                      Paragraph("Darker red = more errors. Darker blue = higher volume. Blank = no entry.",
-                                p("HM", fontSize=8, textColor=colors.HexColor(GRAY), spaceAfter=4))]
-
-            # Build a 30-day grid — 2 rows, one error one volume, 15 columns each
-            from datetime import timedelta as _td
-            today_d = date.today()
-            # Find max volume to scale
-            max_vol = max(list(heatmap_volume.values()) + [1])
-
-            def _err_color(v):
-                if v is None: return "#e2e8f0"
-                if v >= 10: return "#991b1b"
-                if v >= 5:  return "#dc2626"
-                if v >= 2:  return "#f87171"
-                if v >= 1:  return "#fca5a5"
-                return "#fee2e2"
-
-            def _vol_color(v):
-                if v is None: return "#e2e8f0"
-                r = v / max_vol if max_vol > 0 else 0
-                if r >= 0.85: return "#1e3a8a"
-                if r >= 0.65: return "#1d4ed8"
-                if r >= 0.40: return "#3b82f6"
-                if r >= 0.15: return "#93c5fd"
-                return "#dbeafe"
-
-            def _make_hm_row(title, value_map, color_fn, suffix=""):
-                w = 16.5 * cm
-                h = 40
-                d = Drawing(w, h)
-                d.add(String(0, h - 8, title, fontSize=8, fontName="Helvetica-Bold",
-                             fillColor=colors.HexColor(NAVY), textAnchor="start"))
-                cell_w = (w - 8) / 30
-                for i in range(29, -1, -1):
-                    dt = today_d - _td(days=i)
-                    key = str(dt)
-                    v = value_map.get(key)
-                    x = (29 - i) * cell_w + 2
-                    y = 8
-                    d.add(Rect(x, y, cell_w - 1, 14,
-                               fillColor=colors.HexColor(color_fn(v)),
-                               strokeColor=colors.HexColor("#ffffff"),
-                               strokeWidth=0.5))
-                    # Week number labels (every 7 days)
-                    if i % 7 == 0:
-                        d.add(String(x + cell_w/2, 1, dt.strftime("%d"),
-                                     fontSize=5.5, textAnchor="middle",
-                                     fillColor=colors.HexColor(GRAY)))
-                return d
-
-            err_row = _make_hm_row("Error Density %", heatmap_errors, _err_color)
-            vol_row = _make_hm_row("Volume (Items Handled)", heatmap_volume, _vol_color)
-
-            hm_table = Table([[err_row], [vol_row]])
-            hm_table.setStyle(TableStyle([
-                ("ALIGN", (0, 0), (-1, -1), "CENTER"),
-                ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
-            ]))
-            elems += [hm_table, Spacer(1, 0.1 * cm)]
-            # Legend
-            legend_data = [[
-                Paragraph("<b>Error scale:</b>", p("L1", fontSize=8)),
-                Paragraph("<font color='#fee2e2'>■</font> 0% "
-                          "<font color='#fca5a5'>■</font> 1% "
-                          "<font color='#f87171'>■</font> 2%+ "
-                          "<font color='#dc2626'>■</font> 5%+ "
-                          "<font color='#991b1b'>■</font> 10%+", p("L2", fontSize=8)),
-                Paragraph("<b>Volume scale:</b>", p("L3", fontSize=8)),
-                Paragraph("<font color='#dbeafe'>■</font> low  "
-                          "<font color='#93c5fd'>■</font> "
-                          "<font color='#3b82f6'>■</font> "
-                          "<font color='#1d4ed8'>■</font> "
-                          "<font color='#1e3a8a'>■</font> peak", p("L4", fontSize=8)),
-            ]]
-            lt = Table(legend_data, colWidths=[2.2*cm, 5.5*cm, 2.2*cm, 5.5*cm])
-            lt.setStyle(TableStyle([("VALIGN", (0, 0), (-1, -1), "MIDDLE")]))
-            elems += [lt, Spacer(1, 0.4 * cm)]
-
-        # ── PENDING LOG (Constant Protocol) ───────────────────────────
-        pending = payload.get("pending_validations", []) or []
-        if pending:
-            elems += [Paragraph("PENDING BILL VALIDATIONS", h2_st),
-                      Paragraph("Bills awaiting Constant Protocol validation (4-way count check).",
-                                p("PL", fontSize=8, textColor=colors.HexColor(GRAY), spaceAfter=6))]
-
-            pl_rows = [["Date", "Picker", "Count", "Checkers", "Status", "Notes"]]
-            for pv in pending:
-                slots = f"{pv['slots_filled']}/3 submitted"
-                status_map = {
-                    "pending": (f"<font color='{AMBER}'>Pending</font>", ""),
-                    "mismatch": (f"<font color='{ROSE}'>Mismatch</font>", "Review needed — deduct points"),
-                    "admin_override": (f"<font color='{PURPLE}'>Override</font>", "Admin accepted"),
-                }
-                status_html, note = status_map.get(pv["status"], (pv["status"], ""))
-                pl_rows.append([
-                    pv["date"].strftime("%d %b"),
-                    pv["picker_name"] + (" (you)" if pv["is_mine"] else ""),
-                    f"{pv['picker_count']}",
-                    slots,
-                    Paragraph(status_html, p("PLSt", fontSize=8)),
-                    Paragraph(note, p("PLN", fontSize=7.5, textColor=colors.HexColor(GRAY))),
-                ])
-            pl_table = Table(pl_rows, colWidths=[2.0*cm, 4.0*cm, 1.5*cm, 3.0*cm, 2.5*cm, 4.5*cm], repeatRows=1)
-            pl_table.setStyle(TableStyle([
-                ("BACKGROUND",     (0, 0), (-1, 0),  colors.HexColor(AMBER)),
-                ("TEXTCOLOR",      (0, 0), (-1, 0),  colors.white),
-                ("FONTNAME",       (0, 0), (-1, 0),  "Helvetica-Bold"),
-                ("FONTNAME",       (0, 1), (-1, -1), "Helvetica"),
-                ("FONTSIZE",       (0, 0), (-1, -1), 8),
-                ("ALIGN",          (0, 0), (-1, -1), "LEFT"),
-                ("ALIGN",          (2, 1), (2, -1),  "CENTER"),
-                ("VALIGN",         (0, 0), (-1, -1), "MIDDLE"),
-                ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.HexColor(SURFACE), colors.white]),
-                ("GRID",           (0, 0), (-1, -1), 0.3, colors.HexColor(LGRAY)),
-                ("TOPPADDING",     (0, 0), (-1, -1), 4),
-                ("BOTTOMPADDING",  (0, 0), (-1, -1), 4),
-            ]))
-            elems += [pl_table, Spacer(1, 0.3 * cm)]
-
-        # ── FOOTER ───────────────────────────────────────────────────
-        elems += [
-            Spacer(1, 0.2 * cm),
-            HRFlowable(width="100%", thickness=1.5, color=colors.HexColor(BRAND)),
-            Spacer(1, 0.15 * cm),
-            Paragraph(
-                f"Confidential — Pharma IP System · Generated {date.today():%d %b %Y} · Internal use only.",
-                p("FT", fontSize=7.5, alignment=TA_CENTER,
-                  textColor=colors.HexColor(GRAY))
-            ),
-        ]
-
-        _doc.build(elems)
-        _buf.seek(0)
-        return _buf
-
-    except Exception as _e:
-        logger.error(f"PDF generation error: {_e}")
-        import traceback
-        traceback.print_exc()
-        _buf2 = io.BytesIO()
-        _S2   = getSampleStyleSheet()
-        _doc2 = SimpleDocTemplate(_buf2, pagesize=A4)
-        _doc2.build([
-            Paragraph("Pharma IP System", _S2["Title"]),
-            Paragraph("PDF generation encountered an error.", _S2["Normal"]),
-            Paragraph(f"Details: {_e}", _S2["Normal"]),
-            Paragraph("Please contact your system administrator.", _S2["Normal"]),
-        ])
-        _buf2.seek(0)
-        return _buf2
+        doc.build(E, onFirstPage=footer, onLaterPages=footer)
+    except Exception:
+        logger.exception("generate_visual_pdf failed")
+        buf = io.BytesIO()
+        SimpleDocTemplate(buf, pagesize=A4).build(
+            [Paragraph("The report could not be generated. Please try again or contact the administrator.",
+                       S["body"])])
+    buf.seek(0)
+    return buf
