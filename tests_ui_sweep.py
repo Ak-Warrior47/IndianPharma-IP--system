@@ -41,10 +41,10 @@ def check(name, cond, detail=""):
 ROLE_PAGES = {
     "admin": ["/admin_dashboard", "/admin/checklist", "/admin/delivery",
               "/admin/diagnostics", "/admin/reports", "/admin/bulk_import",
-              "/validations", "/supervisor", "/delivery/leaderboard",
+              "/supervisor", "/delivery/leaderboard",
               "/notifications", "/dashboard", "/api/palette"],
     "picker": ["/dashboard", "/notifications", "/api/palette"],
-    "checker": ["/dashboard", "/validations", "/notifications"],
+    "checker": ["/dashboard", "/notifications"],
     "purchaser": ["/dashboard", "/notifications"],
     "delivery": ["/dashboard", "/delivery/leaderboard", "/notifications"],
     "biller": ["/dashboard", "/notifications"],

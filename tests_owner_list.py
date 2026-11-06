@@ -234,6 +234,18 @@ for t in ("dashboard.html", "staff_detail.html", "admin_delivery.html"):
     check("6b.9 %s cannot crash if charts fail to load" % t, "window.Chart && new Chart(" in src)
 check("6b.10 The chart library is in the app", os.path.getsize(os.path.join(REPO, "static", "js", "chart.umd.min.js")) > 100000)
 
+# ---- 6c. The Bill Validations page is gone, links and all ---------------
+_rv = c.get("/validations", follow_redirects=True)
+check("6c.1 /validations no longer exists (an old bookmark lands on the dashboard)",
+      b"Bill Validations" not in _rv.data and b"Staff Management" in _rv.data)
+import glob as _g
+_left = [f for f in _g.glob(os.path.join(REPO, "templates", "*.html")) if "/validations" in open(f).read()]
+check("6c.2 No page links to it (%s)" % [os.path.basename(f) for f in _left], not _left)
+_src = open(os.path.join(REPO, "app.py")).read()
+check("6c.3 Pickers' submissions no longer create validations", "bv = BillValidation(" not in _src)
+check("6c.4 The overdue-validations SMS is no longer scheduled", "stale_validations_sms" not in _src)
+check("6c.5 Past validation records are kept (table still defined)", "class BillValidation(db.Model)" in _src)
+
 # ---- 7. The Jinja trap that broke the checker pages once ---------------
 for t in ("staff_detail.html", "dashboard.html"):
     src = open(os.path.join(REPO, "templates", t)).read()

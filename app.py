@@ -3571,26 +3571,6 @@ def dashboard():
                                                         sales_bills_open, cs_sales_open):
                             flash(_w, "warning")
 
-                    # ── Constant Protocol: create pending BillValidation for pickers
-                    if staff_type == "picker" and total_bills_received > 0:
-                        try:
-                            bv = BillValidation.query.filter_by(
-                                picker_id=emp_id, entry_date=today
-                            ).first()
-                            if not bv:
-                                bv = BillValidation(
-                                    picker_id=emp_id,
-                                    entry_date=today,
-                                    picker_count=total_bills_received,
-                                    status="pending",
-                                )
-                                db.session.add(bv)
-                                db.session.commit()
-                                logger.info(f"Bill validation created: picker {emp_id}, count {total_bills_received}")
-                        except Exception as bve:
-                            db.session.rollback()
-                            logger.error(f"BillValidation create failed: {bve}")
-
                     all_entries = KPIEntry.query.filter_by(emp_id=emp_id).all()
                     all_stats = build_analytics(all_entries, staff_type, emp_id=emp_id)
                     if all_stats:
@@ -3942,12 +3922,7 @@ def admin_dashboard():
                 _m = 12; _y -= 1
         open_complaints = Complaint.query.filter_by(is_resolved=False).order_by(Complaint.created_at.desc()).all()
 
-        # Feature 17: Stale validations (pending > 24h)
-        stale_cutoff = datetime.utcnow() - timedelta(hours=24)
-        stale_validations_count = BillValidation.query.filter(
-            BillValidation.status == 'pending',
-            BillValidation.created_at <= stale_cutoff
-        ).count()
+        stale_validations_count = 0   # Bill Validations feature removed
 
         # Feature 14: Admin notes grouped by emp_id
         all_admin_notes = AdminStaffNote.query.order_by(AdminStaffNote.created_at.desc()).all()
@@ -5079,244 +5054,6 @@ def admin_export_all_pdf():
 
 
 # ─── CONSTANT PROTOCOL ROUTES (Phase 2) ──────────────────────────────────
-
-@app.route("/validations")
-@login_required
-def validations_list():
-    """Show pending validations waiting for checker input. Visible to all staff."""
-    try:
-        today = date.today()
-        # Show pending validations from last 3 days (so checkers can catch up)
-        cutoff = today - timedelta(days=3)
-        pending = BillValidation.query.filter(
-            BillValidation.status == "pending",
-            BillValidation.entry_date >= cutoff
-        ).order_by(BillValidation.entry_date.desc(), BillValidation.created_at.desc()).all()
-        # Recent completed (last 7 days)
-        # Order by created_at (always set) instead of updated_at (may be NULL on old rows)
-        recent = BillValidation.query.filter(
-            BillValidation.status.in_(["confirmed", "mismatch", "admin_override"]),
-            BillValidation.entry_date >= today - timedelta(days=7)
-        ).order_by(BillValidation.created_at.desc()).limit(30).all()
-
-        # Build helper maps for display
-        emp_map = {e.id: e for e in Employee.query.all()}
-        current_user_id = session.get("user_id")
-
-        def _serialize(bv):
-            already_voted = current_user_id in [bv.checker1_id, bv.checker2_id, bv.checker3_id]
-            return {
-                "bv": bv,
-                "picker": emp_map.get(bv.picker_id),
-                "checker1": emp_map.get(bv.checker1_id) if bv.checker1_id else None,
-                "checker2": emp_map.get(bv.checker2_id) if bv.checker2_id else None,
-                "checker3": emp_map.get(bv.checker3_id) if bv.checker3_id else None,
-                "already_voted": already_voted,
-                "slots_filled": bv.checker_count_submitted,
-            }
-
-        return render_template("validations.html",
-            pending=[_serialize(b) for b in pending],
-            recent=[_serialize(b) for b in recent],
-            current_user_id=current_user_id,
-            is_admin=bool(session.get("is_admin")),
-            today=today,
-        )
-    except Exception as e:
-        import traceback
-        logger.error(f"validations_list: {e}\n{traceback.format_exc()}")
-        flash(f"Error loading validations: {str(e)[:120]}", "danger")
-        return redirect(url_for("admin_dashboard") if session.get("is_admin") else url_for("dashboard"))
-
-
-@app.route("/validation/<int:bv_id>/submit", methods=["POST"])
-@login_required
-def validation_submit(bv_id):
-    """A checker submits their count for a pending validation."""
-    try:
-        bv = db.session.get(BillValidation, bv_id)
-        if not bv:
-            flash("Validation not found.", "danger")
-            return redirect(url_for("validations_list"))
-        if bv.status not in ("pending",):
-            flash("This validation is already resolved.", "warning")
-            return redirect(url_for("validations_list"))
-
-        current_id = session.get("user_id")
-        if current_id == bv.picker_id:
-            flash("You cannot validate your own submission.", "warning")
-            return redirect(url_for("validations_list"))
-        if current_id in [bv.checker1_id, bv.checker2_id, bv.checker3_id]:
-            flash("You have already submitted your count for this validation.", "info")
-            return redirect(url_for("validations_list"))
-
-        try:
-            count = max(0, int(request.form.get("count", 0) or 0))
-        except (ValueError, TypeError):
-            flash("Invalid count.", "danger")
-            return redirect(url_for("validations_list"))
-
-        # Fill the first empty slot
-        now = datetime.utcnow()
-        if bv.checker1_count is None:
-            bv.checker1_id = current_id
-            bv.checker1_count = count
-            bv.checker1_at = now
-        elif bv.checker2_count is None:
-            bv.checker2_id = current_id
-            bv.checker2_count = count
-            bv.checker2_at = now
-        elif bv.checker3_count is None:
-            bv.checker3_id = current_id
-            bv.checker3_count = count
-            bv.checker3_at = now
-        else:
-            flash("All 3 checker slots already filled.", "warning")
-            return redirect(url_for("validations_list"))
-
-        # If all 3 slots now filled, evaluate
-        if bv.checker_count_submitted >= 3:
-            new_status, wrong_ids = bv.evaluate()
-            bv.status = new_status
-            bv.mismatch_emp_ids = ",".join(str(x) for x in wrong_ids)
-            db.session.commit()
-            if new_status == "confirmed":
-                flash("All 4 counts matched — submission confirmed.", "success")
-            else:
-                # ── Auto-create complaint entries for each flagged staff ──
-                # Deduction scales with how far off they were from the majority.
-                try:
-                    all_votes = [
-                        (bv.picker_id, bv.picker_count),
-                        (bv.checker1_id, bv.checker1_count),
-                        (bv.checker2_id, bv.checker2_count),
-                        (bv.checker3_id, bv.checker3_count),
-                    ]
-                    counts = Counter(v for _, v in all_votes if v is not None)
-                    majority_val, _ = counts.most_common(1)[0]
-
-                    for wid in wrong_ids:
-                        wrong_emp = db.session.get(Employee, wid)
-                        if not wrong_emp:
-                            continue
-                        wrong_val = next((v for eid, v in all_votes if eid == wid), 0)
-                        diff = abs((wrong_val or 0) - majority_val)
-                        # Scale: 0.5 pt per unit difference, capped at 15 pts
-                        deduct_pts = min(round(diff * 0.5, 1), 15.0)
-                        if deduct_pts < 0.5:
-                            deduct_pts = 0.5  # minimum deduction per mismatch
-
-                        # Role-specific deduction routing
-                        picker_f = deduct_pts if wrong_emp.staff_type == "picker" else 0.0
-                        checker_f = deduct_pts if wrong_emp.staff_type == "checker" else 0.0
-                        purchaser_f = deduct_pts if wrong_emp.staff_type == "purchaser" else 0.0
-
-                        auto_complaint = Complaint(
-                            entry_date=date.today(),
-                            reported_by=None,  # auto-generated, no admin
-                            target_emp_id=wid,  # Phase 1 targeted deduction
-                            description=(f"[AUTO] Bill count mismatch on {bv.entry_date}. "
-                                         f"Entered {wrong_val}, majority was {majority_val} (off by {diff})."),
-                            complaint_type="missing",
-                            picker_deduct=picker_f,
-                            checker_deduct=checker_f,
-                            purchaser_deduct=purchaser_f,
-                            picker_final=picker_f,
-                            checker_final=checker_f,
-                            purchaser_final=purchaser_f,
-                            is_resolved=False,
-                        )
-                        db.session.add(auto_complaint)
-                    db.session.commit()
-                    log_audit("auto_deduction",
-                              f"bv_id={bv.id} date={bv.entry_date}",
-                              f"{len(wrong_ids)} staff auto-deducted for mismatch")
-                except Exception as ae:
-                    logger.error(f"Auto-deduction on mismatch failed: {ae}")
-                    db.session.rollback()
-
-                # Broadcast mismatch alert to admin
-                try:
-                    wrong_names = [db.session.get(Employee, wid).name
-                                   for wid in wrong_ids if db.session.get(Employee, wid)]
-                    socketio.emit("validation_mismatch", {
-                        "picker_id": bv.picker_id,
-                        "date": str(bv.entry_date),
-                        "wrong_names": wrong_names,
-                    })
-                    # Feature 11: SMS alert for mismatch
-                    try:
-                        picker_emp = db.session.get(Employee, bv.picker_id)
-                        picker_name = picker_emp.name if picker_emp else f"#{bv.picker_id}"
-                        admin_phone = os.environ.get("ADMIN_PHONE", "")
-                        send_sms(admin_phone,
-                                 f"Bill count mismatch: {picker_name} on {bv.entry_date}. {len(wrong_ids)} staff flagged.")
-                    except Exception:
-                        pass
-                except Exception:
-                    pass
-                flash(f"Counts do not match! {len(wrong_ids)} staff flagged and auto-deducted. Admin can review and resolve via Complaints.", "warning")
-        else:
-            db.session.commit()
-            flash(f"Count recorded ({bv.checker_count_submitted}/3 checkers).", "success")
-
-        # Live update
-        socketio.emit("validation_update", {
-            "bv_id": bv.id,
-            "status": bv.status,
-            "slots_filled": bv.checker_count_submitted,
-        })
-
-        return redirect(url_for("validations_list"))
-    except Exception as e:
-        db.session.rollback()
-        logger.error(f"validation_submit: {e}")
-        flash("Error submitting validation.", "danger")
-        return redirect(url_for("validations_list"))
-
-
-@app.route("/admin/validation/<int:bv_id>/override", methods=["POST"])
-@admin_required
-def admin_validation_override(bv_id):
-    """Admin override — accept a pending or mismatched validation.
-    Used when fewer than 3 checkers are on shift, or for dispute resolution.
-    """
-    try:
-        bv = db.session.get(BillValidation, bv_id)
-        if not bv:
-            flash("Validation not found.", "danger")
-            return redirect(url_for("validations_list"))
-
-        action = request.form.get("action", "accept")
-        note = request.form.get("note", "").strip()[:200]
-        admin_id = session.get("user_id")
-
-        if action == "accept":
-            bv.status = "admin_override"
-            bv.override_by = admin_id
-            bv.override_note = note or "Admin override (short-staffed / accepted)"
-            db.session.commit()
-            log_audit("validation_override", f"picker={bv.picker_id} date={bv.entry_date}",
-                      f"Accepted. Note: {note}")
-            flash(f"Validation #{bv.id} accepted by admin override.", "success")
-        elif action == "reject":
-            bv.status = "mismatch"
-            bv.override_by = admin_id
-            bv.override_note = note or "Admin rejected"
-            db.session.commit()
-            log_audit("validation_reject", f"picker={bv.picker_id} date={bv.entry_date}",
-                      f"Rejected. Note: {note}")
-            flash(f"Validation #{bv.id} marked as mismatch.", "warning")
-        else:
-            flash("Unknown action.", "warning")
-
-        return redirect(url_for("validations_list"))
-    except Exception as e:
-        db.session.rollback()
-        logger.error(f"admin_validation_override: {e}")
-        flash("Error processing override.", "danger")
-        return redirect(url_for("validations_list"))
-
 
 @app.route("/api/last_entry")
 @login_required
@@ -6807,30 +6544,6 @@ def admin_reports_download(month_str):
         return redirect(url_for("admin_reports_archive"))
 
 
-# ─── FEATURE 17: Stale Validations SMS job ────────────────────────────────────
-
-def stale_validations_sms_job():
-    """Daily APScheduler job: SMS admin if stale pending validations exist."""
-    with app.app_context():
-        try:
-            cutoff = datetime.utcnow() - timedelta(hours=24)
-            count = BillValidation.query.filter(
-                BillValidation.status == 'pending',
-                BillValidation.created_at <= cutoff
-            ).count()
-            if count > 0:
-                admin_phone = os.environ.get("ADMIN_PHONE", "")
-                if admin_phone:
-                    send_sms(admin_phone, f"{count} bill validations have been pending for 24+ hours. Please review.")
-                    logger.info(f"Stale validations SMS sent: {count} pending")
-                else:
-                    logger.info(f"Stale validations: {count} pending, ADMIN_PHONE not set")
-        except Exception as e:
-            logger.error(f"stale_validations_sms_job: {e}")
-
-
-# ─── DELIVERY TRACKING MODULE ─────────────────────────────────────────────────
-
 STORE_LAT = float(os.environ.get("STORE_LAT", "0.0"))
 STORE_LNG = float(os.environ.get("STORE_LNG", "0.0"))
 # Fallback city centre (Cuttack) when no STORE_LAT/LNG configured — keeps the
@@ -6840,6 +6553,7 @@ FALLBACK_LNG = STORE_LNG if STORE_LNG else 85.8830
 STORE_RADIUS_M = 400    # meters — must be within this to start a trip
 ARRIVAL_RADIUS_M = 200  # meters — must be within this to confirm delivery
 TOMTOM_API_KEY = os.environ.get("TOMTOM_API_KEY", "")  # free key → live-traffic routing
+
 
 
 def _haversine_m(lat1, lng1, lat2, lng2):
@@ -7607,7 +7321,6 @@ def api_palette():
                 {"t": "Daily Checklists",  "s": "Define tasks per role",        "u": "/admin/checklist",     "g": "Go to"},
                 {"t": "Delivery Dashboard","s": "Routes, trips, GPS trails",    "u": "/admin/delivery",      "g": "Go to"},
                 {"t": "Delivery Leaderboard","s": "Rider rankings",             "u": "/delivery/leaderboard","g": "Go to"},
-                {"t": "Bill Validations",  "s": "Picker and checker counts",    "u": "/validations",         "g": "Go to"},
                 {"t": "Supervisor Console","s": "Authoritative bill counts",    "u": "/supervisor",          "g": "Go to"},
                 {"t": "Reports Archive",   "s": "Past monthly reports",         "u": "/admin/reports",       "g": "Go to"},
                 {"t": "Bulk Import",       "s": "Add staff from CSV",           "u": "/admin/bulk_import",   "g": "Go to"},
@@ -8147,14 +7860,6 @@ try:
         trigger="cron",
         day=1, hour=8, minute=5,
         id="monthly_archive_report",
-        replace_existing=True
-    )
-    # Feature 17: daily stale validations SMS at 9 AM
-    _scheduler.add_job(
-        stale_validations_sms_job,
-        trigger="cron",
-        hour=9, minute=0,
-        id="stale_validations_sms",
         replace_existing=True
     )
     # Privacy: expire GPS location trails nightly, and once on boot so the
