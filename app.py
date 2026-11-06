@@ -317,6 +317,30 @@ class KPIEntry(db.Model):
         return round(t / max(tt, 0.001), 1) if tt > 0 else 0
 
 
+class ErrorLog(db.Model):
+    """Errors that happened on the live app, so they can be seen and fixed.
+
+    The app sends a crashed request back to the login page and many routes
+    catch their own errors, so failures were invisible: a button "did
+    nothing". Each distinct error (same place + same message) is one row per
+    day with a count, so a loop cannot flood the table or the admin's inbox.
+    """
+    __tablename__ = "error_logs"
+    id         = db.Column(db.Integer, primary_key=True)
+    day        = db.Column(db.Date, nullable=False, index=True)
+    first_at   = db.Column(db.DateTime, default=datetime.utcnow)
+    last_at    = db.Column(db.DateTime, default=datetime.utcnow)
+    count      = db.Column(db.Integer, default=1)
+    path       = db.Column(db.String(200), default="")
+    method     = db.Column(db.String(10), default="")
+    user_id    = db.Column(db.Integer, nullable=True)
+    user_name  = db.Column(db.String(120), default="")
+    where      = db.Column(db.String(160), default="")
+    message    = db.Column(db.String(500), default="")
+    detail     = db.Column(db.Text, default="")
+    alerted    = db.Column(db.Boolean, default=False)
+
+
 class AuditLog(db.Model):
     __tablename__ = "audit_logs"
     id = db.Column(db.Integer, primary_key=True)
@@ -841,6 +865,93 @@ def invalidate_request_memos():
         return
     for k in [k for k in vars(g) if k.startswith("_memo_") or k == "_checker_team_cache"]:
         delattr(g, k)
+
+
+class _ErrorCapture(logging.Handler):
+    """Records every ERROR the app logs into error_logs, with the page and
+    user it happened for, and emails the admin the first time each distinct
+    error appears in a day.
+
+    Written over its own connection, never the request's session: a request
+    that failed may have a half-finished transaction, and committing the log
+    through the same session would commit that half-finished work too.
+    """
+    _busy = False
+
+    def emit(self, record):
+        if _ErrorCapture._busy or record.levelno < logging.ERROR:
+            return
+        _ErrorCapture._busy = True
+        try:
+            msg = record.getMessage()[:500]
+            if "error_logs" in msg:            # never log failures of the log itself
+                return
+            import traceback as _tb
+            detail = ""
+            if record.exc_info and record.exc_info[0]:
+                detail = "".join(_tb.format_exception(*record.exc_info))[-4000:]
+            path = method = uname = ""
+            uid = None
+            if has_request_context():
+                path, method = request.path[:200], request.method
+                uid = session.get("user_id")
+                uname = (session.get("user_name") or "")[:120]
+            where = ("%s:%s" % (record.funcName, record.lineno))[:160]
+            now = datetime.utcnow()
+            today = now.date()
+            tbl = ErrorLog.__table__
+            with db.engine.begin() as conn:
+                row = conn.execute(tbl.select().where(
+                    (tbl.c.day == today) & (tbl.c.where == where) & (tbl.c.message == msg)
+                    & (tbl.c.path == path))).first()
+                if row:
+                    conn.execute(tbl.update().where(tbl.c.id == row.id)
+                                 .values(count=tbl.c.count + 1, last_at=now))
+                    return
+                conn.execute(tbl.insert().values(
+                    day=today, first_at=now, last_at=now, count=1, path=path, method=method,
+                    user_id=uid, user_name=uname, where=where, message=msg, detail=detail,
+                    alerted=False))
+            _alert_admin_of_error(path, uname, msg, detail)
+        except Exception:
+            pass
+        finally:
+            _ErrorCapture._busy = False
+
+
+def _alert_admin_of_error(path, user, msg, detail):
+    """Email the owner about a NEW error, in the background so the page that
+    failed is not slowed down. Silently does nothing if mail is not set up."""
+    to = report_recipient()
+    if not to or active_email_transport() is None or app.config.get("TESTING"):
+        return
+    body = ("A new error happened on the Pharma IP System.\n\n"
+            "Page: %s\nUser: %s\nError: %s\n\n"
+            "Every error is listed on Admin > More > Diagnostics, with a count of how often "
+            "it happened. Send the details to your developer to fix.\n\n%s"
+            % (path or "(background job)", user or "-", msg, detail[-1500:]))
+    def _go():
+        try:
+            send_test_email(to, "Pharma IP System - new error: %s" % msg[:80], body)
+        except Exception:
+            pass
+    try:
+        import threading
+        threading.Thread(target=_go, daemon=True).start()
+    except Exception:
+        pass
+
+
+logger.addHandler(_ErrorCapture())
+
+
+def recent_errors(days=7, limit=50):
+    try:
+        since = date.today() - timedelta(days=days)
+        return (ErrorLog.query.filter(ErrorLog.day >= since)
+                .order_by(ErrorLog.last_at.desc()).limit(limit).all())
+    except Exception:
+        return []
 
 
 def checker_team_day_totals(dates):
@@ -4966,8 +5077,29 @@ def not_found(e):
 
 @app.errorhandler(500)
 def server_error(e):
-    logger.error(f"500: {e}")
-    return redirect(url_for("login"))
+    # Abandon whatever the crashed request had half-written first: it must not
+    # be saved, and while it is open it can block the error log from writing.
+    try:
+        db.session.rollback()
+    except Exception:
+        pass
+    logger.error(f"500: {e}", exc_info=getattr(e, "original_exception", None) or True)
+    # Still a friendly landing, but no longer silent: the error is recorded
+    # and the user is told something went wrong instead of being dropped on
+    # the login page as if nothing had happened.
+    try:
+        flash("Something went wrong on that page. It has been recorded for the admin.", "danger")
+    except Exception:
+        pass
+    return redirect(url_for("index"))
+
+
+@app.errorhandler(Exception)
+def unhandled_error(e):
+    from werkzeug.exceptions import HTTPException
+    if isinstance(e, HTTPException):
+        return e
+    return server_error(e)
 
 
 # ─── MAIN ────────────────────────────────────────────────────────────────────
@@ -6022,7 +6154,12 @@ def admin_diagnostics():
     except Exception as e:
         db_ok, db_note = False, str(e)[:160]
 
-    return render_template("admin_diagnostics.html",
+    errors = recent_errors(7)
+    if errors:
+        warnings.append("%d different error(s) happened on the live app in the last 7 days "
+                        "(%d times in total) -- listed under Recent Errors below."
+                        % (len(errors), sum(e.count or 1 for e in errors)))
+    return render_template("admin_diagnostics.html", errors=errors,
                            groups=[("Email", mail_vars), ("Delivery", delivery_vars),
                                    ("SMS alerts", sms_vars), ("Core", core_vars)],
                            warnings=warnings, db_ok=db_ok, db_note=db_note,
@@ -6119,7 +6256,7 @@ def mail_socket_timeout():
 
 
 
-def send_test_email(to):
+def send_test_email(to, subject=None, body=None):
     """Send one small message over the active transport, failing fast and
     saying exactly what went wrong.
 
@@ -6136,8 +6273,8 @@ def send_test_email(to):
     import socket
     from email.message import EmailMessage
 
-    subject = "Pharma IP System - test email"
-    body = "Mail is configured correctly. Sent from the diagnostics page."
+    subject = subject or "Pharma IP System - test email"
+    body = body or "Mail is configured correctly. Sent from the diagnostics page."
     transport = active_email_transport()
     sender_addr = (os.environ.get("MAIL_USERNAME")
                    or os.environ.get("EMAIL_FROM") or "noreply@pharmaip.com")
@@ -6164,10 +6301,10 @@ def send_test_email(to):
     use_tls = os.environ.get("MAIL_USE_TLS", "true").lower() != "false"
 
     msg = EmailMessage()
-    msg["Subject"] = "Pharma IP System - test email"
+    msg["Subject"] = subject
     msg["From"] = sender
     msg["To"] = to
-    msg.set_content("Mail is configured correctly. Sent from the diagnostics page.")
+    msg.set_content(body)
 
     try:
         # Port 465 is implicit SSL; 587 and 25 are plain with STARTTLS.
@@ -6272,6 +6409,9 @@ def purge_old_location_data():
             n = (BreadcrumbPoint.query
                  .filter(BreadcrumbPoint.recorded_at < cutoff)
                  .delete(synchronize_session=False))
+            # The error log only needs to cover the recent past.
+            ErrorLog.query.filter(ErrorLog.day < date.today() - timedelta(days=30)) \
+                .delete(synchronize_session=False)
             db.session.commit()
             if n:
                 logger.info("Privacy: purged %d GPS point(s) older than %d days"

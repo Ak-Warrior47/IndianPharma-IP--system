@@ -77,6 +77,41 @@
     {% endif %}
   </section>
 
+  <!-- ============ RECENT ERRORS ============ -->
+  <section class="ip-card">
+    <div class="ip-card__head">
+      <div>
+        <div class="ip-card__title">Recent Errors</div>
+        <div class="ip-card__sub">Anything that failed on the live app in the last 7 days. Send these to your developer.</div>
+      </div>
+      <span class="ip-pill {{ 'ip-pill--bad' if errors else 'ip-pill--ok' }}">{{ errors|length }} error{{ '' if errors|length == 1 else 's' }}</span>
+    </div>
+    {% if errors %}
+    <div class="ip-tablewrap">
+      <table class="ip-table">
+        <thead><tr><th>Last seen</th><th>Page</th><th>User</th><th>What failed</th><th class="num">Times</th></tr></thead>
+        <tbody>
+        {% for e in errors %}
+          <tr>
+            <td class="nowrap">{{ e.last_at.strftime('%d %b %H:%M') }} UTC</td>
+            <td class="nowrap"><code style="font-size:var(--fs-small);">{{ e.method }} {{ e.path or '(background)' }}</code></td>
+            <td class="nowrap">{{ e.user_name or '—' }}</td>
+            <td class="ip-small">{{ e.message }}
+              {% if e.detail %}<details><summary class="ip-muted" style="cursor:pointer;">technical detail</summary>
+              <pre style="font-size:11px;max-height:220px;overflow:auto;margin:6px 0 0;">{{ e.detail }}</pre></details>{% endif %}
+              <div class="ip-muted" style="font-size:11px;">at {{ e.where }}</div></td>
+            <td class="num">{{ e.count }}</td>
+          </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <div class="ip-empty"><div class="ip-empty__title">No errors in the last 7 days</div>
+      <div class="ip-empty__hint">If something fails on any page, it appears here with the page, the user and the reason, and you get an email the first time.</div></div>
+    {% endif %}
+  </section>
+
   <!-- ============ DATABASE ============ -->
   <section class="ip-card">
     <div class="ip-card__head">

@@ -1,0 +1,24 @@
+# Every push and pull request runs the whole test suite. A red X on GitHub
+# means a change broke something -- before it can reach the live app.
+name: tests
+on:
+  push:
+  pull_request:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+      - name: System tools for the PDF checks
+        run: sudo apt-get update -q && sudo apt-get install -y -q poppler-utils
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+      - name: Run every test suite
+        env:
+          PYTHON: python
+        run: ./run_tests.sh
