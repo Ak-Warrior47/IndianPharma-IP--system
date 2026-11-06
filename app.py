@@ -874,13 +874,14 @@ def checker_team_day_totals(dates):
         return cache[cache_key]
     for d in dates:
         out[d] = {"total": 0, "checked": 0, "normal": 0, "urgent": 0,
-                  "pending": 0, "by_emp": {}}
+                  "pending": 0, "by_emp": {}, "entered": {}, "mode": "team"}
 
     def _absorb(d, emp_id, total, normal, urgent):
         row = out.get(d)
         if row is None:
             return
         row["total"] = max(row["total"], int(total or 0))
+        row["entered"][emp_id] = max(row["entered"].get(emp_id, 0), int(total or 0))
         row["normal"] += int(normal or 0)
         row["urgent"] += int(urgent or 0)
         n = int(normal or 0) + int(urgent or 0)
@@ -913,6 +914,17 @@ def checker_team_day_totals(dates):
         return out
 
     for row in out.values():
+        # The form used to say "All bills given to YOU today", so on those days
+        # each checker typed their own bills, not the day's total. You can tell:
+        # the team checked more bills than the biggest "total" anyone entered.
+        # On such a day the only reading that adds up is that each figure was
+        # that checker's own share, so the day's total is their sum.
+        if row["checked"] > row["total"]:
+            summed = sum(row["entered"].values())
+            if summed >= row["checked"]:
+                row["total"], row["mode"] = summed, "per_person"
+            else:
+                row["mode"] = "conflict"      # no reading of the figures adds up
         row["pending"] = max(row["total"] - row["checked"], 0)
     if cache is not None:
         cache[cache_key] = out
@@ -1350,10 +1362,13 @@ def build_analytics(entries: List[KPIEntry], staff_type: str = "picker", emp_id:
             team_pending_bills = sum(r["pending"] for r in _team_days.values())
             team_urgent_bills  = sum(r["urgent"] for r in _team_days.values())
             team_checker_count = len({eid for r in _team_days.values() for eid in r["by_emp"]})
+            team_per_person_days = sum(1 for r in _team_days.values() if r["mode"] == "per_person")
+            team_conflict_days = sum(1 for r in _team_days.values() if r["mode"] == "conflict")
         else:
             _team_days = {}
             tbr = team_checked_bills = team_pending_bills = 0
             team_urgent_bills = team_checker_count = 0
+            team_per_person_days = team_conflict_days = 0
         # Kept only so an old hand-typed figure can still be shown beside the
         # derived one while the team gets used to the change. It no longer scores.
         tpbm = sum(int(e.pending_bills_manual or 0) for e in entries) if staff_type == "checker" else 0
@@ -1840,6 +1855,7 @@ def build_analytics(entries: List[KPIEntry], staff_type: str = "picker", emp_id:
             team_total_bills=tbr, team_checked_bills=team_checked_bills,
             team_pending_bills=team_pending_bills, team_urgent_bills=team_urgent_bills,
             team_checker_count=team_checker_count, team_share_pct=team_share_pct,
+            team_per_person_days=team_per_person_days, team_conflict_days=team_conflict_days,
             pending_manual=tpbm,
             # Urgent weighting
             urgent_weight=urgent_weight, weighted_items=weighted_items,
@@ -2190,6 +2206,7 @@ def _safe_stats(stats):
             "pur_pending_bills": 0,
             "team_total_bills": 0, "team_checked_bills": 0, "team_pending_bills": 0,
             "team_urgent_bills": 0, "team_checker_count": 0, "team_share_pct": 0,
+            "team_per_person_days": 0, "team_conflict_days": 0,
             "pending_manual": 0,
             "urgent_weight": URGENT_BILL_WEIGHT, "weighted_items": 0,
             "weighted_bills": 0, "urgent_item_bonus": 0, "urgent_bill_bonus": 0,
@@ -4250,6 +4267,8 @@ def staff_detail(emp_id):
             checker_bests=(checker_month_bests(emp.id)
                            if "checker" in (emp.staff_type, emp.secondary_staff_type) else None),
             mt_days=multitask_days_for(emp.id),
+            team_days=(checker_team_day_totals({e.entry_date for e in entries})
+                       if emp.staff_type == "checker" else {}),
             emp=emp,
             emp_overall_rank=emp_overall_rank,
             emp_role_rank=emp_role_rank,

@@ -231,6 +231,31 @@ with app.app_context():
     check("6.10 A checker typing the correct HIGHER total is never blocked by a low one",
           A.checker_bill_problems(CLEAN, smriti.id, 150, 30, 20) == [])
 
+# ---- 6b. Old days, where each checker typed their OWN bills ----------
+# The form used to say "All bills given to you today", so older days hold
+# each checker's own figure. Taking the biggest as the day total then shows
+# more bills checked than existed; the only reading that adds up is the sum.
+with app.app_context():
+    OLD = DAY - timedelta(days=12)
+    for em, rec, n, u in (("lisa_t@x.com", 172, 75, 42), ("smriti_t@x.com", 90, 60, 20),
+                          ("deepti_t@x.com", 70, 50, 10)):
+        e = Employee.query.filter_by(email=em).first()
+        entry(e, rec, n, u, items=300, urgent_items=40, on=OLD)
+    od = A.checker_team_day_totals([OLD])[OLD]
+    check("6b.1 An own-bills day is recognised", od["mode"] == "per_person", od["mode"])
+    check("6b.2 Its total is the checkers' figures added: 332", od["total"] == 332)
+    check("6b.3 Pending = 332 - 257 checked = 75", od["pending"] == 75, od["pending"])
+    nd = A.checker_team_day_totals([DAY])[DAY]
+    check("6b.4 A proper day-total day is untouched (pending 10)", nd["mode"] == "team" and nd["pending"] == 10)
+src = open(os.path.join(REPO, "templates", "staff_detail.html")).read()
+check("6b.5 Period buttons can hide the other periods", ".period-panel { display: none; }" in src)
+check("6b.6 The daily log uses the team pending, not the typed one",
+      "team_days.get(e.entry_date)" in src and "e.bills_received or 0) - e_sb" not in src)
+for t in ("dashboard.html", "past_entry.html"):
+    f = open(os.path.join(REPO, "templates", t)).read()
+    check("6b.7 %s asks for the whole day's total, not 'your' bills" % t,
+          "Day's Total Sales Bills (whole team)" in f and "All bills given to you" not in f)
+
 # ---- 7. The form refuses it too ----------------------------------------
 # Via the real past-entry window, as Lisa herself, so the whole route runs.
 from app import PastEntryWindow  # noqa: E402

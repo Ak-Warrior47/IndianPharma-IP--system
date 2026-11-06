@@ -147,6 +147,10 @@ body { display: grid; grid-template-columns: 236px minmax(0, 1fr); min-height: 1
   border: 1px solid var(--line-strong); background: var(--surface);
   color: var(--ink-2); font-size: var(--fs-small); font-weight: var(--fw-bold);
   cursor: pointer; transition: background var(--t-fast) var(--ease); }
+/* Only the chosen period is shown. This rule went missing in the redesign,
+   so all four periods were stacked and the buttons appeared to do nothing. */
+.period-panel { display: none; }
+.period-panel.active { display: block; }
 .period-tab.active, .lb-tab.active { background: var(--brand); border-color: var(--brand); color: #fff; }
 [data-theme="dark"] .period-tab.active, [data-theme="dark"] .lb-tab.active { color: var(--on-brand); }
 
@@ -753,11 +757,19 @@ body { display: grid; grid-template-columns: 236px minmax(0, 1fr); min-height: 1
           <div class="mini"><div class="mini-lbl">Total SB Checked</div><div class="mini-val">{{ (pstats.tsb or 0) + (pstats.tcs or 0) }}</div></div>
           <div class="mini"><div class="mini-lbl">Total Items Checked</div><div class="mini-val">{{ pstats.tck_total or pstats.tck or 0 }}</div></div>
           <div class="mini"><div class="mini-lbl">Check Speed/hr</div><div class="mini-val">{{ pstats.check_speed or pstats.ck_speed or 0 }}</div></div>
-          <div class="mini"><div class="mini-lbl">Clearance Rate</div><div class="mini-val">{{ pstats.clearance_rate or 100 }}<span class="suf">%</span></div></div>
+          <div class="mini"><div class="mini-lbl">Clearance Rate</div><div class="mini-val">{% if pstats.team_total_bills %}{{ pstats.clearance_rate }}<span class="suf">%</span>{% else %}—{% endif %}</div></div>
           <div class="mini {% if (pstats.pending_bills or 0) > 0 %}danger{% endif %}">
             <div class="mini-lbl">Pending Bills (team)</div>
             <div class="mini-val">{{ pstats.pending_bills or 0 }}</div>
-            <div class="mini-foot">{{ pstats.team_total_bills or 0 }} total − {{ pstats.team_checked_bills or 0 }} checked by {{ pstats.team_checker_count or 0 }} checker{{ '' if pstats.team_checker_count == 1 else 's' }}</div>
+            {% if pstats.team_total_bills %}
+            <div class="mini-foot">{{ pstats.team_total_bills }} day total − {{ pstats.team_checked_bills }} checked by {{ pstats.team_checker_count }} checker{{ '' if pstats.team_checker_count == 1 else 's' }}</div>
+            {% endif %}
+            {% if pstats.team_per_person_days %}
+            <div class="mini-foot" style="color:var(--amber);">{{ pstats.team_per_person_days }} day{{ '' if pstats.team_per_person_days == 1 else 's' }}: totals were typed per person, so they were added up</div>
+            {% endif %}
+            {% if pstats.team_conflict_days %}
+            <div class="mini-foot" style="color:var(--rose);">{{ pstats.team_conflict_days }} day{{ '' if pstats.team_conflict_days == 1 else 's' }}: more bills checked than any total entered</div>
+            {% endif %}
           </div>
           <div class="mini"><div class="mini-lbl">Own Share of Team</div><div class="mini-val">{{ pstats.team_share_pct or 0 }}<span class="suf">%</span></div></div>
           <div class="mini"><div class="mini-lbl">Urgent Bills Taken</div><div class="mini-val">{{ pstats.tsb_urgent or 0 }}<span class="suf">× {{ pstats.urgent_weight or 1 }}</span></div></div>
@@ -842,16 +854,22 @@ body { display: grid; grid-template-columns: 236px minmax(0, 1fr); min-height: 1
               <td>{{ e.errors_found }}</td>
               <td><strong>{{ (e.sales_bills_open or 0) + (e.cs_sales_open or 0) }}</strong></td>
               <td><strong>{{ (e.checked or 0) + (e.errors_found or 0) }}</strong></td>
-              {% set e_sb = (e.sales_bills_open or 0)+(e.cs_sales_open or 0) %}
-              {% set e_pending = [((e.bills_received or 0) - e_sb), 0]|max %}
-              {% set e_clear = (e_sb / (e.bills_received or 1) * 100)|round(1) if (e.bills_received or 0) > 0 else 100 %}
-              <td style="color:{% if e_pending > 0 %}var(--rose){% else %}var(--emerald){% endif %};font-weight:600">
+              {# Pending is the TEAM's: the day's total minus every checker's
+                 checked bills -- not this one person's own leftover. #}
+              {% set td = team_days.get(e.entry_date) if team_days else none %}
+              {% set e_pending = td.pending if td else 0 %}
+              {% set e_clear = ((td.checked / td.total * 100)|round(1) if td.total else none) if td else none %}
+              {% if e_clear is not none and e_clear > 100 %}{% set e_clear = 100.0 %}{% endif %}
+              <td style="color:{% if e_pending > 0 %}var(--rose){% else %}var(--emerald){% endif %};font-weight:600"
+                  title="{% if td %}Day total {{ td.total }} minus checked by all checkers {{ td.checked }}{% endif %}">
                 {{ e_pending }}
+                {% if td and td.mode != 'team' %}<span style="display:inline-block;margin-left:4px;padding:1px 6px;border-radius:6px;background:var(--amber-lite);color:var(--amber);font-size:11px;font-weight:700;"
+                  title="{{ 'Each checker typed their own bills that day, not the day total - added together' if td.mode == 'per_person' else 'The figures entered that day do not add up' }}">{{ 'own' if td.mode == 'per_person' else '!' }}</span>{% endif %}
                 {% if not e.bills_received or e.bills_received == 0 %}
                   <span style="display:inline-block;margin-left:4px;padding:1px 6px;border-radius:6px;background:var(--amber-lite);color:var(--amber);font-size:11px;font-weight:700;" title="TB Sales (Bills Received) missing">TB</span>
                 {% endif %}
               </td>
-              <td><span class="acc-pill {% if e_clear >= 95 %}acc-good{% elif e_clear >= 85 %}acc-mid{% else %}acc-bad{% endif %}">{{ e_clear }}%</span></td>
+              <td>{% if e_clear is not none %}<span class="acc-pill {% if e_clear >= 95 %}acc-good{% elif e_clear >= 85 %}acc-mid{% else %}acc-bad{% endif %}">{{ e_clear }}%</span>{% else %}—{% endif %}</td>
               {% set e_speed = (((e.checked or 0) + (e.errors_found or 0)) / 9.0)|round(1) %}
               <td>{{ e_speed }}/hr</td>
             {% else %}
@@ -1018,13 +1036,16 @@ body { display: grid; grid-template-columns: 236px minmax(0, 1fr); min-height: 1
       <div class="formula-row"><b>Workspace</b> = Rack×50% + Table×30% + Sweep×20%</div>
       <div class="formula-row"><b>Points (100)</b> = VWCR×25 + Fulfilment×18 + Speed÷250×15 + EffRatio×10 + Workspace×10 + CS×8 + Cleaner×7 + LogCons×7</div>
       {% else %}
-      <div class="formula-row"><b>Check Speed</b> = Items Checked ÷ (9 hrs × Days)</div>
-      <div class="formula-row"><b>VWCR</b> = (Normal÷Total) × (Items/hr ÷ 70) × 100, cap 120%</div>
-      <div class="formula-row"><b>Clearance</b> = SB Checked ÷ (SB Checked + Pending) × 100</div>
-      <div class="formula-row"><b>Cleaner Rate</b> = (Normal×100 + Sweep/Rack×10) ÷ Total Volume</div>
-      <div class="formula-row"><b>Efficiency Ratio</b> = min(items/200, bills/50) — Efficient badge when both = 1.0</div>
-      <div class="formula-row"><b>Log Consistency</b> = max(0, 100 − std_dev × 2) — rewards stable daily logging</div>
-      <div class="formula-row"><b>Points (100)</b> = Speed÷80×22 + Clearance×22 + VWCR×20 + Cleaner×8 + EffRatio×8 + LogCons×8 + PotEff×5 + Workspace×4 + Sweep×3</div>
+      <div class="formula-row"><b>Urgent work</b> = one urgent bill or item counts as {{ a_stats.urgent_weight if a_stats else 1.5 }} normal ones</div>
+      <div class="formula-row"><b>Weighted items</b> = Normal items + Urgent items × 1.5 &nbsp;·&nbsp; <b>Weighted bills</b> = Normal bills + Urgent bills × 1.5</div>
+      <div class="formula-row"><b>Pending (team)</b> = Day's total bills − bills checked by ALL checkers (normal + urgent). Same number for every checker.</div>
+      <div class="formula-row"><b>Clearance (team)</b> = Bills checked by all checkers ÷ Day's total bills × 100</div>
+      <div class="formula-row"><b>Weighted Speed</b> = Weighted items ÷ (9 hrs × Days), scored against the hourly target</div>
+      <div class="formula-row"><b>VWCR</b> = (Weighted items ÷ Items) × (Weighted items/hr ÷ target) × 100, cap 120%</div>
+      <div class="formula-row"><b>Efficiency Ratio</b> = min(weighted items/day ÷ 200, weighted bills/day ÷ 50)</div>
+      <div class="formula-row"><b>Log Consistency</b> = max(0, 100 − std_dev × 2) — rewards steady daily work</div>
+      <div class="formula-row"><b>Points (100)</b> = Weighted Speed 22 + Team Clearance 22 + VWCR 20 + Cleaner 8 + Efficiency 8 + Consistency 8 + Potential 5 + Workspace 4 + Sweep 3</div>
+      <div class="formula-row"><b>Rule</b>: normal + urgent bills can never be more than the day's total — for one checker, or the whole team together</div>
       {% endif %}
       <div class="formula-row"><b>Minus Marking</b> = Complaint deductions subtracted from points (capped 30)</div>
       <div class="formula-row"><b>Admin Adjustment</b> = Manual ± override set per employee or per entry</div>

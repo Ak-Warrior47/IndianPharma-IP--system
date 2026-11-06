@@ -548,9 +548,9 @@ button[disabled] { opacity: .45; cursor: not-allowed; transform: none; }
       <div class="form-grid">
         {% if staff_type == 'checker' %}
         <div class="field">
-          <label>Total Bills Received Today</label>
+          <label>Day's Total Sales Bills (whole team)</label>
           <input type="number" name="bills_received" id="f_bills_received" min="0" value="0" required oninput="updateCheckerTotals()">
-          <small>All bills given to you today</small>
+          <small>The WHOLE day's sales bills — the same number for every checker, not just yours</small>
         </div>
         <div class="field">
           <label>Pending Bills (worked out for you)</label>
@@ -911,7 +911,7 @@ button[disabled] { opacity: .45; cursor: not-allowed; transform: none; }
       <!-- CHECKER params -->
       <div class="mt-fields" id="mt_checker" style="display:none;">
         <div class="form-grid">
-          <div class="field"><label>Total Bills Received</label><input type="number" name="mt_c_bills_received" min="0" value="0"></div>
+          <div class="field"><label>Day's Total Sales Bills (whole team)</label><input type="number" name="mt_c_bills_received" min="0" value="0"></div>
           <div class="field"><label>Pending Bills (not checked)</label><input type="number" name="mt_c_pending" min="0" value="0"></div>
           <div class="field"><label>Sales Bill Checked (Normal)</label><input type="number" name="mt_c_sbo" min="0" value="0"></div>
           <div class="field"><label>SB Checked Urgent</label><input type="number" name="mt_c_cso" min="0" value="0"></div>

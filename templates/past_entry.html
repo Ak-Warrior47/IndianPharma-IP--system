@@ -172,9 +172,9 @@ tbody tr:hover { background: var(--brand-tint); }
 
         {% if staff_type == 'checker' %}
         <div class="field">
-          <label>Total Bills Received That Day</label>
+          <label>Day's Total Sales Bills (whole team)</label>
           <input type="number" name="bills_received" id="pe_bills_received" min="0" value="0" oninput="updatePeTotals()">
-          <small>All bills given to you that day</small>
+          <small>The WHOLE day's sales bills — the same number for every checker, not just yours</small>
         </div>
         <div class="field">
           <label>Pending Bills (worked out for you)</label>
