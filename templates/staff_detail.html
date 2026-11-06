@@ -546,6 +546,48 @@ body { display: grid; grid-template-columns: 236px minmax(0, 1fr); min-height: 1
     </section>
     {% endif %}
 
+{% if levels is defined and levels %}
+  {# Level-up system: a better-than-good day that beats the best day ever
+     becomes the new target. The same for best week and best month. #}
+  <div class="card lvl-card" >
+    <div class="ip-card__head">
+      <div>
+        <div class="ip-card__title">Level {{ levels.level }}</div>
+        <div class="ip-card__sub">Beat your best day, week or month on a good day and you level up — your best day becomes your new target.</div>
+      </div>
+      {% if levels.target %}<span class="ip-pill ip-pill--info">Target {{ levels.fmt(levels.target) }} {{ levels.unit if levels.scored else 'a day' }}</span>{% endif %}
+    </div>
+    <div class="ip-card__body">
+      <div class="ip-metrics">
+        {% for label, rec in [('Best day', levels.day), ('Best week', levels.week), ('Best month', levels.month)] %}
+        <div class="ip-metric">
+          <div class="ip-metric__label">{{ label }}</div>
+          <div class="ip-metric__value">{{ levels.fmt(rec.best_value) if rec and rec.best_value else '—' }}</div>
+          <div class="ip-metric__foot">{% if rec and rec.best_start %}{{ levels.unit }}{% if label == 'Best day' %} · {{ rec.best_start.strftime('%d %b') }}{% elif label == 'Best week' %} · week of {{ rec.best_start.strftime('%d %b') }}{% else %} · {{ rec.best_start.strftime('%B') }}{% endif %} · level {{ rec.level or 0 }}{% else %}not set yet{% endif %}</div>
+        </div>
+        {% endfor %}
+      </div>
+      {% if levels.events %}
+      <details style="margin-top:12px;">
+        <summary style="cursor:pointer;font-weight:600;">Level-up history</summary>
+        <div class="ip-tablewrap" style="margin-top:8px;">
+          <table class="ip-table">
+            <thead><tr><th>When</th><th>Record</th><th class="num">New best</th><th class="num">Beat</th><th class="num">Level</th></tr></thead>
+            <tbody>{% for ev in levels.events %}
+              <tr><td class="nowrap">{{ ev.created_at.strftime('%d %b %Y') }}</td>
+                  <td>{{ {'day':'Best day','week':'Best week','month':'Best month'}[ev.period] }} · {{ ev.start.strftime('%d %b') }}</td>
+                  <td class="num">{{ levels.fmt(ev.value) }} <span class="ip-small ip-muted">{{ ev.unit }}</span></td>
+                  <td class="num">{{ levels.fmt(ev.previous) if ev.previous else 'first' }}</td>
+                  <td class="num">{{ ev.level }}</td></tr>
+            {% endfor %}</tbody>
+          </table>
+        </div>
+      </details>
+      {% endif %}
+    </div>
+  </div>
+  {% endif %}
+
     <!-- POINTS BREAKDOWN -->
     {% if a_stats %}
     <section class="card">

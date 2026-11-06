@@ -694,6 +694,30 @@ var NOTES_BY_EMP = {
     {% endif %}
   </div>
 
+  <!-- RECENT LEVEL-UPS -->
+  <div data-pane="today" data-ord="4" class="card" style="margin-bottom:20px;">
+    <div class="card-header">
+      <div class="card-title">Recent Level-ups <span class="cnt">{{ recent_levelups|length }} (7 days)</span></div>
+    </div>
+    {% if recent_levelups %}
+    <div class="table-wrap">
+      <table class="ptable">
+        <thead><tr><th>Staff</th><th>Record</th><th>New best</th><th>Beat</th><th>Level</th><th>When</th></tr></thead>
+        <tbody>{% for ev, who in recent_levelups %}
+          <tr><td><strong>{{ who.name if who else '#' ~ ev.emp_id }}</strong>{% if who %}<div style="font-size:11px;color:var(--ink-3);">{{ who.staff_type|title }}</div>{% endif %}</td>
+              <td>{{ {'day':'Best day','week':'Best week','month':'Best month'}[ev.period] }} · {{ ev.start.strftime('%d %b') }}</td>
+              <td>{{ '%g'|format(ev.value) }} <span style="font-size:11px;color:var(--ink-3);">{{ ev.unit }}</span></td>
+              <td>{{ '%g'|format(ev.previous) if ev.previous else 'first' }}</td>
+              <td>{{ ev.level }}</td>
+              <td>{{ ev.created_at.strftime('%d %b %H:%M') }}</td></tr>
+        {% endfor %}</tbody>
+      </table>
+    </div>
+    {% else %}
+    <div style="padding:14px;color:var(--ink-3);font-size:13px;">No level-ups this week. A staff member levels up when a better-than-good day, week or month beats their personal best.</div>
+    {% endif %}
+  </div>
+
   <!-- FEATURE 5: BADGE MANAGEMENT -->
   <div data-pane="admin" data-ord="4" class="card" style="margin-bottom:20px;">
     <div class="card-header">

@@ -317,6 +317,42 @@ class KPIEntry(db.Model):
         return round(t / max(tt, 0.001), 1) if tt > 0 else 0
 
 
+class PersonalRecord(db.Model):
+    """A staff member's best day, best week and best month, and their level.
+
+    One row per person per period ("day", "week", "month"). `best_value` is
+    the record to beat; `level` counts how many times it was beaten.
+    `last_checked` is the end of the last period already judged, so the same
+    day, week or month can never level someone up twice.
+    """
+    __tablename__ = "personal_records"
+    id           = db.Column(db.Integer, primary_key=True)
+    emp_id       = db.Column(db.Integer, db.ForeignKey("employees.id", ondelete="CASCADE"), nullable=False, index=True)
+    period       = db.Column(db.String(8), nullable=False)
+    best_value   = db.Column(db.Float, default=0.0)
+    best_start   = db.Column(db.Date, nullable=True)
+    best_end     = db.Column(db.Date, nullable=True)
+    last_checked = db.Column(db.Date, nullable=True)
+    level        = db.Column(db.Integer, default=0)
+    updated_at   = db.Column(db.DateTime, default=datetime.utcnow)
+    __table_args__ = (db.UniqueConstraint("emp_id", "period", name="_pr_emp_period_uc"),)
+
+
+class LevelEvent(db.Model):
+    """One level-up: who, which period, the new record and the one it beat."""
+    __tablename__ = "level_events"
+    id         = db.Column(db.Integer, primary_key=True)
+    emp_id     = db.Column(db.Integer, db.ForeignKey("employees.id", ondelete="CASCADE"), nullable=False, index=True)
+    period     = db.Column(db.String(8), nullable=False)
+    value      = db.Column(db.Float, default=0.0)
+    previous   = db.Column(db.Float, default=0.0)
+    start      = db.Column(db.Date, nullable=True)
+    end        = db.Column(db.Date, nullable=True)
+    level      = db.Column(db.Integer, default=1)
+    unit       = db.Column(db.String(40), default="")
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, index=True)
+
+
 class ErrorLog(db.Model):
     """Errors that happened on the live app, so they can be seen and fixed.
 
@@ -1342,6 +1378,246 @@ def multitask_report(days=30):
     return out
 
 
+# ─── LEVEL-UP SYSTEM ─────────────────────────────────────────────────────────
+# The owner's rule: when a staff member has a day better than good that is
+# also their best day ever, that best day becomes their new target and they
+# level up, with a congratulations notification. The same for best week and
+# best month. Targets only ever go up.
+LEVEL_UNIT = {"picker": "items/hr", "checker": "weighted items/hr", "purchaser": "items/hr",
+              "delivery": "deliveries", "biller": "bills processed"}
+LEVEL_SCORED = ("picker", "checker", "purchaser")   # these have a score and a target
+LEVEL_GOOD_SCORE = 72.0       # "better than good": PROFICIENT or ELITE
+LEVEL_MIN_HISTORY = {"day": 5, "week": 2, "month": 1}   # earlier periods needed before levels start
+LEVEL_MIN_DAYS = {"day": 1, "week": 3, "month": 10}      # working days needed inside a period
+
+
+def _level_day_value(role, e):
+    """The day's figure for this role, from one KPI entry."""
+    if role == "picker":
+        return round(((e.picked or 0) + (e.missed or 0)) / 9.0, 1)
+    if role == "checker":
+        return round(((e.checked or 0) + (e.errors_found or 0) * URGENT_BILL_WEIGHT) / 9.0, 1)
+    if role == "purchaser":
+        return round((e.errors_found or 0) / 9.0, 1)
+    return 0.0
+
+
+def _level_daily(emp, start, end):
+    """{date: (value, kpi_entry_or_None)} for every working day in [start, end]."""
+    role = emp.staff_type
+    out = {}
+    if role in LEVEL_SCORED:
+        for e in KPIEntry.query.filter(KPIEntry.emp_id == emp.id, KPIEntry.entry_date >= start,
+                                       KPIEntry.entry_date <= end).all():
+            out[e.entry_date] = (_level_day_value(role, e), e)
+    elif role in ("delivery", "biller"):
+        for n in DeliveryBillerNote.query.filter(DeliveryBillerNote.emp_id == emp.id,
+                                                 DeliveryBillerNote.entry_date >= start,
+                                                 DeliveryBillerNote.entry_date <= end).all():
+            v = out.get(n.entry_date, (0.0, None))[0] + float(n.quantity or 0)
+            out[n.entry_date] = (v, None)
+    return out
+
+
+def _level_period_bounds(period, ref):
+    """(start, end) of the period containing `ref`. Weeks run Monday-Saturday."""
+    if period == "day":
+        return ref, ref
+    if period == "week":
+        start = ref - timedelta(days=ref.weekday())
+        return start, start + timedelta(days=5)
+    start = ref.replace(day=1)
+    nxt = (start + timedelta(days=32)).replace(day=1)
+    return start, nxt - timedelta(days=1)
+
+
+def _level_judge(emp, period, start, end, daily=None):
+    """(value, good, enough_days) for one period."""
+    role = emp.staff_type
+    days = daily if daily is not None else _level_daily(emp, start, end)
+    days = {d: v for d, v in days.items() if start <= d <= end}
+    if len(days) < LEVEL_MIN_DAYS[period]:
+        return 0.0, False, False
+    value = round(sum(v for v, _ in days.values()) / len(days), 1)
+    if role in LEVEL_SCORED:
+        entries = [e for _, e in days.values() if e is not None]
+        st = build_analytics(entries, role, emp_id=emp.id) or {}
+        good = float(st.get("eff_score") or 0) >= LEVEL_GOOD_SCORE
+    else:
+        good = True          # no score for this role: beating the record is the test
+    return value, good, True
+
+
+def _level_backfill(emp, period, before):
+    """Set up a record from history without levelling anyone up, so switching
+    the system on never floods staff with notifications for old days."""
+    first = (db.session.query(db.func.min(KPIEntry.entry_date)).filter(KPIEntry.emp_id == emp.id).scalar()
+             if emp.staff_type in LEVEL_SCORED else
+             db.session.query(db.func.min(DeliveryBillerNote.entry_date)).filter(
+                 DeliveryBillerNote.emp_id == emp.id).scalar())
+    rec = PersonalRecord(emp_id=emp.id, period=period, best_value=0.0, level=0,
+                         last_checked=before - timedelta(days=1))
+    if not first or first >= before:
+        return rec
+    daily = _level_daily(emp, first, before - timedelta(days=1))
+    # Every complete period before `before`, with its average -- cheap. Only
+    # then score the candidates, highest first, stopping at the first that was
+    # good: scoring every day of a long history would be slow.
+    periods, ref = {}, first
+    while ref < before:
+        a, b = _level_period_bounds(period, ref)
+        if b < before and (a, b) not in periods:
+            vals = [v for d, (v, _) in daily.items() if a <= d <= b]
+            if len(vals) >= LEVEL_MIN_DAYS[period]:
+                periods[(a, b)] = round(sum(vals) / len(vals), 1)
+        # Step to the next period. Weeks end on Saturday, but the Sunday after
+        # still belongs to that same week, so step from the week's Monday.
+        ref = (a + timedelta(days=7)) if period == "week" else (b + timedelta(days=1))
+    for (a, b), v in sorted(periods.items(), key=lambda kv: kv[1], reverse=True):
+        _, good, enough = _level_judge(emp, period, a, b, daily)
+        if enough and good:
+            rec.best_value, rec.best_start, rec.best_end = v, a, b
+            break
+    return rec
+
+
+def _level_history_count(emp, period, before):
+    """How many earlier periods with enough working days exist before `before`."""
+    role = emp.staff_type
+    q = (db.session.query(KPIEntry.entry_date).filter(KPIEntry.emp_id == emp.id, KPIEntry.entry_date < before)
+         if role in LEVEL_SCORED else
+         db.session.query(DeliveryBillerNote.entry_date).filter(DeliveryBillerNote.emp_id == emp.id,
+                                                               DeliveryBillerNote.entry_date < before))
+    dates = sorted({r[0] for r in q.all()})
+    if period == "day":
+        return len(dates)
+    buckets = {}
+    for d in dates:
+        buckets.setdefault(_level_period_bounds(period, d), 0)
+        buckets[_level_period_bounds(period, d)] += 1
+    return sum(1 for k, n in buckets.items() if n >= LEVEL_MIN_DAYS[period] and k[1] < before)
+
+
+def _level_notify(emp, ev, target):
+    first = (emp.name or "").split(" ")[0] or "there"
+    unit = ev.unit
+    if ev.period == "day":
+        title = "Level up! New best day"
+        what = "%s %s on %s" % (_fmt_num(ev.value), unit, ev.start.strftime("%d %b"))
+    elif ev.period == "week":
+        title = "Level up! Best week ever"
+        what = "%s %s a day in the week of %s" % (_fmt_num(ev.value), unit, ev.start.strftime("%d %b"))
+    else:
+        title = "Level up! Best month ever"
+        what = "%s %s a day in %s" % (_fmt_num(ev.value), unit, ev.start.strftime("%B"))
+    beat = ("beat your best of %s" % _fmt_num(ev.previous)) if ev.previous > 0 else "set your first record"
+    tline = (" Your new target is %s %s." % (_fmt_num(target), unit if emp.staff_type in LEVEL_SCORED else "a day")
+             if target else "")
+    body = "Congratulations, %s! %s %s.%s You are now level %d." % (first, what, beat, tline, ev.level)
+    notify_employee(emp.id, title, body, link="/dashboard", sms=False)
+    return title, body
+
+
+def _fmt_num(v):
+    return ("%d" % v) if float(v).is_integer() else ("%.1f" % v)
+
+
+def evaluate_levels(emp, day=None, today=None, notify=True):
+    """Judge the given day (if any) plus the last completed week and month.
+    Returns the level-up events created. Never raises: a failure here must
+    not stop an entry from being saved."""
+    events = []
+    try:
+        if not emp or emp.is_admin or emp.staff_type not in LEVEL_UNIT:
+            return events
+        today = today or date.today()
+        todo = []
+        if day:
+            todo.append(("day", day, day))
+        # last COMPLETED week (Mon-Sat ending before today) and month
+        sat = today - timedelta(days=(today.weekday() - 5) % 7 or 7)
+        todo.append(("week", sat - timedelta(days=5), sat))
+        m_end = today.replace(day=1) - timedelta(days=1)
+        todo.append(("month", m_end.replace(day=1), m_end))
+        unit = LEVEL_UNIT[emp.staff_type]
+        for period, start, end in todo:
+            rec = PersonalRecord.query.filter_by(emp_id=emp.id, period=period).first()
+            if rec is None:
+                rec = _level_backfill(emp, period, start)
+                db.session.add(rec)
+                db.session.flush()
+            if rec.last_checked and end <= rec.last_checked and period != "day":
+                continue
+            if period == "day" and rec.last_checked and rec.last_checked == end:
+                continue
+            value, good, enough = _level_judge(emp, period, start, end)
+            if period != "day" or (rec.last_checked is None or end > rec.last_checked):
+                rec.last_checked = max(end, rec.last_checked) if rec.last_checked else end
+            if not (enough and good):
+                continue
+            if _level_history_count(emp, period, start) < LEVEL_MIN_HISTORY[period]:
+                continue
+            if value <= (rec.best_value or 0) + 0.04:
+                continue
+            prev = rec.best_value or 0.0
+            rec.best_value, rec.best_start, rec.best_end = value, start, end
+            rec.level = (rec.level or 0) + 1
+            rec.updated_at = datetime.utcnow()
+            target = None
+            if period == "day" and emp.staff_type in LEVEL_SCORED:
+                # The best day becomes the target -- and a target only goes up.
+                cur = emp.custom_hourly_target
+                target = value if not cur else max(float(cur), value)
+                emp.custom_hourly_target = target
+            elif period == "day":
+                target = value
+            ev = LevelEvent(emp_id=emp.id, period=period, value=value, previous=prev,
+                            start=start, end=end, level=rec.level, unit=unit)
+            db.session.add(ev)
+            events.append((ev, target))
+        db.session.commit()
+        invalidate_request_memos()
+        out = []
+        for ev, target in events:
+            out.append((ev, _level_notify(emp, ev, target) if notify else None))
+        return out
+    except Exception as exc:
+        db.session.rollback()
+        logger.error("evaluate_levels(%s): %s", getattr(emp, "id", "?"), exc, exc_info=True)
+        return []
+
+
+def level_summary(emp):
+    """What the staff member and admin see: level, records, target, history."""
+    try:
+        if not emp or emp.staff_type not in LEVEL_UNIT:
+            return None
+        recs = {r.period: r for r in PersonalRecord.query.filter_by(emp_id=emp.id).all()}
+        events = (LevelEvent.query.filter_by(emp_id=emp.id)
+                  .order_by(LevelEvent.created_at.desc()).limit(8).all())
+        return {
+            "level": sum((r.level or 0) for r in recs.values()),
+            "unit": LEVEL_UNIT[emp.staff_type],
+            "scored": emp.staff_type in LEVEL_SCORED,
+            "target": emp.custom_hourly_target if emp.staff_type in LEVEL_SCORED else
+                      (recs["day"].best_value if recs.get("day") and recs["day"].best_value else None),
+            "day": recs.get("day"), "week": recs.get("week"), "month": recs.get("month"),
+            "events": events,
+            "fmt": _fmt_num,
+        }
+    except Exception as exc:
+        logger.error("level_summary: %s", exc)
+        return None
+
+
+def run_level_checks():
+    """Daily: judge every staff member's last completed week and month."""
+    with app.app_context():
+        for emp in Employee.query.filter(Employee.is_admin.is_(False),
+                                         Employee.staff_type.in_(tuple(LEVEL_UNIT))).all():
+            evaluate_levels(emp)
+
+
 def multitask_days_for(emp_id, days=30):
     """Extra-role days in the last `days` days, one row per day, by the same
     rule the score uses (10 per role, capped at 30). For the explanation on
@@ -1650,6 +1926,7 @@ def build_analytics(entries: List[KPIEntry], staff_type: str = "picker", emp_id:
         PICKER_TARGET_HR  = DEFAULT_PICKER_TARGET_HR
         CHECKER_TARGET_HR = DEFAULT_CHECKER_TARGET_HR
         # Check for per-employee override
+        PURCHASER_TARGET_HR = 60.0
         _emp_for_target = None
         try:
             if emp_id is not None:
@@ -1659,6 +1936,8 @@ def build_analytics(entries: List[KPIEntry], staff_type: str = "picker", emp_id:
                         PICKER_TARGET_HR = float(_emp_for_target.custom_hourly_target)
                     elif staff_type == "checker":
                         CHECKER_TARGET_HR = float(_emp_for_target.custom_hourly_target)
+                    elif staff_type == "purchaser":
+                        PURCHASER_TARGET_HR = float(_emp_for_target.custom_hourly_target)
         except Exception:
             pass
         # Efficiency ratio targets (hard level = 200 items / 50 bills)
@@ -1787,7 +2066,8 @@ def build_analytics(entries: List[KPIEntry], staff_type: str = "picker", emp_id:
                  "%d of %d CS received (%.1f%%)" % (pur_cs_received, pur_cs_open, pur_cs_fulfilment)),
                 ("Racking", 15, (pur_racking_eff / 100) * 15,
                  "%d of %d items racked (%.1f%%)" % (pur_items_racked, pur_items, pur_racking_eff)),
-                ("Speed", 10, min(pur_speed / 60, 1.0) * 10, "%.1f items/hr against 60" % pur_speed),
+                ("Speed", 10, min(pur_speed / PURCHASER_TARGET_HR, 1.0) * 10,
+                 "%.1f items/hr against %g" % (pur_speed, PURCHASER_TARGET_HR)),
                 ("Bill Entry", 8, (pur_entry_rate / 100) * 8, "%.1f%% of PO bills entered" % pur_entry_rate),
                 ("Pending Bills", 5, pur_pending_pct * 5, "%d PO bills not yet checked" % pur_pending_bills),
                 ("VWCR", 8, (vwcr / 120) * 8, "%.1f of 120" % vwcr),
@@ -3492,6 +3772,9 @@ def dashboard():
                         db.session.add(db_note)
                         db.session.commit()
                         flash("Daily note recorded successfully.", "success")
+                        for _ev, _msg in evaluate_levels(db.session.get(Employee, emp_id), day=today):
+                            if _msg:
+                                flash("%s — %s" % _msg, "success")
                         return redirect(url_for("dashboard"))
                     except Exception as dbe:
                         db.session.rollback()
@@ -3757,6 +4040,9 @@ def dashboard():
                     db.session.commit()
                     # The team pending pile just changed.
                     invalidate_request_memos()
+                    for _ev, _msg in evaluate_levels(db.session.get(Employee, emp_id), day=today):
+                        if _msg:
+                            flash("%s — %s" % _msg, "success")
                     if staff_type == "checker":
                         for _w in checker_bill_warnings(today, emp_id, bills_received,
                                                         sales_bills_open, cs_sales_open):
@@ -4013,6 +4299,7 @@ def dashboard():
             trip_map = {}
 
         return render_template("dashboard.html",
+            levels=level_summary(db.session.get(Employee, emp_id)),
             checker_bests=(checker_month_bests(emp_id)
                            if staff_type == "checker" or session.get("secondary_staff_type") == "checker"
                            else None),
@@ -4215,7 +4502,14 @@ def admin_dashboard():
         except Exception as _mte2:
             logger.error(f"admin mt_report: {_mte2}")
             mt_report = {"by_role": {}, "staff": []}
+        try:
+            recent_levelups = [(ev, db.session.get(Employee, ev.emp_id)) for ev in
+                               LevelEvent.query.filter(LevelEvent.created_at >= datetime.utcnow() - timedelta(days=7))
+                               .order_by(LevelEvent.created_at.desc()).limit(20).all()]
+        except Exception:
+            recent_levelups = []
         return render_template("admin.html",
+            recent_levelups=recent_levelups,
             mt_report=mt_report, role_order=MULTITASK_ROLE_ORDER,
             role_label=multitask_role_label,
             rows=rows, total_picked=total_picked, total_entries=total_entries,
@@ -4428,6 +4722,7 @@ def staff_detail(emp_id):
             checker_bests=(checker_month_bests(emp.id)
                            if "checker" in (emp.staff_type, emp.secondary_staff_type) else None),
             mt_days=multitask_days_for(emp.id),
+            levels=level_summary(emp),
             # The suggestion the "Apply" button will actually apply (last 30 days).
             target_sug=(build_analytics(get_period_entries(emp.id, "last30"), emp.staff_type,
                                         emp_id=emp.id) or {}).get("target_suggestion"),
@@ -4605,6 +4900,8 @@ def admin_delete_user(emp_id):
             ).delete(synchronize_session=False)
             DeliveryBillerNote.query.filter_by(emp_id=emp_id).delete(synchronize_session=False)
             MultitaskEntry.query.filter_by(emp_id=emp_id).delete(synchronize_session=False)
+            PersonalRecord.query.filter_by(emp_id=emp_id).delete(synchronize_session=False)
+            LevelEvent.query.filter_by(emp_id=emp_id).delete(synchronize_session=False)
             Notification.query.filter_by(emp_id=emp_id).delete(synchronize_session=False)
             SupervisorBill.query.filter(
                 (SupervisorBill.staff_id == emp_id) |
@@ -5028,6 +5325,9 @@ def past_entry(date_str):
             db.session.add(ne)
             db.session.commit()
             invalidate_request_memos()
+            for _ev, _msg in evaluate_levels(db.session.get(Employee, emp_id), day=past_date):
+                if _msg:
+                    flash("%s — %s" % _msg, "success")
             if staff_type == "checker":
                 for _w in checker_bill_warnings(past_date, emp_id, bills_received,
                                                 sales_bills_open, cs_sales_open):
@@ -8115,6 +8415,13 @@ try:
         trigger="cron",
         hour=3, minute=20,
         id="purge_location_data",
+        replace_existing=True
+    )
+    _scheduler.add_job(
+        run_level_checks,
+        trigger="cron",
+        hour=3, minute=50,
+        id="run_level_checks",
         replace_existing=True
     )
     _scheduler.add_job(
