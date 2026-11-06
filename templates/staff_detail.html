@@ -503,15 +503,17 @@ body { display: grid; grid-template-columns: 236px minmax(0, 1fr); min-height: 1
     </section>
     {% endif %}
 
-    {% if a_stats and a_stats.target_suggestion %}
+    {% if target_sug %}
     <section class="card">
       <div class="card-title"><span class="ico">▸</span>Target</div>
-      <div class="card-sub">{{ a_stats.auto_suggest }}</div>
+      <div class="card-sub">
+        {% if target_sug.kind == 'raise' %}Pace has risen: the 75th-percentile day over the last {{ target_sug.days }} working days is {{ target_sug.suggested }}/hr, above the current target of {{ target_sug.current }}/hr.
+        {% else %}The role target of {{ target_sug.current }}/hr is above anything reached. A personal target of {{ target_sug.suggested }}/hr (75th-percentile day over the last {{ target_sug.days }} working days) will then rise automatically as pace improves.{% endif %}
+      </div>
       <form method="POST" action="/admin/accept_target_suggestion/{{ emp.id }}" style="margin-top:10px;">
         <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
         <button type="submit" class="ip-btn ip-btn--primary">
-          {{ 'Raise' if a_stats.target_suggestion.kind == 'raise' else 'Set' }} target to
-          {{ a_stats.target_suggestion.suggested }}/hr</button>
+          {{ 'Raise' if target_sug.kind == 'raise' else 'Set' }} target to {{ target_sug.suggested }}/hr</button>
       </form>
     </section>
     {% endif %}
@@ -1135,8 +1137,8 @@ body { display: grid; grid-template-columns: 236px minmax(0, 1fr); min-height: 1
           <tr style="border-bottom:1px solid var(--border);color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:0.05em;">
             <th style="padding:8px 10px;text-align:left;">Date</th>
             <th style="padding:8px 10px;text-align:left;">Role</th>
-            <th style="padding:8px 10px;text-align:right;">Quantity</th>
-            <th style="padding:8px 10px;text-align:right;">Issues</th>
+            <th style="padding:8px 10px;text-align:right;">{{ 'Sales Bills Open' if emp.staff_type == 'packer' else ('Deliveries' if emp.staff_type == 'delivery' else 'Bills Processed') }}</th>
+            <th style="padding:8px 10px;text-align:right;">{{ 'Bills Received' if emp.staff_type == 'packer' else 'Issues' }}</th>
             <th style="padding:8px 10px;text-align:center;">Table Clean</th>
             <th style="padding:8px 10px;text-align:center;">Sweep</th>
             <th style="padding:8px 10px;text-align:left;">Note</th>

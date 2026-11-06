@@ -281,6 +281,45 @@ with app.app_context():
     check("6e.1 One figure, more checked than it: flagged, never multiplied up",
           _row["mode"] == "conflict" and _row["total"] == 50, _row)
 
+# ---- 6f. Deep scan: a part can never exceed its whole, for every role ---
+ep = A.entry_problems
+check("6f.1 Picker: bills picked over bills given is refused",
+      bool(ep("picker", dict(total_bills_received=40, sales_bills_open=60, picked=200))))
+check("6f.2 Picker: a normal day passes",
+      ep("picker", dict(total_bills_received=40, sales_bills_open=35, picked=200, missed=2)) == [])
+check("6f.3 Picker: more bills than items is refused",
+      bool(ep("picker", dict(total_bills_received=40, sales_bills_open=30, picked=10))))
+check("6f.4 Purchaser: PO checked over received is refused",
+      bool(ep("purchaser", dict(sales_bills_open=10, checked=25))))
+check("6f.5 Purchaser: PO entered over received is refused",
+      bool(ep("purchaser", dict(sales_bills_open=10, picked=30))))
+check("6f.6 Purchaser: racked over items is refused",
+      bool(ep("purchaser", dict(sales_bills_open=10, errors_found=100, rack_organized=500))))
+check("6f.7 Purchaser: CS received over CS open is refused",
+      bool(ep("purchaser", dict(sales_bills_open=10, cs_sales_open=5, packing_done=20))))
+check("6f.8 Checker: more bills than items is refused",
+      bool(ep("checker", dict(sales_bills_open=20, cs_sales_open=5, checked=10))))
+check("6f.9 Checker: an urgent-only day passes",
+      ep("checker", dict(sales_bills_open=0, cs_sales_open=20, checked=0, errors_found=120)) == [])
+_src = open(os.path.join(REPO, "app.py")).read()
+check("6f.10 A checker with only urgent items is not told 'Items Checked' is missing",
+      "checked + errors_found <= 0" in _src)
+with app.app_context():
+    _m = A.get_period_entries(CHK, "month")
+    check("6f.11 'This month' is the calendar month on every screen",
+          all(e.entry_date >= TODAY.replace(day=1) for e in _m))
+    _n = A.DeliveryBillerNote(note_type="packer", quantity=12, issues_count=40)
+    check("6f.12 A packer's figures are labelled as the packer form asked",
+          _n.figures == "12 sales bills open · 40 bills received")
+_adm = c.get("/admin_dashboard").data.decode()
+check("6f.13 Performance Summary is titled with the month it shows", "Performance Summary — All Time" not in _adm)
+check("6f.14 No checker card shows the score as 'Accuracy' or rewards 'Normal%'",
+      "}}pts</td>" not in open(os.path.join(REPO, "templates", "admin.html")).read() and "Normal%" not in _adm)
+_dash = open(os.path.join(REPO, "templates", "dashboard.html")).read()
+check("6f.15 The checker dashboard no longer calls urgent work an 'Error rate'",
+      "Clean Check Rate" not in _dash and "Error rate:" not in _dash)
+check("6f.16 Second-role checkers are not asked to type pending", 'name="mt_c_pending"' not in _dash)
+
 # ---- 7. The Jinja trap that broke the checker pages once ---------------
 for t in ("staff_detail.html", "dashboard.html"):
     src = open(os.path.join(REPO, "templates", t)).read()

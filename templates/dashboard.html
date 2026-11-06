@@ -358,9 +358,9 @@ button[disabled] { opacity: .45; cursor: not-allowed; transform: none; }
       <div style="font-size:11px;color:var(--ink-3);margin-top:3px;">{{ d_stats.tck_normal or 0 }} normal + {{ d_stats.tck_urgent or 0 }} urgent</div>
     </div>
     <div style="flex:1;min-width:160px;background:rgba(245,243,255,0.7);border:1px solid rgba(109,40,217,0.2);border-radius:14px;padding:16px 20px;backdrop-filter:blur(12px);">
-      <div style="font-size:11px;font-weight:700;color:var(--purple);text-transform:uppercase;letter-spacing:.7px;margin-bottom:5px;">Clean Check Rate</div>
-      <div style="font-size:28px;font-weight:800;color:#4c1d95;">{{ d_stats.check_acc }}%</div>
-      <div style="font-size:11px;color:var(--ink-3);margin-top:3px;">Error rate: {{ d_stats.error_rate }}%</div>
+      <div style="font-size:11px;font-weight:700;color:var(--purple);text-transform:uppercase;letter-spacing:.7px;margin-bottom:5px;">Team Pending Today</div>
+      <div style="font-size:28px;font-weight:800;color:#4c1d95;">{{ d_stats.team_pending_bills or 0 }}</div>
+      <div style="font-size:11px;color:var(--ink-3);margin-top:3px;">{{ d_stats.team_total_bills or 0 }} day total − {{ d_stats.team_checked_bills or 0 }} checked by the team · your share {{ d_stats.team_share_pct or 0 }}%</div>
     </div>
   </div>
   {% endif %}
@@ -912,7 +912,6 @@ button[disabled] { opacity: .45; cursor: not-allowed; transform: none; }
       <div class="mt-fields" id="mt_checker" style="display:none;">
         <div class="form-grid">
           <div class="field"><label>Day's Total Sales Bills (whole team)</label><input type="number" name="mt_c_bills_received" min="0" value="0"></div>
-          <div class="field"><label>Pending Bills (not checked)</label><input type="number" name="mt_c_pending" min="0" value="0"></div>
           <div class="field"><label>Sales Bill Checked (Normal)</label><input type="number" name="mt_c_sbo" min="0" value="0"></div>
           <div class="field"><label>SB Checked Urgent</label><input type="number" name="mt_c_cso" min="0" value="0"></div>
           <div class="field"><label>Item Checked (Normal)</label><input type="number" name="mt_c_checked" min="0" value="0"></div>
@@ -1429,7 +1428,7 @@ button[disabled] { opacity: .45; cursor: not-allowed; transform: none; }
       <div style="padding:10px 13px;background:rgba(245,243,255,0.6);border:1px solid var(--accent-line);border-radius:10px;">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
           <span style="font-size:11px;font-weight:700;color:var(--accent-ink);">{{ note.entry_date.strftime('%d %b %Y') }}</span>
-          <span style="font-size:11px;color:var(--ink-3);">{{ note.quantity }} processed · {{ note.issues_count }} issues</span>
+          <span style="font-size:11px;color:var(--ink-3);">{{ note.figures }}</span>
         </div>
         <div style="font-size:13px;color:var(--ink);line-height:1.4;">{{ note.note_text }}</div>
       </div>
@@ -1551,8 +1550,8 @@ button[disabled] { opacity: .45; cursor: not-allowed; transform: none; }
         ] %}
       {% elif staff_type == 'checker' %}
         {% set targets = [
-          ('Check Speed', (ref_stats.check_speed or ref_stats.ck_speed) if ref_stats else 0, 70, '/hr'),
-          ('Clearance Rate', (ref_stats.clearance_rate or 100) if ref_stats else 0, 95, '%'),
+          ('Weighted Speed (urgent ×1.5)', (ref_stats.check_speed_weighted or 0) if ref_stats else 0, (ref_stats.hourly_target or 70) if ref_stats else 70, '/hr'),
+          ('Team Clearance', (ref_stats.clearance_rate if ref_stats and ref_stats.team_total_bills else 0), 95, '%'),
           ('Workspace Score', (ref_stats.workspace_score if ref_stats else 0), 80, '%'),
         ] %}
       {% else %}
@@ -1710,7 +1709,7 @@ button[disabled] { opacity: .45; cursor: not-allowed; transform: none; }
     data: {
       labels: chartLabels,
       datasets: [{
-        label: staffType === 'checker' ? 'Clean Check Rate %' : 'Accuracy %',
+        label: staffType === 'checker' ? 'Team Clearance %' : (staffType === 'purchaser' ? 'PO Bills Checked %' : 'Accuracy %'),
         data: chartAccuracy,
         borderColor: '#1d4ed8',
         backgroundColor: 'rgba(29,78,216,0.08)',

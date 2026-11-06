@@ -107,7 +107,7 @@ check("2.2 Checker KPI saved", e is not None and e.checked == 180)
 login("r_pur@x.com")
 client.post("/dashboard", data={
     "sales_bills_open": "14", "checked": "12", "picked": "10", "errors_found": "40",
-    "cs_sales_open": "2", "packing_done": "5", "total_time": "8",
+    "cs_sales_open": "6", "packing_done": "5", "total_time": "8",
     "rack_organized": "3", "table_clean": "1", "sweep_done": "1"}, follow_redirects=True)
 with app.app_context():
     e = KPIEntry.query.filter_by(emp_id=IDS["r_pur@x.com"], entry_date=date.today()).first()
@@ -154,12 +154,12 @@ with app.app_context():
 
 # ---- 4. Multitask across every role, with field mapping ----------------
 MULTITASK = {
-    "picker":    {"mt_p_total_bills": "2", "mt_p_sbo": "10", "mt_p_picked": "50",
+    "picker":    {"mt_p_total_bills": "12", "mt_p_sbo": "10", "mt_p_picked": "50",
                   "mt_p_missed": "3", "mt_p_cso": "1", "mt_p_packing": "5"},
     "checker":   {"mt_c_bills_received": "30", "mt_c_pending": "1", "mt_c_sbo": "4",
                   "mt_c_cso": "2", "mt_c_checked": "60", "mt_c_errors": "7"},
     "purchaser": {"mt_pu_sbo": "15", "mt_pu_checked": "12", "mt_pu_picked": "9",
-                  "mt_pu_items": "30", "mt_pu_cso": "3", "mt_pu_packing": "6"},
+                  "mt_pu_items": "30", "mt_pu_cso": "8", "mt_pu_packing": "6"},
     "billing":   {"mt_b_bills": "11", "mt_b_items": "140", "mt_b_quantity": "11"},
     "delivery":  {"mt_s_quantity__delivery": "8"},
     "packing":   {"mt_s_quantity__packing": "4"},
@@ -177,7 +177,7 @@ with app.app_context():
            for m in MultitaskEntry.query.filter_by(emp_id=IDS["r_sup@x.com"]).all()}
 check("4.1 All seven multitask roles saved", len(mts) == 7)
 check("4.2 Picker fields mapped",
-      bool(mts.get("picker")) and mts["picker"].picked == 50 and mts["picker"].total_bills_received == 2)
+      bool(mts.get("picker")) and mts["picker"].picked == 50 and mts["picker"].total_bills_received == 12)
 check("4.3 Checker fields mapped",
       bool(mts.get("checker")) and mts["checker"].checked == 60 and mts["checker"].bills_received == 30)
 check("4.4 Purchaser fields mapped",

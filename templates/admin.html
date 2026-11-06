@@ -626,7 +626,7 @@ var NOTES_BY_EMP = {
           <div style="font-size:13px;font-weight:700;color:var(--ink);">{{ ne.name if ne else 'Unknown' }}
             <span style="font-size:11px;font-weight:600;padding:2px 8px;border-radius:999px;background:{% if note.note_type == 'delivery' %}var(--accent-tint){% else %}var(--brand-tint-2){% endif %};color:{% if note.note_type == 'delivery' %}var(--accent-ink){% else %}var(--brand){% endif %};text-transform:uppercase;letter-spacing:.5px;">{{ note.note_type|title }}</span>
           </div>
-          <div style="font-size:12px;color:var(--ink-3);margin-top:1px;">{{ note.entry_date.strftime('%d %b %Y') }} &nbsp;·&nbsp; {{ note.quantity }} processed &nbsp;·&nbsp; {{ note.issues_count }} issues</div>
+          <div style="font-size:12px;color:var(--ink-3);margin-top:1px;">{{ note.entry_date.strftime('%d %b %Y') }} &nbsp;·&nbsp; {{ note.figures }}</div>
           <div style="font-size:13px;color:var(--ink);margin-top:4px;line-height:1.4;">{{ note.note_text }}</div>
         </div>
       </div>
@@ -1193,7 +1193,7 @@ var NOTES_BY_EMP = {
               <div style="font-size:18px;width:24px;">{{ loop.index }}</div>
               <div style="flex:1;">
                 <div style="font-size:13px;font-weight:700;">{{ r.emp.name }}</div>
-                <div style="font-size:11px;color:var(--ink-3);">{{ r.stats.days }}d · {{ r.stats.check_speed or r.stats.ck_speed }}/hr · Clr {{ r.stats.clearance_rate or 100 }}%</div>
+                <div style="font-size:11px;color:var(--ink-3);">{{ r.stats.days }}d · {{ r.stats.check_speed_weighted or 0 }}/hr weighted · Team clearance {% if r.stats.team_total_bills %}{{ r.stats.clearance_rate }}%{% else %}—{% endif %}</div>
               </div>
               <div style="text-align:right;">
                 <div style="font-size:18px;font-weight:800;color:var(--accent-ink);">{{ r.stats.eff_score }}</div>
@@ -1201,9 +1201,9 @@ var NOTES_BY_EMP = {
               </div>
             </div>
             <div style="margin-top:7px;display:grid;grid-template-columns:repeat(4,1fr);gap:3px;font-size:11px;text-align:center;">
-              <div style="background:rgba(109,40,217,0.07);border-radius:6px;padding:3px;"><div style="color:var(--ink-3);">Speed/hr</div><div style="font-weight:700;">{{ r.stats.check_speed or r.stats.ck_speed or 0 }}</div></div>
-              <div style="background:rgba(109,40,217,0.07);border-radius:6px;padding:3px;"><div style="color:var(--ink-3);">Normal%</div><div style="font-weight:700;">{{ r.stats.normal_pct or 0 }}%</div></div>
-              <div style="background:rgba(109,40,217,0.07);border-radius:6px;padding:3px;"><div style="color:var(--ink-3);">Clearance</div><div style="font-weight:700;">{{ r.stats.clearance_rate or 100 }}%</div></div>
+              <div style="background:rgba(109,40,217,0.07);border-radius:6px;padding:3px;"><div style="color:var(--ink-3);" title="Urgent items count 1.5x, as in the score">Speed/hr (wtd)</div><div style="font-weight:700;">{{ r.stats.check_speed_weighted or 0 }}</div></div>
+              <div style="background:rgba(109,40,217,0.07);border-radius:6px;padding:3px;"><div style="color:var(--ink-3);" title="Urgent bills checked -- worth 1.5x a normal bill">Urgent bills</div><div style="font-weight:700;">{{ r.stats.tsb_urgent or 0 }}</div></div>
+              <div style="background:rgba(109,40,217,0.07);border-radius:6px;padding:3px;"><div style="color:var(--ink-3);">Clearance (team)</div><div style="font-weight:700;">{% if r.stats.team_total_bills %}{{ r.stats.clearance_rate }}%{% else %}—{% endif %}</div></div>
               <div style="background:rgba(109,40,217,0.07);border-radius:6px;padding:3px;"
                    title="Team pending: the day's total bills minus what every checker got through. The same figure for every checker on the day.">
                 <div style="color:var(--ink-3);">Pending (team)</div><div style="font-weight:700;">{{ r.stats.pending_bills or 0 }}</div></div>
@@ -1309,16 +1309,16 @@ var NOTES_BY_EMP = {
   {% if rows %}
   <div data-pane="scores" data-ord="2" class="card">
     <div class="card-header">
-      <div class="card-title">Performance Summary — All Time</div>
+      <div class="card-title">Performance Summary — {{ current_month }}</div>
     </div>
     <div class="table-wrap">
       <table class="ptable">
         <thead>
           <tr>
-            <th>Name</th><th>Type</th>
-            <th>Accuracy</th><th>Speed /hr</th>
-            <th>Items Processed</th><th>Total Bills</th>
-            <th>Days Active</th><th>Eff. Score</th><th>Grade</th>
+            <th>Name</th><th>Role</th>
+            <th>Bills<span class="th-sub">checked / picked</span></th>
+            <th>Items</th><th>Speed /hr</th>
+            <th>Days</th><th>Score</th><th>Grade</th>
           </tr>
         </thead>
         <tbody>
@@ -1326,16 +1326,22 @@ var NOTES_BY_EMP = {
           <tr>
             <td><strong>{{ r.emp.name }}</strong></td>
             <td><span class="type-badge {% if r.emp.staff_type == 'picker' %}type-picker{% else %}type-checker{% endif %}">{{ r.emp.staff_type }}</span></td>
+            {# Each role's own figures: a checker's bills include urgent ones and
+               speed is the weighted speed the score uses; purchasers show PO
+               bills, not picker columns. #}
             {% if r.emp.staff_type == 'checker' %}
-            <td>{{ r.stats.eff_score }}pts</td>
-            <td>{{ r.stats.ck_speed }}</td>
-            <td>{{ "{:,}".format(r.stats.tck) }}</td>
+            <td>{{ "{:,}".format(r.stats.tsb_total or 0) }} <span style="color:var(--ink-3);font-size:11px;">({{ r.stats.tsb_urgent or 0 }} urgent)</span></td>
+            <td>{{ "{:,}".format(r.stats.tck_total or 0) }}</td>
+            <td>{{ r.stats.check_speed_weighted }}</td>
+            {% elif r.emp.staff_type == 'purchaser' %}
+            <td>{{ "{:,}".format(r.stats.pur_bills_checked or 0) }} <span style="color:var(--ink-3);font-size:11px;">of {{ r.stats.pur_bills_received or 0 }} PO</span></td>
+            <td>{{ "{:,}".format(r.stats.pur_items or 0) }}</td>
+            <td>{{ r.stats.pur_speed }}</td>
             {% else %}
-            <td>{{ r.stats.pick_acc }}%</td>
+            <td>{{ "{:,}".format(r.stats.tsb or 0) }} <span style="color:var(--ink-3);font-size:11px;">of {{ r.stats.tbr_picker or 0 }}</span></td>
+            <td>{{ "{:,}".format(r.stats.tp or 0) }}</td>
             <td>{{ r.stats.pick_speed }}</td>
-            <td>{{ "{:,}".format(r.stats.tp) }}</td>
             {% endif %}
-            <td>{{ "{:,}".format(r.stats.tsb) }}</td>
             <td>{{ r.stats.days }}</td>
             <td class="score-cell">{{ r.stats.eff_score }}</td>
             <td>

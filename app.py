@@ -628,6 +628,19 @@ class DeliveryBillerNote(db.Model):
     table_clean  = db.Column(db.Integer, default=0)   # 0=No 1=Yes (workspace — for everyone)
     sweep_done   = db.Column(db.Integer, default=0)   # 0=No 1=Yes (workspace — for everyone)
     created_at   = db.Column(db.DateTime, default=datetime.utcnow)
+
+    @property
+    def figures(self):
+        """The two numbers in the words the form used for THIS role. A packer's
+        form asks for "Sales Bill Open" and "Total Bills Received", stored in
+        the same two columns a driver uses for deliveries and issues -- so
+        printing "processed / issues" for everyone mislabelled packers."""
+        q, n = self.quantity or 0, self.issues_count or 0
+        if self.note_type == "packer":
+            return "%d sales bills open · %d bills received" % (q, n)
+        if self.note_type == "delivery":
+            return "%d deliveries · %d issues" % (q, n)
+        return "%d bills processed · %d issues" % (q, n)
     __table_args__ = (
         db.UniqueConstraint("emp_id", "entry_date", name="_dbnote_emp_date_uc"),
         db.Index("idx_dbn_date", "entry_date"),
@@ -933,6 +946,47 @@ def checker_team_day_totals(dates):
         row["pending"] = max(row["total"] - row["checked"], 0)
     if cache is not None:
         cache[cache_key] = out
+    return out
+
+
+def entry_problems(staff_type, v):
+    """Why a day's figures cannot be true. Empty list means they add up.
+
+    The owner's rule -- if the total is 100, the parts cannot come to more
+    than 100 -- applied to every role, not only checkers' bills:
+      picker     bills picked <= bills given; items picked >= bills picked
+      checker    items checked >= bills checked (every bill has an item)
+      purchaser  PO checked <= PO received; PO entered <= PO received;
+                 items racked <= items; CS received <= CS open
+    `v` holds the KPIEntry field names. Team-wide checker bills are checked
+    separately by checker_bill_problems().
+    """
+    g_ = lambda k: int(v.get(k) or 0)
+    out = []
+    if staff_type == "picker":
+        if g_("total_bills_received") and g_("sales_bills_open") > g_("total_bills_received"):
+            out.append("Bills picked (%d) is more than bills given to pick (%d)."
+                       % (g_("sales_bills_open"), g_("total_bills_received")))
+        if g_("sales_bills_open") and g_("picked") + g_("missed") < g_("sales_bills_open"):
+            out.append("%d bills picked but only %d items -- every bill has at least one item."
+                       % (g_("sales_bills_open"), g_("picked") + g_("missed")))
+    elif staff_type == "checker":
+        bills = g_("sales_bills_open") + g_("cs_sales_open")
+        items = g_("checked") + g_("errors_found")
+        if bills and items < bills:
+            out.append("%d bills checked but only %d items -- every bill has at least one item."
+                       % (bills, items))
+    elif staff_type == "purchaser":
+        rec = g_("sales_bills_open")
+        if rec and g_("checked") > rec:
+            out.append("PO bills checked (%d) is more than PO bills received (%d)." % (g_("checked"), rec))
+        if rec and g_("picked") > rec:
+            out.append("PO bills entered (%d) is more than PO bills received (%d)." % (g_("picked"), rec))
+        if g_("errors_found") and g_("rack_organized") > g_("errors_found"):
+            out.append("Items racked (%d) is more than the number of items (%d)."
+                       % (g_("rack_organized"), g_("errors_found")))
+        if g_("cs_sales_open") and g_("packing_done") > g_("cs_sales_open"):
+            out.append("CS received (%d) is more than CS open (%d)." % (g_("packing_done"), g_("cs_sales_open")))
     return out
 
 
@@ -1930,7 +1984,13 @@ def build_analytics(entries: List[KPIEntry], staff_type: str = "picker", emp_id:
 
 def get_period_entries(emp_id: int, period: str) -> List[KPIEntry]:
     today = date.today()
-    starts = {"day": today, "week": today - timedelta(days=6), "month": today - timedelta(days=29)}
+    # "month" is the CALENDAR month (1st to today), the same as the admin
+    # dashboard and the label on the PDF. It used to be the last 30 days here
+    # while the admin table used the calendar month, so one person's "month"
+    # score differed from screen to screen. "last30" is a rolling window for
+    # judging pace (targets), which needs enough days even on the 2nd.
+    starts = {"day": today, "week": today - timedelta(days=6),
+              "month": today.replace(day=1), "last30": today - timedelta(days=29)}
     start = starts.get(period, today)
     try:
         return KPIEntry.query.filter(
@@ -3219,7 +3279,6 @@ def _save_multitask_entry(emp_id, entry_date, primary_role):
                         packing_done=mi("mt_p_packing"))
         elif role == "checker":
             vals.update(bills_received=mi("mt_c_bills_received"),
-                        pending_bills_manual=mi("mt_c_pending"),
                         sales_bills_open=mi("mt_c_sbo"), cs_sales_open=mi("mt_c_cso"),
                         checked=mi("mt_c_checked"), errors_found=mi("mt_c_errors"))
         elif role == "purchaser":
@@ -3241,6 +3300,11 @@ def _save_multitask_entry(emp_id, entry_date, primary_role):
 
         # Skip a role with nothing filled in
         if not any(vals.values()) and not note:
+            continue
+
+        _ep = entry_problems(role, vals) if role in ("picker", "checker", "purchaser") else []
+        if _ep:
+            flash("%s figures not saved — %s" % (role.title(), " ".join(_ep)), "danger")
             continue
 
         # Checking as a second role still clears bills off the same pile, so the
@@ -3531,8 +3595,8 @@ def dashboard():
                     elif staff_type == "checker":
                         if bills_received <= 0:
                             missing_fields.append("Bills Received (TB Sales)")
-                        if checked <= 0:
-                            missing_fields.append("Items Checked")
+                        if checked + errors_found <= 0:
+                            missing_fields.append("Items Checked (normal or urgent)")
                     elif staff_type == "purchaser":
                         if sales_bills_open <= 0:
                             missing_fields.append("PO Bills Received (TB Sales)")
@@ -3541,6 +3605,15 @@ def dashboard():
 
                     if missing_fields:
                         flash(f"Cannot save — required fields missing or zero: {', '.join(missing_fields)}.", "danger")
+                        return redirect(url_for("dashboard"))
+
+                    _ep = entry_problems(staff_type, dict(
+                        total_bills_received=total_bills_received, sales_bills_open=sales_bills_open,
+                        picked=picked, missed=missed, cs_sales_open=cs_sales_open, checked=checked,
+                        errors_found=errors_found, packing_done=packing_done,
+                        rack_organized=gi("rack_organized")))
+                    if _ep:
+                        flash("Cannot save — " + " ".join(_ep), "danger")
                         return redirect(url_for("dashboard"))
 
                     if staff_type == "checker":
@@ -3646,14 +3719,27 @@ def dashboard():
         trend_labels = []
         trend_accuracy = []
         trend_speed = []
+        # Each role's own two measures. This read picker fields for everyone,
+        # so a checker's or purchaser's trend sat at 0% every day.
+        _tdays = (checker_team_day_totals([today - timedelta(days=i) for i in range(7)])
+                  if staff_type == "checker" else {})
         for i in range(6, -1, -1):
             d = today - timedelta(days=i)
             e = next((x for x in all_entries if x.entry_date == d), None)
             trend_labels.append(d.strftime("%a %d"))
             if e:
-                t = (e.picked or 0) + (e.missed or 0)
-                acc = round((e.picked or 0) / t * 100, 1) if t > 0 else 0
-                spd = round(t / max(float(e.total_time or 0.001), 0.001), 1)
+                if staff_type == "checker":
+                    _t = _tdays.get(d) or {}
+                    acc = round(min(_t.get("checked", 0) / _t["total"] * 100, 100), 1) if _t.get("total") else None
+                    spd = round(((e.checked or 0) + (e.errors_found or 0) * URGENT_BILL_WEIGHT) / 9.0, 1)
+                elif staff_type == "purchaser":
+                    rec = e.sales_bills_open or 0
+                    acc = round(min((e.checked or 0) / rec * 100, 100), 1) if rec else None
+                    spd = round((e.errors_found or 0) / 9.0, 1)
+                else:
+                    t = (e.picked or 0) + (e.missed or 0)
+                    acc = round((e.picked or 0) / t * 100, 1) if t > 0 else 0
+                    spd = round(t / max(float(e.total_time or 0.001), 0.001), 1)
                 trend_accuracy.append(acc)
                 trend_speed.append(spd)
             else:
@@ -4231,6 +4317,9 @@ def staff_detail(emp_id):
             checker_bests=(checker_month_bests(emp.id)
                            if "checker" in (emp.staff_type, emp.secondary_staff_type) else None),
             mt_days=multitask_days_for(emp.id),
+            # The suggestion the "Apply" button will actually apply (last 30 days).
+            target_sug=(build_analytics(get_period_entries(emp.id, "last30"), emp.staff_type,
+                                        emp_id=emp.id) or {}).get("target_suggestion"),
             team_days=(checker_team_day_totals({e.entry_date for e in entries})
                        if emp.staff_type == "checker" else {}),
             emp=emp,
@@ -4779,8 +4868,8 @@ def past_entry(date_str):
             elif staff_type == "checker":
                 if bills_received <= 0:
                     missing_fields.append("Bills Received (TB Sales)")
-                if checked <= 0:
-                    missing_fields.append("Items Checked")
+                if checked + errors_found <= 0:
+                    missing_fields.append("Items Checked (normal or urgent)")
             elif staff_type == "purchaser":
                 if sales_bills_open <= 0:
                     missing_fields.append("PO Bills Received (TB Sales)")
@@ -4789,6 +4878,14 @@ def past_entry(date_str):
 
             if missing_fields:
                 flash(f"Cannot save — required fields missing or zero: {', '.join(missing_fields)}.", "danger")
+                return redirect(url_for("past_entry", date_str=date_str))
+
+            _ep = entry_problems(staff_type, dict(
+                total_bills_received=total_bills_received, sales_bills_open=sales_bills_open,
+                picked=picked, missed=missed, cs_sales_open=cs_sales_open, checked=checked,
+                errors_found=errors_found, packing_done=packing_done, rack_organized=rack_organized))
+            if _ep:
+                flash("Cannot save — " + " ".join(_ep), "danger")
                 return redirect(url_for("past_entry", date_str=date_str))
 
             if staff_type == "checker":
@@ -5106,7 +5203,7 @@ def admin_accept_target_suggestion(emp_id):
         if not emp:
             flash("Employee not found.", "danger")
             return redirect(url_for("admin_dashboard"))
-        stats = build_analytics(get_period_entries(emp.id, "month"), emp.staff_type, emp_id=emp.id)
+        stats = build_analytics(get_period_entries(emp.id, "last30"), emp.staff_type, emp_id=emp.id)
         sug = (stats or {}).get("target_suggestion")
         if not sug:
             flash(f"No target change is suggested for {emp.name} right now.", "info")
@@ -6142,7 +6239,7 @@ def auto_raise_targets():
                                           Employee.custom_hourly_target.isnot(None),
                                           Employee.staff_type.in_(("picker", "checker"))).all()
             for emp in staff:
-                st = build_analytics(get_period_entries(emp.id, "month"), emp.staff_type, emp_id=emp.id)
+                st = build_analytics(get_period_entries(emp.id, "last30"), emp.staff_type, emp_id=emp.id)
                 sug = (st or {}).get("target_suggestion")
                 if sug and sug.get("kind") == "raise" and sug["suggested"] > (emp.custom_hourly_target or 0):
                     old = emp.custom_hourly_target
