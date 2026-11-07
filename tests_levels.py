@@ -234,6 +234,25 @@ with app.app_context():
     check("12.8 An active row explains the latest day against the best",
           "Latest day" in (pr.get("why") or "") and ("below the best" in pr["why"] or "beat the best" in pr["why"]
                                                     or "a new best" in pr["why"]), pr.get("why"))
+    # Older live rows have is_admin = NULL, not False. They must still count.
+    from sqlalchemy import text as _text  # noqa: E402
+    _nid = Employee.query.filter_by(email="lv_drv@x.com").first().id
+    db.session.execute(_text("UPDATE employees SET is_admin = NULL WHERE id = :i"), {"i": _nid})
+    db.session.commit()
+    db.session.expire_all()
+    rows_null = {r["emp"].email for r in A.level_status_all()}
+    check("12.9 Staff whose admin flag is empty (NULL) are still listed", "lv_drv@x.com" in rows_null)
+    _seen = []
+    _orig = A.evaluate_levels
+    A.evaluate_levels = lambda emp, **k: _seen.append(emp.email) or []
+    try:
+        A.run_level_checks()
+    finally:
+        A.evaluate_levels = _orig
+    check("12.10 The nightly check includes them too", "lv_drv@x.com" in _seen and "lv_adm@x.com" not in _seen,
+          str(_seen))
+    db.session.execute(_text("UPDATE employees SET is_admin = :f WHERE id = :i"), {"f": False, "i": _nid})
+    db.session.commit()
     check("12.7 Every non-admin staff member gets a row",
           all(em in rows for em in ("lv_pick@x.com", "lv_new@x.com", "lv_week@x.com", "lv_drv@x.com",
                                     "lv_pack@x.com", "lv_pur@x.com")) and "lv_adm@x.com" not in rows)

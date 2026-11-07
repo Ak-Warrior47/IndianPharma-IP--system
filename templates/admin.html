@@ -725,7 +725,10 @@ var NOTES_BY_EMP = {
     {% else %}
     <div style="padding:14px;color:var(--ink-3);font-size:13px;">No level-ups this week. A staff member levels up when a better-than-good day, week or month beats their personal best.</div>
     {% endif %}
-    {% if level_status %}
+    {% if not level_status %}
+    <div style="margin-top:16px;padding:12px 14px;border-top:1px solid var(--line);font-size:13px;color:var(--ink-3);">
+      Level-up check: no staff found, or the check could not load. Any error is listed under Diagnostics.</div>
+    {% else %}
     {% set st_counts = {'active': 0, 'waiting': 0, 'starting': 0, 'not_measured': 0} %}
     {% for r in level_status %}{% set _ = st_counts.update({r.status: st_counts[r.status] + 1}) %}{% endfor %}
     <div style="margin-top:16px;padding-top:14px;border-top:1px solid var(--line);">

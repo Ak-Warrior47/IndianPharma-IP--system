@@ -1622,8 +1622,10 @@ def level_status_all():
     from sqlalchemy import func
     rows = []
     try:
-        staff = (Employee.query.filter(Employee.is_admin.is_(False))
-                 .order_by(Employee.staff_type, Employee.name).all())
+        # is_admin can be NULL on older live rows (not False), so a plain
+        # "is_admin = false" filter matched nobody there. Filter in Python.
+        staff = sorted((e for e in Employee.query.all() if not e.is_admin),
+                       key=lambda e: ((e.staff_type or ""), (e.name or "").lower()))
         kpi = dict(db.session.query(KPIEntry.emp_id, func.count(func.distinct(KPIEntry.entry_date)))
                    .group_by(KPIEntry.emp_id).all())
         kpi_last = dict(db.session.query(KPIEntry.emp_id, func.max(KPIEntry.entry_date))
@@ -1684,9 +1686,11 @@ def level_status_all():
 def run_level_checks():
     """Daily: judge every staff member's last completed week and month."""
     with app.app_context():
-        for emp in Employee.query.filter(Employee.is_admin.is_(False),
-                                         Employee.staff_type.in_(tuple(LEVEL_UNIT))).all():
-            evaluate_levels(emp)
+        # Not "is_admin = false": older live rows hold NULL there, and that
+        # filter silently skipped them, so weeks and months were never judged.
+        for emp in Employee.query.filter(Employee.staff_type.in_(tuple(LEVEL_UNIT))).all():
+            if not emp.is_admin:
+                evaluate_levels(emp)
 
 
 def multitask_days_for(emp_id, days=30):
