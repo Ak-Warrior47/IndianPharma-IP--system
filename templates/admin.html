@@ -802,9 +802,8 @@ var NOTES_BY_EMP = {
         </div>
         <div class="field field-wrap">
           <label>Email</label>
-          <input type="text" name="email" id="addEmail" placeholder="rahul@pharmaip.com" required
-                 oninput="handleAddEmail(this)" onkeydown="handleAddEmailKey(event)" autocomplete="off">
-          <div class="ac-list" id="addAcList"></div>
+          <input type="email" name="email" id="addEmail" placeholder="rahul@pharmaip.com" required
+                 oninput="checkAddForm()" autocomplete="off" inputmode="email">
         </div>
         <div class="field">
           <label>Password (min 6 chars)</label>
@@ -1534,46 +1533,10 @@ document.addEventListener('DOMContentLoaded', function() {
   checkAddForm();
 });
 
-let addAcIdx = -1;
-function handleAddEmail(input) {
-  const val = input.value;
-  const list = document.getElementById('addAcList');
-  if (val.length > 0 && !val.includes('@')) {
-    const sug = val + '@pharmaip.com';
-    list.innerHTML = `<div class="ac-item" onclick="pickAddEmail('${escHtml(sug)}')" onmouseover="this.classList.add('sel')" onmouseout="this.classList.remove('sel')"><span>${escHtml(val)}<span class="ac-domain">@pharmaip.com</span></span></div>`;
-    list.classList.add('show');
-    addAcIdx = -1;
-  } else {
-    list.classList.remove('show');
-  }
-  checkAddForm();
-}
-function handleAddEmailKey(e) {
-  const list = document.getElementById('addAcList');
-  if (!list.classList.contains('show')) return;
-  if (e.key === 'Enter' || e.key === 'Tab') {
-    e.preventDefault();
-    const item = list.querySelector('.ac-item');
-    if (item) item.click();
-  } else if (e.key === 'Escape') {
-    list.classList.remove('show');
-  }
-}
-function pickAddEmail(email) {
-  document.getElementById('addEmail').value = email;
-  document.getElementById('addAcList').classList.remove('show');
-  document.querySelector('[name="password"]').focus();
-  checkAddForm();
-}
 function escHtml(s) {
   return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
-document.addEventListener('click', function(e) {
-  const wrap = document.querySelector('#addEmail')?.closest('.field-wrap');
-  if (wrap && !wrap.contains(e.target)) {
-    document.getElementById('addAcList')?.classList.remove('show');
-  }
-});
+
 
 function openEditFromBtn(btn) {
   var id      = btn.dataset.empId;
@@ -1711,5 +1674,6 @@ function switchLB(tab){
 </script>
   <script src="{{ url_for('static', filename='js/palette.js') }}" defer></script>
   <script src="{{ url_for('static', filename='js/ux.js') }}" defer></script>
+<script src="{{ url_for('static', filename='js/email-suggest.js') }}" defer></script>
 </body>
 </html>

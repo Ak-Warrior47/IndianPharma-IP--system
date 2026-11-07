@@ -1969,6 +1969,14 @@ def build_analytics(entries: List[KPIEntry], staff_type: str = "picker", emp_id:
         def _efficiency_ratio(items_per_day, bills_per_day):
             items_r = min(safe_div(items_per_day, HARD_ITEMS_PER_DAY), 1.0)
             bills_r = min(safe_div(bills_per_day, HARD_BILLS_PER_DAY), 1.0)
+            if staff_type == "checker":
+                # The owner's rule: an urgent BILL is worth more points, not
+                # just an urgent item. With the weakest-link minimum below, the
+                # bills figure only counted on days when it happened to be the
+                # weaker one, so 10 urgent bills out of 30 scored exactly the
+                # same as 30 normal ones. Averaging both (urgent weighted in
+                # each) means every urgent bill and item always adds points.
+                return round((items_r + bills_r) / 2.0, 3)
             # Both must be hit — use minimum (weakest link)
             return round(min(items_r, bills_r), 3)
 
@@ -2134,7 +2142,10 @@ def build_analytics(entries: List[KPIEntry], staff_type: str = "picker", emp_id:
                 {"name": "Cleaner Rate", "max": 8, "got": round(cleaner_score, 1),
                  "how": "%.1f%%" % cleaner_rate_score},
                 {"name": "Efficiency Ratio", "max": 8, "got": round(eff_ratio_score, 1),
-                 "how": "%.3f — weakest of items/day and bills/day against 200 / 50" % efficiency_ratio},
+                 "how": "%.3f — average of %.0f items/day and %.0f bills/day against %d / %d "
+                        "(urgent counted ×%.2g in both)"
+                        % (efficiency_ratio, items_daily, bills_daily, HARD_ITEMS_PER_DAY,
+                           HARD_BILLS_PER_DAY, urgent_weight)},
                 {"name": "Log Consistency", "max": 8, "got": round(consist_score, 1),
                  "how": "%.1f%% — steadiness of the daily rate" % consistency},
                 {"name": "Potential Efficiency", "max": 5, "got": round(poteff_score, 1),

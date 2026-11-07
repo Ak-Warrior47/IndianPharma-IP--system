@@ -325,6 +325,26 @@ for t in ("staff_detail.html", "dashboard.html"):
     src = open(os.path.join(REPO, "templates", t)).read()
     check("7.x %s never reads a dict key called .items" % t, "period.items" not in src)
 
+# ---- 8. An urgent BILL always earns more than a normal one -------------
+# Found by a strict re-check: same 30 bills, 10 of them urgent, scored exactly
+# the same as 30 normal, because the bills figure only counted when it was the
+# weaker of items/day and bills/day.
+from datetime import date as _d  # noqa: E402
+with app.app_context(), app.test_request_context():
+    def _ck(nb, ub, items=60, urgent_items=0):
+        e = KPIEntry(emp_id=987654, entry_date=_d(2020, 1, 6), bills_received=100,
+                     sales_bills_open=nb, cs_sales_open=ub, checked=items,
+                     errors_found=urgent_items, total_time=9)
+        return A.build_analytics([e], "checker", emp_id=987654)
+    plain, urg = _ck(30, 0), _ck(20, 10)
+    check("8.1 Same 30 bills, 10 urgent: the urgent day scores higher",
+          urg["eff_score"] > plain["eff_score"], "%s vs %s" % (plain["eff_score"], urg["eff_score"]))
+    check("8.2 Urgent items still score higher too",
+          _ck(30, 0, 40, 20)["eff_score"] > _ck(30, 0, 60, 0)["eff_score"])
+    _er = next(r for r in urg["point_breakdown"] if r["name"] == "Efficiency Ratio")
+    check("8.3 The point line says urgent counts ×1.5 in bills", "35 bills/day" in _er["how"]
+          and "1.5" in _er["how"], _er["how"])
+
 with app.app_context():
     for em in MAILS:
         e = Employee.query.filter_by(email=em).first()
