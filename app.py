@@ -1610,6 +1610,61 @@ def level_summary(emp):
         return None
 
 
+def level_status_all():
+    """One row per staff member: does the level-up system apply to them yet,
+    and if not, why. For the owner's review on the admin page.
+
+    Statuses: "active" (records set, levels counting), "starting" (not enough
+    working days logged yet), "waiting" (enough days, judged at the next save
+    or the nightly check), "not_measured" (role has no output figure), plus a
+    note when nothing was entered in the last 14 days.
+    """
+    from sqlalchemy import func
+    rows = []
+    try:
+        staff = (Employee.query.filter(Employee.is_admin.is_(False))
+                 .order_by(Employee.staff_type, Employee.name).all())
+        kpi = dict(db.session.query(KPIEntry.emp_id, func.count(func.distinct(KPIEntry.entry_date)))
+                   .group_by(KPIEntry.emp_id).all())
+        kpi_last = dict(db.session.query(KPIEntry.emp_id, func.max(KPIEntry.entry_date))
+                        .group_by(KPIEntry.emp_id).all())
+        notes = dict(db.session.query(DeliveryBillerNote.emp_id, func.count(func.distinct(DeliveryBillerNote.entry_date)))
+                     .group_by(DeliveryBillerNote.emp_id).all())
+        notes_last = dict(db.session.query(DeliveryBillerNote.emp_id, func.max(DeliveryBillerNote.entry_date))
+                          .group_by(DeliveryBillerNote.emp_id).all())
+        recs = {}
+        for r in PersonalRecord.query.all():
+            recs.setdefault(r.emp_id, {})[r.period] = r
+        today = date.today()
+        need = LEVEL_MIN_HISTORY["day"] + 1      # history days plus the day being judged
+        for e in staff:
+            role = e.staff_type
+            scored = role in LEVEL_SCORED
+            days = (kpi if scored else notes).get(e.id, 0) if role in LEVEL_UNIT else 0
+            last = (kpi_last if scored else notes_last).get(e.id) if role in LEVEL_UNIT else None
+            r = recs.get(e.id, {})
+            row = {"emp": e, "role": role, "days": days, "last": last,
+                   "unit": LEVEL_UNIT.get(role, ""),
+                   "level": sum((x.level or 0) for x in r.values()),
+                   "day": r.get("day"), "week": r.get("week"), "month": r.get("month"),
+                   "target": (e.custom_hourly_target if scored else
+                              (r["day"].best_value if r.get("day") and r["day"].best_value else None))}
+            if role not in LEVEL_UNIT:
+                row["status"], row["why"] = "not_measured", "No output figure for this role yet"
+            elif days < need:
+                row["status"], row["why"] = "starting", "%d of %d working days logged" % (days, need)
+            elif not r:
+                row["status"], row["why"] = "waiting", "Judged at the next entry or the nightly check"
+            else:
+                row["status"], row["why"] = "active", ""
+            if row["status"] in ("active", "waiting") and (not last or (today - last).days > 14):
+                row["why"] = "No entries in the last 14 days"
+            rows.append(row)
+    except Exception as exc:
+        logger.error("level_status_all: %s", exc)
+    return rows
+
+
 def run_level_checks():
     """Daily: judge every staff member's last completed week and month."""
     with app.app_context():
@@ -4519,8 +4574,9 @@ def admin_dashboard():
                                .order_by(LevelEvent.created_at.desc()).limit(20).all()]
         except Exception:
             recent_levelups = []
+        level_status = level_status_all()
         return render_template("admin.html",
-            recent_levelups=recent_levelups,
+            recent_levelups=recent_levelups, level_status=level_status,
             mt_report=mt_report, role_order=MULTITASK_ROLE_ORDER,
             role_label=multitask_role_label,
             rows=rows, total_picked=total_picked, total_entries=total_entries,

@@ -213,7 +213,26 @@ a = csrf_client(app.test_client())
 a.post("/login", data={"email": "lv_adm@x.com", "password": PW}, follow_redirects=True)
 check("11.2 The staff profile shows the level and history",
       b"Level-up history" in a.get("/staff/%d" % pid).data)
-check("11.3 The admin sees recent level-ups", b"Recent Level-ups" in a.get("/admin_dashboard").data)
+adm_html = a.get("/admin_dashboard").data.decode("utf-8", "replace")
+check("11.3 The admin sees recent level-ups", "Recent Level-ups" in adm_html)
+
+# ---- 12. The owner can check every staff member ----------------------------
+import re as _re  # noqa: E402
+check("12.1 The admin page lists every staff member's level-up status",
+      'id="levelCheckTable"' in adm_html)
+def _status_of(name):
+    m = _re.search(r"<strong>" + _re.escape(name) + r"</strong>[\s\S]{0,200}?lv-pill lv-([a-z_]+)", adm_html)
+    return m.group(1) if m else None
+check("12.2 A picker with records is Active", _status_of("Lv lv_pick") == "active", _status_of("Lv lv_pick"))
+check("12.3 Someone with too few days is Starting", _status_of("Lv lv_new") == "starting", _status_of("Lv lv_new"))
+check("12.4 A packer is Not measured", _status_of("Lv lv_pack") == "not_measured", _status_of("Lv lv_pack"))
+check("12.5 A delivery rider with records is Active", _status_of("Lv lv_drv") == "active", _status_of("Lv lv_drv"))
+check("12.6 The days still needed are spelled out", "of 6 working days logged" in adm_html)
+with app.app_context():
+    rows = {r["emp"].email: r for r in A.level_status_all()}
+    check("12.7 Every non-admin staff member gets a row",
+          all(em in rows for em in ("lv_pick@x.com", "lv_new@x.com", "lv_week@x.com", "lv_drv@x.com",
+                                    "lv_pack@x.com", "lv_pur@x.com")) and "lv_adm@x.com" not in rows)
 
 with app.app_context():
     for em in ("lv_pick@x.com", "lv_new@x.com", "lv_week@x.com", "lv_drv@x.com", "lv_pack@x.com",

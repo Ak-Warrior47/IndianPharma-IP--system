@@ -333,6 +333,15 @@ input:focus, select:focus, textarea:focus { outline: none; border-color: var(--b
 .nav-menu__panel a:hover { background: var(--brand-tint); color: var(--brand-ink); text-decoration: none; }
 .nav-menu__sep { height: 1px; background: var(--line); margin: var(--s1) 0; }
 @media (max-width: 560px) { .nav-menu__panel { right: auto; left: 0; } }
+.lv-pill{display:inline-block;padding:3px 9px;border-radius:999px;font-size:11.5px;font-weight:600;white-space:nowrap}
+.lv-active{background:#E3F4EA;color:#11643F}
+.lv-waiting{background:#E7EEF8;color:#24477A}
+.lv-starting{background:#FDF1DC;color:#7A5208}
+.lv-not_measured{background:#ECEDEF;color:#4B5565}
+[data-theme="dark"] .lv-active{background:#123A28;color:#8FE0B5}
+[data-theme="dark"] .lv-waiting{background:#1B2B44;color:#A9C4EC}
+[data-theme="dark"] .lv-starting{background:#3A2C10;color:#F1CD86}
+[data-theme="dark"] .lv-not_measured{background:#2A2D33;color:#B7BDC8}
 </style>
 </head>
 <body>
@@ -715,6 +724,38 @@ var NOTES_BY_EMP = {
     </div>
     {% else %}
     <div style="padding:14px;color:var(--ink-3);font-size:13px;">No level-ups this week. A staff member levels up when a better-than-good day, week or month beats their personal best.</div>
+    {% endif %}
+    {% if level_status %}
+    {% set st_counts = {'active': 0, 'waiting': 0, 'starting': 0, 'not_measured': 0} %}
+    {% for r in level_status %}{% set _ = st_counts.update({r.status: st_counts[r.status] + 1}) %}{% endfor %}
+    <div style="margin-top:16px;padding-top:14px;border-top:1px solid var(--line);">
+      <div style="font-size:12px;font-weight:700;color:var(--ink-3);text-transform:uppercase;letter-spacing:.4px;margin-bottom:8px;">
+        Level-up check · every staff member</div>
+      <div id="levelCheckSummary" style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:10px;font-size:12.5px;">
+        <span class="lv-pill lv-active">{{ st_counts.active }} active</span>
+        <span class="lv-pill lv-waiting">{{ st_counts.waiting }} waiting for first check</span>
+        <span class="lv-pill lv-starting">{{ st_counts.starting }} still logging days</span>
+        <span class="lv-pill lv-not_measured">{{ st_counts.not_measured }} not measured</span>
+      </div>
+      <div class="table-wrap">
+        <table class="ptable" id="levelCheckTable">
+          <thead><tr><th>Staff</th><th>Status</th><th>Level</th><th>Best day</th><th>Best week</th><th>Best month</th><th>Target</th><th>Days logged</th></tr></thead>
+          <tbody>{% for r in level_status %}
+            <tr>
+              <td><strong>{{ r.emp.name }}</strong><div style="font-size:11px;color:var(--ink-3);">{{ r.role|title }}</div></td>
+              <td><span class="lv-pill lv-{{ r.status }}">{{ {'active':'Active','waiting':'Waiting','starting':'Starting','not_measured':'Not measured'}[r.status] }}</span>
+                  {% if r.why %}<div style="font-size:11px;color:var(--ink-3);margin-top:3px;">{{ r.why }}</div>{% endif %}</td>
+              <td>{{ r.level if r.status == 'active' else '—' }}</td>
+              {% for per in ('day', 'week', 'month') %}
+              <td>{% if r[per] and r[per].best_value %}{{ '%g'|format(r[per].best_value) }}{% if r[per].best_start %}<div style="font-size:11px;color:var(--ink-3);">{{ r[per].best_start.strftime('%d %b') }}</div>{% endif %}{% else %}—{% endif %}</td>
+              {% endfor %}
+              <td>{% if r.target %}{{ '%g'|format(r.target) }} <span style="font-size:11px;color:var(--ink-3);">{{ r.unit }}</span>{% else %}—{% endif %}</td>
+              <td>{{ r.days }}{% if r.last %}<div style="font-size:11px;color:var(--ink-3);">last {{ r.last.strftime('%d %b') }}</div>{% endif %}</td>
+            </tr>
+          {% endfor %}</tbody>
+        </table>
+      </div>
+    </div>
     {% endif %}
   </div>
 
