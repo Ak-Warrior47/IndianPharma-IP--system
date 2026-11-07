@@ -3549,7 +3549,7 @@ def login():
             if not user or not user.check_password(password):
                 _throttle_fail(_lk)
                 logger.warning(f"Failed login attempt for: {redact_email(email)} (ip={request.remote_addr})")
-                flash("Invalid Pharma ID or Password.", "danger")
+                flash("That email and password don't match. Please try again.", "danger")
                 return render_template("login.html")
             _throttle_clear(_lk)
 

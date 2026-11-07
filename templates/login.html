@@ -3,295 +3,570 @@
 <head>
 <meta name="csrf-token" content="{{ csrf_token() }}">
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="theme-color" content="#F5F0E6">
 <title>Sign in — Indian Pharma</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Pixelify+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=IBM+Plex+Mono:wght@500&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
-/* ── Pharma IP sign-in: a living pixel-art warehouse ───────────────────────
-   Colours come from retro game consoles and riso print, not neon: cream,
-   tomato, mustard, teal, sky, deep navy. Everything is CSS and a few lines of
-   script -- no images to download -- so it stays fast on staff phones. All
-   motion stops for anyone whose device asks for reduced motion. */
-:root{--ink:#1B1B2F;--cream:#FFF4E0;--tomato:#FF5A36;--tomato-ink:#C73A17;--mustard:#FFC23C;
-  --teal:#1FA6A0;--sky:#9ADCFF;--grass:#63C27A;--road:#2B2B40;--muted:#4A4458;}
+/* ── Indian Pharma sign-in ────────────────────────────────────────────────
+   The scene is the company's own day: an order is picked off the shelf,
+   checked, packed and sent out on a scooter from the Cuttack warehouse --
+   the four things this software measures. The sky follows the real time in
+   Cuttack. Everything is inline SVG and CSS: nothing to download, so it is
+   quick on staff phones, and all motion stops for anyone whose device asks
+   for reduced motion. */
+:root{
+  --paper:#F5F0E6;--ink:#16202F;--ink-2:#4B5565;--ink-3:#6B7280;--line:#D8CFBF;--field:#FFFDF8;
+  --green:#146B4A;--green-2:#0E5539;--saffron:#E8A13A;--brick:#C8553D;--danger:#B3382A;
+  --sky1:#7FBDE6;--sky2:#D9EDF6;--far:#93AFC2;--far2:#AEC3D1;--river:#86B6D3;--wall:#F1E7D5;--wall2:#E1D3BB;
+  --int:#38445A;--pave:#D8CDBA;--curb:#BBAF9B;--road:#3A4152;--roof:#B4513A;--cloud:#FFFFFF;
+  --cloudop:.95;--starop:0;--lit:0;--ease:cubic-bezier(.2,.7,.2,1);
+}
+body.t-dawn{--sky1:#EFA36C;--sky2:#FCE5C9;--far:#B99B94;--far2:#CFB4A9;--river:#E2B995;--cloud:#FFE8D4}
+body.t-dusk{--sky1:#C9694F;--sky2:#F4C394;--far:#8A6F82;--far2:#A68A97;--river:#C48E7F;--cloud:#FFD6BF;--lit:.65}
+body.t-night{--sky1:#0D172E;--sky2:#283A63;--far:#1F2C4A;--far2:#293A5C;--river:#1A2946;--wall:#C7BDAC;--wall2:#B0A48F;
+  --int:#4B3F2C;--pave:#55565F;--curb:#46474F;--road:#20263A;--roof:#7A3A2B;--cloud:#93A5C8;--cloudop:.16;--starop:1;--lit:1}
+
 *{box-sizing:border-box}
-html,body{margin:0;height:100%}
-body{background:var(--cream);color:var(--ink);font-family:'Pixelify Sans',monospace;transition:background .6s}
-body.night{background:#141A33}
-.page{display:flex;min-height:100vh;padding:16px;gap:16px}
-.scene-wrap{position:relative;flex:1 1 0;overflow:hidden;border:6px solid var(--ink);background:var(--sky);min-height:420px;transition:background .6s}
-body.night .scene-wrap{background:#1B2550}
-.scene{position:absolute;left:0;top:0;width:848px;height:868px;transform-origin:top left}
-.abs{position:absolute}
-.sp{position:absolute;left:0;top:0}
-.side{width:540px;flex:none;display:flex;align-items:center;justify-content:center;padding:0 24px}
-
-/* scene pieces */
-.sign{left:214px;top:236px;width:412px;height:70px;background:var(--mustard);border:6px solid var(--ink);display:flex;align-items:center;justify-content:center;font-family:'Press Start 2P',monospace;font-size:20px;box-shadow:0 6px 0 var(--ink)}
-body.night .sign{box-shadow:0 6px 0 var(--ink),0 0 24px rgba(255,194,60,.55)}
-.roof{left:100px;top:330px;width:640px;height:44px;background:var(--tomato);border:6px solid var(--ink)}
-.roofdash{left:100px;top:344px;width:640px;height:8px;background:repeating-linear-gradient(90deg,var(--ink) 0 6px,transparent 6px 40px)}
-.wall{left:130px;top:368px;width:580px;height:300px;background:var(--cream);border:6px solid var(--ink);border-top:0}
-body.night .wall{background:#E8DCC4}
-.window{left:168px;top:400px;width:372px;height:226px;background:#CFEFFF;border:6px solid var(--ink);overflow:hidden;transition:background .6s}
-body.night .window{background:#FFE7A3}
-.shelf{position:absolute;left:0;right:0;height:64px;display:flex;align-items:flex-end;gap:6px;padding:0 10px;border-bottom:6px solid var(--ink)}
-.box{border:3px solid var(--ink);display:flex;align-items:center;justify-content:center}
-.box i{width:50%;height:3px;background:var(--cream)}
-.door{left:572px;top:470px;width:104px;height:198px;background:var(--teal);border:6px solid var(--ink)}
-.door b{position:absolute;left:10px;top:12px;right:10px;height:70px;background:#CFEFFF;border:4px solid var(--ink)}
-body.night .door b{background:#FFE7A3}
-.door u{position:absolute;right:12px;top:100px;width:12px;height:12px;background:var(--mustard);border:3px solid var(--ink)}
-.grass{left:0;right:0;top:662px;height:46px;background:var(--grass);border-top:6px solid var(--ink)}
-.road{left:0;right:0;top:708px;height:104px;background:var(--road);border-top:6px solid var(--ink);border-bottom:6px solid var(--ink)}
-.lane{left:0;right:0;top:757px;height:6px;background-image:repeating-linear-gradient(90deg,var(--mustard) 0 48px,transparent 48px 96px);animation:lane .6s linear infinite}
-.verge{left:0;right:0;top:812px;bottom:0;background:var(--grass)}
-body.night .grass,body.night .verge{background:#2F7A4A}
-.bubble{left:250px;top:330px;max-width:300px;background:#fff;border:5px solid var(--ink);padding:10px 14px;font-size:18px;font-weight:600;box-shadow:5px 5px 0 var(--ink);opacity:0;transform:translateY(10px) scale(.9);transition:opacity .2s steps(3),transform .2s steps(3);z-index:5}
-.bubble::after{content:"";position:absolute;left:40px;bottom:-17px;width:12px;height:12px;background:#fff;border-right:5px solid var(--ink);border-bottom:5px solid var(--ink);transform:rotate(45deg)}
-.bubble.on{opacity:1;transform:none}
-.stars,.moon,.shoot{display:none}
-body.night .stars,body.night .moon,body.night .shoot{display:block}
-body.night .sun,body.night .cloud,body.night .bird{display:none}
-.star{position:absolute;width:4px;height:4px;background:#FFF4E0}
-
-/* overlays */
-.brand{position:absolute;left:24px;top:22px;display:flex;align-items:center;gap:12px;z-index:3}
-.logo{width:54px;height:54px;background:var(--tomato);border:5px solid var(--ink);box-shadow:4px 4px 0 var(--ink);display:flex;align-items:center;justify-content:center;font-family:'Press Start 2P',monospace;font-size:14px}
-.brand-name{font-family:'Press Start 2P',monospace;font-size:14px;background:var(--cream);border:4px solid var(--ink);padding:8px 10px;line-height:1.4}
-.brand-sub{display:block;font-family:'Pixelify Sans',monospace;font-size:14px;font-weight:500;margin-top:2px}
-.clock{position:absolute;right:20px;top:26px;display:flex;align-items:center;gap:8px;background:var(--ink);color:var(--cream);padding:8px 12px;font-family:'Press Start 2P',monospace;font-size:10px;z-index:3}
-.clock i{width:8px;height:8px;background:var(--tomato);animation:blink 1.1s steps(1) infinite}
-.tagline{position:absolute;left:24px;bottom:16px;font-family:'Press Start 2P',monospace;font-size:10px;line-height:1.6;color:var(--ink);background:var(--cream);border:3px solid var(--ink);padding:6px 8px;z-index:3}
-
-/* the card */
-.card{width:100%;max-width:440px;background:#fff;border:5px solid var(--ink);box-shadow:10px 10px 0 var(--ink);padding:32px 30px;display:flex;flex-direction:column;gap:18px;animation:rise .6s steps(6) both}
-body.night .card{box-shadow:10px 10px 0 #000}
-.card.shake{animation:shake .5s cubic-bezier(.36,.07,.19,.97) both}
-.hello{font-size:17px;font-weight:500;color:var(--muted)}
-h1{margin:0;font-family:'Press Start 2P',monospace;font-weight:400;font-size:24px;line-height:1.3}
-label.lbl{font-size:17px;font-weight:600}
-.row{display:flex;justify-content:space-between;align-items:baseline}
-.inp{width:100%;height:54px;border:4px solid var(--ink);border-radius:0;padding:0 14px;font-family:'Pixelify Sans',monospace;font-size:19px;color:var(--ink);background:var(--cream)}
-.inp:focus{outline:none;background:#FFE7A3}
-.inp::placeholder{color:#6A6478}
-.pw{position:relative}
-.pw .inp{padding-right:60px}
-.eye{position:absolute;right:5px;top:5px;width:44px;height:44px;border:0;background:transparent;cursor:pointer;display:flex;align-items:center;justify-content:center}
-.eye:focus-visible{outline:3px solid var(--tomato)}
-a{color:var(--ink);text-decoration:underline;text-decoration-thickness:2px;text-underline-offset:4px}
-a:hover{color:var(--tomato-ink)}
-.caps{display:none;align-self:flex-start;gap:6px;align-items:center;margin-top:8px;padding:6px 10px;background:var(--ink);color:var(--mustard);font-family:'Press Start 2P',monospace;font-size:9px}
-.caps.on{display:flex}
-.alert{border:4px solid var(--ink);padding:10px 12px;font-size:17px;font-weight:600;background:#FFD6D6;box-shadow:4px 4px 0 var(--ink)}
-.alert.info,.alert.success{background:#D6F5E3}
-.start{align-self:center;font-family:'Press Start 2P',monospace;font-size:10px;color:var(--tomato-ink);animation:blink 1.1s steps(1) infinite}
-.go{position:relative;width:100%;height:62px;border:5px solid var(--ink);border-radius:0;background:var(--tomato);color:var(--ink);font-family:'Press Start 2P',monospace;font-size:16px;cursor:pointer;box-shadow:6px 6px 0 var(--ink);overflow:hidden;transition:transform .08s steps(2),box-shadow .08s steps(2)}
-.go:hover{transform:translate(-2px,-2px);box-shadow:8px 8px 0 var(--ink)}
-.go:active{transform:translate(6px,6px);box-shadow:0 0 0 var(--ink)}
-.go:focus-visible{outline:4px solid var(--teal);outline-offset:3px}
-.go .bar{position:absolute;left:0;top:0;bottom:0;width:0;background:var(--mustard)}
-.go .lbl{position:relative}
-.go.loading .bar{animation:load 2.2s steps(11) forwards}
-.foot{margin:0;font-size:16px;line-height:1.4;color:var(--muted)}
-
-/* motion */
-@keyframes lane{from{background-position:0 0}to{background-position:-96px 0}}
-@keyframes drift{from{transform:translateX(-260px)}to{transform:translateX(1000px)}}
-@keyframes ride{from{transform:translateX(-160px)}to{transform:translateX(960px)}}
-@keyframes auto{from{transform:translateX(960px) scaleX(-1)}to{transform:translateX(-200px) scaleX(-1)}}
-@keyframes walk{0%{transform:translateX(0) scaleX(1)}49%{transform:translateX(250px) scaleX(1)}50%{transform:translateX(250px) scaleX(-1)}99%{transform:translateX(0) scaleX(-1)}100%{transform:translateX(0) scaleX(1)}}
-@keyframes bob{0%,100%{transform:translateY(0)}50%{transform:translateY(-3px)}}
-@keyframes float{0%,100%{transform:translateY(0) rotate(0)}50%{transform:translateY(-12px) rotate(8deg)}}
-@keyframes blink{0%,49%{opacity:1}50%,100%{opacity:0}}
-@keyframes crossblink{0%,60%,100%{opacity:1}70%,90%{opacity:.3}}
-@keyframes twinkle{0%,100%{opacity:0;transform:scale(.4)}50%{opacity:1;transform:scale(1)}}
-@keyframes starblink{0%,100%{opacity:.25}50%{opacity:1}}
-@keyframes fly{0%{transform:translate(-80px,0)}25%{transform:translate(200px,-14px)}50%{transform:translate(480px,6px)}75%{transform:translate(760px,-10px)}100%{transform:translate(1000px,0)}}
-@keyframes flap{0%,49%{transform:scaleY(1)}50%,100%{transform:scaleY(-1)}}
-@keyframes shoot{0%,86%{opacity:0;transform:translate(0,0)}88%{opacity:1}100%{opacity:0;transform:translate(-320px,180px)}}
-@keyframes rise{from{opacity:0;transform:translateY(24px)}to{opacity:1;transform:none}}
-@keyframes shake{0%,100%{transform:translateX(0)}15%{transform:translateX(-12px)}30%{transform:translateX(10px)}45%{transform:translateX(-8px)}60%{transform:translateX(6px)}75%{transform:translateX(-3px)}}
-@keyframes load{from{width:0}to{width:100%}}
-@keyframes sunpulse{0%,100%{transform:scale(1)}50%{transform:scale(1.06)}}
-.cloud{animation:drift 40s linear infinite}
-.cloud.c2{animation-duration:54s;animation-delay:-22s}
-.cloud.c3{animation-duration:46s;animation-delay:-36s}
-.sun{animation:sunpulse 3s steps(3) infinite}
-.rider{animation:ride 9s linear infinite}
-.rider.fast{animation-duration:2.2s}
-.auto{animation:auto 13s linear -4s infinite}
-.walker{animation:walk 8s steps(80) infinite}
-.walker.stop{animation:none;transform:translateX(150px)}
-.bob{animation:bob .5s steps(2) infinite}
-.walker.stop .bob{animation:none}
-.float{animation:float 3.4s ease-in-out infinite}
-.cross{animation:crossblink 2.4s steps(1) infinite}
-body.night .cross{filter:drop-shadow(0 0 8px #2BB673)}
-.spark{animation:twinkle 2s steps(4) infinite}
-.bird{animation:fly 16s linear infinite}
-.bird .sp{animation:flap .35s steps(1) infinite}
-.star{animation:starblink 2.6s ease-in-out infinite}
-.shoot{animation:shoot 8s linear infinite}
-@media (prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;transition:none!important}}
-
-@media (max-width:900px){
-  .page{flex-direction:column;padding:0;gap:0}
-  /* The scene gives way to the form: whatever height is left after the form
-     (about 500px) goes to the scene, between 150px and 42% of the screen. */
-  .scene-wrap{flex:none;height:clamp(150px,calc(100vh - 500px),42vh);height:clamp(150px,calc(100svh - 500px),42svh);min-height:0;border-width:0 0 5px}
-  .side{width:auto;padding:20px 16px 28px}
-  .card{box-shadow:6px 6px 0 var(--ink);padding:22px 18px}
-  .brand{left:12px;top:12px}.logo{width:42px;height:42px;font-size:11px;border-width:4px}
-  .brand-name{font-size:11px;padding:6px 8px}.brand-sub{display:none}
-  .clock{right:12px;top:16px;font-size:9px}.ck-pre{display:none}.tagline{display:none}
-  .brand-name{font-size:10px}
-  h1{font-size:19px}
+html,body{margin:0;min-height:100%}
+body{
+  background:var(--paper);color:var(--ink);
+  font:400 16px/1.5 'IBM Plex Sans',system-ui,-apple-system,'Segoe UI',sans-serif;
+  -webkit-font-smoothing:antialiased;
+  /* a faint paper grain, so the page reads as printed rather than flat */
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 0.1 0 0 0 0 0.08 0 0 0 0 0.05 0 0 0 .05 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
 }
-/* Short portrait screens (iPhone SE and similar): a tighter form. */
-@media (max-width:900px) and (max-height:700px){
-  .card{gap:12px;padding:16px 16px}
-  .inp{height:48px;font-size:18px}
-  .go{height:54px;font-size:14px}
-  .start,.foot{display:none}
-  .side{padding:12px 12px 16px}
-}
-/* Very narrow phones */
-@media (max-width:360px){
-  .card{padding:16px 14px}
-  .brand-name{display:none}
-}
-/* Phones held sideways: scene and form side by side, the form scrolls in its column. */
-@media (max-height:520px) and (orientation:landscape){
-  .page{flex-direction:row;padding:0;gap:0;height:100vh;height:100svh;min-height:0}
-  .scene-wrap{flex:1 1 0;height:auto;min-height:0;border-width:0 5px 0 0}
-  .side{width:min(440px,52vw);flex:none;align-items:flex-start;overflow-y:auto;padding:12px}
-  .card{gap:10px;padding:14px 16px;box-shadow:5px 5px 0 var(--ink)}
-  .card h1{font-size:16px}
-  .inp{height:44px;font-size:17px}
-  .go{height:50px;font-size:13px}
-  .start,.foot,.tagline,.brand-sub{display:none}
-  .brand-name{font-size:10px}
-}
-/* Big monitors: a sign-in box in proportion to the screen. */
+a{color:var(--green);text-decoration:none;font-weight:500}
+a:hover{text-decoration:underline;text-underline-offset:3px}
+a:focus-visible,button:focus-visible{outline:2px solid var(--green);outline-offset:3px;border-radius:6px}
+
+.page{display:grid;grid-template-columns:minmax(0,1fr) minmax(420px,520px);min-height:100vh;min-height:100svh;padding:16px;gap:16px}
+
+/* ── Scene panel ─────────────────────────────────────────────────────── */
+.scene{position:relative;border-radius:24px;overflow:hidden;background:var(--sky2);isolation:isolate;
+  box-shadow:0 1px 0 rgba(22,32,47,.06),0 24px 48px -28px rgba(22,32,47,.45)}
+.scene svg.art{position:absolute;inset:0;width:100%;height:100%;display:block}
+.scene .scrim{position:absolute;left:0;right:0;bottom:0;height:34%;pointer-events:none;
+  background:linear-gradient(to top,rgba(12,18,32,.72),rgba(12,18,32,.38) 45%,rgba(12,18,32,0))}
+
+.c-sky1{stop-color:var(--sky1)} .c-sky2{stop-color:var(--sky2)}
+.c-far{fill:var(--far)} .c-far2{fill:var(--far2)} .c-river{fill:var(--river)}
+.c-wall{fill:var(--wall)} .c-wall2{fill:var(--wall2)} .c-int{fill:var(--int)} .c-roof{fill:var(--roof)}
+.c-pave{fill:var(--pave)} .c-curb{fill:var(--curb)} .c-road{fill:var(--road)}
+.c-far,.c-far2,.c-river,.c-wall,.c-wall2,.c-int,.c-roof,.c-pave,.c-curb,.c-road{transition:fill 1.2s ease}
+.c-sky1,.c-sky2{transition:stop-color 1.2s ease}
+.cloud{fill:var(--cloud);opacity:var(--cloudop);transition:opacity 1.2s,fill 1.2s}
+.stars{opacity:var(--starop);transition:opacity 1.2s}
+.lit{opacity:var(--lit);transition:opacity 1.2s}
+.cone{opacity:calc(.1 + var(--lit) * .65);transition:opacity 1.2s}
+#sign{transition:filter 1.2s}
+body.t-night #sign,body.t-dusk #sign{filter:drop-shadow(0 0 14px rgba(232,161,58,.55))}
+
+/* ambient motion */
+@keyframes drift{from{transform:translateX(-360px)}to{transform:translateX(1560px)}}
+.drift{animation:drift linear infinite}
+@keyframes twinkle{0%,100%{opacity:.25}50%{opacity:1}}
+.tw{animation:twinkle 3.4s ease-in-out infinite}
+@keyframes sway{from{transform:rotate(-1.4deg)}to{transform:rotate(1.4deg)}}
+.canopy{transform-origin:112px 600px;animation:sway 6.5s ease-in-out infinite alternate}
+@keyframes lampSway{from{transform:rotate(-1.6deg)}to{transform:rotate(1.6deg)}}
+.lamp{animation:lampSway 5s ease-in-out infinite alternate}
+@keyframes flag{0%,100%{transform:scaleX(1)}50%{transform:scaleX(.72)}}
+.flag{transform-origin:940px 360px;animation:flag 1.8s ease-in-out infinite}
+@keyframes shimmer{0%,100%{opacity:0;transform:translateX(0)}50%{opacity:.7;transform:translateX(14px)}}
+.shim{animation:shimmer 4s ease-in-out infinite}
+@keyframes birds{from{transform:translate(-120px,170px)}to{transform:translate(1400px,120px)}}
+.birds{animation:birds 34s linear infinite;animation-delay:-9s}
+@keyframes flap{0%,100%{transform:scaleY(1)}50%{transform:scaleY(-.6)}}
+.wing{transform-box:fill-box;transform-origin:center;animation:flap .7s ease-in-out infinite}
+@keyframes autoGo{0%{transform:translate(1380px,738px)}52%{transform:translate(-220px,738px)}100%{transform:translate(-220px,738px)}}
+.auto{animation:autoGo 24s linear infinite;animation-delay:-3s}
+@keyframes spin{to{transform:rotate(-360deg)}}
+.auto .wh{transform-box:fill-box;transform-origin:center;animation:spin .55s linear infinite}
+@keyframes bob{0%,100%{transform:translateY(0)}50%{transform:translateY(-1.2px)}}
+.auto .body{animation:bob .3s ease-in-out infinite}
+
+/* scene entrance: each layer rises into place */
+.in{transition:opacity 1s var(--ease),transform 1.2s var(--ease)}
+body:not(.ready) .in-sky{opacity:0}
+body:not(.ready) .in-far{opacity:0;transform:translateY(26px)}
+body:not(.ready) .in-mid{opacity:0;transform:translateY(40px)}
+body:not(.ready) .in-fore{opacity:0;transform:translateY(56px)}
+.in-far{transition-delay:.1s}.in-mid{transition-delay:.22s}.in-fore{transition-delay:.34s}
+
+/* scene overlays */
+.brand{position:absolute;left:20px;top:20px;display:flex;align-items:center;gap:12px;padding:7px 16px 7px 7px;
+  background:var(--paper);border-radius:16px;box-shadow:0 8px 24px -12px rgba(22,32,47,.5)}
+.brand .mark{width:42px;height:42px;flex:none;display:block}
+.brand b{display:block;font:600 18px/1.1 'Fraunces',Georgia,serif;letter-spacing:.2px}
+.brand span{display:block;font:500 11px/1.4 'IBM Plex Mono',ui-monospace,monospace;letter-spacing:.8px;text-transform:uppercase;color:var(--ink-3);margin-top:2px}
+.mark .mk-cross{transform-origin:35px 9px;transition:transform .9s var(--ease) .7s}
+body:not(.ready) .mark .mk-cross{transform:rotate(-90deg) scale(0)}
+.clock{position:absolute;right:20px;top:24px;display:flex;align-items:center;gap:8px;padding:8px 12px;border-radius:999px;
+  background:rgba(22,32,47,.88);color:#F5F0E6;border:1px solid rgba(255,255,255,.14);font:500 12px/1 'IBM Plex Mono',ui-monospace,monospace;letter-spacing:.6px}
+.clock i{width:7px;height:7px;border-radius:50%;background:#3DDC97;box-shadow:0 0 0 0 rgba(61,220,151,.6);animation:ping 2s infinite}
+@keyframes ping{0%{box-shadow:0 0 0 0 rgba(61,220,151,.55)}80%,100%{box-shadow:0 0 0 7px rgba(61,220,151,0)}}
+
+.flow{position:absolute;left:28px;right:28px;bottom:26px;color:#fff;pointer-events:none}
+.flow h2{margin:0 0 14px;font:500 clamp(22px,2.3vw,34px)/1.12 'Fraunces',Georgia,serif;letter-spacing:-.2px;max-width:560px;text-wrap:balance}
+.flow ol{list-style:none;margin:0;padding:0;display:flex;align-items:center;max-width:560px}
+.flow li{display:flex;align-items:center;flex:1 1 0;min-width:0}
+.flow li:last-child{flex:0 0 auto}
+.flow .dot{position:relative;width:24px;height:24px;flex:none;border-radius:50%;border:1.5px solid rgba(255,255,255,.55);
+  display:grid;place-items:center;transition:background .35s,border-color .35s,transform .35s var(--ease)}
+.flow .dot svg{width:12px;height:12px;opacity:0;transform:scale(.4);transition:opacity .3s,transform .35s var(--ease)}
+.flow .nm{margin:0 10px 0 8px;font:500 13px/1 'IBM Plex Sans',sans-serif;opacity:.7;white-space:nowrap;transition:opacity .3s}
+.flow .bar{flex:1 1 auto;height:2px;background:rgba(255,255,255,.25);border-radius:2px;overflow:hidden;margin-right:10px}
+.flow .bar i{display:block;height:100%;width:0;background:#fff;border-radius:2px}
+.flow li.done .dot{background:#2FBF7F;border-color:#2FBF7F}
+.flow li.done .dot svg{opacity:1;transform:none}
+.flow li.done .bar i{width:100%}
+.flow li.on .dot{border-color:var(--saffron);background:rgba(232,161,58,.18);transform:scale(1.08)}
+.flow li.on .dot::after{content:"";position:absolute;inset:5px;border-radius:50%;background:var(--saffron)}
+.flow li.on .dot::before{content:"";position:absolute;inset:-6px;border-radius:50%;border:1.5px solid var(--saffron);opacity:0;animation:ring 1.6s ease-out infinite}
+@keyframes ring{0%{opacity:.8;transform:scale(.7)}100%{opacity:0;transform:scale(1.25)}}
+.flow li.on .nm,.flow li.done .nm{opacity:1}
+.flow .cap{margin:12px 0 0;font:500 12px/1.4 'IBM Plex Mono',ui-monospace,monospace;letter-spacing:.5px;color:rgba(255,255,255,.82);min-height:17px}
+.flow .cap span{display:inline-block;transition:opacity .3s,transform .4s var(--ease)}
+.flow .cap span.out{opacity:0;transform:translateY(5px)}
+
+/* ── Form side ───────────────────────────────────────────────────────── */
+.side{display:flex;align-items:center;justify-content:center;padding:40px 44px}
+.card{width:100%;max-width:400px;display:flex;flex-direction:column}
+.eyebrow{font:500 12px/1.4 'IBM Plex Mono',ui-monospace,monospace;letter-spacing:.7px;text-transform:uppercase;color:var(--ink-3)}
+h1{margin:10px 0 8px;font:600 44px/1.04 'Fraunces',Georgia,serif;letter-spacing:-.8px;font-variation-settings:"opsz" 120}
+h1 em{font-style:normal;color:var(--green)}
+.lede{margin:0 0 28px;color:var(--ink-2);font-size:15.5px;max-width:34ch}
+
+.alert{display:flex;gap:10px;align-items:flex-start;margin:0 0 18px;padding:12px 14px;border-radius:12px;font-size:14.5px;line-height:1.45;
+  background:#EEF2F6;color:#26364A;border:1px solid #D7DFE8;animation:alertIn .45s var(--ease) both}
+.alert svg{flex:none;width:18px;height:18px;margin-top:1px}
+.alert.danger{background:#FBECE8;color:#7A2216;border-color:#F0CFC7}
+.alert.warning{background:#FDF3E1;color:#6B4A0E;border-color:#F1DDB5}
+.alert.success{background:#E8F4EE;color:#0F4A32;border-color:#C9E4D6}
+@keyframes alertIn{from{opacity:0;transform:translateY(-6px)}to{opacity:1;transform:none}}
+
+.field{margin-bottom:18px}
+.lblrow{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:8px}
+.lbl{display:block;font-weight:500;font-size:14px;color:var(--ink);transition:color .2s}
+.lblrow a{font-size:13.5px}
+.ctl{position:relative}
+.inp{width:100%;height:52px;padding:0 16px;font:400 16px/1 'IBM Plex Sans',sans-serif;color:var(--ink);
+  background:var(--field);border:1.5px solid var(--line);border-radius:12px;outline:none;-webkit-appearance:none;appearance:none;
+  transition:border-color .2s,box-shadow .25s,background .2s}
+.inp::placeholder{color:#A39C90}
+.inp:hover{border-color:#C3B9A7}
+.inp:focus{border-color:var(--green);background:#fff;box-shadow:0 0 0 4px rgba(20,107,74,.13)}
+.field:focus-within .lbl{color:var(--green)}
+.inp.bad{border-color:var(--danger);box-shadow:0 0 0 4px rgba(179,56,42,.10)}
+.pw .inp{padding-right:52px}
+.eye{position:absolute;right:6px;top:6px;width:40px;height:40px;border:0;border-radius:9px;background:transparent;color:var(--ink-3);
+  cursor:pointer;display:grid;place-items:center;transition:background .2s,color .2s}
+.eye:hover{background:rgba(22,32,47,.06);color:var(--ink)}
+.eye svg{width:20px;height:20px;grid-area:1/1;transition:opacity .2s,transform .25s var(--ease)}
+.eye .off{opacity:0;transform:scale(.7)}
+.eye[aria-pressed="true"] .on{opacity:0;transform:scale(.7)}
+.eye[aria-pressed="true"] .off{opacity:1;transform:none}
+.caps{display:flex;align-items:center;gap:6px;height:0;overflow:hidden;opacity:0;font-size:13px;color:#8A5A0B;transition:height .25s var(--ease),opacity .2s,margin .25s}
+.caps.on{height:20px;opacity:1;margin-top:8px}
+
+.go{position:relative;overflow:hidden;margin-top:8px;width:100%;height:54px;border:0;border-radius:12px;cursor:pointer;
+  display:flex;align-items:center;justify-content:center;gap:10px;background:var(--green);color:#fff;
+  font:600 16px/1 'IBM Plex Sans',sans-serif;letter-spacing:.2px;
+  box-shadow:0 1px 0 rgba(255,255,255,.12) inset,0 10px 22px -12px rgba(20,107,74,.85);
+  transition:background .2s,transform .15s,box-shadow .2s}
+.go:hover{background:var(--green-2);box-shadow:0 1px 0 rgba(255,255,255,.12) inset,0 14px 26px -12px rgba(20,107,74,.9)}
+.go:active{transform:scale(.985)}
+.go .arrow{width:18px;height:18px;transition:transform .25s var(--ease)}
+.go:hover .arrow{transform:translateX(4px)}
+.go .spin{display:none;width:18px;height:18px;animation:rot .8s linear infinite}
+@keyframes rot{to{transform:rotate(360deg)}}
+.go::after{content:"";position:absolute;top:0;bottom:0;width:40%;left:-60%;background:linear-gradient(100deg,transparent,rgba(255,255,255,.22),transparent);transform:skewX(-18deg)}
+.go.loading{pointer-events:none;background:var(--green-2)}
+.go.loading .arrow{display:none}.go.loading .spin{display:block}
+.go.loading::after{animation:sheen 1.1s ease-in-out infinite}
+@keyframes sheen{to{left:130%}}
+
+.foot{margin:26px 0 0;padding-top:20px;border-top:1px solid var(--line);display:flex;gap:10px;color:var(--ink-3);font-size:13.5px;line-height:1.5}
+.foot svg{flex:none;width:16px;height:16px;margin-top:2px;color:var(--green)}
+.legal{margin:18px 0 0;font:500 11px/1.4 'IBM Plex Mono',ui-monospace,monospace;letter-spacing:.6px;text-transform:uppercase;color:#A39C90}
+
+/* form entrance */
+.rise{opacity:0;transform:translateY(14px);transition:opacity .7s var(--ease),transform .8s var(--ease);transition-delay:calc(var(--i,0) * 70ms + 260ms)}
+body.ready .rise{opacity:1;transform:none}
+@keyframes shake{10%,90%{transform:translateX(-1px)}20%,80%{transform:translateX(3px)}30%,50%,70%{transform:translateX(-6px)}40%,60%{transform:translateX(6px)}}
+.card.shake{animation:shake .5s cubic-bezier(.36,.07,.19,.97) .5s both}
+
+/* ── Every screen ────────────────────────────────────────────────────── */
 @media (min-width:1800px){
-  .side{width:660px}
-  .card{max-width:540px;padding:42px 40px;gap:22px}
-  h1{font-size:30px}
-  .hello,label.lbl{font-size:19px}
-  .inp{height:62px;font-size:21px}
-  .go{height:70px;font-size:18px}
-  .brand{left:32px;top:30px}.logo{width:66px;height:66px;font-size:17px}
-  .brand-name{font-size:17px}.clock{font-size:12px;top:34px;right:28px}.tagline{font-size:12px}
+  .page{grid-template-columns:minmax(0,1fr) 620px}
+  .card{max-width:460px} h1{font-size:54px} .lede{font-size:17px}
+  .inp,.go{height:58px}
 }
-/* Whatever the device, a narrow scene panel drops the extras that would collide. */
-.scene-wrap.tight .ck-pre,.scene-wrap.tight .brand-sub,.scene-wrap.tight .tagline{display:none}
-.scene-wrap.xtight .clock{display:none}
-.scene-wrap.tight .brand-name{font-size:11px;padding:6px 8px}
-.scene-wrap.tight .logo{width:44px;height:44px;font-size:12px}
-/* Tablets held sideways and small laptops: give the scene a bit more room. */
-@media (min-width:901px) and (max-width:1200px){.side{width:470px;padding:0 16px}}
+@media (max-width:1100px) and (min-width:861px){
+  .page{grid-template-columns:minmax(0,1fr) 420px}
+  .side{padding:32px 28px} h1{font-size:38px}
+  .flow .nm{font-size:12px;margin:0 6px 0 6px}
+}
+@media (max-width:860px){
+  .page{grid-template-columns:1fr;grid-template-rows:auto 1fr;padding:10px;gap:0}
+  .scene{height:clamp(240px,42svh,430px);border-radius:20px}
+  .side{align-items:flex-start;padding:26px 14px 28px}
+  .card{max-width:520px;margin:0 auto}
+  h1{font-size:36px;margin-top:8px}
+  .lede{margin-bottom:22px}
+  .brand{left:12px;top:12px;padding:5px 12px 5px 5px;border-radius:13px;gap:9px}
+  .brand .mark{width:34px;height:34px}
+  .brand b{font-size:15.5px} .brand span{font-size:9.5px}
+  .clock{right:12px;top:16px;padding:7px 10px;font-size:11px}
+  .clock .city{display:none}
+  .flow{left:16px;right:16px;bottom:16px}
+  .flow h2{display:none}
+  .flow .nm{display:none}
+  .flow .bar{margin:0 8px}
+  .flow .dot{width:20px;height:20px}
+  .flow .cap{margin-top:8px;font-size:11px}
+  .scene .scrim{height:34%;background:linear-gradient(to top,rgba(12,18,32,.92),rgba(12,18,32,.7) 50%,rgba(12,18,32,0))}
+  .legal{display:none}
+}
+@media (max-width:420px){ .brand span{display:none} }
+@media (max-width:380px){
+  h1{font-size:31px} .lede{font-size:14.5px}
+}
+@media (max-width:860px) and (max-height:700px){
+  .scene{height:clamp(200px,36svh,300px)}
+  .lede{display:none} h1{margin-bottom:18px}
+}
+@media (max-width:860px) and (max-height:600px){
+  .scene{height:clamp(160px,31svh,220px)}
+  .side{padding-top:16px}
+  .eyebrow,.flow .cap{display:none}
+  h1{font-size:28px;margin:0 0 14px}
+  .field{margin-bottom:12px} .inp,.go{height:48px}
+  .foot{margin-top:18px;padding-top:14px}
+}
+/* phones held sideways: scene and form side by side */
+@media (orientation:landscape) and (max-height:560px){
+  .page{grid-template-columns:minmax(0,1fr) minmax(320px,46%);grid-template-rows:none;gap:10px;padding:10px;height:100svh}
+  .scene{height:auto}
+  .side{align-items:flex-start;overflow-y:auto;padding:16px 10px}
+  .flow h2,.flow .cap,.lede,.legal{display:none}
+  h1{font-size:28px;margin:4px 0 14px}
+  .field{margin-bottom:12px} .inp,.go{height:46px}
+  .foot{margin-top:16px;padding-top:12px}
+}
+
+@media (prefers-reduced-motion:reduce){
+  *,*::before,*::after{animation:none!important;transition:none!important}
+  .rise{opacity:1;transform:none}
+}
 </style>
 </head>
-<body>
+<body class="t-day">
+
 <div class="page">
+  <!-- ═════════════ The warehouse, live ═════════════ -->
+  <div class="scene" id="scene" aria-hidden="true">
+    <svg class="art" viewBox="0 0 1200 900" preserveAspectRatio="xMidYMax slice">
+      <defs>
+        <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" class="c-sky1"/><stop offset="1" class="c-sky2"/>
+        </linearGradient>
+        <radialGradient id="sunGlow"><stop offset="0" stop-color="#FFE2A0" stop-opacity=".9"/><stop offset="1" stop-color="#FFE2A0" stop-opacity="0"/></radialGradient>
+        <radialGradient id="moonGlow"><stop offset="0" stop-color="#DCE6FF" stop-opacity=".45"/><stop offset="1" stop-color="#DCE6FF" stop-opacity="0"/></radialGradient>
+        <linearGradient id="cone" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#FFE3A6" stop-opacity=".95"/><stop offset="1" stop-color="#FFE3A6" stop-opacity="0"/></linearGradient>
+        <linearGradient id="beamG" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#3DDC97" stop-opacity=".1"/><stop offset=".5" stop-color="#3DDC97" stop-opacity=".55"/><stop offset="1" stop-color="#3DDC97" stop-opacity=".1"/></linearGradient>
+        <radialGradient id="lampGlow"><stop offset="0" stop-color="#FFD98A" stop-opacity=".75"/><stop offset="1" stop-color="#FFD98A" stop-opacity="0"/></radialGradient>
+        <linearGradient id="beamH" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#FFF1C4" stop-opacity=".7"/><stop offset="1" stop-color="#FFF1C4" stop-opacity="0"/></linearGradient>
+        <g id="palm">
+          <path d="M0 0 C 4 -40, 10 -80, 22 -112" fill="none" stroke-width="7" stroke-linecap="round"/>
+          <path d="M22 -112 C 0 -122,-22 -116,-36 -98 C -16 -106, 4 -108, 22 -112Z"/>
+          <path d="M22 -112 C 44 -126, 66 -120, 78 -102 C 58 -110, 40 -110, 22 -112Z"/>
+          <path d="M22 -112 C 10 -136,-6 -146,-26 -146 C -8 -138, 8 -126, 22 -112Z"/>
+          <path d="M22 -112 C 36 -138, 54 -146, 72 -142 C 54 -134, 38 -124, 22 -112Z"/>
+          <path d="M22 -112 C 28 -90, 26 -72, 16 -58 C 22 -76, 22 -94, 22 -112Z"/>
+        </g>
+      </defs>
 
-  <div class="scene-wrap" id="sceneWrap" aria-hidden="true">
-    <div class="scene" id="scene">
-      <div class="stars" id="stars"></div>
-      <div class="abs sun" style="left:690px;top:110px"><div class="sp" data-s="sun" data-p="6"></div></div>
-      <div class="abs moon" style="left:690px;top:110px"><div class="sp" data-s="moon" data-p="6"></div></div>
-      <div class="abs shoot" style="left:760px;top:60px;width:44px;height:4px;background:linear-gradient(90deg,#FFF4E0,transparent)"></div>
-      <div class="abs cloud" style="left:0;top:170px"><div class="sp" data-s="cloud" data-p="6"></div></div>
-      <div class="abs cloud c2" style="left:0;top:236px"><div class="sp" data-s="cloud" data-p="4"></div></div>
-      <div class="abs cloud c3" style="left:0;top:136px"><div class="sp" data-s="cloud" data-p="4"></div></div>
-      <div class="abs bird" style="left:0;top:200px"><div class="sp" data-s="bird" data-p="5"></div></div>
-      <div class="abs bird" style="left:0;top:250px;animation-delay:-6s;animation-duration:19s"><div class="sp" data-s="bird" data-p="4"></div></div>
+      <!-- sky -->
+      <g class="in in-sky">
+        <rect x="-100" y="-100" width="1400" height="1100" fill="url(#sky)"/>
+        <g class="stars" id="stars"></g>
+        <g id="sun"><circle r="90" fill="url(#sunGlow)"/><circle r="30" fill="#FFD67E"/><circle r="30" fill="none" stroke="#FFC24F" stroke-width="2" opacity=".6"/></g>
+        <g id="moon" style="display:none"><circle r="70" fill="url(#moonGlow)"/><circle r="22" fill="#EEF1FA"/><circle cx="8" cy="-6" r="20" fill="var(--sky1)" opacity=".0"/><circle cx="-7" cy="4" r="4" fill="#D5DBEB"/><circle cx="6" cy="9" r="2.6" fill="#D5DBEB"/><circle cx="4" cy="-8" r="3" fill="#D5DBEB"/></g>
+        <g class="drift" style="animation-duration:92s;animation-delay:-20s">
+          <g class="cloud"><ellipse cx="0" cy="150" rx="70" ry="18"/><ellipse cx="-22" cy="138" rx="34" ry="22"/><ellipse cx="20" cy="132" rx="40" ry="28"/></g></g>
+        <g class="drift" style="animation-duration:130s;animation-delay:-84s">
+          <g class="cloud"><ellipse cx="0" cy="235" rx="90" ry="20"/><ellipse cx="-30" cy="222" rx="40" ry="24"/><ellipse cx="26" cy="214" rx="50" ry="32"/></g></g>
+        <g class="drift" style="animation-duration:110s;animation-delay:-55s">
+          <g class="cloud" opacity=".8"><ellipse cx="0" cy="95" rx="50" ry="12"/><ellipse cx="10" cy="86" rx="28" ry="17"/></g></g>
+        <g class="birds"><g fill="none" stroke="#2A3346" stroke-width="2.2" stroke-linecap="round" opacity=".55">
+          <path class="wing" d="M0 0 q6 -6 12 0 q6 -6 12 0"/>
+          <path class="wing" style="animation-delay:-.2s" d="M30 14 q5 -5 10 0 q5 -5 10 0"/>
+          <path class="wing" style="animation-delay:-.45s" d="M-26 18 q5 -5 10 0 q5 -5 10 0"/></g></g>
+      </g>
 
-      <div class="abs" style="left:-6px;top:494px"><div class="sp" data-s="temple" data-p="8" data-night="templeN"></div></div>
-      <div class="abs" style="left:96px;top:622px"><div class="sp" data-s="porch" data-p="8" data-night="porchN"></div></div>
+      <!-- far: the Cuttack skyline across the Mahanadi -->
+      <g class="in in-far"><g id="pFar">
+        <use href="#palm" x="34" y="574" class="c-far2" stroke="var(--far2)"/>
+        <use href="#palm" x="1150" y="574" class="c-far2" stroke="var(--far2)" transform="translate(2300 0) scale(-1 1)"/>
+        <!-- bridge -->
+        <rect x="-60" y="526" width="380" height="9" class="c-far"/>
+        <rect x="-60" y="516" width="380" height="2.5" class="c-far"/>
+        <g id="bridge" class="c-far"></g>
+        <!-- city behind the warehouse -->
+        <rect x="160" y="462" width="80" height="112" class="c-far2"/>
+        <rect x="246" y="430" width="54" height="144" class="c-far"/>
+        <rect x="836" y="452" width="60" height="122" class="c-far"/>
+        <g id="farWins" class="lit" fill="#FFD98A"></g>
+        <!-- temple: a rekha deula, as on the Odisha skyline -->
+        <g class="c-far">
+          <rect x="896" y="560" width="96" height="14"/>
+          <path d="M904 562 L 907 506 C 909 470, 916 446, 929 428 L 951 428 C 964 446, 971 470, 973 506 L 976 562 Z"/>
+          <ellipse cx="940" cy="424" rx="22" ry="6.5"/>
+          <path d="M928 416 Q 940 400 952 416 Z"/>
+          <rect x="938" y="392" width="4" height="12"/>
+          <rect x="939" y="356" width="2" height="38"/>
+          <path d="M974 562 L 986 532 L 1022 532 L 1032 562 Z"/>
+          <rect x="992" y="524" width="24" height="8"/>
+        </g>
+        <g stroke="var(--far2)" stroke-width="2" opacity=".7">
+          <path d="M923 560 L 924 500 C 925 470, 929 450, 934 432" fill="none"/><path d="M957 560 L 956 500 C 955 470, 951 450, 946 432" fill="none"/><line x1="940" y1="560" x2="940" y2="432"/><line x1="908" y1="512" x2="972" y2="512"/><line x1="906" y1="538" x2="974" y2="538"/>
+        </g>
+        <path class="flag" d="M941 357 L 966 363 L 941 371 Z" fill="#E0663F"/>
+        <!-- Barabati gate -->
+        <path class="c-far2" d="M1048 574 L1048 498 L1168 498 L1168 574 L1128 574 L1128 536 Q1108 508 1088 536 L1088 574 Z"/>
+        <g id="crenels" class="c-far2"></g>
+        <!-- the river -->
+        <rect x="-100" y="572" width="1400" height="30" class="c-river"/>
+        <g id="shimmer" stroke="#fff" stroke-width="2" stroke-linecap="round"></g>
+      </g></g>
 
-      <div class="abs float" style="left:56px;top:330px"><div class="sp" data-s="pill" data-p="5"></div></div>
-      <div class="abs float" style="left:770px;top:300px;animation-delay:-1.4s"><div class="sp" data-s="pillT" data-p="5"></div></div>
-      <div class="abs float" style="left:752px;top:500px;animation-delay:-2.3s"><div class="sp" data-s="pill" data-p="4"></div></div>
-      <div class="abs spark" style="left:245px;top:222px"><div class="sp" data-s="spark" data-p="5"></div></div>
-      <div class="abs spark" style="left:590px;top:208px;animation-delay:-.7s"><div class="sp" data-s="spark" data-p="5"></div></div>
-      <div class="abs spark" style="left:130px;top:430px;animation-delay:-1.3s"><div class="sp" data-s="spark" data-p="4"></div></div>
+      <!-- mid: the Indian Pharma warehouse at work -->
+      <g class="in in-mid"><g id="pMid">
+        <rect x="210" y="356" width="660" height="246" class="c-wall"/>
+        <path class="c-roof" d="M200 362 L200 330 L313 298 L313 330 L426 298 L426 330 L539 298 L539 330 L652 298 L652 330 L765 298 L765 330 L880 298 L880 362 Z"/>
+        <g fill="#BFE3F5" opacity=".55"><path d="M309 302 L313 300 L313 330 L309 330Z"/><path d="M422 302 L426 300 L426 330 L422 330Z"/><path d="M535 302 L539 300 L539 330 L535 330Z"/><path d="M648 302 L652 300 L652 330 L648 330Z"/><path d="M761 302 L765 300 L765 330 L761 330Z"/></g>
+        <rect x="210" y="356" width="660" height="10" class="c-wall2"/>
+        <!-- sign -->
+        <g id="sign">
+          <rect x="356" y="376" width="368" height="52" rx="8" fill="#16202F"/>
+          <rect x="370" y="387" width="30" height="30" rx="6" fill="#1E9E5A"/>
+          <path d="M381 392 h8 v8 h8 v8 h-8 v8 h-8 v-8 h-8 v-8 h8z" fill="#fff"/>
+          <text x="562" y="411" text-anchor="middle" font-family="Fraunces, Georgia, serif" font-weight="600" font-size="24" letter-spacing="3" fill="#F5F0E6">INDIAN PHARMA</text>
+        </g>
+        <!-- the open loading bay -->
+        <rect x="240" y="440" width="600" height="162" class="c-int"/>
+        <rect x="240" y="588" width="600" height="14" fill="#000" opacity=".14"/>
+        <rect x="236" y="430" width="608" height="14" rx="3" fill="#7C8494"/>
+        <g stroke="#5F6676" stroke-width="1.4"><line x1="240" y1="434" x2="840" y2="434"/><line x1="240" y1="438" x2="840" y2="438"/></g>
+        <!-- lamps -->
+        <g class="lamp" style="transform-origin:330px 444px"><polygon class="cone" points="322,470 338,470 380,590 280,590" fill="url(#cone)"/><line x1="330" y1="444" x2="330" y2="462" stroke="#2A3142" stroke-width="2"/><path d="M318 472 Q330 456 342 472 Z" fill="#2A3142"/></g>
+        <g class="lamp" style="transform-origin:560px 444px;animation-delay:-1.6s"><polygon class="cone" points="552,470 568,470 615,590 505,590" fill="url(#cone)"/><line x1="560" y1="444" x2="560" y2="462" stroke="#2A3142" stroke-width="2"/><path d="M548 472 Q560 456 572 472 Z" fill="#2A3142"/></g>
+        <g class="lamp" style="transform-origin:740px 444px;animation-delay:-3.1s"><polygon class="cone" points="732,470 748,470 795,590 685,590" fill="url(#cone)"/><line x1="740" y1="444" x2="740" y2="462" stroke="#2A3142" stroke-width="2"/><path d="M728 472 Q740 456 752 472 Z" fill="#2A3142"/></g>
+        <!-- shelves -->
+        <g fill="#8B6B4B"><rect x="252" y="450" width="5" height="140"/><rect x="394" y="450" width="5" height="140"/>
+          <rect x="252" y="486" width="147" height="4"/><rect x="252" y="530" width="147" height="4"/><rect x="252" y="574" width="147" height="4"/></g>
+        <g id="shelfBoxes"></g>
+        <rect id="slot" x="364" y="466" width="28" height="20" rx="2" fill="#E8A13A"/>
+        <!-- picker -->
+        <g id="picker">
+          <rect x="411" y="546" width="7" height="54" rx="3" fill="#2C3446"/><rect x="421" y="546" width="7" height="54" rx="3" fill="#2C3446"/>
+          <rect x="406" y="502" width="26" height="50" rx="10" fill="#1F7A8C"/>
+          <rect x="413" y="510" width="12" height="30" rx="3" fill="#F0E3C8" opacity=".9"/>
+          <circle cx="419" cy="489" r="10" fill="#A8714B"/>
+          <path d="M409 487 Q410 476 419 476 Q429 476 429 486 Q424 481 419 482 Q413 482 409 487Z" fill="#1E1A1A"/>
+          <g id="pkArm"><line x1="0" y1="0" x2="0" y2="30" stroke="#1F7A8C" stroke-width="8" stroke-linecap="round"/><circle cx="0" cy="33" r="4.5" fill="#A8714B"/></g>
+        </g>
+        <!-- checker: white coat -->
+        <g><rect x="676" y="506" width="28" height="50" rx="10" fill="#F4F2EE"/><path d="M684 506 L690 520 L696 506" fill="none" stroke="#1E9E5A" stroke-width="3"/>
+          <g id="ckHead"><circle cx="690" cy="492" r="10" fill="#8C5A3C"/><path d="M680 490 Q681 479 690 479 Q700 479 700 489 Q695 484 690 485 Q684 485 680 490Z" fill="#231B17"/></g></g>
+        <!-- packer: saffron apron -->
+        <g><rect x="790" y="506" width="28" height="50" rx="10" fill="#E39B2E"/>
+          <circle cx="804" cy="492" r="10" fill="#B07A52"/><path d="M794 490 Q795 478 804 478 Q814 478 814 489 Q809 483 804 484 Q798 484 794 490Z" fill="#1E1A1A"/>
+          <g id="pcA1"><line x1="0" y1="0" x2="0" y2="28" stroke="#E39B2E" stroke-width="8" stroke-linecap="round"/><circle cx="0" cy="31" r="4.5" fill="#B07A52"/></g></g>
+        <!-- conveyor -->
+        <g fill="#2A3142"><rect x="446" y="562" width="6" height="40"/><rect x="600" y="562" width="6" height="40"/><rect x="740" y="562" width="6" height="40"/><rect x="858" y="562" width="6" height="40"/></g>
+        <rect x="434" y="550" width="448" height="14" rx="7" fill="#1C2230"/>
+        <line id="beltDash" x1="442" y1="551.5" x2="874" y2="551.5" stroke="#5B6477" stroke-width="2" stroke-dasharray="7 11"/>
+        <g id="rollers" fill="#8C95A8"></g>
+        <!-- the order -->
+        <g id="box" transform="translate(-100 -100)">
+          <rect x="-17" y="-14" width="34" height="28" rx="3" fill="#C9A06A"/>
+          <rect x="-17" y="-14" width="34" height="7" rx="2" fill="#B88A55"/>
+          <rect x="-6" y="-2" width="12" height="12" rx="2" fill="#F5F0E6"/>
+          <path d="M-1.5 0 h3 v3 h3 v3 h-3 v3 h-3 v-3 h-3 v-3 h3z" fill="#1E9E5A"/>
+          <rect id="tape" x="-17" y="-12.5" width="0" height="4" fill="#EADBB2"/>
+        </g>
+        <g id="badge" transform="translate(-100 -100) scale(0)"><circle r="12" fill="#1E9E5A"/><circle r="12" fill="none" stroke="#fff" stroke-width="2" opacity=".5"/><path d="M-5.5 0.5 l3.6 3.6 L6 -4.4" fill="none" stroke="#fff" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round"/></g>
+        <!-- scanner -->
+        <rect id="beam" x="609" y="497" width="32" height="53" fill="url(#beamG)" opacity="0"/>
+        <rect id="scanLine" x="609" y="500" width="32" height="2" fill="#7CF0BF" opacity="0"/>
+        <g fill="#2A3142"><rect x="602" y="492" width="7" height="62" rx="2"/><rect x="641" y="492" width="7" height="62" rx="2"/><rect x="598" y="484" width="54" height="12" rx="3"/></g>
+        <circle id="scanLight" cx="625" cy="490" r="3" fill="#E0663F"/>
+        <!-- checker's tablet, in front -->
+        <rect x="672" y="522" width="20" height="15" rx="2" fill="#2A3142" transform="rotate(-8 682 529)"/>
+        <rect x="674.5" y="524.5" width="15" height="10" rx="1" fill="#7CF0BF" opacity=".75" transform="rotate(-8 682 529)"/>
+        <!-- tape head on its arm -->
+        <line x1="762" y1="444" x2="762" y2="498" stroke="#2A3142" stroke-width="4"/>
+        <g id="tapeHead"><rect x="748" y="498" width="28" height="14" rx="3" fill="#2A3142"/><circle cx="762" cy="505" r="5" fill="#EADBB2"/></g>
+        <!-- chute down to the bay -->
+        <path d="M876 552 L 884 552 L 914 596 L 904 600 Z" fill="#8C95A8"/>
+      </g></g>
 
-      <div class="abs sign">INDIAN PHARMA</div>
-      <div class="abs" style="left:260px;top:306px;width:12px;height:26px;background:var(--ink)"></div>
-      <div class="abs" style="left:568px;top:306px;width:12px;height:26px;background:var(--ink)"></div>
-      <div class="abs roof"></div>
-      <div class="abs roofdash"></div>
-      <div class="abs wall"></div>
-      <div class="abs window" id="shopWindow">
-        <div id="shelves"></div>
-        <div class="abs walker" id="walker" style="left:14px;top:130px;width:48px">
-          <div class="bob"><div class="sp" id="worker" data-s="worker" data-p="4"></div></div>
-        </div>
-      </div>
-      <div class="abs door"><b></b><u></u></div>
-      <div class="abs cross" style="left:600px;top:398px"><div class="sp" data-s="cross" data-p="6"></div></div>
-      <div class="abs bubble" id="bubble">Oops!</div>
+      <!-- foreground: the street -->
+      <g class="in in-fore"><g id="pFore">
+        <rect x="-140" y="600" width="1480" height="90" class="c-pave"/>
+        <g id="tiles" stroke="#000" stroke-opacity=".06" stroke-width="1.5"></g>
+        <rect x="-140" y="686" width="1480" height="9" class="c-curb"/>
+        <rect x="-140" y="694" width="1480" height="114" class="c-road"/>
+        <rect x="-140" y="806" width="1480" height="8" class="c-curb"/>
+        <rect x="-140" y="814" width="1480" height="110" class="c-pave"/>
+        <rect x="-140" y="814" width="1480" height="110" fill="#000" opacity=".18"/>
+        <g id="dashes" fill="#F5F0E6" opacity=".55"></g>
+        <!-- an Odisha auto-rickshaw, now and then -->
+        <g class="auto"><g class="body">
+          <path d="M-46 -18 L-46 -52 Q-44 -64 -30 -64 L18 -64 Q34 -64 40 -48 L48 -18 Z" fill="#F2C230"/>
+          <path d="M-46 -30 L48 -30 L48 -10 Q48 -4 42 -4 L-40 -4 Q-46 -4 -46 -10 Z" fill="#2E8B57"/>
+          <path d="M-38 -54 L-10 -54 L-10 -32 L-38 -32 Z" fill="#CFE8F6" opacity=".9"/>
+          <path d="M-4 -54 L22 -54 Q30 -54 33 -44 L37 -32 L-4 -32 Z" fill="#CFE8F6" opacity=".9"/>
+          <circle cx="44" cy="-24" r="3" fill="#FFF2B3"/></g>
+          <g class="wh"><circle cx="-28" cy="-6" r="9" fill="#151A26"/><circle cx="-28" cy="-6" r="3.5" fill="#9AA3B5"/><rect x="-29" y="-14" width="2" height="5" fill="#9AA3B5"/></g>
+          <g class="wh"><circle cx="34" cy="-6" r="9" fill="#151A26"/><circle cx="34" cy="-6" r="3.5" fill="#9AA3B5"/><rect x="33" y="-14" width="2" height="5" fill="#9AA3B5"/></g>
+        </g>
+        <!-- pots by the door -->
+        <g><path d="M214 600 L218 580 L236 580 L240 600 Z" fill="#B4513A"/><circle cx="222" cy="572" r="10" fill="#3F7D4E"/><circle cx="232" cy="568" r="12" fill="#4E9460"/></g>
+        <!-- neem tree -->
+        <path d="M108 602 C 104 560, 112 520, 104 474 M108 540 C 120 520, 134 506, 150 498 M106 512 C 92 498, 80 490, 66 486" fill="none" stroke="#5B4636" stroke-width="10" stroke-linecap="round"/>
+        <g class="canopy">
+          <circle cx="70" cy="470" r="38" fill="#2F6A41"/><circle cx="150" cy="474" r="40" fill="#2F6A41"/>
+          <circle cx="108" cy="436" r="52" fill="#3F7D4E"/><circle cx="62" cy="438" r="30" fill="#4E9460"/><circle cx="152" cy="436" r="34" fill="#4E9460"/>
+          <circle cx="112" cy="404" r="30" fill="#5AA36C"/><circle cx="90" cy="470" r="26" fill="#3F7D4E"/>
+        </g>
+        <!-- street lamp -->
+        <rect x="1096" y="456" width="6" height="146" fill="#2A3142"/>
+        <path d="M1099 460 Q1099 446 1116 446 L1128 446" fill="none" stroke="#2A3142" stroke-width="5"/>
+        <circle class="lit" cx="1128" cy="462" r="46" fill="url(#lampGlow)"/>
+        <path d="M1118 446 L1138 446 L1134 456 L1122 456 Z" fill="#2A3142"/>
+        <rect x="1123" y="455" width="10" height="3" fill="#FFE3A6"/>
+        <!-- delivery scooter -->
+        <g id="scooter" transform="translate(950 676)"><g id="scBody">
+          <path class="lit" d="M44 -60 L180 -84 L180 -30 Z" fill="url(#beamH)"/>
+          <g id="puff" opacity="0" fill="#C9CED8"><circle cx="-74" cy="-18" r="5"/><circle cx="-86" cy="-22" r="7"/><circle cx="-100" cy="-18" r="5"/></g>
+          <!-- crate -->
+          <rect x="-70" y="-74" width="40" height="32" rx="3" fill="#E8A13A"/>
+          <rect x="-70" y="-74" width="40" height="7" rx="2" fill="#D18A26"/>
+          <text x="-50" y="-48" text-anchor="middle" font-family="Fraunces, Georgia, serif" font-weight="700" font-size="13" fill="#16202F">IP</text>
+          <g id="crateBox" opacity="0" transform="translate(-50 -88)">
+            <rect x="-17" y="-14" width="34" height="28" rx="3" fill="#C9A06A"/><rect x="-17" y="-14" width="34" height="7" rx="2" fill="#B88A55"/>
+            <rect x="-17" y="-12.5" width="34" height="4" fill="#EADBB2"/><rect x="-6" y="-2" width="12" height="12" rx="2" fill="#F5F0E6"/>
+          </g>
+          <!-- body -->
+          <path d="M-56 -22 Q-60 -42 -36 -44 L8 -44 Q22 -44 28 -32 L32 -22 Z" fill="#146B4A"/>
+          <path d="M24 -36 L34 -74 L44 -72 L42 -22 L30 -22 Z" fill="#146B4A"/>
+          <rect x="-32" y="-52" width="40" height="9" rx="4.5" fill="#16202F"/>
+          <line x1="36" y1="-74" x2="26" y2="-80" stroke="#16202F" stroke-width="4" stroke-linecap="round"/>
+          <circle cx="44" cy="-60" r="4" fill="#FFF2B3"/>
+          <!-- rider -->
+          <path d="M-8 -50 L12 -38 L22 -26" fill="none" stroke="#2C3446" stroke-width="9" stroke-linecap="round" stroke-linejoin="round"/>
+          <rect x="-22" y="-96" width="24" height="48" rx="10" fill="#1F7A8C" transform="rotate(8 -10 -72)"/>
+          <line x1="-2" y1="-86" x2="26" y2="-78" stroke="#1F7A8C" stroke-width="7" stroke-linecap="round"/>
+          <circle cx="-4" cy="-108" r="12" fill="#E8A13A"/>
+          <path d="M-2 -110 L9 -110 Q10 -102 4 -100 L-2 -100 Z" fill="#16202F" opacity=".85"/>
+          <!-- wheels -->
+          <g id="wR" transform="translate(-36 -13)"><circle r="13" fill="#151A26"/><circle r="5" fill="#9AA3B5"/><rect x="-1" y="-11" width="2" height="6" fill="#9AA3B5"/></g>
+          <g id="wF" transform="translate(40 -13)"><circle r="13" fill="#151A26"/><circle r="5" fill="#9AA3B5"/><rect x="-1" y="-11" width="2" height="6" fill="#9AA3B5"/></g>
+        </g></g>
+      </g></g>
+    </svg>
+    <div class="scrim"></div>
 
-      <div class="abs grass"></div>
-      <div class="abs road"></div>
-      <div class="abs lane"></div>
-      <div class="abs auto" style="left:0;top:704px"><div class="sp" data-s="auto" data-p="5"></div></div>
-      <div class="abs rider" id="rider" style="left:0;top:742px"><div class="sp" data-s="scooter" data-p="5"></div></div>
-      <div class="abs verge"></div>
+    <div class="brand in in-far">
+      <svg class="mark" viewBox="0 0 44 44" aria-hidden="true">
+        <rect x="1" y="1" width="42" height="42" rx="11" fill="#146B4A"/>
+        <text x="20" y="30" text-anchor="middle" font-family="Fraunces, Georgia, serif" font-weight="700" font-size="19" fill="#F5F0E6">IP</text>
+        <g class="mk-cross"><path d="M33 4 h4 v4 h4 v4 h-4 v4 h-4 v-4 h-4 v-4 h4z" fill="#E8A13A"/></g>
+      </svg>
+      <div><b>Indian Pharma</b><span>Distribution · Cuttack</span></div>
     </div>
+    <div class="clock in in-far"><i></i><span class="city">Cuttack&nbsp;·&nbsp;</span><span id="clock">--:--</span></div>
 
-    <div class="brand">
-      <div class="logo">IP</div>
-      <div class="brand-name">INDIAN PHARMA<span class="brand-sub">Pharma IP · Cuttack</span></div>
+    <div class="flow in in-fore">
+      <h2>Every bill, every shelf, every rider.</h2>
+      <ol id="flow">
+        <li><span class="dot"><svg viewBox="0 0 12 12"><path d="M2.5 6.2l2.3 2.3L9.5 3.8" fill="none" stroke="#fff" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></span><span class="nm">Picked</span><span class="bar"><i></i></span></li>
+        <li><span class="dot"><svg viewBox="0 0 12 12"><path d="M2.5 6.2l2.3 2.3L9.5 3.8" fill="none" stroke="#fff" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></span><span class="nm">Checked</span><span class="bar"><i></i></span></li>
+        <li><span class="dot"><svg viewBox="0 0 12 12"><path d="M2.5 6.2l2.3 2.3L9.5 3.8" fill="none" stroke="#fff" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></span><span class="nm">Packed</span><span class="bar"><i></i></span></li>
+        <li><span class="dot"><svg viewBox="0 0 12 12"><path d="M2.5 6.2l2.3 2.3L9.5 3.8" fill="none" stroke="#fff" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></span><span class="nm">Delivered</span></li>
+      </ol>
+      <p class="cap"><span id="flowCap">Picking the order off the shelf</span></p>
     </div>
-    <div class="clock"><i></i><span class="ck-pre" id="ckPre">LIVE · </span><span id="clock">--:--</span></div>
-    <div class="tagline">EVERY BILL · EVERY SHELF · EVERY RIDER</div>
   </div>
 
+  <!-- ═════════════ Sign in ═════════════ -->
   <div class="side">
     <form method="POST" class="card" id="loginForm" novalidate>
       <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
-      <div>
-        <div class="hello" id="hello">Welcome</div>
-        <h1>SIGN IN</h1>
-      </div>
+      <div class="eyebrow rise" style="--i:0" id="hello">Welcome</div>
+      <h1 class="rise" style="--i:1">Welcome <em>back.</em></h1>
+      <p class="lede rise" style="--i:2">Sign in with your Indian Pharma email to start your shift.</p>
 
       {% with messages = get_flashed_messages(with_categories=true) %}
         {% for cat, msg in messages %}
-        <div class="alert {{ cat }}" role="alert" data-cat="{{ cat }}">{{ msg }}</div>
+        <div class="alert {{ cat }}" role="alert" data-cat="{{ cat }}">
+          {% if cat in ('danger', 'warning') %}
+          <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="10" cy="10" r="8"/><path d="M10 6v5M10 14h.01"/></svg>
+          {% elif cat == 'success' %}
+          <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="10" cy="10" r="8"/><path d="M6.5 10.3l2.3 2.3 4.7-4.9"/></svg>
+          {% else %}
+          <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="10" cy="10" r="8"/><path d="M10 9v5M10 6h.01"/></svg>
+          {% endif %}
+          <span>{{ msg }}</span>
+        </div>
         {% endfor %}
       {% endwith %}
 
-      <div style="display:flex;flex-direction:column;gap:8px">
-        <label class="lbl" for="email">Email</label>
-        <input class="inp" type="email" id="email" name="email" required autofocus
-               autocomplete="username" inputmode="email" placeholder="name@company.com"
-               value="{{ request.form.get('email', '') if request.method == 'POST' else '' }}">
+      <div class="field rise" style="--i:3">
+        <label class="lbl" for="email" style="margin-bottom:8px">Email</label>
+        <div class="ctl">
+          <input class="inp" type="email" id="email" name="email" required autofocus
+                 autocomplete="username" inputmode="email" placeholder="name@pharmaip.com"
+                 value="{{ request.form.get('email', '') if request.method == 'POST' else '' }}">
+        </div>
       </div>
 
-      <div style="display:flex;flex-direction:column;gap:8px">
-        <div class="row">
+      <div class="field rise" style="--i:4">
+        <div class="lblrow">
           <label class="lbl" for="password">Password</label>
-          <a href="{{ url_for('forgot_password') }}" style="font-size:16px">Forgot it?</a>
+          <a href="{{ url_for('forgot_password') }}">Forgot password?</a>
         </div>
-        <div class="pw">
+        <div class="ctl pw">
           <input class="inp" type="password" id="password" name="password" required
-                 autocomplete="current-password" placeholder="Password">
+                 autocomplete="current-password" placeholder="Enter your password">
           <button type="button" class="eye" id="eye" aria-label="Show password" aria-pressed="false">
-            <span class="sp" id="eyeIcon" data-s="eye" data-p="3" style="position:relative;margin:-12px 0 0 -27px"></span>
+            <svg class="on" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg>
+            <svg class="off" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M10.6 5.1A9.9 9.9 0 0 1 12 5c6.4 0 10 7 10 7a17 17 0 0 1-2.6 3.5M6.6 6.6C3.7 8.4 2 12 2 12s3.6 7 10 7a9.6 9.6 0 0 0 5.4-1.6"/><path d="M9.9 9.9a3 3 0 0 0 4.2 4.2"/><path d="M3 3l18 18"/></svg>
           </button>
         </div>
-        <div class="caps" id="caps" role="status">CAPS LOCK IS ON</div>
+        <div class="caps" id="caps" role="status">
+          <svg width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M10 3l7 7h-4v4H7v-4H3z"/><path d="M7 17h6"/></svg>
+          Caps Lock is on
+        </div>
       </div>
 
-      <span class="start" aria-hidden="true">PRESS START</span>
-      <button type="submit" class="go" id="go"><span class="bar"></span><span class="lbl" id="goLbl">SIGN IN ▶</span></button>
+      <button type="submit" class="go rise" style="--i:5" id="go">
+        <span id="goLbl">Sign in</span>
+        <svg class="arrow" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 10h12M11 5l5 5-5 5"/></svg>
+        <svg class="spin" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M10 2.5a7.5 7.5 0 1 1-7.5 7.5" /></svg>
+      </button>
 
-      <p class="foot">New here or locked out? Your admin sets up and resets accounts.</p>
+      <p class="foot rise" style="--i:6">
+        <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><rect x="4" y="9" width="12" height="8" rx="2"/><path d="M7 9V6.5a3 3 0 0 1 6 0V9"/></svg>
+        <span>For Indian Pharma staff only. New here or locked out? Your admin sets up and resets accounts.</span>
+      </p>
+      <p class="legal rise" style="--i:7">Indian Pharma · Cuttack, Odisha</p>
     </form>
   </div>
 </div>
@@ -299,157 +574,238 @@ body.night .cross{filter:drop-shadow(0 0 8px #2BB673)}
 <script>
 (function () {
   "use strict";
-  var INK = '#1B1B2F', TOM = '#FF5A36', MUS = '#FFC23C', TEAL = '#1FA6A0', WHITE = '#FFFFFF',
-      NAVY = '#2E3A6B', SKIN = '#C68642', GREY = '#9AA0B4', GREEN = '#2BB673', CREAM = '#FFF4E0';
-
-  /* Pixel sprites, drawn as box-shadows: one row of characters per row of pixels. */
-  var cloud = ['....XXXX......', '..XXXXXXXX.XX.', '.XXXXXXXXXXXXX', 'XXXXXXXXXXXXXX', '.XXXXXXXXXXXX.'];
-  var templeMap = ['.......F........', '.......FF.......', '.......X........', '......XXX.......', '.....XXXXX......', '......XXX.......',
-    '.....XXXXX......', '....XXXXXXX.....', '....XXXXXXX.....', '...XXXXXXXXX....', '...XXXXXXXXX....', '...XXXXXXXXX....',
-    '..XXXXXXXXXXX...', '..XXXXXXXXXXX...', '..XXXXXXXXXXX...', '.XXXXXXXXXXXXX..', '.XXXXXXXXXXXXX..', '.XXXXXXXXXXXXX..',
-    'XXXXXXXXXXXXXXXX', 'XXXXXXXXXXXXXXXX', 'XXXXXXXXXXXXXXXX'];
-  var porchMap = ['...XX...', '..XXXX..', '.XXXXXX.', 'XXXXXXXX', 'XXXXXXXX'];
-  var body = ['.TTTTTT.', 'TTBBBBTT', 'STBBBBTS', '..BBBB..', '..NNNN..', '..N..N..', '.NN..NN.'];
-  var S = {
-    cloud: [cloud, { X: WHITE }],
-    sun: [['..YYYY..', '.YYYYYY.', 'YYYOOYYY', 'YYOOOOYY', 'YYOOOOYY', 'YYYOOYYY', '.YYYYYY.', '..YYYY..'], { Y: MUS, O: '#FFD976' }],
-    moon: [['..CCCC..', '.CCCCCC.', 'CCCDCCCC', 'CCCCCCDC', 'CDCCCCCC', 'CCCCDCCC', '.CCCCCC.', '..CCCC..'], { C: CREAM, D: '#E2D3B4' }],
-    bird: [['X...X', '.X.X.'], { X: INK }],
-    temple: [templeMap, { X: '#7FC6EC', F: TOM }], templeN: [templeMap, { X: '#2A3566', F: TOM }],
-    porch: [porchMap, { X: '#7FC6EC' }], porchN: [porchMap, { X: '#2A3566' }],
-    pill: [['..RRWW..', '.RRRWWW.', 'RRRRWWWW', '.RRRWWW.', '..RRWW..'], { R: TOM, W: WHITE }],
-    pillT: [['..TTWW..', '.TTTWWW.', 'TTTTWWWW', '.TTTWWW.', '..TTWW..'], { T: TEAL, W: WHITE }],
-    spark: [['..Y..', '..Y..', 'YYWYY', '..Y..', '..Y..'], { Y: MUS, W: WHITE }],
-    cross: [['..GGG..', '..GGG..', 'GGGGGGG', 'GGGWGGG', 'GGGGGGG', '..GGG..', '..GGG..'], { G: GREEN, W: '#9BF0C3' }],
-    worker: [['..HHHH..', '.HHHHHH.', '.HSSSSH.', '..SKSK..', '...SS...'].concat(body), { H: INK, S: SKIN, K: INK, T: TEAL, B: MUS, N: NAVY }],
-    cover: [['..HHHH..', '.HHHHHH.', 'SSSSSSSS', 'S.SSSS.S', 'T..SS..T', 'TTTTTTTT', '.TTTTTT.', '.TTTTTT.', '..TTTT..', '..NNNN..', '..N..N..', '.NN..NN.'], { H: INK, S: SKIN, T: TEAL, N: NAVY }],
-    peek: [['..HHHH..', '.HHHHHH.', 'SSSK.SSS', 'S.SSSS.S', 'T..SS..T', 'TTTTTTTT', '.TTTTTT.', '.TTTTTT.', '..TTTT..', '..NNNN..', '..N..N..', '.NN..NN.'], { H: INK, S: SKIN, K: INK, T: TEAL, N: NAVY }],
-    shrug: [['..HHHH..', '.HHHHHH.', '.HSSSSH.', '..SKSK..', 'S..SS..S', 'TTTTTTTT', '.TTTTTT.', '.TTTTTT.', '..TTTT..', '..NNNN..', '..N..N..', '.NN..NN.'], { H: INK, S: SKIN, K: INK, T: TEAL, N: NAVY }],
-    scooter: [['.......HH.........', '......HHSS........', '......TTTT...BBBB.', '.....TTTTT...BBBB.', '.....TTNN....BBBB.', '..RRRRRRNNRRRRRR..', '.RRRRRRRRRRRRRRRR.', '.KKK.........KKK..', 'KKGKK.......KKGKK.', '.KKK.........KKK..'], { H: INK, S: SKIN, T: TEAL, N: NAVY, B: MUS, R: TOM, K: INK, G: GREY }],
-    auto: [['...YYYYYYYYYYYY.....', '..YYYYYYYYYYYYYY....', '..Y.WWWW.Y..WWWY....', '..Y.WWWW.Y..WWWY....', '.GGGGGGGGGGGGGGGGG..', 'GGGGGGGGGGGGGGGGGGG.', 'GGGGGGGGGGGGGGGGGGGL', '.KKK..........KKK...', 'KKGKK........KKGKK..', '.KKK..........KKK...'], { Y: MUS, W: '#CFEFFF', G: GREEN, L: '#FFE7A3', K: INK }],
-    eye: [['....XXXXX....', '..XX.....XX..', '.X...XXX...X.', 'X...XXXXX...X', '.X...XXX...X.', '..XX.....XX..', '....XXXXX....'], { X: INK }],
-    eyeOff: [['X...XXXXX....', '.XXX.....XX..', '.X.X.XXX...X.', 'X...XXXXX...X', '.X...XXXX..X.', '..XX.....XXX.', '....XXXXX...X'], { X: INK }]
-  };
-  function shadow(name, P) {
-    var d = S[name], out = [];
-    d[0].forEach(function (row, y) {
-      for (var x = 0; x < row.length; x++) {
-        var c = d[1][row[x]];
-        if (c) out.push(((x + 1) * P) + 'px ' + ((y + 1) * P) + 'px 0 0 ' + c);
-      }
-    });
-    return out.join(',');
-  }
-  function paint(el, name) {
-    var P = +el.getAttribute('data-p') || 4;
-    el.style.width = P + 'px'; el.style.height = P + 'px';
-    el.style.boxShadow = shadow(name, P);
-  }
-  var night = false;
-  function paintAll() {
-    document.querySelectorAll('[data-s]').forEach(function (el) {
-      var n = night && el.getAttribute('data-night') ? el.getAttribute('data-night') : el.getAttribute('data-s');
-      paint(el, n);
-    });
+  var NS = "http://www.w3.org/2000/svg";
+  var body = document.body;
+  var reduce = window.matchMedia && matchMedia("(prefers-reduced-motion: reduce)").matches;
+  function $(id) { return document.getElementById(id); }
+  function el(tag, attrs, parent) {
+    var n = document.createElementNS(NS, tag);
+    for (var k in attrs) n.setAttribute(k, attrs[k]);
+    if (parent) parent.appendChild(n);
+    return n;
   }
 
-  /* Shelves of medicine boxes */
-  var pal = [TOM, MUS, TEAL, '#8FA8FF', '#FF8FB1', WHITE], hs = [40, 30, 46, 36, 26, 42, 34], html = '';
-  for (var r = 0; r < 3; r++) {
-    html += '<div class="shelf" style="top:' + (r * 70) + 'px">';
-    for (var i = 0; i < 11; i++) {
-      html += '<div class="box" style="width:' + (i % 3 === 0 ? 34 : 26) + 'px;height:' + hs[(i + r * 2) % hs.length] +
-              'px;background:' + pal[(i * 2 + r) % pal.length] + '"><i></i></div>';
+  /* ── Repeating details, drawn once ─────────────────────────────────── */
+  var i, x;
+  for (i = 0; i < 46; i++) {                       // stars
+    var c = el("circle", { cx: (i * 263) % 1200, cy: 20 + (i * 97) % 330, r: (i % 3) * .45 + .8, fill: "#fff" }, $("stars"));
+    c.setAttribute("class", "tw"); c.style.animationDelay = (-(i % 9) * .41) + "s";
+  }
+  for (x = -60; x < 320; x += 54) {                // Mahanadi bridge arches
+    el("rect", { x: x, y: 535, width: 7, height: 38 }, $("bridge"));
+    el("path", { d: "M" + (x + 7) + " 535 Q" + (x + 30) + " 560 " + (x + 54) + " 535 Z" }, $("bridge"));
+    el("rect", { x: x + 26, y: 516, width: 2, height: 10 }, $("bridge"));
+  }
+  for (x = 1048; x < 1168; x += 16) el("rect", { x: x, y: 488, width: 10, height: 12 }, $("crenels"));
+  [[168, 474], [190, 474], [212, 474], [168, 500], [212, 500], [190, 526], [256, 446], [278, 446], [256, 474], [278, 502],
+   [846, 466], [870, 466], [846, 494], [870, 522]].forEach(function (p) {
+    el("rect", { x: p[0], y: p[1], width: 9, height: 12, rx: 1 }, $("farWins"));
+  });
+  for (i = 0; i < 14; i++) {                       // light on the river
+    var s = el("line", { x1: (i * 89) % 1200, y1: 580 + (i * 7) % 18, x2: (i * 89) % 1200 + 18 + (i % 3) * 8, y2: 580 + (i * 7) % 18 }, $("shimmer"));
+    s.setAttribute("class", "shim"); s.style.animationDelay = (-(i % 7) * .6) + "s";
+  }
+  var SHELF = ["#E8A13A", "#1E7A50", "#C8553D", "#5B8DB8", "#E9E1D0", "#7A9E7E", "#D9C27A"];
+  [[486, 0], [530, 1], [574, 2]].forEach(function (row) {   // medicine boxes on the shelves
+    var bx = 260, k = row[1] * 3;
+    while (bx < 388) {
+      var w = 14 + ((k * 7) % 3) * 6, h = 14 + ((k * 5) % 4) * 4;
+      if (row[1] === 0 && bx + w > 362) break;               // leave room for the order being picked
+      if (bx + w > 392) break;
+      el("rect", { x: bx, y: row[0] - h, width: w, height: h, rx: 1.5, fill: SHELF[k % SHELF.length] }, $("shelfBoxes"));
+      bx += w + 3; k++;
     }
-    html += '</div>';
-  }
-  document.getElementById('shelves').innerHTML = html;
+  });
+  for (x = 446; x <= 870; x += 28) el("circle", { cx: x, cy: 557, r: 3 }, $("rollers"));
+  for (x = -140; x < 1340; x += 64) el("line", { x1: x, y1: 602, x2: x - 22, y2: 686 }, $("tiles"));
+  for (x = -140; x < 1340; x += 84) el("rect", { x: x, y: 744, width: 44, height: 4, rx: 2 }, $("dashes"));
 
-  /* Stars for the night sky */
-  var stars = '';
-  for (var k = 0; k < 46; k++) {
-    var sx = (k * 137) % 840, sy = 20 + (k * 89) % 300;
-    stars += '<div class="star" style="left:' + sx + 'px;top:' + sy + 'px;animation-delay:-' + ((k % 7) * .4) + 's"></div>';
+  /* ── Time in Cuttack: sky, sun, greeting, clock ────────────────────── */
+  function cuttackNow() {
+    var d = new Date();
+    try {
+      var p = new Intl.DateTimeFormat("en-GB", { timeZone: "Asia/Kolkata", hour: "numeric", minute: "numeric", hour12: false }).formatToParts(d);
+      var h = 0, m = 0;
+      p.forEach(function (q) { if (q.type === "hour") h = +q.value % 24; if (q.type === "minute") m = +q.value; });
+      return { d: d, h: h, m: m, tz: "Asia/Kolkata" };
+    } catch (e) { return { d: d, h: d.getHours(), m: d.getMinutes(), tz: undefined }; }
   }
-  document.getElementById('stars').innerHTML = stars;
-
-  /* Day or night follows the real clock; greeting and time too. */
   function tick() {
-    var now = new Date(), h = now.getHours();
-    var wasNight = night;
-    night = h >= 19 || h < 6;
-    document.body.classList.toggle('night', night);
-    if (wasNight !== night) paintAll();
-    document.getElementById('ckPre').textContent = night ? 'NIGHT · ' : 'LIVE · ';
-    document.getElementById('clock').textContent = now.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' });
-    document.getElementById('hello').textContent =
-      (h < 12 ? 'Good morning' : h < 17 ? 'Good afternoon' : 'Good evening') + ' · ' +
-      now.toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'long' });
+    var n = cuttackNow(), hr = n.h + n.m / 60;
+    var phase = (hr >= 5 && hr < 7) ? "dawn" : (hr >= 7 && hr < 17) ? "day" : (hr >= 17 && hr < 19) ? "dusk" : "night";
+    body.classList.remove("t-dawn", "t-day", "t-dusk", "t-night");
+    body.classList.add("t-" + phase);
+    var opt = { hour: "numeric", minute: "2-digit", hour12: true };
+    if (n.tz) opt.timeZone = n.tz;
+    $("clock").textContent = n.d.toLocaleTimeString("en-IN", opt).toLowerCase();
+    var dopt = { weekday: "long", day: "numeric", month: "long" };
+    if (n.tz) dopt.timeZone = n.tz;
+    $("hello").textContent = (n.h < 12 ? "Good morning" : n.h < 17 ? "Good afternoon" : "Good evening") + " · " +
+      n.d.toLocaleDateString("en-IN", dopt);
+    // the sun rides an arc from 5:30 to 18:30; the moon takes the night
+    var day = (hr - 5.5) / 13, up = day >= 0 && day <= 1;
+    var f = up ? day : (((hr - 18.5) + 24) % 24) / 11;
+    f = Math.min(Math.max(f, 0), 1);
+    var sx = 130 + f * 940, sy = 330 - Math.sin(Math.PI * f) * 240;
+    $("sun").style.display = up ? "" : "none";
+    $("moon").style.display = up ? "none" : "";
+    (up ? $("sun") : $("moon")).setAttribute("transform", "translate(" + sx.toFixed(1) + " " + sy.toFixed(1) + ")");
   }
-  night = (function () { var h = new Date().getHours(); return h >= 19 || h < 6; })();
-  document.body.classList.toggle('night', night);
-  paintAll(); tick(); setInterval(tick, 30000);
+  tick(); setInterval(tick, 30000);
 
-  /* Keep the scene filling its frame at any screen size. */
-  var wrap = document.getElementById('sceneWrap'), scene = document.getElementById('scene');
-  function fit() {
-    var w = wrap.clientWidth, h = wrap.clientHeight, s = Math.max(w / 848, h / 868);
-    wrap.classList.toggle('tight', w < 620);
-    wrap.classList.toggle('xtight', w < 340);
-    // Normally the scene sits on its road. When the frame is short, centre on
-    // the shop and its sign instead, so a small phone still shows the name.
-    var ty = h - 868 * s;
-    if (h / s < 650) ty = Math.max(ty, Math.min(0, -210 * s));
-    scene.style.transform = 'translate(' + ((w - 848 * s) / 2) + 'px,' + ty + 'px) scale(' + s + ')';
+  /* Frame the scene for the panel's shape: a wide, short panel (a phone)
+     drops the empty kerb at the bottom so the roof and sign stay clear. */
+  var art = document.querySelector("svg.art"), panel = $("scene");
+  function frameFit() {
+    var r = panel.getBoundingClientRect();
+    if (r.height) art.setAttribute("viewBox", "0 0 1200 " + (r.width / r.height > 1.3 ? 830 : 900));
   }
-  fit(); window.addEventListener('resize', fit); window.addEventListener('orientationchange', function () { setTimeout(fit, 150); });
+  frameFit();
+  window.addEventListener("resize", frameFit);
+  window.addEventListener("orientationchange", function () { setTimeout(frameFit, 150); });
 
-  /* The picker reacts to what you do. */
-  var walker = document.getElementById('walker'), worker = document.getElementById('worker'),
-      bubble = document.getElementById('bubble'), pw = document.getElementById('password'),
-      eye = document.getElementById('eye'), eyeIcon = document.getElementById('eyeIcon'), shown = false, held = false;
-  function pose(name) { paint(worker, name); }
-  function stand() { walker.classList.add('stop'); }
-  function walkOn() { if (held) return; walker.classList.remove('stop'); pose('worker'); bubble.classList.remove('on'); }
-  pw.addEventListener('focus', function () { stand(); pose(shown ? 'peek' : 'cover'); });
-  pw.addEventListener('blur', function () { setTimeout(walkOn, 150); });
-  eye.addEventListener('click', function () {
-    shown = !shown;
-    pw.type = shown ? 'text' : 'password';
-    eye.setAttribute('aria-pressed', String(shown));
-    eye.setAttribute('aria-label', shown ? 'Hide password' : 'Show password');
-    paint(eyeIcon, shown ? 'eyeOff' : 'eye');
-    if (document.activeElement === pw || walker.classList.contains('stop')) pose(shown ? 'peek' : 'cover');
+  /* ── The order's journey: pick → check → pack → deliver ────────────── */
+  var D = 11, PH = [0, 2.2, 4.6, 7.0, D];
+  var CAPS = ["Picking the order off the shelf", "Checking every item against the bill",
+              "Packing and sealing the box", "Out for delivery across Cuttack"];
+  var box = $("box"), tape = $("tape"), badge = $("badge"), slot = $("slot"), arm = $("pkArm"), pcA1 = $("pcA1"),
+      beam = $("beam"), scanLine = $("scanLine"), light = $("scanLight"), head = $("tapeHead"), ck = $("ckHead"),
+      sc = $("scooter"), scB = $("scBody"), wR = $("wR"), wF = $("wF"), puff = $("puff"), crate = $("crateBox"),
+      belt = $("beltDash"), steps = $("flow").children, cap = $("flowCap");
+  function clamp(v) { return v < 0 ? 0 : v > 1 ? 1 : v; }
+  function seg(t, a, b) { return clamp((t - a) / (b - a)); }
+  function lerp(a, b, p) { return a + (b - a) * p; }
+  function io(p) { return p < .5 ? 2 * p * p : 1 - Math.pow(-2 * p + 2, 2) / 2; }
+  function eIn(p) { return p * p * p; }
+  function eOut(p) { return 1 - Math.pow(1 - p, 3); }
+  function pop(p) { var c = 1.70158 * 1.6; return 1 + (c + 1) * Math.pow(p - 1, 3) + c * Math.pow(p - 1, 2); }
+  var SH = [419, 512];                                  // the picker's shoulder
+  function handAt(deg, L) { var r = deg * Math.PI / 180; return [SH[0] - L * Math.sin(r), SH[1] + L * Math.cos(r)]; }
+  var lastStep = -1, beltOff = 0;
+
+  function frame(t) {
+    // 1 · pick
+    var a = 10, held = false, bx = 0, by = 0, show = true, slotOn = true;
+    if (t < .8) { a = lerp(10, 132, io(seg(t, 0, .8))); show = false; }
+    else if (t < 1.9) { a = t < 1.0 ? 132 : lerp(132, -52, io(seg(t, 1.0, 1.9))); held = true; slotOn = false; }
+    else if (t < 2.4) { a = lerp(-52, 10, io(seg(t, 1.9, 2.4))); slotOn = t > 2.15; }
+    arm.setAttribute("transform", "translate(" + SH[0] + " " + SH[1] + ") rotate(" + a.toFixed(1) + ")");
+    slot.style.opacity = slotOn ? (t > 2.15 && t < 2.6 ? seg(t, 2.15, 2.6) : 1) : 0;
+    if (held) { var hp = handAt(a, 46); bx = hp[0]; by = hp[1]; }
+    else if (t < 2.2) { bx = 456; by = 538; }
+    // 2 · check
+    else if (t < 3.6) { bx = lerp(456, 625, io(seg(t, 2.2, 3.6))); by = 538; }
+    else if (t < 4.6) { bx = 625; by = 538; }
+    // 3 · pack
+    else if (t < 5.6) { bx = lerp(625, 762, io(seg(t, 4.6, 5.6))); by = 538; }
+    else if (t < 7.0) { bx = 762; by = 538; }
+    // 4 · deliver
+    else if (t < 7.6) { bx = lerp(762, 884, eIn(seg(t, 7.0, 7.6))); by = 538; }
+    else if (t < 8.05) { var q = seg(t, 7.6, 8.05); bx = lerp(884, 900, q); by = lerp(538, 590, q * q); }
+    else show = false;
+    if (bx >= 440 && bx <= 884 && !held) beltOff = bx;
+    belt.setAttribute("stroke-dashoffset", (-beltOff).toFixed(1));
+    box.setAttribute("transform", show ? "translate(" + bx.toFixed(1) + " " + by.toFixed(1) + ")" : "translate(-200 -200)");
+    tape.setAttribute("width", t < 6.0 ? 0 : (34 * seg(t, 6.0, 6.6)).toFixed(1));
+
+    // scanner, tick, nod
+    var scanning = t >= 3.6 && t < 4.3;
+    beam.setAttribute("opacity", scanning ? (.75 + Math.sin(t * 60) * .15).toFixed(2) : 0);
+    scanLine.setAttribute("opacity", scanning ? .95 : 0);
+    if (scanning) scanLine.setAttribute("y", (498 + 50 * ((t - 3.6) / .35 % 1)).toFixed(1));
+    light.setAttribute("fill", (t >= 4.3 && t < 7.0) ? "#3DDC97" : scanning ? "#E8A13A" : "#E0663F");
+    var bs = t < 4.3 ? 0 : t < 4.55 ? pop(seg(t, 4.3, 4.55)) : t < 5.2 ? 1 : 1 - seg(t, 5.2, 5.45);
+    badge.setAttribute("transform", "translate(" + (t < 4.6 ? 625 : bx).toFixed(1) + " 506) scale(" + Math.max(bs, 0).toFixed(3) + ")");
+    ck.setAttribute("transform", "translate(0 " + (t >= 4.3 && t < 4.9 ? (Math.sin(seg(t, 4.3, 4.9) * Math.PI * 2) * 2.2).toFixed(2) : 0) + ")");
+
+    // tape head and packer
+    var hd = t < 5.6 ? 0 : t < 6.0 ? io(seg(t, 5.6, 6.0)) : t < 6.6 ? 1 : 1 - io(seg(t, 6.6, 6.95));
+    head.setAttribute("transform", "translate(0 " + (hd * 12).toFixed(1) + ")");
+    var pa = t < 5.5 ? 8 : t < 5.85 ? lerp(8, 64, io(seg(t, 5.5, 5.85))) : t < 6.6 ? 64 + Math.sin(t * 9) * 4 : lerp(64, 8, io(seg(t, 6.6, 6.95)));
+    pcA1.setAttribute("transform", "translate(804 516) rotate(" + pa.toFixed(1) + ")");
+
+    // the scooter: wait for the box, ride out, come back for the next one
+    var sx = 950, lean = 0, moving = false;
+    if (t >= 8.3 && t < 9.8) { var r = seg(t, 8.3, 9.8); sx = lerp(950, 1400, eIn(r)); lean = -3 * Math.sin(Math.min(r * 2, 1) * Math.PI / 2); moving = true; }
+    else if (t >= 9.8) { var r2 = seg(t, 9.8, D); sx = lerp(-200, 950, eOut(r2)); lean = 2 * (1 - r2); moving = r2 < 1; }
+    sc.setAttribute("transform", "translate(" + sx.toFixed(1) + " 676)");
+    scB.setAttribute("transform", "rotate(" + lean.toFixed(2) + " 0 -10)" + (t > 8.05 && t < 8.3 ? " translate(0 " + (Math.sin(seg(t, 8.05, 8.3) * Math.PI) * 2).toFixed(2) + ")" : ""));
+    var spin = (sx / 13) * 57.3;
+    wR.setAttribute("transform", "translate(-36 -13) rotate(" + spin.toFixed(1) + ")");
+    wF.setAttribute("transform", "translate(40 -13) rotate(" + spin.toFixed(1) + ")");
+    puff.setAttribute("opacity", moving && t < 9.8 ? (.5 + Math.sin(t * 20) * .2).toFixed(2) : 0);
+    crate.setAttribute("opacity", (t >= 8.05 && t < 9.8) ? 1 : 0);
+
+    // the step tracker over the scene
+    var st = t < PH[1] ? 0 : t < PH[2] ? 1 : t < PH[3] ? 2 : 3;
+    if (st !== lastStep) {
+      for (var k = 0; k < steps.length; k++) {
+        steps[k].className = k < st ? "done" : k === st ? "on" : "";
+        var bi = steps[k].querySelector(".bar i"); if (bi) bi.style.width = k < st ? "100%" : "0";
+      }
+      cap.classList.add("out");
+      (function (s) { setTimeout(function () { cap.textContent = CAPS[s]; cap.classList.remove("out"); }, 180); })(st);
+      lastStep = st;
+    }
+    var bar = steps[st].querySelector(".bar i");
+    if (bar) bar.style.width = (seg(t, PH[st], PH[st + 1]) * 100).toFixed(1) + "%";
+  }
+
+  /* ── Depth: the layers drift apart a little as the pointer moves ───── */
+  var layers = [[$("pFar"), 5], [$("pMid"), 11], [$("pFore"), 20]], tx = 0, ty = 0, cx = 0, cy = 0;
+  if (!reduce && window.matchMedia && matchMedia("(pointer:fine)").matches) {
+    window.addEventListener("pointermove", function (e) {
+      tx = (e.clientX / window.innerWidth) * 2 - 1;
+      ty = (e.clientY / window.innerHeight) * 2 - 1;
+    }, { passive: true });
+  }
+
+  var t0 = performance.now();
+  if (reduce) { frame(4.45); }
+  else {
+    (function loop(now) {
+      var t = ((now - t0) / 1000) % D;
+      frame(t);
+      cx += (tx - cx) * .06; cy += (ty - cy) * .06;
+      if (Math.abs(cx) > .001 || Math.abs(cy) > .001) {
+        layers.forEach(function (L) { L[0].setAttribute("transform", "translate(" + (-cx * L[1]).toFixed(2) + " " + (-cy * L[1] * .4).toFixed(2) + ")"); });
+      }
+      requestAnimationFrame(loop);
+    })(t0);
+  }
+  requestAnimationFrame(function () { setTimeout(function () { body.classList.add("ready"); }, 40); });
+
+  /* ── The form ──────────────────────────────────────────────────────── */
+  var form = $("loginForm"), em = $("email"), pw = $("password"), eye = $("eye");
+  eye.addEventListener("click", function () {
+    var show = pw.type === "password";
+    pw.type = show ? "text" : "password";
+    eye.setAttribute("aria-pressed", String(show));
+    eye.setAttribute("aria-label", show ? "Hide password" : "Show password");
     pw.focus();
   });
-  function caps(e) { document.getElementById('caps').classList.toggle('on', !!(e.getModifierState && e.getModifierState('CapsLock'))); }
-  pw.addEventListener('keydown', caps); pw.addEventListener('keyup', caps);
+  function caps(e) { $("caps").classList.toggle("on", !!(e.getModifierState && e.getModifierState("CapsLock"))); }
+  pw.addEventListener("keydown", caps); pw.addEventListener("keyup", caps);
+  [em, pw].forEach(function (f) { f.addEventListener("input", function () { f.classList.remove("bad"); }); });
 
-  /* A wrong password: the card shakes, the picker shrugs, a bubble says why. */
+  // A wrong password: the form gives a short shake and the fields say so.
   var err = document.querySelector('.alert[data-cat="danger"], .alert[data-cat="warning"]');
   if (err) {
-    var card = document.getElementById('loginForm');
-    card.classList.add('shake');
-    held = true; stand(); pose('shrug');
-    var t = err.textContent || '';
-    bubble.textContent = /too many/i.test(t) ? 'Taking a short break! Try again soon.' : 'Oops! Wrong email or password.';
-    setTimeout(function () { bubble.classList.add('on'); }, 250);
-    setTimeout(function () { held = false; walkOn(); }, 4200);
+    form.classList.add("shake");
+    if (!/too many|locked|wait/i.test(err.textContent || "")) { em.classList.add("bad"); pw.classList.add("bad"); }
+    if (em.value) { em.removeAttribute("autofocus"); setTimeout(function () { pw.focus(); }, 60); }
   }
 
-  /* Signing in: the loading bar fills and the rider speeds off. */
-  document.getElementById('loginForm').addEventListener('submit', function (e) {
-    var em = document.getElementById('email');
+  form.addEventListener("submit", function (e) {
     if (!em.value.trim() || !pw.value) {
       e.preventDefault();
-      (em.value.trim() ? pw : em).focus();
+      var f = em.value.trim() ? pw : em;
+      f.classList.add("bad"); f.focus();
       return;
     }
-    var go = document.getElementById('go');
-    go.classList.add('loading');
-    document.getElementById('goLbl').textContent = 'LOADING…';
-    document.getElementById('rider').classList.add('fast');
-    stand(); pose('worker'); bubble.textContent = 'On my way!'; bubble.classList.add('on');
+    $("go").classList.add("loading");
+    $("goLbl").textContent = "Signing in…";
+    if (!reduce) t0 = performance.now() - 8.25 * 1000;   // and the order heads out
   });
 })();
 </script>

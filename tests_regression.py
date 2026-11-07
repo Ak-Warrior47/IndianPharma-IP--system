@@ -76,7 +76,7 @@ def login(email):
 # ---- 1. Authentication and access control -------------------------------
 r = client.post("/login", data={"email": "r_pick@x.com", "password": "wrong"},
                 follow_redirects=True)
-check("1.1 Wrong password rejected", b"Invalid" in r.data or b"incorrect" in r.data.lower())
+check("1.1 Wrong password rejected", b"don&#39;t match" in r.data or b"don't match" in r.data or b"Invalid" in r.data)
 check("1.2 Correct password accepted", login("r_pick@x.com").status_code == 200)
 check("1.3 Logout returns to login", b"assword" in client.get("/logout", follow_redirects=True).data)
 check("1.4 Admin page blocked when logged out",
