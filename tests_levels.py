@@ -230,6 +230,10 @@ check("12.5 A delivery rider with records is Active", _status_of("Lv lv_drv") ==
 check("12.6 The days still needed are spelled out", "of 6 working days logged" in adm_html)
 with app.app_context():
     rows = {r["emp"].email: r for r in A.level_status_all()}
+    pr = rows.get("lv_pick@x.com", {})
+    check("12.8 An active row explains the latest day against the best",
+          "Latest day" in (pr.get("why") or "") and ("below the best" in pr["why"] or "beat the best" in pr["why"]
+                                                    or "a new best" in pr["why"]), pr.get("why"))
     check("12.7 Every non-admin staff member gets a row",
           all(em in rows for em in ("lv_pick@x.com", "lv_new@x.com", "lv_week@x.com", "lv_drv@x.com",
                                     "lv_pack@x.com", "lv_pur@x.com")) and "lv_adm@x.com" not in rows)

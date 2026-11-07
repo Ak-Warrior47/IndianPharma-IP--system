@@ -1659,6 +1659,22 @@ def level_status_all():
                 row["status"], row["why"] = "active", ""
             if row["status"] in ("active", "waiting") and (not last or (today - last).days > 14):
                 row["why"] = "No entries in the last 14 days"
+            elif row["status"] == "active" and last and r.get("day"):
+                # Why the latest day did or did not level them up, in plain words.
+                try:
+                    v, good, enough = _level_judge(e, "day", last, last)
+                    best = r["day"].best_value or 0
+                    row["latest"] = v
+                    bits = ["Latest day (%s): %s %s" % (last.strftime("%d %b"), _fmt_num(v), row["unit"])]
+                    if v > best and good:
+                        bits.append("a new best")
+                    elif v > best:
+                        bits.append("beat the best %s, but the day scored under %d" % (_fmt_num(best), LEVEL_GOOD_SCORE))
+                    else:
+                        bits.append("below the best of %s" % _fmt_num(best))
+                    row["why"] = " · ".join(bits)
+                except Exception as _exc:
+                    logger.warning("level_status_all latest(%s): %s", e.id, _exc)
             rows.append(row)
     except Exception as exc:
         logger.error("level_status_all: %s", exc)
