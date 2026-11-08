@@ -153,7 +153,7 @@
     var late = p.filter(function (r) { return r.late_by != null; });
     $("pkLate").hidden = !late.length;
     $("pkLate").innerHTML = late.length ? "<b>Running late (" + late.length + ")</b>" + late.map(function (r) {
-      return esc(r.name) + " · Bill " + esc(r.bill_no) + " · " + r.items + " items · late by " + clock(r.late_by);
+      return esc(r.name) + " · Bill " + esc(r.bill_no) + " · " + r.items + " item" + (r.items === 1 ? "" : "s") + " · late by " + clock(r.late_by);
     }).join("<br>") : "";
     $("pkPickers").innerHTML = p.length ? p.map(function (r) {
       if (r.free) return '<span class="pk-chip free">' + esc(r.name) + ' · free</span>';
