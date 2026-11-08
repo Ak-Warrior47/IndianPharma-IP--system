@@ -247,6 +247,7 @@ class Employee(db.Model):
     twofa_enabled = db.Column(db.Boolean, default=False)
     admin_adjustment = db.Column(db.Float, default=0.0)  # Ongoing +/- pts applied to every score
     admin_adjustment_note = db.Column(db.String(200), default="")  # Reason/notes
+    last_seen_at  = db.Column(db.DateTime, nullable=True)   # last time on the picking screen
     custom_hourly_target = db.Column(db.Float, nullable=True)  # Override default role target (Phase 1 auto-raise)
     phone         = db.Column(db.String(20), nullable=True)   # Feature 15: phone for OTP reset
     secondary_staff_type = db.Column(db.String(20), nullable=True)  # optional 2nd role for multitasking (kept for compat)
@@ -2015,6 +2016,8 @@ def add_pick_bill(bill_no, items, created_by):
         items = 0
     if items < 1 or items > 500:
         raise PickError("Items must be between 1 and 500.")
+    if int(m.group(1)) == 0:
+        raise PickError("Bill number cannot be 0.")
     full = fy_prefix() + m.group(1)
     if PickBill.query.filter_by(bill_no=full).first():
         raise PickError("Bill %s was already entered. A bill number can be used only once." % full)
@@ -2037,6 +2040,7 @@ def claim_items(picker_id, bill_id, n, now=None):
         n = 0
     if n < 1:
         raise PickError("Type how many items you are taking.")
+    db.session.query(Employee).filter_by(id=picker_id).with_for_update().first()
     if active_claim_for(picker_id):
         raise PickError("Finish your current items first.")
     bill = db.session.query(PickBill).filter_by(id=bill_id).with_for_update().first()
@@ -2095,16 +2099,23 @@ def finish_claim(picker_id, claim_id, now=None, day=None, picked=None, missing=N
     c.done_at, c.status, c.picked, c.missing = now, "done", picked, m_qty
     c.work_date = day or date.today()      # same day boundary as the rest of the app
     c.outcome = {"normal": "ontime", "find": "extra", "report": "report", "late": "late"}[phase]
-    c.points = pick_points(c.items, c.due_at, now, picked=picked, missing=m_qty)
+    # Points for missing items are held until the assigner confirms them as
+    # not available; otherwise reporting everything missing would pay for
+    # nothing picked.
+    c.points = pick_points(c.items, c.due_at, now, picked=picked, missing=0)
     bill = db.session.get(PickBill, c.bill_id)
     for name, q in missing:
         db.session.add(PickMissing(bill_id=c.bill_id, claim_id=c.id, picker_id=picker_id,
                                    item_name=name, qty=q, reported_at=now))
         _pick_event("missing", picker_id, c.bill_id, detail="%s x%d" % (name, q))
-    if phase == "late" and not c.late_alerted:
-        c.late_alerted = True
-        _pick_event("late", picker_id, c.bill_id,
-                    minutes=round((now - pick_windows(c)[2]).total_seconds() / 60.0, 1))
+    if phase == "late":
+        mins = round((now - pick_windows(c)[2]).total_seconds() / 60.0, 1)
+        ev = PickEvent.query.filter_by(kind="late", picker_id=picker_id, bill_id=c.bill_id).order_by(PickEvent.id.desc()).first()
+        if c.late_alerted and ev:
+            ev.minutes, ev.detail = mins, "finished %g min late" % mins
+        else:
+            c.late_alerted = True
+            _pick_event("late", picker_id, c.bill_id, minutes=mins, detail="finished %g min late" % mins)
     db.session.flush()
     completed = _close_bill_if_done(bill, now)
     db.session.commit()
@@ -2129,6 +2140,12 @@ def handle_missing(missing_id, action, now=None):
     if action not in ("reassign", "unavailable"):
         raise PickError("Choose reassign or not available.")
     m.status, m.handled_at = ("reassigned" if action == "reassign" else "unavailable"), now
+    if action == "unavailable" and m.claim_id:
+        # Confirmed missing: the reporter is paid for it as if picked, at the
+        # rate of when they reported it (normal time 1.5, extra time 1).
+        rc = db.session.get(PickClaim, m.claim_id)
+        if rc and rc.outcome in ("ontime", "extra", "report"):
+            rc.points = round(float(rc.points or 0) + (PICK_ONTIME_RATE if rc.outcome == "ontime" else 1.0) * m.qty, 1)
     if action == "reassign":
         # the items go back on the bill as ordinary items to pick
         bill = db.session.get(PickBill, m.bill_id)
@@ -2241,7 +2258,16 @@ def alert_late_picks(now=None):
         waiting = [b for b in PickBill.query.filter_by(status="open").all() if pick_bill_progress(b)["left"] > 0]
         if waiting:
             warned = {(e.picker_id, e.bill_id) for e in PickEvent.query.filter_by(kind="idle").all()}
+            last_warn = dict(db.session.query(PickEvent.picker_id, db.func.max(PickEvent.at))
+                             .filter(PickEvent.kind == "idle").group_by(PickEvent.picker_id).all())
+            on_duty = now - timedelta(minutes=5)
             for p in free_pickers():
+                if not p.last_seen_at or p.last_seen_at < on_duty:
+                    continue          # not at work / not on the picking screen
+                if last_warn.get(p.id) and last_warn[p.id] >= (max(
+                        (db.session.query(db.func.max(PickClaim.done_at)).filter(PickClaim.picker_id == p.id).scalar()
+                         or datetime.min), min(b.created_at for b in waiting))):
+                    continue          # already warned for this idle stretch
                 last = (db.session.query(db.func.max(PickClaim.done_at))
                         .filter(PickClaim.picker_id == p.id).scalar())
                 for b in waiting:
@@ -8292,6 +8318,9 @@ def pick_state():
     if role not in ("picker", "pick_assigner") and not is_admin:
         return jsonify({"ok": False, "message": "Not available for your role."}), 403
     emp = db.session.get(Employee, session.get("user_id"))
+    if role == "picker" and emp and (not emp.last_seen_at or datetime.utcnow() - emp.last_seen_at > timedelta(seconds=60)):
+        emp.last_seen_at = datetime.utcnow()
+        db.session.commit()
     return jsonify(picking_state(emp, "picker" if role == "picker" else "pick_assigner"))
 
 

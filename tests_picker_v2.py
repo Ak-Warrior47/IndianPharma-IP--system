@@ -296,7 +296,8 @@ with app.app_context():
     cl = db.session.get(PickClaim, c3c)
     pr = A.pick_bill_progress(db.session.get(PickBill, NB))
     check("9.11 Picked and missing are recorded on the grab", cl.picked == 2 and cl.missing == 2)
-    check("9.12 Missing items reported in normal time earn full points (1.5 x 4 = 6)", cl.points == 6.0, str(cl.points))
+    check("9.12 Picked items in normal time: 1.5 x 2 = 3; missing items wait for the assigner",
+          cl.points == 3.0, str(cl.points))
     check("9.13 The bill shows 2 missing and is not complete", pr["missing"] == 2 and db.session.get(PickBill, NB).status == "open")
     check("9.14 The assigner is notified about the missing items",
           Notification.query.filter_by(emp_id=ASG_ID).filter(Notification.title.like("Missing items%")).count() >= 1)
@@ -321,6 +322,8 @@ jpost(c4, "/pick/done", {"claim_id": c4c})
 with app.app_context():
     check("9.20 Once the reassigned item is picked and the other marked not available, the bill completes",
           db.session.get(PickBill, NB).status == "done")
+    check("9.20b The confirmed-missing item pays its reporter (3 + 1.5 = 4.5); the reassigned one does not",
+          db.session.get(PickClaim, c3c).points == 4.5, str(db.session.get(PickClaim, c3c).points))
     # report-only window: Done without reporting is refused
     db.session.add(PickBill(bill_no="RW1", items=2))
     db.session.commit()
@@ -339,6 +342,7 @@ with app.app_context():
     # idle warning: free picker leaves a waiting bill 2 minutes
     Notification.query.filter_by(emp_id=ids["p2"]).delete()
     PickEvent.query.filter_by(kind="idle").delete()
+    db.session.get(Employee, ids["p2"]).last_seen_at = datetime.utcnow()   # p2 is on the picking screen
     for c in PickClaim.query.filter_by(picker_id=ids["p2"]).all():   # p2 has been free 5 minutes
         if c.done_at:
             c.done_at = datetime.utcnow() - timedelta(minutes=5)
