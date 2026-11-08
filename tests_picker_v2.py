@@ -210,6 +210,36 @@ with app.app_context():
 r = c1.get("/past_entry/%s" % (date.today() - timedelta(days=1)).isoformat(), follow_redirects=True)
 check("7.1 Past-date entry is closed for pickers", b"recorded live" in r.data)
 
+# ---- 8. Trial copy: test accounts and banner, never on the live database -----
+TRIAL = ["ravi@pharmaip.com", "lisa@pharmaip.com", "smriti@pharmaip.com", "deepti@pharmaip.com",
+         "amit@pharmaip.com"]
+with app.app_context():
+    pre = {em for em in TRIAL if Employee.query.filter_by(email=em).first()}
+    os.environ.pop("TRIAL_DEMO", None)
+    check("8.1 No test accounts without TRIAL_DEMO", A.seed_trial_demo() == 0)
+    os.environ["TRIAL_DEMO"] = "1"
+    os.environ["DATABASE_URL"] = "postgresql://live.example/db"
+    check("8.2 Never with a live DATABASE_URL set", A.seed_trial_demo() == 0)
+    os.environ.pop("DATABASE_URL")
+    A.seed_trial_demo()
+    ravi = Employee.query.filter_by(email="ravi@pharmaip.com").first()
+    check("8.3 TRIAL_DEMO creates the Pick Assigner and four pickers",
+          ravi is not None and ravi.staff_type == "pick_assigner"
+          and all(Employee.query.filter_by(email=em).first() for em in TRIAL))
+    check("8.4 Running it again adds nobody twice", A.seed_trial_demo() == 0
+          and Employee.query.filter_by(email="lisa@pharmaip.com").count() == 1)
+tc = app.test_client()
+check("8.5 Every page shows the trial banner", b"Trial copy: not the live app" in tc.get("/login").data)
+os.environ.pop("TRIAL_DEMO")
+check("8.6 No banner on a normal (live) copy", b"Trial copy" not in tc.get("/login").data)
+with app.app_context():
+    for em in TRIAL:
+        if em not in pre:
+            e = Employee.query.filter_by(email=em).first()
+            if e:
+                db.session.delete(e)
+    db.session.commit()
+
 with app.app_context():
     for em in EMAILS:
         e = Employee.query.filter_by(email=em).first()

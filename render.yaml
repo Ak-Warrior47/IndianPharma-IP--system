@@ -125,6 +125,10 @@ services:
         value: "1.5"
       - key: PICK_SECONDS_PER_ITEM
         value: "100"
+      # Trial copies only: "1" creates test accounts and shows a "trial" banner,
+      # and only when DATABASE_URL is empty. Keep "0" on the live service.
+      - key: TRIAL_DEMO
+        value: "0"
 
       # ---- Privacy -------------------------------------------------------
       # Location is the most sensitive data this app holds. Points are recorded

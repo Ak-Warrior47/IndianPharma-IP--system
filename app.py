@@ -3821,6 +3821,54 @@ def sa_text_literal(value):
     return "'" + str(value).replace("'", "''") + "'"
 
 
+TRIAL_STAFF = [("Ravi", "pick_assigner"), ("Lisa", "picker"), ("Smriti", "picker"),
+               ("Deepti", "picker"), ("Amit", "picker")]
+
+
+def seed_trial_demo():
+    """Ready-made accounts for a trial copy of the app. Runs only when
+    TRIAL_DEMO=1 AND no DATABASE_URL is set, so it can never touch the live
+    Supabase database. Passwords are the ADMIN_PASSWORD value; none is
+    written in code. Safe to run twice."""
+    if not (os.environ.get("TRIAL_DEMO", "0") == "1" and not os.environ.get("DATABASE_URL")):
+        return 0
+    pw = os.environ.get("ADMIN_PASSWORD", "admin123")
+    made = 0
+    for name, role in TRIAL_STAFF:
+        email = "%s@pharmaip.com" % name.lower()
+        if Employee.query.filter_by(email=email).first():
+            continue
+        e = Employee(name=name, email=email, staff_type=role, role=ROLE_DISPLAY_NAMES.get(role, role))
+        e.set_password(pw)
+        db.session.add(e)
+        made += 1
+    db.session.commit()
+    if made:
+        logger.info("Trial copy: %d test accounts created", made)
+    return made
+
+
+TRIAL_BANNER = ('<div role="note" style="position:sticky;top:0;z-index:9999;background:#7A5208;color:#fff;'
+                'font:600 13px/1.4 system-ui,sans-serif;text-align:center;padding:6px 12px">'
+                'Trial copy: not the live app. Data resets when the server restarts.</div>')
+
+
+@app.after_request
+def _trial_banner(resp):
+    """On a trial copy, put a banner at the top of every page."""
+    try:
+        if (os.environ.get("TRIAL_DEMO", "0") == "1" and not os.environ.get("DATABASE_URL")
+                and resp.mimetype == "text/html" and not resp.direct_passthrough):
+            html = resp.get_data(as_text=True)
+            i = html.find("<body")
+            if i != -1:
+                j = html.find(">", i)
+                resp.set_data(html[:j + 1] + TRIAL_BANNER + html[j + 1:])
+    except Exception as exc:
+        logger.warning("trial banner: %s", exc)
+    return resp
+
+
 def init_db():
     with app.app_context():
         try:
@@ -3846,6 +3894,7 @@ def init_db():
                 db.session.add(c1)
                 db.session.commit()
                 logger.info("Database initialized successfully")
+            seed_trial_demo()
             # Seed default auto badges if none exist
             try:
                 if Badge.query.count() == 0:
