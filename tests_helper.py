@@ -41,3 +41,25 @@ def csrf_client(client):
 
     client.post = post
     return client
+
+
+def add_picks(emp_id, d, items, hours=9.0, on_time=True):
+    """Record one finished grab for a picker on day d (bill-based picking).
+
+    items picked over `hours` gives items/hr = items / hours; on_time=False
+    makes the grab late. Clears that picker's earlier grabs for the day so a
+    test can rewrite a day. Call inside an app context.
+    """
+    from datetime import datetime, time, timedelta
+    from app import db, PickBill, PickClaim
+    PickClaim.query.filter_by(picker_id=emp_id, work_date=d).delete()
+    bill = PickBill(bill_no="T-%d-%s" % (emp_id, d.isoformat()), items=items, status="done")
+    db.session.add(bill)
+    db.session.flush()
+    start = datetime.combine(d, time(9, 0))
+    done = start + timedelta(hours=hours)
+    due = done if on_time else done - timedelta(minutes=30)
+    db.session.add(PickClaim(bill_id=bill.id, picker_id=emp_id, items=items, started_at=start,
+                             due_at=due, done_at=done, work_date=d, status="done",
+                             points=items if on_time else -5))
+    db.session.commit()

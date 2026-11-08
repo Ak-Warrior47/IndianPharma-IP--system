@@ -1,0 +1,219 @@
+{# Bill-based picking: the picker's screen and the Pick Assigner's screen.
+   Live data comes from /pick/state.json, refreshed every 10 seconds; the
+   timers count down every second in the browser. #}
+<style>
+.pk-card{margin-bottom:20px}
+.pk-row{display:flex;flex-wrap:wrap;gap:12px;align-items:center}
+.pk-stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin:4px 0 14px}
+.pk-stat{border:1px solid var(--line);border-radius:12px;padding:10px 12px;background:var(--surface,#fff)}
+.pk-stat b{display:block;font-size:22px;font-weight:800;color:var(--ink);font-variant-numeric:tabular-nums}
+.pk-stat span{font-size:11px;font-weight:700;color:var(--ink-3);text-transform:uppercase;letter-spacing:.5px}
+.pk-mine{border:2px solid var(--brand);border-radius:14px;padding:16px;margin-bottom:14px;background:var(--accent-tint,#eef4ff)}
+.pk-mine.late{border-color:var(--bad);background:var(--bad-tint)}
+.pk-clock{font-size:44px;font-weight:800;line-height:1;font-variant-numeric:tabular-nums;color:var(--ink)}
+.pk-mine.late .pk-clock{color:var(--bad-ink)}
+.pk-bar{height:8px;border-radius:6px;background:var(--line);overflow:hidden;margin:10px 0}
+.pk-bar i{display:block;height:100%;background:var(--brand);transition:width .9s linear}
+.pk-mine.late .pk-bar i{background:var(--bad)}
+.pk-prog{display:flex;height:8px;border-radius:6px;overflow:hidden;background:var(--line);min-width:120px;flex:1}
+.pk-prog .d{background:var(--ok)} .pk-prog .a{background:var(--warn)}
+.pk-bill{display:grid;grid-template-columns:minmax(90px,auto) 1fr auto;gap:12px;align-items:center;padding:12px 0;border-top:1px solid var(--line)}
+.pk-bill:first-child{border-top:0}
+.pk-bill .no{font-weight:800;font-size:15px}
+.pk-bill .sub{font-size:12px;color:var(--ink-3)}
+.pk-take{display:flex;gap:6px;align-items:center}
+.pk-take input{width:64px;padding:9px 8px;border:1.5px solid var(--line);border-radius:10px;font-size:15px;text-align:center}
+.pk-btn{border:0;border-radius:10px;padding:10px 16px;font-weight:700;font-size:14px;cursor:pointer;background:var(--brand);color:#fff;min-height:42px}
+.pk-btn:disabled{opacity:.45;cursor:not-allowed}
+.pk-btn.ok{background:var(--ok)} .pk-btn.ghost{background:transparent;color:var(--ink-2);border:1.5px solid var(--line)}
+.pk-btn.bad{background:transparent;color:var(--bad-ink);border:1.5px solid var(--bad-line,#f3c2c2)}
+.pk-msg{display:none;margin:0 0 12px;padding:10px 12px;border-radius:10px;font-size:14px}
+.pk-msg.on{display:block} .pk-msg.good{background:#e8f4ee;color:#0f4a32} .pk-msg.warn{background:var(--warn-tint);color:var(--warn-ink)}
+.pk-note{font-size:12.5px;color:var(--ink-3);margin-top:10px}
+.pk-chip{display:inline-flex;align-items:center;gap:6px;padding:6px 10px;border-radius:999px;font-size:13px;font-weight:600;border:1px solid var(--line)}
+.pk-chip.free{background:#e8f4ee;border-color:#c9e4d6;color:#0f4a32}
+.pk-chip.busy{background:var(--warn-tint);border-color:var(--warn-line);color:var(--warn-ink)}
+.pk-chip.late{background:var(--bad-tint);color:var(--bad-ink)}
+.pk-add{display:grid;grid-template-columns:1fr 120px auto;gap:10px;align-items:end}
+.pk-add input{width:100%;padding:11px 12px;border:1.5px solid var(--line);border-radius:10px;font-size:15px}
+.pk-add label{display:block;font-size:12px;font-weight:700;color:var(--ink-3);margin-bottom:5px}
+.pk-empty{padding:14px 0;color:var(--ink-3);font-size:14px}
+@media (max-width:640px){
+  .pk-stats{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .pk-bill{grid-template-columns:1fr;gap:8px}
+  .pk-add{grid-template-columns:1fr 1fr}
+  .pk-add .pk-btn{grid-column:1/-1}
+}
+</style>
+
+<div class="card pk-card" id="pickApp" data-role="{{ 'picker' if staff_type == 'picker' else 'assigner' }}">
+  {% if staff_type == 'picker' %}
+  <div class="section-label">Picking — {{ today.strftime('%A, %d %b') }}</div>
+  <div class="pk-msg" id="pkMsg" role="status"></div>
+  <div class="pk-stats">
+    <div class="pk-stat"><span>Items today</span><b id="pkItems">0</b></div>
+    <div class="pk-stat"><span>Points</span><b id="pkPoints">0</b></div>
+    <div class="pk-stat"><span>On time</span><b id="pkOnTime">—</b></div>
+    <div class="pk-stat"><span>Items / hr</span><b id="pkRate">—</b></div>
+  </div>
+  <div class="pk-mine" id="pkMine" hidden>
+    <div class="pk-row" style="justify-content:space-between">
+      <div><div class="sub" style="font-size:12px;color:var(--ink-3);font-weight:700;text-transform:uppercase">Your items</div>
+        <div style="font-size:18px;font-weight:800" id="pkMineText"></div></div>
+      <div class="pk-clock" id="pkClock">0:00</div>
+    </div>
+    <div class="pk-bar"><i id="pkBar" style="width:100%"></i></div>
+    <div class="pk-row" style="justify-content:space-between">
+      <span id="pkLateText" style="font-size:13px;color:var(--ink-2)"></span>
+      <button type="button" class="pk-btn ok" id="pkDone">Done — all picked</button>
+    </div>
+  </div>
+  <div class="section-label" style="margin-top:6px">Open bills</div>
+  <div id="pkBills"><div class="pk-empty">Loading bills…</div></div>
+  <p class="pk-note" id="pkRule"></p>
+
+  {% else %}
+  <div class="section-label">Pick Assigner — {{ today.strftime('%A, %d %b') }}</div>
+  <div class="pk-msg" id="pkMsg" role="status"></div>
+  <form class="pk-add" id="pkAdd" autocomplete="off">
+    <div><label for="pkBillNo">Bill number</label><input id="pkBillNo" name="bill_no" required maxlength="40" placeholder="e.g. 4521"></div>
+    <div><label for="pkBillItems">Items</label><input id="pkBillItems" name="items" type="number" min="1" max="500" required placeholder="10"></div>
+    <button class="pk-btn" type="submit">Add bill</button>
+  </form>
+  <div class="section-label" style="margin-top:18px">Pickers right now</div>
+  <div class="pk-row" id="pkPickers"><span class="pk-empty">Loading…</span></div>
+  <div class="section-label" style="margin-top:18px">Today's bills</div>
+  <div class="table-wrap"><table class="ptable" id="pkTable">
+    <thead><tr><th>Bill</th><th>Items</th><th>Progress</th><th>Pickers</th><th>Status</th><th>Time taken</th><th></th></tr></thead>
+    <tbody><tr><td colspan="7" class="pk-empty">Loading…</td></tr></tbody></table></div>
+  <p class="pk-note" id="pkRule"></p>
+  {% endif %}
+</div>
+
+<script>
+(function () {
+  "use strict";
+  var app = document.getElementById("pickApp");
+  if (!app) return;
+  var role = app.getAttribute("data-role"), state = null, mineDue = null, mineTotal = 0, loadedAt = 0;
+  var tok = (document.querySelector('meta[name="csrf-token"]') || {}).content || "";
+  function $(id) { return document.getElementById(id); }
+  function esc(s) { return String(s == null ? "" : s).replace(/[&<>"]/g, function (c) { return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]; }); }
+  function clock(sec) { var a = Math.abs(sec), m = Math.floor(a / 60), s = a % 60; return m + ":" + (s < 10 ? "0" : "") + s; }
+  function say(text, good) { var m = $("pkMsg"); m.textContent = text; m.className = "pk-msg on " + (good ? "good" : "warn"); clearTimeout(say.t); say.t = setTimeout(function () { m.className = "pk-msg"; }, 6000); }
+  function post(url, body) {
+    return fetch(url, { method: "POST", credentials: "same-origin",
+      headers: { "Content-Type": "application/json", "X-Requested-With": "fetch", "X-CSRFToken": tok },
+      body: JSON.stringify(body || {}) })
+      .then(function (r) { return r.json().catch(function () { return { ok: false, message: "Something went wrong." }; }); })
+      .then(function (j) { say(j.message || (j.ok ? "Done." : "Could not do that."), j.ok); load(); return j; });
+  }
+  function rule(s) {
+    var per = s.seconds_per_item;
+    $("pkRule").textContent = "Each item gets " + clock(per) + ". Done on time: +1 point per item. Late: −1 per minute over, at most −" + s.late_cap + " for one grab.";
+  }
+  function prog(b) {
+    var d = 100 * b.done / b.items, a = 100 * b.active / b.items;
+    return '<div class="pk-prog" title="' + b.done + ' picked, ' + b.active + ' being picked, ' + b.left + ' left"><i class="d" style="width:' + d + '%"></i><i class="a" style="width:' + a + '%"></i></div>';
+  }
+
+  function renderPicker(s) {
+    var t = s.today || {};
+    $("pkItems").textContent = t.items || 0;
+    $("pkPoints").textContent = (t.points > 0 ? "+" : "") + (t.points || 0);
+    $("pkOnTime").textContent = t.on_time_pct == null ? "—" : Math.round(t.on_time_pct) + "%";
+    $("pkRate").textContent = t.rate == null ? "—" : t.rate;
+    var mine = s.mine;
+    $("pkMine").hidden = !mine;
+    if (mine) {
+      $("pkMineText").textContent = mine.items + " item" + (mine.items === 1 ? "" : "s") + " · Bill " + mine.bill_no;
+      mineDue = Date.now() + mine.seconds_left * 1000; mineTotal = mine.seconds_total;
+      $("pkDone").setAttribute("data-claim", mine.id);
+    } else { mineDue = null; }
+    var open = s.bills.filter(function (b) { return b.status === "open"; });
+    if (!open.length) { $("pkBills").innerHTML = '<div class="pk-empty">No open bills right now. You will get a notification when one is added.</div>'; }
+    else {
+      $("pkBills").innerHTML = open.map(function (b) {
+        var can = !mine && b.left > 0;
+        return '<div class="pk-bill"><div><div class="no">Bill ' + esc(b.bill_no) + '</div><div class="sub">added ' + esc(b.added) + ' · ' + b.items + ' items</div></div>' +
+          '<div><div class="pk-row">' + prog(b) + '<span class="sub">' + b.done + ' / ' + b.items + ' picked · <b>' + b.left + ' left</b></span></div>' +
+          (b.pickers.length ? '<div class="sub" style="margin-top:4px">' + esc(b.pickers.join(", ")) + '</div>' : '') + '</div>' +
+          '<div class="pk-take"><input type="number" min="1" max="' + b.left + '" value="' + Math.min(b.left, 3) + '" aria-label="Items to take from bill ' + esc(b.bill_no) + '" id="take' + b.id + '"' + (can ? '' : ' disabled') + '>' +
+          '<button type="button" class="pk-btn" data-take="' + b.id + '"' + (can ? '' : ' disabled') + '>Take</button></div></div>';
+      }).join("");
+    }
+    rule(s);
+  }
+
+  function renderAssigner(s) {
+    var p = s.pickers || [];
+    $("pkPickers").innerHTML = p.length ? p.map(function (r) {
+      if (r.free) return '<span class="pk-chip free">' + esc(r.name) + ' · free</span>';
+      var late = r.seconds_left < 0;
+      return '<span class="pk-chip ' + (late ? 'late' : 'busy') + '" data-due="' + (Date.now() + r.seconds_left * 1000) + '">' + esc(r.name) + ' · Bill ' + esc(r.bill_no) + ' · ' + r.items + ' items · <b class="pk-left"></b>' +
+        ' <button type="button" class="pk-btn ghost" style="min-height:0;padding:3px 8px;font-size:12px" data-release="' + r.claim_id + '">Release</button></span>';
+    }).join("") : '<span class="pk-empty">No pickers set up yet.</span>';
+    var rows = s.bills;
+    $("pkTable").querySelector("tbody").innerHTML = rows.length ? rows.map(function (b) {
+      var st = b.status === "done" ? "Complete" : b.status === "cancelled" ? "Cancelled" : (b.left ? b.left + " left" : "Being picked");
+      return '<tr><td><strong>' + esc(b.bill_no) + '</strong><div style="font-size:11px;color:var(--ink-3)">' + esc(b.added) + '</div></td><td>' + b.items + '</td>' +
+        '<td style="min-width:150px">' + prog(b) + '<div style="font-size:11px;color:var(--ink-3);margin-top:3px">' + b.done + ' / ' + b.items + '</div></td>' +
+        '<td>' + esc(b.pickers.join(", ") || "—") + '</td><td>' + st + '</td><td>' + (b.minutes == null ? "—" : b.minutes + " min") + '</td>' +
+        '<td>' + (b.status === "open" ? '<button type="button" class="pk-btn bad" style="min-height:0;padding:5px 10px;font-size:12px" data-cancel="' + b.id + '">Cancel</button>' : '') + '</td></tr>';
+    }).join("") : '<tr><td colspan="7" class="pk-empty">No bills yet today. Add the first one above.</td></tr>';
+    rule(s);
+  }
+
+  function load() {
+    fetch("/pick/state.json", { credentials: "same-origin" }).then(function (r) { return r.json(); }).then(function (s) {
+      if (!s || !s.bills) return;
+      state = s; loadedAt = Date.now();
+      (role === "picker" ? renderPicker : renderAssigner)(s);
+      tick();
+    }).catch(function () {});
+  }
+
+  function tick() {
+    if (role === "picker" && mineDue) {
+      var left = Math.round((mineDue - Date.now()) / 1000), late = left < 0;
+      $("pkClock").textContent = (late ? "−" : "") + clock(left);
+      $("pkMine").classList.toggle("late", late);
+      $("pkBar").style.width = Math.max(0, Math.min(100, 100 * left / Math.max(mineTotal, 1))) + "%";
+      $("pkLateText").textContent = late ? "Late by " + clock(left) + " — points are dropping." : "Pick them and tap Done before the timer ends.";
+    }
+    if (role !== "picker") {
+      Array.prototype.forEach.call(document.querySelectorAll(".pk-chip[data-due]"), function (c) {
+        var left = Math.round((+c.getAttribute("data-due") - Date.now()) / 1000);
+        c.querySelector(".pk-left").textContent = (left < 0 ? "late " : "") + clock(left);
+        c.classList.toggle("late", left < 0); c.classList.toggle("busy", left >= 0);
+      });
+    }
+  }
+
+  app.addEventListener("click", function (e) {
+    var b = e.target.closest("button"); if (!b || b.disabled) return;
+    if (b.hasAttribute("data-take")) {
+      var id = b.getAttribute("data-take"), n = +($("take" + id) || {}).value;
+      b.disabled = true; post("/pick/claim", { bill_id: +id, items: n });
+    } else if (b.id === "pkDone") {
+      b.disabled = true; post("/pick/done", { claim_id: +b.getAttribute("data-claim") }).then(function () { b.disabled = false; });
+    } else if (b.hasAttribute("data-release")) {
+      post("/pick/claim/" + b.getAttribute("data-release") + "/release");
+    } else if (b.hasAttribute("data-cancel")) {
+      if (b.getAttribute("data-sure") === "1") post("/pick/bill/" + b.getAttribute("data-cancel") + "/cancel");
+      else { b.setAttribute("data-sure", "1"); b.textContent = "Tap again to cancel"; }
+    }
+  });
+  var add = $("pkAdd");
+  if (add) add.addEventListener("submit", function (e) {
+    e.preventDefault();
+    post("/pick/bill", { bill_no: $("pkBillNo").value, items: +$("pkBillItems").value }).then(function (j) {
+      if (j.ok) { add.reset(); $("pkBillNo").focus(); }
+    });
+  });
+
+  load();
+  setInterval(load, 10000);
+  setInterval(tick, 1000);
+})();
+</script>

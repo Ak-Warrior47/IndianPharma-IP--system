@@ -21,7 +21,7 @@ sys.path.insert(0, REPO)
 import app as A  # noqa: E402
 from app import (app, db, Employee, KPIEntry, DeliveryBillerNote, PersonalRecord,  # noqa: E402
                  LevelEvent, Notification)
-from tests_helper import csrf_client  # noqa: E402
+from tests_helper import csrf_client, add_picks  # noqa: E402
 
 app.config["TESTING"] = True
 PW = "longpass123"
@@ -51,6 +51,7 @@ def mk(email, st, admin=False):
         Notification.query.filter_by(emp_id=e.id).delete()
         KPIEntry.query.filter_by(emp_id=e.id).delete()
         DeliveryBillerNote.query.filter_by(emp_id=e.id).delete()
+        A.PickClaim.query.filter_by(picker_id=e.id).delete()
         e.custom_hourly_target = None
         e.staff_type = st
         db.session.commit()
@@ -64,6 +65,7 @@ def mk(email, st, admin=False):
     # sitting under this id. (On PostgreSQL the cascade removes them.)
     for M in (PersonalRecord, LevelEvent, Notification, KPIEntry, DeliveryBillerNote):
         M.query.filter_by(emp_id=e.id).delete()
+    A.PickClaim.query.filter_by(picker_id=e.id).delete()
     db.session.commit()
     return e
 
@@ -76,6 +78,9 @@ def picker_day(e, d, items, good=True):
         cs_sales_open=10, packing_done=10 if good else 0, rack_organized=10 if good else 0,
         table_clean=1 if good else 0, sweep_done=1 if good else 0, total_time=9, check_time=9))
     db.session.commit()
+    # Bill-based picking: the same day as finished grabs, items/hr = items / 9.
+    if e.staff_type == "picker":
+        add_picks(e.id, d, items, hours=9.0, on_time=good)
 
 
 with app.app_context():

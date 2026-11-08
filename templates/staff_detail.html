@@ -329,7 +329,7 @@ body { display: grid; grid-template-columns: 236px minmax(0, 1fr); min-height: 1
     </div>
     {% endif %}
     <div class="sc-card accent-gold">
-      <div class="sc-label">{{ emp.staff_type|title }} Rank</div>
+      <div class="sc-label">{{ emp.staff_type|replace('_',' ')|title }} Rank</div>
       <div class="sc-value">#{{ emp_role_rank or '—' }}</div>
       <div class="sc-sub">Among all {{ emp.staff_type }}s</div>
     </div>
@@ -434,9 +434,9 @@ body { display: grid; grid-template-columns: 236px minmax(0, 1fr); min-height: 1
     <!-- LEADERBOARD -->
     <section class="card">
       <div class="card-title"><span class="ico">▸</span>Leaderboard</div>
-      <div class="card-sub">See where this staff stands — {{ emp.staff_type|title }} rankings and overall.</div>
+      <div class="card-sub">See where this staff stands — {{ emp.staff_type|replace('_',' ')|title }} rankings and overall.</div>
       <div class="lb-tabs" role="tablist">
-        <button class="lb-tab active" data-target="lb-role" type="button">{{ emp.staff_type|title }}s Only</button>
+        <button class="lb-tab active" data-target="lb-role" type="button">{{ emp.staff_type|replace('_',' ')|title }}s Only</button>
         <button class="lb-tab" data-target="lb-overall" type="button">All Staff</button>
       </div>
       <div id="lb-role" class="lb-panel">
@@ -461,7 +461,7 @@ body { display: grid; grid-template-columns: 236px minmax(0, 1fr); min-height: 1
             {% for r in overall_leaderboard %}
             <div class="lb-row {% if r.is_self %}self{% endif %} {% if r.rank == 1 %}top1{% elif r.rank == 2 %}top2{% elif r.rank == 3 %}top3{% endif %}">
               <div class="lb-rank">{{ r.rank }}</div>
-              <div class="lb-name">{{ r.name }}<span class="role">· {{ r.staff_type|title }}</span>{% if r.is_self %} <span class="lb-self-marker">You</span>{% endif %}</div>
+              <div class="lb-name">{{ r.name }}<span class="role">· {{ r.staff_type|replace('_',' ')|title }}</span>{% if r.is_self %} <span class="lb-self-marker">You</span>{% endif %}</div>
               <div class="lb-grade g-{{ r.grade }}">{{ r.grade }}</div>
               <div class="lb-score">{{ r.score }}</div>
             </div>
@@ -1061,7 +1061,7 @@ body { display: grid; grid-template-columns: 236px minmax(0, 1fr); min-height: 1
   {% if a_stats %}
   <section class="card" style="margin-top:20px;">
     <div class="card-title"><span class="ico">▸</span>How Points Are Calculated</div>
-    <div class="card-sub">Formula reference for {{ emp.staff_type|title }} role.</div>
+    <div class="card-sub">Formula reference for {{ emp.staff_type|replace('_',' ')|title }} role.</div>
     <div class="formula-grid">
       {% if emp.staff_type == 'purchaser' %}
       <div class="formula-row"><b>Bill Rate</b> = PO Checked ÷ PO Received × 100</div>

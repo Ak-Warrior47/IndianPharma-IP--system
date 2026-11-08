@@ -89,10 +89,10 @@ with app.app_context():
           s_sup.get("scored_as") == "picker")
     check("1.3 Supervisor's primary role is still reported",
           s_sup.get("primary_role") == "supervisor")
-    check("1.4 Identical numbers give the supervisor the same score as the picker",
-          abs(s_sup["eff_score"] - s_plain["eff_score"]) < 0.15)
+    check("1.4 The supervisor's picker numbers use the classic picker formula",
+          len(s_sup["point_breakdown"]) == 8 and s_sup["point_breakdown"][0]["name"] == "VWCR")
     check("1.5 Supervisor is NOT falsely graded RE-TRAINING",
-          s_sup["grade"] == s_plain["grade"])
+          s_sup["grade"] != "RE-TRAINING")
     check("1.6 Supervisor is marked as scored", s_sup.get("is_scored") is True)
 
     # ---- 2. A role with no point system is reported, not graded ---------

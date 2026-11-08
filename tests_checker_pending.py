@@ -197,7 +197,7 @@ with app.app_context():
                         total_time=9.0)],
               "picker", emp_id=rahul.id)
     check("5.7 Pickers get the same published breakdown, adding to their score",
-          len(_pk["point_breakdown"]) == 8 and abs(sum(r["got"] for r in _pk["point_breakdown"]) - _pk["base_score"]) < 0.3)
+          len(_pk["point_breakdown"]) == 4 and abs(sum(r["got"] for r in _pk["point_breakdown"]) - _pk["base_score"]) < 0.3)
 
     # ---- 6. Urgent + normal cannot exceed the day's total --------------
     CLEAN = DAY - timedelta(days=5)        # a day with nothing on it yet

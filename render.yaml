@@ -123,6 +123,8 @@ services:
       # Raise it if urgent work is being avoided; 1.0 switches the weighting off.
       - key: URGENT_BILL_WEIGHT
         value: "1.5"
+      - key: PICK_SECONDS_PER_ITEM
+        value: "100"
 
       # ---- Privacy -------------------------------------------------------
       # Location is the most sensitive data this app holds. Points are recorded

@@ -25,7 +25,7 @@
     <form method="POST" action="{{ url_for('switch_role') }}" style="margin:0;">
 <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
       <input type="hidden" name="role" value="{{ secondary_staff_type }}">
-      <button type="submit" class="ip-btn">Work as {{ secondary_staff_type|title }}</button>
+      <button type="submit" class="ip-btn">Work as {{ secondary_staff_type|replace('_',' ')|title }}</button>
     </form>
     {% elif secondary_staff_type == 'supervisor' and not is_admin %}
     <a href="{{ url_for('dashboard') }}" class="ip-btn ip-btn--ghost">My Dashboard</a>

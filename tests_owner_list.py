@@ -13,7 +13,7 @@ sys.path.insert(0, REPO)
 
 import app as A  # noqa: E402
 from app import app, db, Employee, KPIEntry, MultitaskEntry, PastEntryWindow  # noqa: E402
-from tests_helper import csrf_client  # noqa: E402
+from tests_helper import csrf_client, add_picks  # noqa: E402
 from sqlalchemy import event  # noqa: E402
 
 app.config["TESTING"] = True
@@ -65,6 +65,9 @@ with app.app_context():
                                   bills_received=200, sales_bills_open=4))
     db.session.add(MultitaskEntry(emp_id=pk.id, entry_date=DAYS[0], secondary_type="delivery", quantity=6))
     db.session.commit()
+    # Bill-based picking: the same days as finished grabs (about 17 items/hr).
+    for i, d in enumerate(DAYS):
+        add_picks(pk.id, d, 150 + i, hours=9.0)
     CHK, PK = chk.id, pk.id
 
     # ---- 1. Checker's best day --------------------------------------------

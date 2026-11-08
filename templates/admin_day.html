@@ -74,7 +74,7 @@
         {% for r in rows %}
           <tr>
             <td><a href="{{ url_for('staff_detail', emp_id=r.emp.id) }}">{{ r.emp.name }}</a></td>
-            <td class="nowrap">{{ r.emp.staff_type|title }}</td>
+            <td class="nowrap">{{ r.emp.staff_type|replace('_',' ')|title }}</td>
             <td><div class="dv-figs">{% for k, v in r.figs %}<span>{{ k }} <b>{{ v }}</b></span>{% endfor %}</div></td>
             <td class="num">{{ r.score if r.score is not none else '—' }}</td>
             <td class="nowrap">{% if r.grade %}<span class="ip-pill ip-pill--muted">{{ r.grade }}</span>{% endif %}</td>
@@ -98,7 +98,7 @@
         <tbody>
         {% for m, emp in mts %}
           <tr><td class="nowrap">{{ role_label(m.secondary_type) }}</td>
-              <td>{{ emp.name }} <span class="ip-small ip-muted">({{ emp.staff_type|title }})</span></td>
+              <td>{{ emp.name }} <span class="ip-small ip-muted">({{ emp.staff_type|replace('_',' ')|title }})</span></td>
               <td class="ip-small">{{ m.summary }}</td></tr>
         {% endfor %}
         </tbody>

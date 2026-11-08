@@ -96,7 +96,7 @@
               <tr>
                 <td class="nowrap"><strong>{{ r.emp.name }}</strong>
                   {% if r.emp.secondary_staff_type %}
-                  <div class="ip-muted" style="font-size:var(--fs-micro);">also {{ r.emp.secondary_staff_type|title }}</div>
+                  <div class="ip-muted" style="font-size:var(--fs-micro);">also {{ r.emp.secondary_staff_type|replace('_',' ')|title }}</div>
                   {% endif %}
                 </td>
                 <td class="nowrap">

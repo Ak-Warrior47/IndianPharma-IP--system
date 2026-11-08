@@ -93,7 +93,7 @@ client.post("/dashboard", data={
     "rack_organized": "5", "table_clean": "1", "sweep_done": "1"}, follow_redirects=True)
 with app.app_context():
     e = KPIEntry.query.filter_by(emp_id=IDS["r_pick@x.com"], entry_date=date.today()).first()
-check("2.1 Picker KPI saved", e is not None and e.picked == 140)
+check("2.1 Picker daily totals are refused: picking is recorded bill by bill", e is None)
 
 login("r_chk@x.com")
 client.post("/dashboard", data={

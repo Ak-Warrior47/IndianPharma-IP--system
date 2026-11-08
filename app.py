@@ -3,6 +3,7 @@ eventlet.monkey_patch()
 
 import os
 import logging
+import math
 import io
 import csv
 import json
@@ -96,7 +97,16 @@ socketio = SocketIO(app, cors_allowed_origins="*", async_mode="eventlet")
 # ─── ROLES ───────────────────────────────────────────────────────────────────
 # "biller" is internally kept but displayed as "Assigner". "supervisor" is a
 # hidden role (admin-assigned only, never on the login screen).
-VALID_STAFF_TYPES = ("picker", "checker", "purchaser", "delivery", "biller", "packer", "supervisor")
+VALID_STAFF_TYPES = ("picker", "checker", "purchaser", "delivery", "biller", "packer", "supervisor",
+                     "pick_assigner")
+
+# ─── Bill-based picking ─────────────────────────────────────────────────────
+# A Pick Assigner adds each bill as it is made (bill number + items). Free
+# pickers grab items from it; several pickers share one bill. Every grab gets
+# a timer of items x PICK_SECONDS_PER_ITEM. Done on time earns +1 per item;
+# late costs -1 per started minute over, never more than PICK_LATE_CAP.
+PICK_SECONDS_PER_ITEM = max(10, int(os.environ.get("PICK_SECONDS_PER_ITEM", "100")))
+PICK_LATE_CAP = 5
 
 # Hourly volume targets used by the scoring formulas. Set them to what this
 # warehouse can actually reach: a target nobody attains makes those points dead
@@ -203,6 +213,7 @@ ROLE_DISPLAY_NAMES = {
     "biller": "Assigner",
     "packer": "Packer",
     "supervisor": "Supervisor",
+    "pick_assigner": "Pick Assigner",
 }
 # Recommended Cuttack delivery areas (from the delivery-CRM Excel) + packet types
 KNOWN_ROUTES = [
@@ -772,6 +783,33 @@ class Notification(db.Model):
     link       = db.Column(db.String(200), nullable=True)
     is_read    = db.Column(db.Boolean, default=False, index=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+
+class PickBill(db.Model):
+    """A bill added by the Pick Assigner for pickers to pick."""
+    __tablename__ = "pick_bills"
+    id           = db.Column(db.Integer, primary_key=True)
+    bill_no      = db.Column(db.String(40), nullable=False)
+    items        = db.Column(db.Integer, nullable=False)
+    created_by   = db.Column(db.Integer, db.ForeignKey("employees.id", ondelete="SET NULL"), nullable=True)
+    created_at   = db.Column(db.DateTime, default=datetime.utcnow, index=True)
+    completed_at = db.Column(db.DateTime, nullable=True)
+    status       = db.Column(db.String(12), default="open", index=True)   # open / done / cancelled
+
+
+class PickClaim(db.Model):
+    """Items of one bill grabbed by one picker, with its own timer."""
+    __tablename__ = "pick_claims"
+    id         = db.Column(db.Integer, primary_key=True)
+    bill_id    = db.Column(db.Integer, db.ForeignKey("pick_bills.id", ondelete="CASCADE"), nullable=False, index=True)
+    picker_id  = db.Column(db.Integer, db.ForeignKey("employees.id", ondelete="CASCADE"), nullable=False, index=True)
+    items      = db.Column(db.Integer, nullable=False)
+    started_at = db.Column(db.DateTime, default=datetime.utcnow)
+    due_at     = db.Column(db.DateTime, nullable=False)
+    done_at    = db.Column(db.DateTime, nullable=True)
+    work_date  = db.Column(db.Date, nullable=True, index=True)   # local day the grab was finished
+    status     = db.Column(db.String(12), default="active", index=True)  # active / done / cancelled
+    points     = db.Column(db.Integer, default=0)
 
 
 class ChecklistTemplate(db.Model):
@@ -1394,7 +1432,8 @@ LEVEL_MIN_DAYS = {"day": 1, "week": 3, "month": 10}      # working days needed i
 def _level_day_value(role, e):
     """The day's figure for this role, from one KPI entry."""
     if role == "picker":
-        return round(((e.picked or 0) + (e.missed or 0)) / 9.0, 1)
+        # Bill-based picking: items per hour actually spent picking.
+        return float(picker_pick_stats(e.emp_id, [e.entry_date])["daily_rate"].get(e.entry_date, 0.0))
     if role == "checker":
         return round(((e.checked or 0) + (e.errors_found or 0) * URGENT_BILL_WEIGHT) / 9.0, 1)
     if role == "purchaser":
@@ -1829,6 +1868,233 @@ def get_complaint_deduction(staff_type: str, emp_id: int = None) -> float:
     except Exception:
         return 0.0
 
+# ─── Bill-based picking: the rules ───────────────────────────────────────────
+class PickError(Exception):
+    """A picking action that cannot be done; the message is shown to the user."""
+
+
+def pick_points(items, due_at, done_at):
+    """+1 per item when done on time; late: -1 per started minute over, capped."""
+    if done_at <= due_at:
+        return int(items)
+    late_min = math.ceil((done_at - due_at).total_seconds() / 60.0)
+    return -min(PICK_LATE_CAP, max(1, late_min))
+
+
+def pick_bill_progress(bill):
+    """{"done", "active", "left", "pickers"} for one bill."""
+    claims = PickClaim.query.filter(PickClaim.bill_id == bill.id, PickClaim.status != "cancelled").all()
+    done = sum(c.items for c in claims if c.status == "done")
+    active = sum(c.items for c in claims if c.status == "active")
+    return {"done": done, "active": active, "left": max(int(bill.items) - done - active, 0),
+            "pickers": sorted({c.picker_id for c in claims})}
+
+
+def active_claim_for(picker_id):
+    return PickClaim.query.filter_by(picker_id=picker_id, status="active").first()
+
+
+def free_pickers():
+    """Pickers with no grab in progress right now."""
+    busy = {c.picker_id for c in PickClaim.query.filter_by(status="active").all()}
+    return [e for e in Employee.query.filter(Employee.staff_type == "picker").order_by(Employee.name).all()
+            if not e.is_admin and e.id not in busy]
+
+
+def add_pick_bill(bill_no, items, created_by):
+    bill_no = (bill_no or "").strip()[:40]
+    try:
+        items = int(items)
+    except (TypeError, ValueError):
+        items = 0
+    if not bill_no:
+        raise PickError("Enter the bill number.")
+    if items < 1 or items > 500:
+        raise PickError("Items must be between 1 and 500.")
+    if PickBill.query.filter_by(bill_no=bill_no, status="open").first():
+        raise PickError("Bill %s is already open." % bill_no)
+    bill = PickBill(bill_no=bill_no, items=items, created_by=created_by)
+    db.session.add(bill)
+    db.session.commit()
+    for p in free_pickers():
+        notify_employee(p.id, "New bill %s" % bill_no, "%d items to pick" % items,
+                        link="/dashboard", sms=False)
+    return bill
+
+
+def claim_items(picker_id, bill_id, n, now=None):
+    """Picker grabs n items of a bill. One grab at a time per picker."""
+    now = now or datetime.utcnow()
+    try:
+        n = int(n)
+    except (TypeError, ValueError):
+        n = 0
+    if n < 1:
+        raise PickError("Choose at least 1 item.")
+    if active_claim_for(picker_id):
+        raise PickError("Finish your current items first.")
+    # Lock the bill row so two pickers cannot take the same last items.
+    bill = db.session.query(PickBill).filter_by(id=bill_id).with_for_update().first()
+    if not bill or bill.status != "open":
+        db.session.rollback()
+        raise PickError("That bill is no longer open.")
+    left = pick_bill_progress(bill)["left"]
+    if n > left:
+        db.session.rollback()
+        raise PickError("Only %d item%s left on bill %s." % (left, "" if left == 1 else "s", bill.bill_no))
+    c = PickClaim(bill_id=bill.id, picker_id=picker_id, items=n, started_at=now,
+                  due_at=now + timedelta(seconds=n * PICK_SECONDS_PER_ITEM))
+    db.session.add(c)
+    db.session.commit()
+    return c
+
+
+def finish_claim(picker_id, claim_id, now=None, day=None):
+    """Picker marks a grab done. Returns (claim, bill_completed)."""
+    now = now or datetime.utcnow()
+    c = db.session.get(PickClaim, claim_id)
+    if not c or c.picker_id != picker_id or c.status != "active":
+        raise PickError("Nothing to finish.")
+    c.done_at = now
+    c.status = "done"
+    c.work_date = day or date.today()
+    c.points = pick_points(c.items, c.due_at, now)
+    bill = db.session.get(PickBill, c.bill_id)
+    db.session.flush()
+    completed = False
+    if bill and bill.status == "open":
+        prog = pick_bill_progress(bill)
+        if prog["done"] >= bill.items:
+            bill.status, bill.completed_at, completed = "done", now, True
+    db.session.commit()
+    sync_picker_day(picker_id, c.work_date)
+    return c, completed
+
+
+def release_claim(claim_id):
+    """Assigner frees a stuck grab; its items go back on the bill."""
+    c = db.session.get(PickClaim, claim_id)
+    if not c or c.status != "active":
+        raise PickError("That grab is not in progress.")
+    c.status = "cancelled"
+    db.session.commit()
+
+
+def cancel_pick_bill(bill_id):
+    bill = db.session.get(PickBill, bill_id)
+    if not bill or bill.status != "open":
+        raise PickError("That bill is not open.")
+    bill.status = "cancelled"
+    for c in PickClaim.query.filter_by(bill_id=bill.id, status="active").all():
+        c.status = "cancelled"
+    db.session.commit()
+
+
+def picker_pick_stats(emp_id, dates):
+    """Finished grabs on these days: items, grabs, on-time, points, hours,
+    and items/hr per day. The basis of the picker score."""
+    dates = [d for d in dates if d]
+    out = {"items": 0, "grabs": 0, "on_time": 0, "points": 0, "seconds": 0.0, "bills": 0,
+           "daily_rate": {}, "daily_items": {}}
+    if emp_id is None or not dates:
+        return out
+    claims = PickClaim.query.filter(PickClaim.picker_id == emp_id, PickClaim.status == "done",
+                                    PickClaim.work_date.in_(dates)).all()
+    per_day = {}
+    bills = set()
+    for c in claims:
+        secs = max((c.done_at - c.started_at).total_seconds(), 1.0) if c.done_at and c.started_at else 1.0
+        out["items"] += c.items
+        out["grabs"] += 1
+        out["on_time"] += 1 if c.done_at <= c.due_at else 0
+        out["points"] += int(c.points or 0)
+        out["seconds"] += secs
+        bills.add(c.bill_id)
+        d = per_day.setdefault(c.work_date, [0, 0.0])
+        d[0] += c.items
+        d[1] += secs
+    out["bills"] = len(bills)
+    for d, (it, secs) in per_day.items():
+        out["daily_items"][d] = it
+        out["daily_rate"][d] = round(it / (secs / 3600.0), 1)
+    return out
+
+
+def sync_picker_day(emp_id, d):
+    """Keep one KPIEntry per picker per day in step with their finished grabs,
+    so leaderboards, reports, history and level-ups keep working unchanged."""
+    st = picker_pick_stats(emp_id, [d])
+    e = KPIEntry.query.filter_by(emp_id=emp_id, entry_date=d).first()
+    if not e:
+        if not st["grabs"]:
+            return None
+        e = KPIEntry(emp_id=emp_id, entry_date=d, total_time=9.0)
+        db.session.add(e)
+    e.picked = st["items"]
+    e.missed = 0
+    e.sales_bills_open = st["bills"]
+    e.total_bills_received = st["bills"]
+    e.total_time = 9.0
+    db.session.commit()
+    try:
+        emp = db.session.get(Employee, emp_id)
+        if emp:
+            evaluate_levels(emp, day=d)
+    except Exception as exc:
+        logger.error("sync_picker_day levels: %s", exc)
+    return e
+
+
+def picking_state(emp, staff_type):
+    """Everything the picking screens show, as plain JSON-able data."""
+    now = datetime.utcnow()
+    today = date.today()
+    bills = (PickBill.query.filter(or_(PickBill.status == "open",
+                                       PickBill.created_at >= datetime.combine(today, datetime.min.time())))
+             .order_by(PickBill.created_at.desc()).limit(60).all())
+    names = {e.id: e.name for e in Employee.query.all()}
+    def bill_row(b):
+        pr = pick_bill_progress(b)
+        mins = None
+        if b.completed_at and b.created_at:
+            mins = round((b.completed_at - b.created_at).total_seconds() / 60.0, 1)
+        return {"id": b.id, "bill_no": b.bill_no, "items": b.items, "status": b.status,
+                "done": pr["done"], "active": pr["active"], "left": pr["left"],
+                "pickers": [names.get(i, "#%d" % i) for i in pr["pickers"]],
+                "minutes": mins, "added": b.created_at.strftime("%H:%M") if b.created_at else ""}
+    out = {"seconds_per_item": PICK_SECONDS_PER_ITEM, "late_cap": PICK_LATE_CAP,
+           "bills": [bill_row(b) for b in bills]}
+    if staff_type == "picker":
+        c = active_claim_for(emp.id)
+        if c:
+            b = db.session.get(PickBill, c.bill_id)
+            out["mine"] = {"id": c.id, "bill_no": b.bill_no if b else "", "items": c.items,
+                           "seconds_left": int((c.due_at - now).total_seconds()),
+                           "seconds_total": c.items * PICK_SECONDS_PER_ITEM}
+        st = picker_pick_stats(emp.id, [today])
+        out["today"] = {"items": st["items"], "grabs": st["grabs"], "points": st["points"],
+                        "on_time_pct": round(100.0 * st["on_time"] / st["grabs"], 1) if st["grabs"] else None,
+                        "rate": st["daily_rate"].get(today)}
+    else:
+        active = {c.picker_id: c for c in PickClaim.query.filter_by(status="active").all()}
+        rows = []
+        for e in Employee.query.filter(Employee.staff_type == "picker").order_by(Employee.name).all():
+            if e.is_admin:
+                continue
+            c = active.get(e.id)
+            r = {"id": e.id, "name": e.name, "free": c is None}
+            if c:
+                b = db.session.get(PickBill, c.bill_id)
+                r.update({"claim_id": c.id, "bill_no": b.bill_no if b else "", "items": c.items,
+                          "seconds_left": int((c.due_at - now).total_seconds())})
+            st = picker_pick_stats(e.id, [today])
+            r["today_items"] = st["items"]
+            r["today_points"] = st["points"]
+            rows.append(r)
+        out["pickers"] = rows
+    return out
+
+
 def build_analytics(entries: List[KPIEntry], staff_type: str = "picker", emp_id: int = None) -> Optional[Dict[str, Any]]:
     try:
         if not entries: return None
@@ -2114,6 +2380,7 @@ def build_analytics(entries: List[KPIEntry], staff_type: str = "picker", emp_id:
             workspace_score = workspace_score_checker
 
         point_breakdown = []   # filled per role where the arithmetic is published
+        pick_stats = None      # bill-based picking figures (pickers only)
         if staff_type == "purchaser":
             # Purchaser params using DB fields:
             # sales_bills_open = Total PO Bills Received
@@ -2161,8 +2428,38 @@ def build_analytics(entries: List[KPIEntry], staff_type: str = "picker", emp_id:
             eff_score = round(sum(c[2] for c in _pc), 1)
             point_breakdown = [{"name": n, "max": m, "got": round(g, 1), "how": h} for n, m, g, h in _pc]
 
+        elif staff_type == "picker" and primary_role == "picker":
+            # ── PICKER: BILL-BASED PICKING (100 pts) ──
+            # Scored from finished grabs, not typed totals:
+            #   On time 40 · Speed 30 · Volume 20 · Consistency 10
+            _ps = picker_pick_stats(emp_id, [e.entry_date for e in entries])
+            pick_ontime_pct = round(100.0 * _ps["on_time"] / _ps["grabs"], 1) if _ps["grabs"] else 0.0
+            pick_rate = round(_ps["items"] / (_ps["seconds"] / 3600.0), 1) if _ps["seconds"] else 0.0
+            pick_items_day = round(_ps["items"] / max(days, 1), 1)
+            _rates = list(_ps["daily_rate"].values())
+            if len(_rates) > 1:
+                _m = sum(_rates) / len(_rates)
+                _sd = (sum((r - _m) ** 2 for r in _rates) / len(_rates)) ** 0.5
+                pick_consistency = round(max(0.0, 100.0 - (_sd / max(_m, 1)) * 100), 1)
+            else:
+                pick_consistency = 100.0 if _rates else 0.0
+            pick_stats = dict(_ps, on_time_pct=pick_ontime_pct, rate=pick_rate,
+                              items_per_day=pick_items_day, consistency=pick_consistency)
+            _pc = [
+                ("On time", 40, (pick_ontime_pct / 100) * 40,
+                 "%d of %d grabs done within the timer (%.1f%%)" % (_ps["on_time"], _ps["grabs"], pick_ontime_pct)),
+                ("Pick speed", 30, min(pick_rate / PICKER_TARGET_HR, 1.0) * 30,
+                 "%.1f items/hr while picking, against %.0f" % (pick_rate, PICKER_TARGET_HR)),
+                ("Volume", 20, min(pick_items_day / HARD_ITEMS_PER_DAY, 1.0) * 20,
+                 "%.1f items a day, against %d" % (pick_items_day, HARD_ITEMS_PER_DAY)),
+                ("Consistency", 10, (pick_consistency / 100) * 10,
+                 "%.1f%% — steadiness of the daily pick rate" % pick_consistency),
+            ]
+            eff_score = round(sum(c[2] for c in _pc), 1)
+            point_breakdown = [{"name": n, "max": m, "got": round(g, 1), "how": h} for n, m, g, h in _pc]
         elif staff_type == "picker":
             # ── PICKER POINT SYSTEM (100 pts total) — Phase 1 rebalance ──
+            # Still used when picker is someone's second role (multitask).
             # OLD: Acc×25 + Fulfil×20 + Speed×18 + PackEff×12 + Workspace×10 + CS×8 + Consistency×7
             # NEW: VWCR×25 + Fulfil×18 + Speed×15 + EffRatio×10 + Workspace×10
             #    + CS×8 + Cleaner×7 + LogCons×7
@@ -2325,7 +2622,9 @@ def build_analytics(entries: List[KPIEntry], staff_type: str = "picker", emp_id:
         auto_suggest = None
         target_suggestion = None
         if is_scored and staff_type in ("picker", "checker") and days >= 5:
-            if staff_type == "picker":
+            if staff_type == "picker" and pick_stats is not None:
+                _rates = list(pick_stats["daily_rate"].values())
+            elif staff_type == "picker":
                 _rates = [((e.picked or 0) + (e.missed or 0)) / FIXED_HRS for e in entries]
             else:
                 _rates = [((e.checked or 0) + (e.errors_found or 0) * urgent_weight) / FIXED_HRS
@@ -2408,6 +2707,7 @@ def build_analytics(entries: List[KPIEntry], staff_type: str = "picker", emp_id:
             urgent_bill_bonus=urgent_bill_bonus,
             check_speed_weighted=check_speed_weighted,
             point_breakdown=point_breakdown,
+            pick_stats=pick_stats,
             tbr_picker=tbr_picker, bill_fulfilment=bill_fulfilment,
             pur_bills_received=pur_bills_received if staff_type=="purchaser" else 0,
             pur_pending_bills=pur_pending_bills if staff_type=="purchaser" else 0,
@@ -4022,6 +4322,11 @@ def dashboard():
                 flash("Error saving multitask report.", "danger")
             return redirect(url_for("dashboard"))
 
+        # Pickers no longer type daily totals: their work is recorded bill by
+        # bill as they finish grabs. The Pick Assigner has no daily form.
+        if request.method == "POST" and staff_type in ("picker", "pick_assigner"):
+            flash("Picking is recorded live, bill by bill. There is no daily form to submit.", "info")
+            return redirect(url_for("dashboard"))
         if request.method == "POST" and not today_entry:
             is_sunday = today.weekday() == 6
             emp = db.session.get(Employee, emp_id)
@@ -4990,6 +5295,8 @@ def admin_delete_user(emp_id):
             PersonalRecord.query.filter_by(emp_id=emp_id).delete(synchronize_session=False)
             LevelEvent.query.filter_by(emp_id=emp_id).delete(synchronize_session=False)
             Notification.query.filter_by(emp_id=emp_id).delete(synchronize_session=False)
+            PickClaim.query.filter_by(picker_id=emp_id).delete(synchronize_session=False)
+            PickBill.query.filter_by(created_by=emp_id).update({"created_by": None}, synchronize_session=False)
             SupervisorBill.query.filter(
                 (SupervisorBill.staff_id == emp_id) |
                 (SupervisorBill.supervisor_id == emp_id)
@@ -5293,6 +5600,10 @@ def past_entry(date_str):
 
     if past_date >= today:
         flash("You can only submit data for past dates.", "warning")
+        return redirect(url_for("dashboard"))
+
+    if staff_type in ("picker", "pick_assigner"):
+        flash("Picking is recorded live, bill by bill, so there is nothing to enter for a past date.", "info")
         return redirect(url_for("dashboard"))
 
     window = PastEntryWindow.query.filter_by(past_date=past_date, is_active=True).first()
@@ -7653,6 +7964,102 @@ def delivery_log_stop(stop_id):
         db.session.rollback()
         logger.error(f"delivery_log_stop: {e}")
         return jsonify({"ok": False, "error": "Server error"}), 500
+
+
+# ─── Bill-based picking: routes ─────────────────────────────────────────────
+def _pick_role():
+    return session.get("staff_type", ""), bool(session.get("is_admin"))
+
+
+def _pick_reply(ok, msg, code=200):
+    """JSON for the live screens; a flash and redirect for plain form posts."""
+    if request.is_json or request.headers.get("X-Requested-With") == "fetch":
+        return jsonify({"ok": ok, "message": msg}), (200 if ok else code)
+    flash(msg, "success" if ok else "warning")
+    return redirect(url_for("dashboard"))
+
+
+@app.route("/pick/state.json")
+@login_required
+def pick_state():
+    role, is_admin = _pick_role()
+    if role not in ("picker", "pick_assigner") and not is_admin:
+        return jsonify({"ok": False, "message": "Not available for your role."}), 403
+    emp = db.session.get(Employee, session.get("user_id"))
+    return jsonify(picking_state(emp, "picker" if role == "picker" else "pick_assigner"))
+
+
+@app.route("/pick/bill", methods=["POST"])
+@login_required
+def pick_add_bill():
+    role, is_admin = _pick_role()
+    if role != "pick_assigner" and not is_admin:
+        return _pick_reply(False, "Only the Pick Assigner can add bills.", 403)
+    data = request.get_json(silent=True) or request.form
+    try:
+        b = add_pick_bill(data.get("bill_no"), data.get("items"), session.get("user_id"))
+    except PickError as exc:
+        return _pick_reply(False, str(exc), 400)
+    return _pick_reply(True, "Bill %s added: %d items. Free pickers notified." % (b.bill_no, b.items))
+
+
+@app.route("/pick/claim", methods=["POST"])
+@login_required
+def pick_claim():
+    role, _ = _pick_role()
+    if role != "picker":
+        return _pick_reply(False, "Only pickers can take items.", 403)
+    data = request.get_json(silent=True) or request.form
+    try:
+        c = claim_items(session.get("user_id"), int(data.get("bill_id") or 0), data.get("items"))
+    except (PickError, ValueError) as exc:
+        return _pick_reply(False, str(exc) if isinstance(exc, PickError) else "Choose a bill.", 400)
+    mins = c.items * PICK_SECONDS_PER_ITEM / 60.0
+    return _pick_reply(True, "%d item%s taken. You have %s minutes." % (
+        c.items, "" if c.items == 1 else "s", ("%g" % round(mins, 1))))
+
+
+@app.route("/pick/done", methods=["POST"])
+@login_required
+def pick_done():
+    role, _ = _pick_role()
+    if role != "picker":
+        return _pick_reply(False, "Only pickers can finish items.", 403)
+    data = request.get_json(silent=True) or request.form
+    try:
+        c, completed = finish_claim(session.get("user_id"), int(data.get("claim_id") or 0))
+    except (PickError, ValueError) as exc:
+        return _pick_reply(False, str(exc) if isinstance(exc, PickError) else "Nothing to finish.", 400)
+    msg = ("On time: +%d points." % c.points) if c.points > 0 else ("Late: %d points." % c.points)
+    if completed:
+        msg += " Bill complete."
+    return _pick_reply(True, msg)
+
+
+@app.route("/pick/bill/<int:bill_id>/cancel", methods=["POST"])
+@login_required
+def pick_cancel_bill(bill_id):
+    role, is_admin = _pick_role()
+    if role != "pick_assigner" and not is_admin:
+        return _pick_reply(False, "Only the Pick Assigner can cancel bills.", 403)
+    try:
+        cancel_pick_bill(bill_id)
+    except PickError as exc:
+        return _pick_reply(False, str(exc), 400)
+    return _pick_reply(True, "Bill cancelled.")
+
+
+@app.route("/pick/claim/<int:claim_id>/release", methods=["POST"])
+@login_required
+def pick_release_claim(claim_id):
+    role, is_admin = _pick_role()
+    if role != "pick_assigner" and not is_admin:
+        return _pick_reply(False, "Only the Pick Assigner can release items.", 403)
+    try:
+        release_claim(claim_id)
+    except PickError as exc:
+        return _pick_reply(False, str(exc), 400)
+    return _pick_reply(True, "Items released back to the bill.")
 
 
 @app.route("/notifications")
