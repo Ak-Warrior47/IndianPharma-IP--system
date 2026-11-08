@@ -70,6 +70,7 @@ with app.app_context():
     asg = mk("pk_asg@x.com", "pick_assigner")
     p1, p2, p3, p4 = (mk(e, "picker") for e in EMAILS[1:])
     ids = {"p1": p1.id, "p2": p2.id, "p3": p3.id, "p4": p4.id}
+    ASG_ID = asg.id
     # other pickers left in the shared test database must not be "busy" here
     others = [e.id for e in Employee.query.filter(Employee.staff_type == "picker").all() if e.id not in ids.values()]
 
@@ -209,6 +210,34 @@ with app.app_context():
 # ---- 7. Old screens are closed for pickers ---------------------------------------
 r = c1.get("/past_entry/%s" % (date.today() - timedelta(days=1)).isoformat(), follow_redirects=True)
 check("7.1 Past-date entry is closed for pickers", b"recorded live" in r.data)
+
+# ---- 7b. The assigner is alerted when a picker runs late -------------------
+with app.app_context():
+    Notification.query.filter_by(emp_id=ASG_ID).delete()
+    db.session.add(PickBill(bill_no="L1", items=5))
+    db.session.commit()
+    lb = PickBill.query.filter_by(bill_no="L1").first()
+    LB_ID = lb.id
+    t0 = datetime.utcnow() - timedelta(minutes=20)
+    lc = A.claim_items(ids["p3"], lb.id, 3, now=t0)          # timer ran out ~15 min ago
+    ok_c = A.claim_items(ids["p4"], lb.id, 1)               # still within its timer
+    n = A.alert_late_picks()
+    msgs = Notification.query.filter_by(emp_id=ASG_ID).all()
+    check("7b.1 The assigner is told who is late, on which bill",
+          n == 1 and len(msgs) == 1 and "PK P3 is late on bill L1" in msgs[0].title, str([m.title for m in msgs]))
+    check("7b.2 A picker still within the timer is not reported",
+          not any("P4" in m.title for m in msgs))
+    check("7b.3 Each late grab alerts only once", A.alert_late_picks() == 0
+          and Notification.query.filter_by(emp_id=ASG_ID).count() == 1)
+s_late = ca.get("/pick/state.json").get_json()
+row = next((r for r in s_late["pickers"] if r["id"] == ids["p3"]), {})
+check("7b.4 The assigner's screen lists the late picker with how late",
+      row.get("late_by", 0) > 600 and "late_by" not in next(r for r in s_late["pickers"] if r["id"] == ids["p4"]))
+check("7b.5 The screen has the red running-late box", 'id="pkLate"' in ca.get("/dashboard").data.decode())
+with app.app_context():
+    for cl in PickClaim.query.filter_by(bill_id=LB_ID).all():
+        cl.status = "cancelled"
+    db.session.commit()
 
 # ---- 8. Trial copy: test accounts and banner, never on the live database -----
 TRIAL = ["ravi@pharmaip.com", "lisa@pharmaip.com", "smriti@pharmaip.com", "deepti@pharmaip.com",

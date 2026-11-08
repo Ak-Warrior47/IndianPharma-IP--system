@@ -810,6 +810,7 @@ class PickClaim(db.Model):
     work_date  = db.Column(db.Date, nullable=True, index=True)   # local day the grab was finished
     status     = db.Column(db.String(12), default="active", index=True)  # active / done / cancelled
     points     = db.Column(db.Integer, default=0)
+    late_alerted = db.Column(db.Boolean, default=False)   # assigner told it ran late
 
 
 class ChecklistTemplate(db.Model):
@@ -2045,10 +2046,45 @@ def sync_picker_day(emp_id, d):
     return e
 
 
+def alert_late_picks(now=None):
+    """Tell every Pick Assigner, once, about each grab that has run past its
+    timer and is still not done. Runs on every screen refresh and once a
+    minute in the background. Returns how many grabs were reported."""
+    now = now or datetime.utcnow()
+    try:
+        late = PickClaim.query.filter(PickClaim.status == "active", PickClaim.due_at < now,
+                                      or_(PickClaim.late_alerted.is_(None), PickClaim.late_alerted.is_(False))).all()
+        if not late:
+            return 0
+        assigners = [e for e in Employee.query.filter(Employee.staff_type == "pick_assigner").all()]
+        for c in late:
+            c.late_alerted = True
+        db.session.commit()
+        for c in late:
+            who = db.session.get(Employee, c.picker_id)
+            bill = db.session.get(PickBill, c.bill_id)
+            title = "%s is late on bill %s" % (who.name if who else "A picker", bill.bill_no if bill else "?")
+            body = "%d item%s, timer ran out at %s." % (c.items, "" if c.items == 1 else "s",
+                                                       (c.due_at + timedelta(hours=5, minutes=30)).strftime("%H:%M"))
+            for a in assigners:
+                notify_employee(a.id, title, body, link="/dashboard", sms=False)
+        return len(late)
+    except Exception as exc:
+        db.session.rollback()
+        logger.error("alert_late_picks: %s", exc)
+        return 0
+
+
+def run_late_pick_alerts():
+    with app.app_context():
+        alert_late_picks()
+
+
 def picking_state(emp, staff_type):
     """Everything the picking screens show, as plain JSON-able data."""
     now = datetime.utcnow()
     today = date.today()
+    alert_late_picks(now)
     bills = (PickBill.query.filter(or_(PickBill.status == "open",
                                        PickBill.created_at >= datetime.combine(today, datetime.min.time())))
              .order_by(PickBill.created_at.desc()).limit(60).all())
@@ -2088,6 +2124,8 @@ def picking_state(emp, staff_type):
                 r.update({"claim_id": c.id, "bill_no": b.bill_no if b else "", "items": c.items,
                           "seconds_left": int((c.due_at - now).total_seconds())})
             st = picker_pick_stats(e.id, [today])
+            if c and c.due_at < now:
+                r["late_by"] = int((now - c.due_at).total_seconds())
             r["today_items"] = st["items"]
             r["today_points"] = st["points"]
             rows.append(r)
@@ -8958,6 +8996,12 @@ try:
         trigger="cron",
         hour=3, minute=20,
         id="purge_location_data",
+        replace_existing=True
+    )
+    _scheduler.add_job(
+        run_late_pick_alerts,
+        trigger="interval", minutes=1,
+        id="run_late_pick_alerts",
         replace_existing=True
     )
     _scheduler.add_job(
