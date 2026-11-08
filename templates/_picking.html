@@ -1,48 +1,68 @@
 {# Bill-based picking: the picker's screen and the Pick Assigner's screen.
    Live data comes from /pick/state.json, refreshed every 10 seconds; the
-   timers count down every second in the browser. #}
+   timers count down every second in the browser. Times are 12-hour. #}
 <style>
 .pk-card{margin-bottom:20px}
-.pk-row{display:flex;flex-wrap:wrap;gap:12px;align-items:center}
-.pk-stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin:4px 0 14px}
-.pk-stat{border:1px solid var(--line);border-radius:12px;padding:10px 12px;background:var(--surface,#fff)}
-.pk-stat b{display:block;font-size:22px;font-weight:800;color:var(--ink);font-variant-numeric:tabular-nums}
-.pk-stat span{font-size:11px;font-weight:700;color:var(--ink-3);text-transform:uppercase;letter-spacing:.5px}
-.pk-mine{border:2px solid var(--brand);border-radius:14px;padding:16px;margin-bottom:14px;background:var(--accent-tint,#eef4ff)}
+.pk-row{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
+.pk-stats{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:8px;margin:2px 0 12px}
+.pk-stat{border:1px solid var(--line);border-radius:12px;padding:8px 10px}
+.pk-stat b{display:block;font-size:20px;font-weight:800;color:var(--ink);font-variant-numeric:tabular-nums}
+.pk-stat span{font-size:10.5px;font-weight:700;color:var(--ink-3);text-transform:uppercase;letter-spacing:.5px}
+.pk-mine{border:2px solid var(--brand);border-radius:14px;padding:14px;margin-bottom:12px;background:var(--accent-tint,#eef4ff)}
+.pk-mine.find{border-color:var(--warn);background:var(--warn-tint)}
+.pk-mine.report{border-color:#7c3aed;background:#f3efff}
 .pk-mine.late{border-color:var(--bad);background:var(--bad-tint)}
-.pk-clock{font-size:44px;font-weight:800;line-height:1;font-variant-numeric:tabular-nums;color:var(--ink)}
+.pk-phase{font-size:12px;font-weight:800;text-transform:uppercase;letter-spacing:.5px;color:var(--ink-2)}
+.pk-clock{font-size:42px;font-weight:800;line-height:1;font-variant-numeric:tabular-nums;color:var(--ink)}
 .pk-mine.late .pk-clock{color:var(--bad-ink)}
-.pk-bar{height:8px;border-radius:6px;background:var(--line);overflow:hidden;margin:10px 0}
-.pk-bar i{display:block;height:100%;background:var(--brand);transition:width .9s linear}
-.pk-mine.late .pk-bar i{background:var(--bad)}
-.pk-prog{display:flex;height:8px;border-radius:6px;overflow:hidden;background:var(--line);min-width:120px;flex:1}
-.pk-prog .d{background:var(--ok)} .pk-prog .a{background:var(--warn)}
-.pk-bill{display:grid;grid-template-columns:minmax(90px,auto) 1fr auto;gap:12px;align-items:center;padding:12px 0;border-top:1px solid var(--line)}
+.pk-bar{height:8px;border-radius:6px;background:var(--line);overflow:hidden;margin:8px 0}
+.pk-bar i{display:block;height:100%;background:var(--brand)}
+.pk-mine.find .pk-bar i{background:var(--warn)} .pk-mine.report .pk-bar i{background:#7c3aed} .pk-mine.late .pk-bar i{background:var(--bad)}
+.pk-prog{display:flex;height:8px;border-radius:6px;overflow:hidden;background:var(--line);min-width:110px;flex:1}
+.pk-prog .d{background:var(--ok)} .pk-prog .a{background:var(--warn)} .pk-prog .m{background:var(--bad)}
+.pk-bill{display:grid;grid-template-columns:minmax(110px,auto) 1fr auto;gap:10px;align-items:center;padding:10px 0;border-top:1px solid var(--line)}
 .pk-bill:first-child{border-top:0}
+.pk-bill.urgent{background:#fff1f1;border-radius:10px;padding:10px;border:1.5px solid #f3b4b4;margin-bottom:6px}
 .pk-bill .no{font-weight:800;font-size:15px}
-.pk-bill .sub{font-size:12px;color:var(--ink-3)}
+.pk-bill .sub,.pk-sub{font-size:12px;color:var(--ink-3)}
+.pk-u{display:inline-block;background:var(--bad);color:#fff;font-size:10.5px;font-weight:800;padding:1px 6px;border-radius:6px;margin-left:6px;vertical-align:middle}
+.pk-taken{font-size:12px;color:var(--ink-2);margin-top:4px}
+.pk-taken .late{color:var(--bad-ink);font-weight:700}
 .pk-take{display:flex;gap:6px;align-items:center}
-.pk-take input{width:64px;padding:9px 8px;border:1.5px solid var(--line);border-radius:10px;font-size:15px;text-align:center}
-.pk-btn{border:0;border-radius:10px;padding:10px 16px;font-weight:700;font-size:14px;cursor:pointer;background:var(--brand);color:#fff;min-height:42px}
+.pk-in{width:64px;padding:8px;border:1.5px solid var(--line);border-radius:10px;font-size:15px;text-align:center}
+.pk-in:focus::placeholder,.pk-add input:focus::placeholder{color:transparent}
+.pk-btn{border:0;border-radius:10px;padding:9px 14px;font-weight:700;font-size:14px;cursor:pointer;background:var(--brand);color:#fff;min-height:40px}
 .pk-btn:disabled{opacity:.45;cursor:not-allowed}
 .pk-btn.ok{background:var(--ok)} .pk-btn.ghost{background:transparent;color:var(--ink-2);border:1.5px solid var(--line)}
 .pk-btn.bad{background:transparent;color:var(--bad-ink);border:1.5px solid var(--bad-line,#f3c2c2)}
-.pk-msg{display:none;margin:0 0 12px;padding:10px 12px;border-radius:10px;font-size:14px}
+.pk-btn.sm{min-height:0;padding:4px 9px;font-size:12px}
+.pk-msg{display:none;margin:0 0 10px;padding:9px 12px;border-radius:10px;font-size:14px}
 .pk-msg.on{display:block} .pk-msg.good{background:#e8f4ee;color:#0f4a32} .pk-msg.warn{background:var(--warn-tint);color:var(--warn-ink)}
-.pk-note{font-size:12.5px;color:var(--ink-3);margin-top:10px}
-.pk-chip{display:inline-flex;align-items:center;gap:6px;padding:6px 10px;border-radius:999px;font-size:13px;font-weight:600;border:1px solid var(--line)}
+.pk-note{font-size:12px;color:var(--ink-3);margin-top:8px}
+.pk-chip{display:inline-flex;align-items:center;gap:6px;padding:5px 10px;border-radius:999px;font-size:13px;font-weight:600;border:1px solid var(--line)}
 .pk-chip.free{background:#e8f4ee;border-color:#c9e4d6;color:#0f4a32}
 .pk-chip.busy{background:var(--warn-tint);border-color:var(--warn-line);color:var(--warn-ink)}
 .pk-chip.late{background:var(--bad-tint);color:var(--bad-ink)}
-.pk-add{display:grid;grid-template-columns:1fr 120px auto;gap:10px;align-items:end}
-.pk-add input{width:100%;padding:11px 12px;border:1.5px solid var(--line);border-radius:10px;font-size:15px}
-.pk-add label{display:block;font-size:12px;font-weight:700;color:var(--ink-3);margin-bottom:5px}
-.pk-empty{padding:14px 0;color:var(--ink-3);font-size:14px}
-.pk-late{margin:0 0 14px;padding:12px 14px;border-radius:12px;background:var(--bad-tint);border:1.5px solid var(--bad);color:var(--bad-ink);font-size:14px}
-.pk-late b{display:block;font-size:13px;text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px}
+.pk-add{display:grid;grid-template-columns:1fr 110px auto;gap:8px;align-items:end}
+.pk-add label{display:block;font-size:12px;font-weight:700;color:var(--ink-3);margin-bottom:4px}
+.pk-add input{width:100%;padding:9px 10px;border:1.5px solid var(--line);border-radius:10px;font-size:15px}
+.pk-pre{display:flex;align-items:stretch}
+.pk-pre span{display:flex;align-items:center;padding:0 8px;background:var(--line);border-radius:10px 0 0 10px;font-weight:800;font-size:14px;color:var(--ink-2)}
+.pk-pre input{border-radius:0 10px 10px 0;border-left:0}
+.pk-late{margin:0 0 12px;padding:10px 12px;border-radius:12px;background:var(--bad-tint);border:1.5px solid var(--bad);color:var(--bad-ink);font-size:14px}
+.pk-late b{display:block;font-size:12.5px;text-transform:uppercase;letter-spacing:.5px;margin-bottom:3px}
+.pk-miss{margin-top:6px;padding:8px 10px;border-radius:10px;background:var(--bad-tint);border:1px solid var(--bad-line,#f3c2c2);font-size:13px;color:var(--bad-ink)}
+.pk-miss .pk-row{gap:6px}
+.pk-rep{margin-top:10px;padding:10px;border-radius:10px;background:#fff;border:1px solid var(--line)}
+.pk-rep .r{display:grid;grid-template-columns:1fr 64px;gap:6px;margin-bottom:6px}
+.pk-rep input{padding:8px;border:1.5px solid var(--line);border-radius:8px;font-size:14px}
+.pk-ev{font-size:13px;padding:6px 0;border-top:1px solid var(--line)} .pk-ev:first-child{border-top:0}
+.pk-ev .k{display:inline-block;min-width:62px;font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.4px}
+.pk-ev .k.late{color:var(--bad-ink)} .pk-ev .k.idle{color:var(--warn-ink)} .pk-ev .k.missing{color:#7c3aed}
+.pk-empty{padding:12px 0;color:var(--ink-3);font-size:14px}
 @media (max-width:640px){
-  .pk-stats{grid-template-columns:repeat(2,minmax(0,1fr))}
-  .pk-bill{grid-template-columns:1fr;gap:8px}
+  .pk-stats{grid-template-columns:repeat(3,minmax(0,1fr))}
+  .pk-bill{grid-template-columns:1fr;gap:6px}
   .pk-add{grid-template-columns:1fr 1fr}
   .pk-add .pk-btn{grid-column:1/-1}
 }
@@ -53,24 +73,36 @@
   <div class="section-label">Picking — {{ today.strftime('%A, %d %b') }}</div>
   <div class="pk-msg" id="pkMsg" role="status"></div>
   <div class="pk-stats">
-    <div class="pk-stat"><span>Items today</span><b id="pkItems">0</b></div>
-    <div class="pk-stat"><span>Points</span><b id="pkPoints">0</b></div>
+    <div class="pk-stat"><span>Bills</span><b id="pkBillsN">0</b></div>
+    <div class="pk-stat"><span>Items</span><b id="pkItems">0</b></div>
     <div class="pk-stat"><span>On time</span><b id="pkOnTime">—</b></div>
+    <div class="pk-stat"><span>Points</span><b id="pkPoints">0</b></div>
     <div class="pk-stat"><span>Items / hr</span><b id="pkRate">—</b></div>
   </div>
   <div class="pk-mine" id="pkMine" hidden>
     <div class="pk-row" style="justify-content:space-between">
-      <div><div class="sub" style="font-size:12px;color:var(--ink-3);font-weight:700;text-transform:uppercase">Your items</div>
-        <div style="font-size:18px;font-weight:800" id="pkMineText"></div></div>
+      <div><div class="pk-phase" id="pkPhase">Normal time</div>
+        <div style="font-size:17px;font-weight:800" id="pkMineText"></div></div>
       <div class="pk-clock" id="pkClock">0:00</div>
     </div>
     <div class="pk-bar"><i id="pkBar" style="width:100%"></i></div>
     <div class="pk-row" style="justify-content:space-between">
-      <span id="pkLateText" style="font-size:13px;color:var(--ink-2)"></span>
-      <button type="button" class="pk-btn ok" id="pkDone">Done — all picked</button>
+      <span id="pkLateText" class="pk-sub" style="color:var(--ink-2)"></span>
+      <div class="pk-row">
+        <button type="button" class="pk-btn ghost" id="pkRepBtn">Item not found</button>
+        <button type="button" class="pk-btn ok" id="pkDone">Done — all picked</button>
+      </div>
+    </div>
+    <div class="pk-rep" id="pkRep" hidden>
+      <div class="pk-sub" style="margin-bottom:6px">Write each item you could not find and how many. The rest count as picked.</div>
+      <div id="pkRepRows"></div>
+      <div class="pk-row">
+        <button type="button" class="pk-btn ghost sm" id="pkRepAdd">+ Another item</button>
+        <button type="button" class="pk-btn" id="pkRepSend">Report and finish</button>
+      </div>
     </div>
   </div>
-  <div class="section-label" style="margin-top:6px">Open bills</div>
+  <div class="section-label" style="margin-top:4px">Open bills</div>
   <div id="pkBills"><div class="pk-empty">Loading bills…</div></div>
   <p class="pk-note" id="pkRule"></p>
 
@@ -78,17 +110,18 @@
   <div class="section-label">Pick Assigner — {{ today.strftime('%A, %d %b') }}</div>
   <div class="pk-msg" id="pkMsg" role="status"></div>
   <div class="pk-late" id="pkLate" role="alert" hidden></div>
-  <form class="pk-add" id="pkAdd" autocomplete="off">
-    <div><label for="pkBillNo">Bill number</label><input id="pkBillNo" name="bill_no" required maxlength="40" placeholder="e.g. 4521"></div>
-    <div><label for="pkBillItems">Items</label><input id="pkBillItems" name="items" type="number" min="1" max="500" required placeholder="10"></div>
-    <button class="pk-btn" type="submit">Add bill</button>
+  <form class="pk-add" id="pkAdd" autocomplete="off" novalidate>
+    <div><label for="pkBillNo">Bill number <span style="font-weight:500">(add U for urgent)</span></label>
+      <div class="pk-pre"><span id="pkPrefix">IP----/</span><input id="pkBillNo" name="bill_no" maxlength="7" inputmode="text" placeholder="0" autocapitalize="characters"></div></div>
+    <div><label for="pkBillItems">Items</label><input id="pkBillItems" name="items" type="number" min="1" max="500" inputmode="numeric" placeholder="0"></div>
+    <button class="pk-btn" type="button" id="pkAddBtn">Add bill</button>
   </form>
-  <div class="section-label" style="margin-top:18px">Pickers right now</div>
+  <div class="section-label" style="margin-top:14px">Pickers right now</div>
   <div class="pk-row" id="pkPickers"><span class="pk-empty">Loading…</span></div>
-  <div class="section-label" style="margin-top:18px">Today's bills</div>
-  <div class="table-wrap"><table class="ptable" id="pkTable">
-    <thead><tr><th>Bill</th><th>Items</th><th>Progress</th><th>Pickers</th><th>Status</th><th>Time taken</th><th></th></tr></thead>
-    <tbody><tr><td colspan="7" class="pk-empty">Loading…</td></tr></tbody></table></div>
+  <div class="section-label" style="margin-top:14px">Today's bills</div>
+  <div id="pkBills"><div class="pk-empty">Loading…</div></div>
+  <div class="section-label" style="margin-top:14px">Late report — today</div>
+  <div id="pkEvents"><div class="pk-empty">Nothing yet today.</div></div>
   <p class="pk-note" id="pkRule"></p>
   {% endif %}
 </div>
@@ -98,12 +131,13 @@
   "use strict";
   var app = document.getElementById("pickApp");
   if (!app) return;
-  var role = app.getAttribute("data-role"), state = null, mineDue = null, mineTotal = 0, loadedAt = 0;
+  var role = app.getAttribute("data-role"), mine = null, mineAt = 0;
   var tok = (document.querySelector('meta[name="csrf-token"]') || {}).content || "";
   function $(id) { return document.getElementById(id); }
   function esc(s) { return String(s == null ? "" : s).replace(/[&<>"]/g, function (c) { return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]; }); }
-  function clock(sec) { var a = Math.abs(sec), m = Math.floor(a / 60), s = a % 60; return m + ":" + (s < 10 ? "0" : "") + s; }
-  function say(text, good) { var m = $("pkMsg"); m.textContent = text; m.className = "pk-msg on " + (good ? "good" : "warn"); clearTimeout(say.t); say.t = setTimeout(function () { m.className = "pk-msg"; }, 6000); }
+  function clock(sec) { var a = Math.abs(Math.round(sec)), m = Math.floor(a / 60), s = a % 60; return m + ":" + (s < 10 ? "0" : "") + s; }
+  function plural(n, w) { return n + " " + w + (n === 1 ? "" : "s"); }
+  function say(text, good) { var m = $("pkMsg"); m.textContent = text; m.className = "pk-msg on " + (good ? "good" : "warn"); clearTimeout(say.t); say.t = setTimeout(function () { m.className = "pk-msg"; }, 7000); }
   function post(url, body) {
     return fetch(url, { method: "POST", credentials: "same-origin",
       headers: { "Content-Type": "application/json", "X-Requested-With": "fetch", "X-CSRFToken": tok },
@@ -112,112 +146,179 @@
       .then(function (j) { say(j.message || (j.ok ? "Done." : "Could not do that."), j.ok); load(); return j; });
   }
   function rule(s) {
-    var per = s.seconds_per_item;
-    $("pkRule").textContent = "Each item gets " + clock(per) + ". Done on time: +1 point per item. Late: −1 per minute over, at most −" + s.late_cap + " for one grab.";
+    $("pkRule").textContent = "Each item: " + s.seconds_per_item + " s (urgent " + s.urgent_seconds + " s). Then " +
+      Math.round(s.extra_seconds / 2) + " s extra time to find, then " + Math.round(s.extra_seconds / 2) +
+      " s to report only. Normal time earns 1.5 points per item, extra time 1 per item. Late after that: −1 per minute, at most −" + s.late_cap + ".";
   }
   function prog(b) {
-    var d = 100 * b.done / b.items, a = 100 * b.active / b.items;
-    return '<div class="pk-prog" title="' + b.done + ' picked, ' + b.active + ' being picked, ' + b.left + ' left"><i class="d" style="width:' + d + '%"></i><i class="a" style="width:' + a + '%"></i></div>';
+    return '<div class="pk-prog" title="' + b.done + ' picked, ' + b.active + ' being picked, ' + b.missing + ' missing, ' + b.left + ' left">' +
+      '<i class="d" style="width:' + (100 * b.done / b.items) + '%"></i><i class="a" style="width:' + (100 * b.active / b.items) + '%"></i>' +
+      '<i class="m" style="width:' + (100 * b.missing / b.items) + '%"></i></div>';
+  }
+  function taken(b) {
+    if (!b.taken.length) return "";
+    return '<div class="pk-taken">Taken by: ' + b.taken.map(function (t) {
+      return '<span class="' + (t.state === "late" ? "late" : "") + '">' + esc(t.name) + " " + t.items + (t.state === "late" ? " (late)" : t.state === "picking" ? " (picking)" : "") + "</span>";
+    }).join(" · ") + "</div>";
   }
 
+  // ---- picker ----------------------------------------------------------
   function renderPicker(s) {
     var t = s.today || {};
+    $("pkBillsN").textContent = t.bills || 0;
     $("pkItems").textContent = t.items || 0;
-    $("pkPoints").textContent = (t.points > 0 ? "+" : "") + (t.points || 0);
     $("pkOnTime").textContent = t.on_time_pct == null ? "—" : Math.round(t.on_time_pct) + "%";
+    $("pkPoints").textContent = (t.points > 0 ? "+" : "") + (t.points || 0);
     $("pkRate").textContent = t.rate == null ? "—" : t.rate;
-    var mine = s.mine;
+    var had = mine && mine.id;
+    mine = s.mine || null; mineAt = Date.now();
     $("pkMine").hidden = !mine;
     if (mine) {
-      $("pkMineText").textContent = mine.items + " item" + (mine.items === 1 ? "" : "s") + " · Bill " + mine.bill_no;
-      mineDue = Date.now() + mine.seconds_left * 1000; mineTotal = mine.seconds_total;
-      $("pkDone").setAttribute("data-claim", mine.id);
-    } else { mineDue = null; }
+      $("pkMineText").innerHTML = plural(mine.items, "item") + " · Bill " + esc(mine.bill_no) + (mine.urgent ? '<span class="pk-u">URGENT</span>' : "");
+      if (had !== mine.id) { $("pkRep").hidden = true; $("pkRepRows").innerHTML = ""; }
+    }
     var open = s.bills.filter(function (b) { return b.status === "open"; });
+    var urgentLeft = open.some(function (b) { return b.urgent && b.left > 0; });
     if (!open.length) { $("pkBills").innerHTML = '<div class="pk-empty">No open bills right now. You will get a notification when one is added.</div>'; }
     else {
+      var keep = {};
+      Array.prototype.forEach.call(document.querySelectorAll("#pkBills .pk-in"), function (i) { if (i.value) keep[i.id] = i.value; });
+      var focused = document.activeElement && document.activeElement.id;
       $("pkBills").innerHTML = open.map(function (b) {
-        var can = !mine && b.left > 0;
-        return '<div class="pk-bill"><div><div class="no">Bill ' + esc(b.bill_no) + '</div><div class="sub">added ' + esc(b.added) + ' · ' + b.items + ' items</div></div>' +
-          '<div><div class="pk-row">' + prog(b) + '<span class="sub">' + b.done + ' / ' + b.items + ' picked · <b>' + b.left + ' left</b></span></div>' +
-          (b.pickers.length ? '<div class="sub" style="margin-top:4px">' + esc(b.pickers.join(", ")) + '</div>' : '') + '</div>' +
-          '<div class="pk-take"><input type="number" min="1" max="' + b.left + '" value="' + Math.min(b.left, 3) + '" aria-label="Items to take from bill ' + esc(b.bill_no) + '" id="take' + b.id + '"' + (can ? '' : ' disabled') + '>' +
-          '<button type="button" class="pk-btn" data-take="' + b.id + '"' + (can ? '' : ' disabled') + '>Take</button></div></div>';
-      }).join("");
+        var can = !mine && b.left > 0 && (b.urgent || !urgentLeft);
+        return '<div class="pk-bill' + (b.urgent ? " urgent" : "") + '"><div><div class="no">' + esc(b.bill_no) + (b.urgent ? '<span class="pk-u">URGENT</span>' : "") +
+          '</div><div class="sub">added ' + esc(b.added) + " · " + plural(b.items, "item") + "</div></div>" +
+          '<div><div class="pk-row">' + prog(b) + '<span class="sub">' + b.done + " / " + b.items + " picked · <b>" + b.left + " left</b></span></div>" + taken(b) + "</div>" +
+          '<div class="pk-take"><input class="pk-in" type="number" min="1" max="' + b.left + '" placeholder="0" inputmode="numeric" aria-label="Items you are taking from ' + esc(b.bill_no) + '" id="take' + b.id + '"' + (can ? "" : " disabled") + ">" +
+          '<button type="button" class="pk-btn" data-take="' + b.id + '"' + (can ? "" : " disabled") + ">Take</button></div></div>";
+      }).join("") + (urgentLeft && !mine ? '<div class="pk-note" style="color:var(--bad-ink)">Urgent bills come first.</div>' : "");
+      Object.keys(keep).forEach(function (k) { if ($(k)) $(k).value = keep[k]; });
+      if (focused && $(focused)) $(focused).focus();
     }
     rule(s);
   }
 
+  // ---- assigner ----------------------------------------------------------
   function renderAssigner(s) {
+    $("pkPrefix").textContent = s.prefix;
     var p = s.pickers || [];
     var late = p.filter(function (r) { return r.late_by != null; });
     $("pkLate").hidden = !late.length;
     $("pkLate").innerHTML = late.length ? "<b>Running late (" + late.length + ")</b>" + late.map(function (r) {
-      return esc(r.name) + " · Bill " + esc(r.bill_no) + " · " + r.items + " item" + (r.items === 1 ? "" : "s") + " · late by " + clock(r.late_by);
+      return esc(r.name) + " · " + esc(r.bill_no) + " · " + plural(r.items, "item") + " · late by " + clock(r.late_by);
     }).join("<br>") : "";
     $("pkPickers").innerHTML = p.length ? p.map(function (r) {
-      if (r.free) return '<span class="pk-chip free">' + esc(r.name) + ' · free</span>';
-      var late = r.seconds_left < 0;
-      return '<span class="pk-chip ' + (late ? 'late' : 'busy') + '" data-due="' + (Date.now() + r.seconds_left * 1000) + '">' + esc(r.name) + ' · Bill ' + esc(r.bill_no) + ' · ' + r.items + ' items · <b class="pk-left"></b>' +
-        ' <button type="button" class="pk-btn ghost" style="min-height:0;padding:3px 8px;font-size:12px" data-release="' + r.claim_id + '">Release</button></span>';
+      if (r.free) return '<span class="pk-chip free">' + esc(r.name) + " · free · " + plural(r.today_bills, "bill") + "</span>";
+      var lt = r.phase === "late";
+      return '<span class="pk-chip ' + (lt ? "late" : "busy") + '" data-due="' + (Date.now() + r.seconds_left * 1000) + '">' + esc(r.name) + " · " + esc(r.bill_no) + " · " + plural(r.items, "item") + ' · <b class="pk-left"></b>' +
+        ' <button type="button" class="pk-btn ghost sm" data-release="' + r.claim_id + '">Release</button></span>';
     }).join("") : '<span class="pk-empty">No pickers set up yet.</span>';
-    var rows = s.bills;
-    $("pkTable").querySelector("tbody").innerHTML = rows.length ? rows.map(function (b) {
-      var st = b.status === "done" ? "Complete" : b.status === "cancelled" ? "Cancelled" : (b.left ? b.left + " left" : "Being picked");
-      return '<tr><td><strong>' + esc(b.bill_no) + '</strong><div style="font-size:11px;color:var(--ink-3)">' + esc(b.added) + '</div></td><td>' + b.items + '</td>' +
-        '<td style="min-width:150px">' + prog(b) + '<div style="font-size:11px;color:var(--ink-3);margin-top:3px">' + b.done + ' / ' + b.items + '</div></td>' +
-        '<td>' + esc(b.pickers.join(", ") || "—") + '</td><td>' + st + '</td><td>' + (b.minutes == null ? "—" : b.minutes + " min") + '</td>' +
-        '<td>' + (b.status === "open" ? '<button type="button" class="pk-btn bad" style="min-height:0;padding:5px 10px;font-size:12px" data-cancel="' + b.id + '">Cancel</button>' : '') + '</td></tr>';
-    }).join("") : '<tr><td colspan="7" class="pk-empty">No bills yet today. Add the first one above.</td></tr>';
+    $("pkBills").innerHTML = s.bills.length ? s.bills.map(function (b) {
+      var st = b.status === "done" ? "Complete in " + b.minutes + " min" : b.status === "cancelled" ? "Cancelled" :
+        (b.missing ? b.missing + " missing · " : "") + (b.left ? b.left + " left" : "being picked");
+      var miss = b.missing_rows.length ? '<div class="pk-miss"><b>Not found:</b> ' + b.missing_rows.map(function (m) {
+        return '<div class="pk-row" style="margin-top:4px">' + esc(m.item) + " ×" + m.qty + " · by " + esc(m.by) + " at " + esc(m.at) +
+          ' <button type="button" class="pk-btn sm" data-miss="' + m.id + '" data-act="reassign">Reassign</button>' +
+          ' <button type="button" class="pk-btn ghost sm" data-miss="' + m.id + '" data-act="unavailable">Not available</button></div>';
+      }).join("") + "</div>" : "";
+      return '<div class="pk-bill' + (b.urgent ? " urgent" : "") + '"' + (b.missing ? ' style="border-left:4px solid var(--bad);padding-left:8px"' : "") + '><div><div class="no">' + esc(b.bill_no) + (b.urgent ? '<span class="pk-u">URGENT</span>' : "") +
+        '</div><div class="sub">added ' + esc(b.added) + " · " + plural(b.items, "item") + "</div>" +
+        (b.status === "open" ? '<div class="sub">open for <b class="pk-el" data-start="' + (Date.now() - b.elapsed * 1000) + '"></b></div>' : "") + "</div>" +
+        '<div><div class="pk-row">' + prog(b) + '<span class="sub">' + b.done + " / " + b.items + " · " + st + "</span></div>" + taken(b) + miss + "</div>" +
+        "<div>" + (b.status === "open" ? '<button type="button" class="pk-btn bad sm" data-cancel="' + b.id + '">Cancel</button>' : "") + "</div></div>";
+    }).join("") : '<div class="pk-empty">No bills yet today. Add the first one above.</div>';
+    var ev = s.events || [];
+    $("pkEvents").innerHTML = ev.length ? ev.map(function (e) {
+      var label = e.kind === "late" ? "Late" : e.kind === "idle" ? "Waiting" : "Missing";
+      var what = e.kind === "idle" ? "left " + esc(e.bill) + " waiting " + (e.minutes || 0) + " min" :
+                 e.kind === "late" ? "late on " + esc(e.bill) : "could not find " + esc(e.detail) + " on " + esc(e.bill);
+      return '<div class="pk-ev"><span class="k ' + e.kind + '">' + label + "</span> " + esc(e.at) + " · <b>" + esc(e.who) + "</b> " + what + "</div>";
+    }).join("") : '<div class="pk-empty">Nothing yet today.</div>';
     rule(s);
   }
 
   function load() {
     fetch("/pick/state.json", { credentials: "same-origin" }).then(function (r) { return r.json(); }).then(function (s) {
       if (!s || !s.bills) return;
-      state = s; loadedAt = Date.now();
       (role === "picker" ? renderPicker : renderAssigner)(s);
       tick();
     }).catch(function () {});
   }
 
   function tick() {
-    if (role === "picker" && mineDue) {
-      var left = Math.round((mineDue - Date.now()) / 1000), late = left < 0;
-      $("pkClock").textContent = (late ? "−" : "") + clock(left);
-      $("pkMine").classList.toggle("late", late);
-      $("pkBar").style.width = Math.max(0, Math.min(100, 100 * left / Math.max(mineTotal, 1))) + "%";
-      $("pkLateText").textContent = late ? "Late by " + clock(left) + " — points are dropping." : "Pick them and tap Done before the timer ends.";
+    var dt = (Date.now() - mineAt) / 1000;
+    if (role === "picker" && mine) {
+      var n = mine.normal_left - dt, f = mine.find_left - dt, r = mine.report_left - dt, phase, left, total;
+      if (n >= 0) { phase = "normal"; left = n; total = mine.seconds_total; }
+      else if (f >= 0) { phase = "find"; left = f; total = mine.find_left - mine.normal_left; }
+      else if (r >= 0) { phase = "report"; left = r; total = mine.report_left - mine.find_left; }
+      else { phase = "late"; left = r; total = 1; }
+      $("pkMine").className = "pk-mine" + (phase === "normal" ? "" : " " + phase);
+      $("pkPhase").textContent = {normal: "Normal time", find: "Extra time to find", report: "Report only — picking locked", late: "Late"}[phase];
+      $("pkClock").textContent = (phase === "late" ? "−" : "") + clock(left);
+      $("pkBar").style.width = Math.max(0, Math.min(100, 100 * left / Math.max(total, 1))) + "%";
+      $("pkLateText").textContent = {normal: "Finish now for 1.5 points per item.", find: "Still time to find them: 1 point per item.",
+        report: "Picking is closed. Report the items you could not find.", late: "Late by " + clock(left) + " — points are dropping."}[phase];
+      $("pkDone").disabled = phase === "report";
     }
     if (role !== "picker") {
       Array.prototype.forEach.call(document.querySelectorAll(".pk-chip[data-due]"), function (c) {
         var left = Math.round((+c.getAttribute("data-due") - Date.now()) / 1000);
-        c.querySelector(".pk-left").textContent = (left < 0 ? "late " : "") + clock(left);
-        c.classList.toggle("late", left < 0); c.classList.toggle("busy", left >= 0);
+        c.querySelector(".pk-left").textContent = left >= 0 ? clock(left) : "over by " + clock(left);
+      });
+      Array.prototype.forEach.call(document.querySelectorAll(".pk-el[data-start]"), function (e) {
+        e.textContent = clock((Date.now() - +e.getAttribute("data-start")) / 1000);
       });
     }
+  }
+
+  function repRow() {
+    var d = document.createElement("div"); d.className = "r";
+    d.innerHTML = '<input placeholder="Item name" aria-label="Missing item name" maxlength="120"><input type="number" min="1" placeholder="0" aria-label="How many" inputmode="numeric">';
+    $("pkRepRows").appendChild(d); d.querySelector("input").focus();
   }
 
   app.addEventListener("click", function (e) {
     var b = e.target.closest("button"); if (!b || b.disabled) return;
     if (b.hasAttribute("data-take")) {
-      var id = b.getAttribute("data-take"), n = +($("take" + id) || {}).value;
-      b.disabled = true; post("/pick/claim", { bill_id: +id, items: n });
+      var id = b.getAttribute("data-take"), v = +($("take" + id) || {}).value;
+      if (!v) { say("Type how many items you are taking.", false); $("take" + id).focus(); return; }
+      b.disabled = true; post("/pick/claim", { bill_id: +id, items: v });
     } else if (b.id === "pkDone") {
-      b.disabled = true; post("/pick/done", { claim_id: +b.getAttribute("data-claim") }).then(function () { b.disabled = false; });
-    } else if (b.hasAttribute("data-release")) {
-      post("/pick/claim/" + b.getAttribute("data-release") + "/release");
+      b.disabled = true; post("/pick/done", { claim_id: mine.id }).then(function () { b.disabled = false; });
+    } else if (b.id === "pkRepBtn") {
+      $("pkRep").hidden = !$("pkRep").hidden; if (!$("pkRep").hidden && !$("pkRepRows").children.length) repRow();
+    } else if (b.id === "pkRepAdd") { repRow();
+    } else if (b.id === "pkRepSend") {
+      var rows = Array.prototype.map.call($("pkRepRows").children, function (r) {
+        var i = r.querySelectorAll("input"); return { item: i[0].value.trim(), qty: +i[1].value || 0 };
+      }).filter(function (m) { return m.item || m.qty; });
+      if (!rows.length) { say("Write the missing item and how many.", false); return; }
+      post("/pick/done", { claim_id: mine.id, missing: rows });
+    } else if (b.id === "pkAddBtn") { addBill();
+    } else if (b.hasAttribute("data-release")) { post("/pick/claim/" + b.getAttribute("data-release") + "/release");
+    } else if (b.hasAttribute("data-miss")) { post("/pick/missing/" + b.getAttribute("data-miss") + "/" + b.getAttribute("data-act"));
     } else if (b.hasAttribute("data-cancel")) {
       if (b.getAttribute("data-sure") === "1") post("/pick/bill/" + b.getAttribute("data-cancel") + "/cancel");
       else { b.setAttribute("data-sure", "1"); b.textContent = "Tap again to cancel"; }
     }
   });
-  var add = $("pkAdd");
-  if (add) add.addEventListener("submit", function (e) {
-    e.preventDefault();
-    post("/pick/bill", { bill_no: $("pkBillNo").value, items: +$("pkBillItems").value }).then(function (j) {
-      if (j.ok) { add.reset(); $("pkBillNo").focus(); }
+  function addBill() {
+    var no = $("pkBillNo").value.trim(), it = $("pkBillItems").value;
+    if (!no) { say("Type the bill number.", false); $("pkBillNo").focus(); return; }
+    if (!+it) { say("Type how many items.", false); $("pkBillItems").focus(); return; }
+    post("/pick/bill", { bill_no: no, items: +it }).then(function (j) {
+      if (j.ok) { $("pkBillNo").value = ""; $("pkBillItems").value = ""; }
+      $("pkBillNo").focus();
     });
+  }
+  // Enter moves to the next empty field, and submits when all are filled.
+  app.addEventListener("keydown", function (e) {
+    if (e.key !== "Enter" || !e.target.matches("input")) return;
+    e.preventDefault();
+    if (e.target.id === "pkBillNo") { $("pkBillItems").value ? addBill() : $("pkBillItems").focus(); }
+    else if (e.target.id === "pkBillItems") { $("pkBillNo").value ? addBill() : $("pkBillNo").focus(); }
+    else if (e.target.id && e.target.id.indexOf("take") === 0) { var btn = app.querySelector('[data-take="' + e.target.id.slice(4) + '"]'); if (btn) btn.click(); }
   });
 
   load();

@@ -4,6 +4,7 @@ eventlet.monkey_patch()
 import os
 import logging
 import math
+import re
 import io
 import csv
 import json
@@ -105,7 +106,12 @@ VALID_STAFF_TYPES = ("picker", "checker", "purchaser", "delivery", "biller", "pa
 # pickers grab items from it; several pickers share one bill. Every grab gets
 # a timer of items x PICK_SECONDS_PER_ITEM. Done on time earns +1 per item;
 # late costs -1 per started minute over, never more than PICK_LATE_CAP.
-PICK_SECONDS_PER_ITEM = max(10, int(os.environ.get("PICK_SECONDS_PER_ITEM", "100")))
+PICK_SECONDS_PER_ITEM = max(5, int(os.environ.get("PICK_SECONDS_PER_ITEM", "30")))
+PICK_URGENT_SECONDS = 20          # per item on an urgent bill
+PICK_EXTRA_SECONDS = 125          # after normal time: first half find, second half report only
+PICK_IDLE_SECONDS = 120           # a free picker has this long to take a waiting bill
+PICK_URGENT_POOL = 10.0           # bonus points per urgent bill, shared by items picked
+PICK_ONTIME_RATE = 1.5            # points per item finished within normal time
 PICK_LATE_CAP = 5
 
 # Hourly volume targets used by the scoring formulas. Set them to what this
@@ -795,6 +801,7 @@ class PickBill(db.Model):
     created_at   = db.Column(db.DateTime, default=datetime.utcnow, index=True)
     completed_at = db.Column(db.DateTime, nullable=True)
     status       = db.Column(db.String(12), default="open", index=True)   # open / done / cancelled
+    is_urgent    = db.Column(db.Boolean, default=False)
 
 
 class PickClaim(db.Model):
@@ -809,8 +816,39 @@ class PickClaim(db.Model):
     done_at    = db.Column(db.DateTime, nullable=True)
     work_date  = db.Column(db.Date, nullable=True, index=True)   # local day the grab was finished
     status     = db.Column(db.String(12), default="active", index=True)  # active / done / cancelled
-    points     = db.Column(db.Integer, default=0)
+    points     = db.Column(db.Float, default=0.0)
+    bonus      = db.Column(db.Float, default=0.0)       # share of an urgent bill's pool
+    picked     = db.Column(db.Integer, nullable=True)   # items actually picked (rest reported missing)
+    missing    = db.Column(db.Integer, default=0)
+    outcome    = db.Column(db.String(12), nullable=True)  # ontime / extra / report / late
     late_alerted = db.Column(db.Boolean, default=False)   # assigner told it ran late
+
+
+class PickMissing(db.Model):
+    """An item a picker could not find on a bill."""
+    __tablename__ = "pick_missing"
+    id          = db.Column(db.Integer, primary_key=True)
+    bill_id     = db.Column(db.Integer, db.ForeignKey("pick_bills.id", ondelete="CASCADE"), nullable=False, index=True)
+    claim_id    = db.Column(db.Integer, db.ForeignKey("pick_claims.id", ondelete="CASCADE"), nullable=True)
+    picker_id   = db.Column(db.Integer, db.ForeignKey("employees.id", ondelete="CASCADE"), nullable=True, index=True)
+    item_name   = db.Column(db.String(120), nullable=False)
+    qty         = db.Column(db.Integer, default=1)
+    reported_at = db.Column(db.DateTime, default=datetime.utcnow)
+    status      = db.Column(db.String(12), default="open", index=True)  # open / reassigned / unavailable
+    handled_at  = db.Column(db.DateTime, nullable=True)
+
+
+class PickEvent(db.Model):
+    """The day's late, idle and missing-item log for the assigner and admin."""
+    __tablename__ = "pick_events"
+    id        = db.Column(db.Integer, primary_key=True)
+    kind      = db.Column(db.String(12), nullable=False, index=True)   # late / idle / missing
+    picker_id = db.Column(db.Integer, db.ForeignKey("employees.id", ondelete="CASCADE"), nullable=True, index=True)
+    bill_id   = db.Column(db.Integer, db.ForeignKey("pick_bills.id", ondelete="CASCADE"), nullable=True)
+    at        = db.Column(db.DateTime, default=datetime.utcnow)
+    day       = db.Column(db.Date, index=True)
+    minutes   = db.Column(db.Float, nullable=True)
+    detail    = db.Column(db.String(200), nullable=True)
 
 
 class ChecklistTemplate(db.Model):
@@ -1870,25 +1908,78 @@ def get_complaint_deduction(staff_type: str, emp_id: int = None) -> float:
         return 0.0
 
 # ─── Bill-based picking: the rules ───────────────────────────────────────────
+# Timeline of one grab of n items (s = 30 s per item, 20 s on an urgent bill):
+#   normal time   0 .. n*s            pick or report; finishing here earns most
+#   find time     + 62.5 s            still pick or report; no points cut
+#   report time   + 62.5 s            picking locked: only report missing items
+#   late          after that          late penalty and the assigner is alerted
 class PickError(Exception):
     """A picking action that cannot be done; the message is shown to the user."""
 
 
-def pick_points(items, due_at, done_at):
-    """+1 per item when done on time; late: -1 per started minute over, capped."""
-    if done_at <= due_at:
-        return int(items)
-    late_min = math.ceil((done_at - due_at).total_seconds() / 60.0)
-    return -min(PICK_LATE_CAP, max(1, late_min))
+IST = timedelta(hours=5, minutes=30)
+
+
+def ist12(dt):
+    """A UTC time as Indian time in 12-hour form, e.g. 2:05 PM."""
+    if not dt:
+        return ""
+    return (dt + IST).strftime("%I:%M %p").lstrip("0")
+
+
+def fy_prefix(d=None):
+    """Bill number prefix for the financial year (April to March): IP2627/."""
+    d = d or (datetime.utcnow() + IST).date()
+    a = (d.year if d.month >= 4 else d.year - 1) % 100
+    return "IP%02d%02d/" % (a, (a + 1) % 100)
+
+
+def pick_seconds(bill):
+    return PICK_URGENT_SECONDS if bill is not None and bill.is_urgent else PICK_SECONDS_PER_ITEM
+
+
+def pick_windows(c):
+    """(normal_end, find_end, report_end) for a grab."""
+    half = timedelta(seconds=PICK_EXTRA_SECONDS / 2.0)
+    return c.due_at, c.due_at + half, c.due_at + 2 * half
+
+
+def pick_phase(c, now):
+    n, f, r = pick_windows(c)
+    return "normal" if now <= n else "find" if now <= f else "report" if now <= r else "late"
+
+
+def pick_points(items, due, done, picked=None, missing=0):
+    """Points for one finished grab. picked defaults to all items."""
+    picked = items if picked is None else picked
+    half = timedelta(seconds=PICK_EXTRA_SECONDS / 2.0)
+    if done <= due:                       # normal time: more points; missing reported now counts in full
+        return round(PICK_ONTIME_RATE * (picked + missing), 1)
+    if done <= due + 2 * half:            # find or report time: no cut
+        return float(picked)
+    late_min = math.ceil((done - due - 2 * half).total_seconds() / 60.0)
+    return -float(min(PICK_LATE_CAP, max(1, late_min)))
 
 
 def pick_bill_progress(bill):
-    """{"done", "active", "left", "pickers"} for one bill."""
+    """Where a bill stands, and who is on it."""
     claims = PickClaim.query.filter(PickClaim.bill_id == bill.id, PickClaim.status != "cancelled").all()
-    done = sum(c.items for c in claims if c.status == "done")
+    miss = PickMissing.query.filter_by(bill_id=bill.id).all()
+    done = sum((c.picked if c.picked is not None else c.items) for c in claims if c.status == "done")
     active = sum(c.items for c in claims if c.status == "active")
-    return {"done": done, "active": active, "left": max(int(bill.items) - done - active, 0),
-            "pickers": sorted({c.picker_id for c in claims})}
+    m_open = sum(m.qty for m in miss if m.status == "open")
+    m_gone = sum(m.qty for m in miss if m.status == "unavailable")
+    by = {}
+    for c in claims:
+        r = by.setdefault(c.picker_id, {"items": 0, "active": 0, "late": False})
+        if c.status == "done":
+            r["items"] += c.picked if c.picked is not None else c.items
+            r["late"] = r["late"] or c.outcome == "late"
+        else:
+            r["active"] += c.items
+    return {"done": done, "active": active, "missing": m_open, "unavailable": m_gone,
+            "left": max(int(bill.items) - done - active - m_open - m_gone, 0), "by": by,
+            "pickers": sorted(by), "missing_rows": [m for m in miss if m.status == "open"]}
 
 
 def active_claim_for(picker_id):
@@ -1902,74 +1993,156 @@ def free_pickers():
             if not e.is_admin and e.id not in busy]
 
 
+def _assigners():
+    return Employee.query.filter(Employee.staff_type == "pick_assigner").all()
+
+
+def _pick_event(kind, picker_id, bill_id, minutes=None, detail=""):
+    db.session.add(PickEvent(kind=kind, picker_id=picker_id, bill_id=bill_id, minutes=minutes,
+                             detail=(detail or "")[:200], day=date.today()))
+
+
 def add_pick_bill(bill_no, items, created_by):
-    bill_no = (bill_no or "").strip()[:40]
+    """bill_no is what the assigner types: up to 6 digits, U on the end for
+    urgent. The financial-year prefix is added here; a number is never reused."""
+    raw = (bill_no or "").strip().upper().replace(" ", "")
+    m = re.match(r"^(\d{1,6})(U?)$", raw)
+    if not m:
+        raise PickError("Bill number: up to 6 digits, with U on the end if urgent (e.g. 4521 or 4521U).")
     try:
         items = int(items)
     except (TypeError, ValueError):
         items = 0
-    if not bill_no:
-        raise PickError("Enter the bill number.")
     if items < 1 or items > 500:
         raise PickError("Items must be between 1 and 500.")
-    if PickBill.query.filter_by(bill_no=bill_no, status="open").first():
-        raise PickError("Bill %s is already open." % bill_no)
-    bill = PickBill(bill_no=bill_no, items=items, created_by=created_by)
+    full = fy_prefix() + m.group(1)
+    if PickBill.query.filter_by(bill_no=full).first():
+        raise PickError("Bill %s was already entered. A bill number can be used only once." % full)
+    bill = PickBill(bill_no=full, items=items, created_by=created_by, is_urgent=bool(m.group(2)))
     db.session.add(bill)
     db.session.commit()
+    title = ("URGENT bill %s" if bill.is_urgent else "New bill %s") % full
     for p in free_pickers():
-        notify_employee(p.id, "New bill %s" % bill_no, "%d items to pick" % items,
-                        link="/dashboard", sms=False)
+        notify_employee(p.id, title, "%d items to pick" % items, link="/dashboard", sms=False)
     return bill
 
 
 def claim_items(picker_id, bill_id, n, now=None):
-    """Picker grabs n items of a bill. One grab at a time per picker."""
+    """Picker types how many items they are taking. One grab at a time;
+    urgent bills come first."""
     now = now or datetime.utcnow()
     try:
         n = int(n)
     except (TypeError, ValueError):
         n = 0
     if n < 1:
-        raise PickError("Choose at least 1 item.")
+        raise PickError("Type how many items you are taking.")
     if active_claim_for(picker_id):
         raise PickError("Finish your current items first.")
-    # Lock the bill row so two pickers cannot take the same last items.
     bill = db.session.query(PickBill).filter_by(id=bill_id).with_for_update().first()
     if not bill or bill.status != "open":
         db.session.rollback()
         raise PickError("That bill is no longer open.")
+    if not bill.is_urgent:
+        for u in PickBill.query.filter_by(status="open", is_urgent=True).all():
+            if pick_bill_progress(u)["left"] > 0:
+                db.session.rollback()
+                raise PickError("Urgent bill %s comes first." % u.bill_no)
     left = pick_bill_progress(bill)["left"]
     if n > left:
         db.session.rollback()
         raise PickError("Only %d item%s left on bill %s." % (left, "" if left == 1 else "s", bill.bill_no))
     c = PickClaim(bill_id=bill.id, picker_id=picker_id, items=n, started_at=now,
-                  due_at=now + timedelta(seconds=n * PICK_SECONDS_PER_ITEM))
+                  due_at=now + timedelta(seconds=n * pick_seconds(bill)))
     db.session.add(c)
     db.session.commit()
     return c
 
 
-def finish_claim(picker_id, claim_id, now=None, day=None):
-    """Picker marks a grab done. Returns (claim, bill_completed)."""
+def _close_bill_if_done(bill, now):
+    if not bill or bill.status != "open":
+        return False
+    pr = pick_bill_progress(bill)
+    if pr["done"] + pr["unavailable"] < bill.items or pr["active"] or pr["missing"]:
+        return False
+    bill.status, bill.completed_at = "done", now
+    if bill.is_urgent:                    # share the pool by items picked
+        claims = PickClaim.query.filter_by(bill_id=bill.id, status="done").all()
+        total = sum((c.picked or 0) for c in claims)
+        for c in claims:
+            c.bonus = round(PICK_URGENT_POOL * (c.picked or 0) / total, 1) if total else 0.0
+    return True
+
+
+def finish_claim(picker_id, claim_id, now=None, day=None, picked=None, missing=None):
+    """Picker finishes a grab: all picked, or some picked and the rest
+    reported missing ([(item name, qty), ...]). Returns (claim, bill_done)."""
     now = now or datetime.utcnow()
     c = db.session.get(PickClaim, claim_id)
     if not c or c.picker_id != picker_id or c.status != "active":
         raise PickError("Nothing to finish.")
-    c.done_at = now
-    c.status = "done"
-    c.work_date = day or date.today()
-    c.points = pick_points(c.items, c.due_at, now)
+    missing = [(str(n or "").strip()[:120], int(q or 0)) for n, q in (missing or [])]
+    missing = [(n, q) for n, q in missing if q > 0]
+    if any(not n for n, _ in missing):
+        raise PickError("Write the name of each missing item.")
+    m_qty = sum(q for _, q in missing)
+    picked = c.items - m_qty if picked is None else int(picked)
+    if picked < 0 or picked + m_qty != c.items:
+        raise PickError("Picked plus missing must equal the %d items you took." % c.items)
+    phase = pick_phase(c, now)
+    if phase == "report" and not missing:
+        raise PickError("Picking time is over. Report the items you could not find.")
+    c.done_at, c.status, c.picked, c.missing = now, "done", picked, m_qty
+    c.work_date = day or date.today()      # same day boundary as the rest of the app
+    c.outcome = {"normal": "ontime", "find": "extra", "report": "report", "late": "late"}[phase]
+    c.points = pick_points(c.items, c.due_at, now, picked=picked, missing=m_qty)
     bill = db.session.get(PickBill, c.bill_id)
+    for name, q in missing:
+        db.session.add(PickMissing(bill_id=c.bill_id, claim_id=c.id, picker_id=picker_id,
+                                   item_name=name, qty=q, reported_at=now))
+        _pick_event("missing", picker_id, c.bill_id, detail="%s x%d" % (name, q))
+    if phase == "late" and not c.late_alerted:
+        c.late_alerted = True
+        _pick_event("late", picker_id, c.bill_id,
+                    minutes=round((now - pick_windows(c)[2]).total_seconds() / 60.0, 1))
     db.session.flush()
-    completed = False
-    if bill and bill.status == "open":
-        prog = pick_bill_progress(bill)
-        if prog["done"] >= bill.items:
-            bill.status, bill.completed_at, completed = "done", now, True
+    completed = _close_bill_if_done(bill, now)
     db.session.commit()
+    if missing:
+        who = db.session.get(Employee, picker_id)
+        for a in _assigners():
+            notify_employee(a.id, "Missing items on bill %s" % (bill.bill_no if bill else "?"),
+                            "%s could not find: %s" % (who.name if who else "A picker",
+                                                       ", ".join("%s x%d" % mq for mq in missing)),
+                            link="/dashboard", sms=False)
     sync_picker_day(picker_id, c.work_date)
     return c, completed
+
+
+def handle_missing(missing_id, action, now=None):
+    """Assigner deals with a missing-item report: put the items back on the
+    bill for another picker (reassign), or mark them not available."""
+    now = now or datetime.utcnow()
+    m = db.session.get(PickMissing, missing_id)
+    if not m or m.status != "open":
+        raise PickError("That report has already been handled.")
+    if action not in ("reassign", "unavailable"):
+        raise PickError("Choose reassign or not available.")
+    m.status, m.handled_at = ("reassigned" if action == "reassign" else "unavailable"), now
+    if action == "reassign":
+        # the items go back on the bill as ordinary items to pick
+        bill = db.session.get(PickBill, m.bill_id)
+        if bill and bill.status == "done":
+            bill.status, bill.completed_at = "open", None
+    db.session.flush()
+    _close_bill_if_done(db.session.get(PickBill, m.bill_id), now)
+    db.session.commit()
+    if action == "reassign":
+        bill = db.session.get(PickBill, m.bill_id)
+        for p in free_pickers():
+            notify_employee(p.id, "Bill %s: %d item%s to pick again" % (bill.bill_no, m.qty, "" if m.qty == 1 else "s"),
+                            m.item_name, link="/dashboard", sms=False)
+    return m
 
 
 def release_claim(claim_id):
@@ -1992,28 +2165,29 @@ def cancel_pick_bill(bill_id):
 
 
 def picker_pick_stats(emp_id, dates):
-    """Finished grabs on these days: items, grabs, on-time, points, hours,
-    and items/hr per day. The basis of the picker score."""
+    """Finished grabs on these days. The basis of the picker score."""
     dates = [d for d in dates if d]
-    out = {"items": 0, "grabs": 0, "on_time": 0, "points": 0, "seconds": 0.0, "bills": 0,
-           "daily_rate": {}, "daily_items": {}}
+    out = {"items": 0, "grabs": 0, "on_time": 0, "points": 0.0, "seconds": 0.0, "bills": 0,
+           "missing": 0, "daily_rate": {}, "daily_items": {}}
     if emp_id is None or not dates:
         return out
     claims = PickClaim.query.filter(PickClaim.picker_id == emp_id, PickClaim.status == "done",
                                     PickClaim.work_date.in_(dates)).all()
-    per_day = {}
-    bills = set()
+    per_day, bills = {}, set()
     for c in claims:
+        got = c.picked if c.picked is not None else c.items
         secs = max((c.done_at - c.started_at).total_seconds(), 1.0) if c.done_at and c.started_at else 1.0
-        out["items"] += c.items
+        out["items"] += got
         out["grabs"] += 1
-        out["on_time"] += 1 if c.done_at <= c.due_at else 0
-        out["points"] += int(c.points or 0)
+        out["missing"] += c.missing or 0
+        out["on_time"] += 1 if (c.outcome in ("ontime", "extra", "report") if c.outcome else c.done_at <= c.due_at) else 0
+        out["points"] += float(c.points or 0) + float(c.bonus or 0)
         out["seconds"] += secs
         bills.add(c.bill_id)
         d = per_day.setdefault(c.work_date, [0, 0.0])
-        d[0] += c.items
+        d[0] += got
         d[1] += secs
+    out["points"] = round(out["points"], 1)
     out["bills"] = len(bills)
     for d, (it, secs) in per_day.items():
         out["daily_items"][d] = it
@@ -2032,7 +2206,7 @@ def sync_picker_day(emp_id, d):
         e = KPIEntry(emp_id=emp_id, entry_date=d, total_time=9.0)
         db.session.add(e)
     e.picked = st["items"]
-    e.missed = 0
+    e.missed = st["missing"]
     e.sales_bills_open = st["bills"]
     e.total_bills_received = st["bills"]
     e.total_time = 9.0
@@ -2047,27 +2221,54 @@ def sync_picker_day(emp_id, d):
 
 
 def alert_late_picks(now=None):
-    """Tell every Pick Assigner, once, about each grab that has run past its
-    timer and is still not done. Runs on every screen refresh and once a
-    minute in the background. Returns how many grabs were reported."""
+    """Run on every screen refresh and once a minute:
+      - a grab past its report time is late: the assigner is told once
+      - a free picker who has not taken a waiting bill within 2 minutes gets
+        a warning (no points cut for now) and the assigner is told
+    Returns how many new late grabs were found."""
     now = now or datetime.utcnow()
     try:
-        late = PickClaim.query.filter(PickClaim.status == "active", PickClaim.due_at < now,
-                                      or_(PickClaim.late_alerted.is_(None), PickClaim.late_alerted.is_(False))).all()
-        if not late:
-            return 0
-        assigners = [e for e in Employee.query.filter(Employee.staff_type == "pick_assigner").all()]
+        assigners = _assigners()
+        half = timedelta(seconds=PICK_EXTRA_SECONDS / 2.0)
+        late = [c for c in PickClaim.query.filter(PickClaim.status == "active",
+                                                  PickClaim.due_at < now - 2 * half).all()
+                if not c.late_alerted]
         for c in late:
             c.late_alerted = True
+            _pick_event("late", c.picker_id, c.bill_id, minutes=0.0, detail="still not finished")
+        # free pickers who leave a waiting bill untouched
+        idle_new = []
+        waiting = [b for b in PickBill.query.filter_by(status="open").all() if pick_bill_progress(b)["left"] > 0]
+        if waiting:
+            warned = {(e.picker_id, e.bill_id) for e in PickEvent.query.filter_by(kind="idle").all()}
+            for p in free_pickers():
+                last = (db.session.query(db.func.max(PickClaim.done_at))
+                        .filter(PickClaim.picker_id == p.id).scalar())
+                for b in waiting:
+                    since = max(b.created_at, last) if last else b.created_at
+                    if (now - since).total_seconds() >= PICK_IDLE_SECONDS and (p.id, b.id) not in warned:
+                        mins = round((now - since).total_seconds() / 60.0, 1)
+                        _pick_event("idle", p.id, b.id, minutes=mins, detail="did not take a waiting bill")
+                        idle_new.append((p, b, mins))
+                        break
+        if not late and not idle_new:
+            return 0
         db.session.commit()
         for c in late:
             who = db.session.get(Employee, c.picker_id)
             bill = db.session.get(PickBill, c.bill_id)
             title = "%s is late on bill %s" % (who.name if who else "A picker", bill.bill_no if bill else "?")
-            body = "%d item%s, timer ran out at %s." % (c.items, "" if c.items == 1 else "s",
-                                                       (c.due_at + timedelta(hours=5, minutes=30)).strftime("%H:%M"))
+            body = "%d item%s, time ran out at %s." % (c.items, "" if c.items == 1 else "s", ist12(pick_windows(c)[2]))
             for a in assigners:
                 notify_employee(a.id, title, body, link="/dashboard", sms=False)
+        for p, b, mins in idle_new:
+            notify_employee(p.id, "Please take the waiting bill",
+                            "Bill %s has been waiting %g min while you were free. Leaving bills waiting "
+                            "will lead to point deductions from your day's points." % (b.bill_no, mins),
+                            link="/dashboard", sms=False)
+            for a in assigners:
+                notify_employee(a.id, "%s left bill %s waiting" % (p.name, b.bill_no),
+                                "Free for %g min without taking it." % mins, link="/dashboard", sms=False)
         return len(late)
     except Exception as exc:
         db.session.rollback()
@@ -2084,52 +2285,68 @@ def picking_state(emp, staff_type):
     """Everything the picking screens show, as plain JSON-able data."""
     now = datetime.utcnow()
     today = date.today()
+    day_start = datetime.combine(today, datetime.min.time())
     alert_late_picks(now)
-    bills = (PickBill.query.filter(or_(PickBill.status == "open",
-                                       PickBill.created_at >= datetime.combine(today, datetime.min.time())))
-             .order_by(PickBill.created_at.desc()).limit(60).all())
+    bills = (PickBill.query.filter(or_(PickBill.status == "open", PickBill.created_at >= day_start))
+             .order_by(PickBill.is_urgent.desc(), PickBill.created_at.desc()).limit(80).all())
     names = {e.id: e.name for e in Employee.query.all()}
+    active_now = {c.picker_id: c for c in PickClaim.query.filter_by(status="active").all()}
+
     def bill_row(b):
         pr = pick_bill_progress(b)
-        mins = None
-        if b.completed_at and b.created_at:
-            mins = round((b.completed_at - b.created_at).total_seconds() / 60.0, 1)
-        return {"id": b.id, "bill_no": b.bill_no, "items": b.items, "status": b.status,
-                "done": pr["done"], "active": pr["active"], "left": pr["left"],
-                "pickers": [names.get(i, "#%d" % i) for i in pr["pickers"]],
-                "minutes": mins, "added": b.created_at.strftime("%H:%M") if b.created_at else ""}
-    out = {"seconds_per_item": PICK_SECONDS_PER_ITEM, "late_cap": PICK_LATE_CAP,
+        mins = round((b.completed_at - b.created_at).total_seconds() / 60.0, 1) if b.completed_at and b.created_at else None
+        taken = []
+        for pid, r in pr["by"].items():
+            ac = active_now.get(pid)
+            late_now = bool(ac and ac.bill_id == b.id and pick_phase(ac, now) == "late")
+            taken.append({"name": names.get(pid, "#%d" % pid), "items": r["items"] + r["active"],
+                          "state": "late" if (r["late"] or late_now) else ("picking" if r["active"] else "done")})
+        return {"id": b.id, "bill_no": b.bill_no, "items": b.items, "status": b.status, "urgent": bool(b.is_urgent),
+                "done": pr["done"], "active": pr["active"], "left": pr["left"], "missing": pr["missing"],
+                "taken": taken, "pickers": [t["name"] for t in taken],
+                "missing_rows": [{"id": m.id, "item": m.item_name, "qty": m.qty, "by": names.get(m.picker_id, ""),
+                                  "at": ist12(m.reported_at)} for m in pr["missing_rows"]],
+                "elapsed": int(((b.completed_at or now) - b.created_at).total_seconds()) if b.created_at else 0,
+                "minutes": mins, "added": ist12(b.created_at)}
+
+    out = {"seconds_per_item": PICK_SECONDS_PER_ITEM, "urgent_seconds": PICK_URGENT_SECONDS,
+           "extra_seconds": PICK_EXTRA_SECONDS, "late_cap": PICK_LATE_CAP, "prefix": fy_prefix(),
            "bills": [bill_row(b) for b in bills]}
     if staff_type == "picker":
-        c = active_claim_for(emp.id)
+        c = active_now.get(emp.id)
         if c:
             b = db.session.get(PickBill, c.bill_id)
+            n, f, r = pick_windows(c)
             out["mine"] = {"id": c.id, "bill_no": b.bill_no if b else "", "items": c.items,
-                           "seconds_left": int((c.due_at - now).total_seconds()),
-                           "seconds_total": c.items * PICK_SECONDS_PER_ITEM}
+                           "urgent": bool(b and b.is_urgent),
+                           "normal_left": int((n - now).total_seconds()), "find_left": int((f - now).total_seconds()),
+                           "report_left": int((r - now).total_seconds()),
+                           "seconds_total": c.items * pick_seconds(b)}
         st = picker_pick_stats(emp.id, [today])
-        out["today"] = {"items": st["items"], "grabs": st["grabs"], "points": st["points"],
+        out["today"] = {"bills": st["bills"], "items": st["items"], "grabs": st["grabs"], "points": st["points"],
                         "on_time_pct": round(100.0 * st["on_time"] / st["grabs"], 1) if st["grabs"] else None,
-                        "rate": st["daily_rate"].get(today)}
+                        "rate": st["daily_rate"].get(today), "missing": st["missing"]}
     else:
-        active = {c.picker_id: c for c in PickClaim.query.filter_by(status="active").all()}
         rows = []
         for e in Employee.query.filter(Employee.staff_type == "picker").order_by(Employee.name).all():
             if e.is_admin:
                 continue
-            c = active.get(e.id)
+            c = active_now.get(e.id)
             r = {"id": e.id, "name": e.name, "free": c is None}
             if c:
                 b = db.session.get(PickBill, c.bill_id)
                 r.update({"claim_id": c.id, "bill_no": b.bill_no if b else "", "items": c.items,
-                          "seconds_left": int((c.due_at - now).total_seconds())})
+                          "seconds_left": int((c.due_at - now).total_seconds()), "phase": pick_phase(c, now)})
+                if pick_phase(c, now) == "late":
+                    r["late_by"] = int((now - pick_windows(c)[2]).total_seconds())
             st = picker_pick_stats(e.id, [today])
-            if c and c.due_at < now:
-                r["late_by"] = int((now - c.due_at).total_seconds())
-            r["today_items"] = st["items"]
-            r["today_points"] = st["points"]
+            r.update({"today_bills": st["bills"], "today_items": st["items"], "today_points": st["points"]})
             rows.append(r)
         out["pickers"] = rows
+        evs = PickEvent.query.filter_by(day=today).order_by(PickEvent.at.desc()).limit(100).all()
+        bill_no = {b.id: b.bill_no for b in PickBill.query.filter(PickBill.id.in_({e.bill_id for e in evs if e.bill_id})).all()} if evs else {}
+        out["events"] = [{"kind": e.kind, "who": names.get(e.picker_id, ""), "bill": bill_no.get(e.bill_id, ""),
+                          "at": ist12(e.at), "minutes": e.minutes, "detail": e.detail or ""} for e in evs]
     return out
 
 
@@ -5382,6 +5599,8 @@ def admin_delete_user(emp_id):
             PersonalRecord.query.filter_by(emp_id=emp_id).delete(synchronize_session=False)
             LevelEvent.query.filter_by(emp_id=emp_id).delete(synchronize_session=False)
             Notification.query.filter_by(emp_id=emp_id).delete(synchronize_session=False)
+            PickMissing.query.filter_by(picker_id=emp_id).delete(synchronize_session=False)
+            PickEvent.query.filter_by(picker_id=emp_id).delete(synchronize_session=False)
             PickClaim.query.filter_by(picker_id=emp_id).delete(synchronize_session=False)
             PickBill.query.filter_by(created_by=emp_id).update({"created_by": None}, synchronize_session=False)
             SupervisorBill.query.filter(
@@ -8113,11 +8332,23 @@ def pick_done():
     if role != "picker":
         return _pick_reply(False, "Only pickers can finish items.", 403)
     data = request.get_json(silent=True) or request.form
+    missing = data.get("missing") or []
+    if not isinstance(missing, list):
+        missing = []
     try:
-        c, completed = finish_claim(session.get("user_id"), int(data.get("claim_id") or 0))
-    except (PickError, ValueError) as exc:
+        missing = [(m.get("item"), int(m.get("qty") or 0)) for m in missing if isinstance(m, dict)]
+        c, completed = finish_claim(session.get("user_id"), int(data.get("claim_id") or 0), missing=missing)
+    except (PickError, ValueError, TypeError) as exc:
         return _pick_reply(False, str(exc) if isinstance(exc, PickError) else "Nothing to finish.", 400)
-    msg = ("On time: +%d points." % c.points) if c.points > 0 else ("Late: %d points." % c.points)
+    pts = ("%g" % c.points)
+    if c.outcome == "ontime":
+        msg = "In normal time: +%s points." % pts
+    elif c.outcome in ("extra", "report"):
+        msg = "Done in extra time: +%s points." % pts
+    else:
+        msg = "Late: %s points." % pts
+    if c.missing:
+        msg += " %d missing item%s reported to the assigner." % (c.missing, "" if c.missing == 1 else "s")
     if completed:
         msg += " Bill complete."
     return _pick_reply(True, msg)
@@ -8134,6 +8365,20 @@ def pick_cancel_bill(bill_id):
     except PickError as exc:
         return _pick_reply(False, str(exc), 400)
     return _pick_reply(True, "Bill cancelled.")
+
+
+@app.route("/pick/missing/<int:missing_id>/<action>", methods=["POST"])
+@login_required
+def pick_missing_action(missing_id, action):
+    role, is_admin = _pick_role()
+    if role != "pick_assigner" and not is_admin:
+        return _pick_reply(False, "Only the Pick Assigner can handle missing items.", 403)
+    try:
+        handle_missing(missing_id, action)
+    except PickError as exc:
+        return _pick_reply(False, str(exc), 400)
+    return _pick_reply(True, "Items put back on the bill for another picker." if action == "reassign"
+                       else "Marked as not available.")
 
 
 @app.route("/pick/claim/<int:claim_id>/release", methods=["POST"])

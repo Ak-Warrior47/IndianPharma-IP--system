@@ -2,9 +2,10 @@
 
 A Pick Assigner adds a bill (bill number + items). Free pickers are notified
 and grab items from it themselves; several pickers share one bill. Each grab
-has a timer of items x PICK_SECONDS_PER_ITEM. Done on time: +1 per item.
-Late: -1 per started minute over, never more than -5. The picker score comes
-from these grabs.
+has a timer of items x 30 s (20 s urgent), then 125 s extra: half to find,
+half to report only. Normal time earns 1.5 points per item, extra time 1 per
+item, late -1 per started minute, never more than -5. Bill numbers get the
+financial-year prefix (IP2627/) and can never be reused.
 
 The owner's example: a 10-item bill, picker 1 takes 3, picker 2 takes 3,
 picker 4 takes 2, picker 1 takes 1 more -> 9 of 10 picked, 1 left.
@@ -20,7 +21,7 @@ REPO = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, REPO)
 
 import app as A  # noqa: E402
-from app import (app, db, Employee, KPIEntry, Notification, PickBill, PickClaim,  # noqa: E402
+from app import (app, db, Employee, KPIEntry, Notification, PickBill, PickClaim, PickEvent,  # noqa: E402
                  PersonalRecord, LevelEvent)
 from tests_helper import csrf_client  # noqa: E402
 
@@ -98,13 +99,13 @@ check("2.1 A picker cannot add bills", code == 403)
 code, j = jpost(ca, "/pick/bill", {"bill_no": "4521", "items": 10})
 check("2.2 The assigner adds bill 4521 with 10 items", code == 200 and j.get("ok"), str(j))
 with app.app_context():
-    bill = PickBill.query.filter_by(bill_no="4521").first()
+    bill = PickBill.query.filter_by(bill_no=A.fy_prefix() + "4521").first()
     BID = bill.id
     check("2.3 Every free picker is notified",
           all(Notification.query.filter_by(emp_id=i).filter(Notification.title.like("%4521%")).count() == 1
               for i in ids.values()))
 code, j = jpost(ca, "/pick/bill", {"bill_no": "4521", "items": 3})
-check("2.4 The same open bill number cannot be added twice", code == 400)
+check("2.4 The same bill number cannot be entered twice", code == 400 and "only once" in j.get("message", ""))
 code, j = jpost(ca, "/pick/bill", {"bill_no": "B0", "items": 0})
 check("2.5 A bill needs at least 1 item", code == 400)
 
@@ -129,7 +130,7 @@ for c in (c1, c2, c4):
 with app.app_context():
     mine = {cl.picker_id: cl.id for cl in PickClaim.query.filter_by(bill_id=BID, status="active").all()}
 code, j = jpost(c1, "/pick/done", {"claim_id": mine[ids["p1"]]})
-check("3.6 Picker 1 finishes on time: +3 points", code == 200 and "+3" in j.get("message", ""), str(j))
+check("3.6 Picker 1 finishes in normal time: 1.5 x 3 = +4.5 points", code == 200 and "+4.5" in j.get("message", ""), str(j))
 jpost(c2, "/pick/done", {"claim_id": mine[ids["p2"]]})
 jpost(c4, "/pick/done", {"claim_id": mine[ids["p4"]]})
 code, j = jpost(c1, "/pick/claim", {"bill_id": BID, "items": 1})
@@ -152,11 +153,14 @@ with app.app_context():
 # ---- 4. Timer and points -----------------------------------------------------
 t0 = datetime(2026, 1, 5, 10, 0, 0)
 due = t0 + timedelta(seconds=3 * SEC)
-check("4.1 Timer is items x time per item (3 items = %d s)" % (3 * SEC), True)
-check("4.2 On time: +1 per item", A.pick_points(3, due, due - timedelta(seconds=1)) == 3)
-check("4.3 Exactly at the deadline still counts as on time", A.pick_points(3, due, due) == 3)
-check("4.4 90 s late = 2 started minutes: -2", A.pick_points(3, due, due + timedelta(seconds=90)) == -2)
-check("4.5 9 minutes late is capped at -5", A.pick_points(3, due, due + timedelta(minutes=9)) == -5)
+check("4.1 Normal time is 30 s per item", SEC == 30)
+check("4.2 Done in normal time: 1.5 per item", A.pick_points(3, due, due - timedelta(seconds=1)) == 4.5)
+check("4.3 Exactly at the end of normal time still counts", A.pick_points(3, due, due) == 4.5)
+check("4.4 Extra time (find): 1 per item, no cut", A.pick_points(3, due, due + timedelta(seconds=60)) == 3.0)
+check("4.4b Extra time (report): still 1 per item", A.pick_points(3, due, due + timedelta(seconds=120)) == 3.0)
+check("4.4c 90 s after the 125 s extra time = 2 started minutes late: -2",
+      A.pick_points(3, due, due + timedelta(seconds=125 + 90)) == -2)
+check("4.5 Very late is capped at -5", A.pick_points(3, due, due + timedelta(minutes=30)) == -5)
 with app.app_context():
     db.session.add(PickBill(bill_no="T9", items=4))
     db.session.commit()
@@ -164,12 +168,12 @@ with app.app_context():
     cl = A.claim_items(ids["p2"], tb.id, 2, now=t0)
     check("4.6 A grab's deadline is set from its size", cl.due_at == t0 + timedelta(seconds=2 * SEC))
     cl, _ = A.finish_claim(ids["p2"], cl.id, now=cl.due_at + timedelta(minutes=3), day=date.today())
-    check("4.7 Finished 3 minutes late: -3 points", cl.points == -3, str(cl.points))
+    check("4.7 Finished 3 minutes after normal time (55 s after extra time): -1", cl.points == -1, str(cl.points))
 
 # ---- 5. Assigner tools ---------------------------------------------------------
-code, j = jpost(ca, "/pick/bill", {"bill_no": "R1", "items": 4})
+code, j = jpost(ca, "/pick/bill", {"bill_no": "990001", "items": 4})
 with app.app_context():
-    rb = PickBill.query.filter_by(bill_no="R1").first().id
+    rb = PickBill.query.filter_by(bill_no=A.fy_prefix() + "990001").first().id
 jpost(c4, "/pick/claim", {"bill_id": rb, "items": 4})
 with app.app_context():
     rc = PickClaim.query.filter_by(picker_id=ids["p4"], status="active").first().id
@@ -184,7 +188,7 @@ s = ca.get("/pick/state.json").get_json()
 check("5.3 The assigner sees every picker, free or busy", s and all(any(p["id"] == i for p in s["pickers"])
                                                                     for i in ids.values()))
 s = c1.get("/pick/state.json").get_json()
-check("5.4 A picker sees today's items and points", s and s["today"]["items"] == 4 and s["today"]["points"] == 4,
+check("5.4 A picker sees today's items and points (4.5 + 1.5)", s and s["today"]["items"] == 4 and s["today"]["points"] == 6,
       str(s and s.get("today")))
 
 # ---- 6. Score and daily record -------------------------------------------------
@@ -239,6 +243,125 @@ with app.app_context():
         cl.status = "cancelled"
     db.session.commit()
 
+# ---- 9. Owner's second round ------------------------------------------------
+from datetime import date as _date  # noqa: E402
+check("9.1 Prefix follows the financial year: Nov 2026 -> IP2627/", A.fy_prefix(_date(2026, 11, 8)) == "IP2627/")
+check("9.2 31 Mar 2027 is still IP2627/, 1 Apr 2027 becomes IP2728/",
+      A.fy_prefix(_date(2027, 3, 31)) == "IP2627/" and A.fy_prefix(_date(2027, 4, 1)) == "IP2728/")
+code, j = jpost(ca, "/pick/bill", {"bill_no": "1234567", "items": 3})
+check("9.3 Bill number is at most 6 digits", code == 400)
+code, j = jpost(ca, "/pick/bill", {"bill_no": "12ab", "items": 3})
+check("9.4 Letters other than a final U are refused", code == 400)
+with app.app_context():
+    # earlier sections leave bills open; close them so urgency is tested alone
+    for b in PickBill.query.filter_by(status="open").all():
+        b.status = "cancelled"
+    for c in PickClaim.query.filter_by(status="active").all():
+        c.status = "cancelled"
+    db.session.commit()
+jpost(ca, "/pick/bill", {"bill_no": "5001", "items": 4})
+code, j = jpost(ca, "/pick/bill", {"bill_no": "5002u", "items": 4})
+with app.app_context():
+    nb = PickBill.query.filter_by(bill_no=A.fy_prefix() + "5001").first()
+    ub = PickBill.query.filter_by(bill_no=A.fy_prefix() + "5002").first()
+    NB, UB = nb.id, ub.id
+    check("9.5 U on the end marks the bill urgent and the prefix is added", ub is not None and ub.is_urgent and not nb.is_urgent)
+code, j = jpost(c1, "/pick/claim", {"bill_id": NB, "items": 2})
+check("9.6 Urgent bills come first: a normal bill can't be taken while urgent items wait",
+      code == 400 and "Urgent" in j.get("message", ""), str(j))
+code, j = jpost(c1, "/pick/claim", {"bill_id": UB, "items": 3})
+with app.app_context():
+    uc = PickClaim.query.filter_by(picker_id=ids["p1"], status="active").first()
+    check("9.7 Urgent items get 20 s each (3 items = 60 s)",
+          uc is not None and abs((uc.due_at - uc.started_at).total_seconds() - 60) < 1)
+    UC = uc.id
+jpost(c2, "/pick/claim", {"bill_id": UB, "items": 1})
+with app.app_context():
+    c2c = PickClaim.query.filter_by(picker_id=ids["p2"], status="active").first().id
+code, j = jpost(c1, "/pick/done", {"claim_id": UC})
+jpost(c2, "/pick/done", {"claim_id": c2c})
+with app.app_context():
+    cl1, cl2 = db.session.get(PickClaim, UC), db.session.get(PickClaim, c2c)
+    check("9.8 The urgent pool (10) is shared by items picked: 7.5 and 2.5",
+          cl1.bonus == 7.5 and cl2.bonus == 2.5, "%s %s" % (cl1.bonus, cl2.bonus))
+s9 = c1.get("/pick/state.json").get_json()
+row = next(b for b in s9["bills"] if b["id"] == NB)
+check("9.9 Times are shown in 12-hour form", row["added"].endswith(("AM", "PM")), row["added"])
+code, j = jpost(c3, "/pick/claim", {"bill_id": NB, "items": 4})
+with app.app_context():
+    c3c = PickClaim.query.filter_by(picker_id=ids["p3"], status="active").first().id
+code, j = jpost(c3, "/pick/done", {"claim_id": c3c, "missing": [{"item": "Dolo 650", "qty": 1}, {"item": "Pan 40", "qty": 1}]})
+check("9.10 A picker can report missing items: 2 picked, 2 not found", code == 200 and "2 missing" in j.get("message", ""), str(j))
+with app.app_context():
+    cl = db.session.get(PickClaim, c3c)
+    pr = A.pick_bill_progress(db.session.get(PickBill, NB))
+    check("9.11 Picked and missing are recorded on the grab", cl.picked == 2 and cl.missing == 2)
+    check("9.12 Missing items reported in normal time earn full points (1.5 x 4 = 6)", cl.points == 6.0, str(cl.points))
+    check("9.13 The bill shows 2 missing and is not complete", pr["missing"] == 2 and db.session.get(PickBill, NB).status == "open")
+    check("9.14 The assigner is notified about the missing items",
+          Notification.query.filter_by(emp_id=ASG_ID).filter(Notification.title.like("Missing items%")).count() >= 1)
+sa = ca.get("/pick/state.json").get_json()
+brow = next(b for b in sa["bills"] if b["id"] == NB)
+check("9.15 The assigner sees which items, who reported them and when",
+      len(brow["missing_rows"]) == 2 and brow["missing_rows"][0]["by"] == "PK P3" and brow["missing_rows"][0]["at"])
+check("9.16 'Taken by' shows each picker and their items", any(t["name"] == "PK P3" and t["items"] == 2 for t in brow["taken"]))
+check("9.17 The day's late report lists the missing items", any(e["kind"] == "missing" and "Dolo 650" in e["detail"] for e in sa["events"]))
+mids = [m["id"] for m in brow["missing_rows"]]
+code, j = jpost(c1, "/pick/missing/%d/reassign" % mids[0])
+check("9.18 Only the assigner can handle missing items", code == 403)
+jpost(ca, "/pick/missing/%d/reassign" % mids[0])
+with app.app_context():
+    pr = A.pick_bill_progress(db.session.get(PickBill, NB))
+    check("9.19 Reassign puts the item back on the bill for another picker", pr["left"] == 1 and pr["missing"] == 1, str(pr))
+jpost(ca, "/pick/missing/%d/unavailable" % mids[1])
+code, j = jpost(c4, "/pick/claim", {"bill_id": NB, "items": 1})
+with app.app_context():
+    c4c = PickClaim.query.filter_by(picker_id=ids["p4"], status="active").first().id
+jpost(c4, "/pick/done", {"claim_id": c4c})
+with app.app_context():
+    check("9.20 Once the reassigned item is picked and the other marked not available, the bill completes",
+          db.session.get(PickBill, NB).status == "done")
+    # report-only window: Done without reporting is refused
+    db.session.add(PickBill(bill_no="RW1", items=2))
+    db.session.commit()
+    rw = PickBill.query.filter_by(bill_no="RW1").first()
+    t1 = datetime.utcnow() - timedelta(seconds=2 * 30 + 100)        # past normal + find, inside report
+    rc = A.claim_items(ids["p1"], rw.id, 2, now=t1)
+    check("9.21 The phase is 'report' after normal + find time", A.pick_phase(rc, datetime.utcnow()) == "report")
+    try:
+        A.finish_claim(ids["p1"], rc.id)
+        locked = False
+    except A.PickError as exc:
+        locked = "Report" in str(exc)
+    check("9.22 In report-only time, picking is locked: Done is refused", locked)
+    rc2, _ = A.finish_claim(ids["p1"], rc.id, missing=[("Crocin", 2)])
+    check("9.23 Reporting is still allowed then, with no points cut on picked items", rc2.outcome == "report")
+    # idle warning: free picker leaves a waiting bill 2 minutes
+    Notification.query.filter_by(emp_id=ids["p2"]).delete()
+    PickEvent.query.filter_by(kind="idle").delete()
+    for c in PickClaim.query.filter_by(picker_id=ids["p2"]).all():   # p2 has been free 5 minutes
+        if c.done_at:
+            c.done_at = datetime.utcnow() - timedelta(minutes=5)
+    db.session.commit()
+
+    db.session.add(PickBill(bill_no="ID1", items=3, created_at=datetime.utcnow() - timedelta(minutes=3)))
+    db.session.commit()
+    A.alert_late_picks()
+    warn = Notification.query.filter_by(emp_id=ids["p2"]).filter(Notification.title.like("Please take%")).first()
+    check("9.24 A free picker who leaves a bill waiting 2 min gets a warning", warn is not None and "deduction" in (warn.body or ""))
+    check("9.25 ...and it is noted in the late report for the assigner",
+          PickEvent.query.filter_by(kind="idle", picker_id=ids["p2"]).count() == 1)
+    before = A.picker_pick_stats(ids["p2"], [date.today()])["points"]
+    A.alert_late_picks()
+    check("9.26 No points are taken for it yet, and it warns only once",
+          A.picker_pick_stats(ids["p2"], [date.today()])["points"] == before
+          and PickEvent.query.filter_by(kind="idle", picker_id=ids["p2"]).count() == 1)
+pd = c1.get("/dashboard").data.decode()
+check("9.27 The picker's scorecard order is Bills, Items, On time, Points",
+      pd.index(">Bills<") < pd.index(">Items<") < pd.index(">On time<") < pd.index(">Points<"))
+ad = ca.get("/dashboard").data.decode()
+check("9.28 The assigner's form shows the prefix and no 'e.g.' hint", 'id="pkPrefix"' in ad and "e.g." not in ad.split('id="pkAdd"')[1][:900])
+
 # ---- 8. Trial copy: test accounts and banner, never on the live database -----
 TRIAL = ["ravi@pharmaip.com", "lisa@pharmaip.com", "smriti@pharmaip.com", "deepti@pharmaip.com",
          "amit@pharmaip.com"]
@@ -277,6 +400,8 @@ with app.app_context():
                 M.query.filter_by(emp_id=e.id).delete()
             PickClaim.query.filter_by(picker_id=e.id).delete()
             db.session.delete(e)
+    A.PickMissing.query.delete()
+    PickEvent.query.delete()
     PickBill.query.delete()
     db.session.commit()
 
