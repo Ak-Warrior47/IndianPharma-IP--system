@@ -60,6 +60,32 @@
 .pk-ev .k{display:inline-block;min-width:62px;font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.4px}
 .pk-ev .k.late{color:var(--bad-ink)} .pk-ev .k.idle{color:var(--warn-ink)} .pk-ev .k.missing{color:#7c3aed}
 .pk-empty{padding:12px 0;color:var(--ink-3);font-size:14px}
+.pk-tabs{display:flex;gap:4px;overflow-x:auto;margin:0 0 12px;border-bottom:1px solid var(--line);scrollbar-width:none}
+.pk-tabs button{flex:none;border:0;background:transparent;padding:9px 12px;font:700 14px system-ui,sans-serif;color:var(--ink-3);border-bottom:2.5px solid transparent;cursor:pointer;white-space:nowrap}
+.pk-tabs button[aria-selected="true"]{color:var(--brand);border-bottom-color:var(--brand)}
+.pk-tabs .cnt{display:inline-block;min-width:18px;padding:0 5px;margin-left:4px;border-radius:9px;background:var(--bad);color:#fff;font-size:11px;line-height:18px;text-align:center}
+.pk-open{border:0;background:transparent;padding:0;font:inherit;color:inherit;font-weight:800;cursor:pointer;text-decoration:underline;text-decoration-color:var(--line);text-underline-offset:3px}
+.pk-board{width:100%;border-collapse:collapse;font-size:14px}
+.pk-board th{text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.4px;color:var(--ink-3);padding:6px;border-bottom:1px solid var(--line)}
+.pk-board td{padding:8px 6px;border-bottom:1px solid var(--line);font-variant-numeric:tabular-nums}
+.pk-board tr.me td{background:var(--accent-tint,#eef4ff);font-weight:700}
+.pk-rank{display:inline-grid;place-items:center;width:24px;height:24px;border-radius:50%;background:var(--line);font-weight:800;font-size:12px}
+.pk-rank.r1{background:#f5c542}.pk-rank.r2{background:#d6d9de}.pk-rank.r3{background:#e6b17e}
+.pk-charts{display:grid;grid-template-columns:3fr 2fr;gap:14px;margin-top:14px}
+.pk-charts > div{border:1px solid var(--line);border-radius:12px;padding:10px;min-width:0}
+.pk-charts canvas{width:100%!important;height:220px!important}
+.pk-modal{position:fixed;inset:0;z-index:9990;background:rgba(15,23,42,.45);display:flex;align-items:flex-end;justify-content:center}
+.pk-modal[hidden]{display:none}
+.pk-sheet{background:var(--card,#fff);width:100%;max-width:620px;max-height:85vh;overflow:auto;border-radius:16px 16px 0 0;padding:16px}
+.pk-tl{border-left:3px solid var(--line);margin:10px 0 0 6px;padding-left:14px}
+.pk-tl > div{position:relative;padding:6px 0;font-size:14px}
+.pk-tl > div::before{content:"";position:absolute;left:-21px;top:11px;width:11px;height:11px;border-radius:50%;background:var(--brand)}
+.pk-tl > div.late::before{background:var(--bad)} .pk-tl > div.miss::before{background:#7c3aed} .pk-tl > div.end::before{background:var(--ok)}
+.pk-resch{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px}
+.pk-resch input{padding:6px 8px;border:1.5px solid var(--line);border-radius:8px;font-size:14px}
+.pk-closed{padding:10px 12px;border-radius:10px;background:#e8f4ee;color:#0f4a32;font-size:14px;margin-top:12px}
+@media (min-width:700px){ .pk-modal{align-items:center} .pk-sheet{border-radius:16px} }
+@media (max-width:640px){ .pk-charts{grid-template-columns:1fr} }
 @media (max-width:640px){
   .pk-stats{grid-template-columns:repeat(3,minmax(0,1fr))}
   .pk-bill{grid-template-columns:1fr;gap:6px}
@@ -72,6 +98,13 @@
   {% if staff_type == 'picker' %}
   <div class="section-label">Picking — {{ today.strftime('%A, %d %b') }}</div>
   <div class="pk-msg" id="pkMsg" role="status"></div>
+  <div class="pk-tabs" role="tablist" aria-label="Picking">
+    <button role="tab" data-tab="live" aria-selected="true">Live</button>
+    <button role="tab" data-tab="board" aria-selected="false">Leaderboard</button>
+    <button role="tab" data-tab="mine" aria-selected="false">My bills</button>
+    <button role="tab" data-tab="rules" aria-selected="false">Rules</button>
+  </div>
+  <section data-panel="live">
   <div class="pk-stats">
     <div class="pk-stat"><span>Bills</span><b id="pkBillsN">0</b></div>
     <div class="pk-stat"><span>Items</span><b id="pkItems">0</b></div>
@@ -104,11 +137,22 @@
   </div>
   <div class="section-label" style="margin-top:4px">Open bills</div>
   <div id="pkBills"><div class="pk-empty">Loading bills…</div></div>
-  <p class="pk-note" id="pkRule"></p>
+  </section>
+  <section data-panel="board" hidden><div id="pkBoard"></div></section>
+  <section data-panel="mine" hidden><div id="pkMyBills"></div></section>
+  <section data-panel="rules" hidden><div id="pkRule"></div></section>
 
   {% else %}
   <div class="section-label">Pick Assigner — {{ today.strftime('%A, %d %b') }}</div>
   <div class="pk-msg" id="pkMsg" role="status"></div>
+  <div class="pk-tabs" role="tablist" aria-label="Pick Assigner">
+    <button role="tab" data-tab="live" aria-selected="true">Live</button>
+    <button role="tab" data-tab="late" aria-selected="false">Late report <span class="cnt" id="pkLateCnt" hidden></span></button>
+    <button role="tab" data-tab="board" aria-selected="false">Leaderboard</button>
+    <button role="tab" data-tab="sched" aria-selected="false">Rescheduled <span class="cnt" id="pkSchedCnt" hidden></span></button>
+    <button role="tab" data-tab="rules" aria-selected="false">Rules</button>
+  </div>
+  <section data-panel="live">
   <div class="pk-late" id="pkLate" role="alert" hidden></div>
   <form class="pk-add" id="pkAdd" autocomplete="off" novalidate>
     <div><label for="pkBillNo">Bill number <span style="font-weight:500">(add U for urgent)</span></label>
@@ -120,10 +164,25 @@
   <div class="pk-row" id="pkPickers"><span class="pk-empty">Loading…</span></div>
   <div class="section-label" style="margin-top:14px">Today's bills</div>
   <div id="pkBills"><div class="pk-empty">Loading…</div></div>
-  <div class="section-label" style="margin-top:14px">Late report — today</div>
-  <div id="pkEvents"><div class="pk-empty">Nothing yet today.</div></div>
-  <p class="pk-note" id="pkRule"></p>
+  <div id="pkClose" style="margin-top:14px"></div>
+  </section>
+  <section data-panel="late" hidden>
+    <div class="pk-sub" style="margin-bottom:6px">Today's late picks, bills left waiting, and missing items. Saved for the admin.</div>
+    <div id="pkEvents"><div class="pk-empty">Nothing yet today.</div></div>
+  </section>
+  <section data-panel="board" hidden><div id="pkBoard"></div></section>
+  <section data-panel="sched" hidden>
+    <div class="pk-sub" style="margin-bottom:6px">Bills moved to a later time, and bills not finished when the day was closed. They come back to pickers on their own at that time.</div>
+    <div id="pkSched"></div>
+  </section>
+  <section data-panel="rules" hidden><div id="pkRule"></div></section>
   {% endif %}
+  <div class="pk-modal" id="pkModal" hidden role="dialog" aria-modal="true" aria-labelledby="pkModalTitle">
+    <div class="pk-sheet"><div class="pk-row" style="justify-content:space-between">
+      <div class="section-label" id="pkModalTitle" style="margin:0">Bill</div>
+      <button type="button" class="pk-btn ghost sm" id="pkModalX">Close</button></div>
+      <div id="pkModalBody"></div></div>
+  </div>
 </div>
 
 <script>
@@ -146,10 +205,18 @@
       .then(function (j) { say(j.message || (j.ok ? "Done." : "Could not do that."), j.ok); load(); return j; });
   }
   function rule(s) {
-    $("pkRule").textContent = "Each item: " + s.seconds_per_item + " s (urgent " + s.urgent_seconds + " s). Then " +
-      Math.round(s.extra_seconds / 2) + " s extra time to find, then " + Math.round(s.extra_seconds / 2) +
-      " s to report only. Normal time earns 1.5 points per item, extra time 1 per item. Late after that: −1 per minute, at most −" + s.late_cap + ".";
+    var h = Math.round(s.extra_seconds / 2);
+    $("pkRule").innerHTML = '<ul class="pk-sub" style="font-size:14px;color:var(--ink-2);padding-left:18px;margin:0;line-height:1.6">' +
+      "<li><b>Normal time:</b> " + s.seconds_per_item + " s per item (urgent bills " + s.urgent_seconds + " s). Done in this time: <b>1.5 points per item</b>.</li>" +
+      "<li><b>Extra time to find:</b> " + h + " s more. Done now: <b>1 point per item</b>, no cut.</li>" +
+      "<li><b>Report only:</b> " + h + " s more. Picking is locked; report the items you could not find.</li>" +
+      "<li><b>Late</b> after that: −1 point per minute, at most −" + s.late_cap + ". The Pick Assigner is alerted.</li>" +
+      "<li><b>Item not found:</b> report it with the name and quantity. It is paid once the assigner confirms it is not available.</li>" +
+      "<li><b>Urgent bills</b> (U) come first. 10 bonus points per urgent bill, shared by items picked.</li>" +
+      "<li><b>Waiting bills:</b> if you are free and leave a bill waiting 2 minutes, you get a warning. This will lead to point deductions.</li>" +
+      "<li>Bill numbers start with " + esc(s.prefix) + " and change every 1 April. A number can be used only once.</li></ul>";
   }
+  function billBtn(b) { return '<button type="button" class="pk-open" data-open="' + b.id + '" title="See this bill\'s timeline">' + esc(b.bill_no) + "</button>"; }
   function prog(b) {
     return '<div class="pk-prog" title="' + b.done + ' picked, ' + b.active + ' being picked, ' + b.missing + ' missing, ' + b.left + ' left">' +
       '<i class="d" style="width:' + (100 * b.done / b.items) + '%"></i><i class="a" style="width:' + (100 * b.active / b.items) + '%"></i>' +
@@ -186,7 +253,7 @@
       var focused = document.activeElement && document.activeElement.id;
       $("pkBills").innerHTML = open.map(function (b) {
         var can = !mine && b.left > 0 && (b.urgent || !urgentLeft);
-        return '<div class="pk-bill' + (b.urgent ? " urgent" : "") + '"><div><div class="no">' + esc(b.bill_no) + (b.urgent ? '<span class="pk-u">URGENT</span>' : "") +
+        return '<div class="pk-bill' + (b.urgent ? " urgent" : "") + '"><div><div class="no">' + billBtn(b) + (b.urgent ? '<span class="pk-u">URGENT</span>' : "") +
           '</div><div class="sub">added ' + esc(b.added) + " · " + plural(b.items, "item") + "</div></div>" +
           '<div><div class="pk-row">' + prog(b) + '<span class="sub">' + b.done + " / " + b.items + " picked · <b>" + b.left + " left</b></span></div>" + taken(b) + "</div>" +
           '<div class="pk-take"><input class="pk-in" type="number" min="1" max="' + b.left + '" placeholder="0" inputmode="numeric" aria-label="Items you are taking from ' + esc(b.bill_no) + '" id="take' + b.id + '"' + (can ? "" : " disabled") + ">" +
@@ -195,6 +262,13 @@
       Object.keys(keep).forEach(function (k) { if ($(k)) $(k).value = keep[k]; });
       if (focused && $(focused)) $(focused).focus();
     }
+    var mb = s.my_bills || [];
+    $("pkMyBills").innerHTML = mb.length ? '<div class="pk-sub" style="margin-bottom:6px">' + plural(mb.length, "bill") + " today · tap a bill to see its timeline</div>" + mb.map(function (r) {
+      return '<div class="pk-bill"><div><div class="no">' + billBtn({id: r.bill_id, bill_no: r.bill_no}) + (r.urgent ? '<span class="pk-u">URGENT</span>' : "") + '</div><div class="sub">last at ' + esc(r.last) + "</div></div>" +
+        "<div><b>" + plural(r.items, "item") + " picked</b>" + (r.missing ? ' · <span style="color:var(--bad-ink)">' + r.missing + " not found</span>" : "") + (r.late ? ' · <span style="color:var(--bad-ink)">late</span>' : "") +
+        '</div><div class="sub" style="font-weight:700">' + (r.points > 0 ? "+" : "") + r.points + " pts</div></div>";
+    }).join("") : '<div class="pk-empty">No bills picked yet today.</div>';
+    renderBoard(s);
     rule(s);
   }
 
@@ -215,17 +289,19 @@
     }).join("") : '<span class="pk-empty">No pickers set up yet.</span>';
     $("pkBills").innerHTML = s.bills.length ? s.bills.map(function (b) {
       var st = b.status === "done" ? "Complete in " + b.minutes + " min" : b.status === "cancelled" ? "Cancelled" :
-        (b.missing ? b.missing + " missing · " : "") + (b.left ? b.left + " left" : "being picked");
+        (b.missing ? b.missing + " missing · " : "") + (b.left ? b.left + " left" : b.active ? "being picked" : "waiting for you");
       var miss = b.missing_rows.length ? '<div class="pk-miss"><b>Not found:</b> ' + b.missing_rows.map(function (m) {
         return '<div class="pk-row" style="margin-top:4px">' + esc(m.item) + " ×" + m.qty + " · by " + esc(m.by) + " at " + esc(m.at) +
           ' <button type="button" class="pk-btn sm" data-miss="' + m.id + '" data-act="reassign">Reassign</button>' +
           ' <button type="button" class="pk-btn ghost sm" data-miss="' + m.id + '" data-act="unavailable">Not available</button></div>';
       }).join("") + "</div>" : "";
-      return '<div class="pk-bill' + (b.urgent ? " urgent" : "") + '"' + (b.missing ? ' style="border-left:4px solid var(--bad);padding-left:8px"' : "") + '><div><div class="no">' + esc(b.bill_no) + (b.urgent ? '<span class="pk-u">URGENT</span>' : "") +
+      return '<div class="pk-bill' + (b.urgent ? " urgent" : "") + '"' + (b.missing ? ' style="border-left:4px solid var(--bad);padding-left:8px"' : "") + '><div><div class="no">' + billBtn(b) + (b.urgent ? '<span class="pk-u">URGENT</span>' : "") +
         '</div><div class="sub">added ' + esc(b.added) + " · " + plural(b.items, "item") + "</div>" +
         (b.status === "open" ? '<div class="sub">open for <b class="pk-el" data-start="' + (Date.now() - b.elapsed * 1000) + '"></b></div>' : "") + "</div>" +
         '<div><div class="pk-row">' + prog(b) + '<span class="sub">' + b.done + " / " + b.items + " · " + st + "</span></div>" + taken(b) + miss + "</div>" +
-        "<div>" + (b.status === "open" ? '<button type="button" class="pk-btn bad sm" data-cancel="' + b.id + '">Cancel</button>' : "") + "</div></div>";
+        "<div>" + (b.status === "open" ? '<div class="pk-row" style="gap:6px"><button type="button" class="pk-btn ghost sm" data-resch="' + b.id + '">Reschedule</button>' +
+        '<button type="button" class="pk-btn bad sm" data-cancel="' + b.id + '">Cancel</button></div><div class="pk-resch" id="rs' + b.id + '" hidden>' +
+        '<input type="date" aria-label="Date"><input type="time" aria-label="Time"><button type="button" class="pk-btn sm" data-rsave="' + b.id + '">Save</button></div>' : "") + "</div></div>";
     }).join("") : '<div class="pk-empty">No bills yet today. Add the first one above.</div>';
     var ev = s.events || [];
     $("pkEvents").innerHTML = ev.length ? ev.map(function (e) {
@@ -234,7 +310,89 @@
                  e.kind === "late" ? "late on " + esc(e.bill) : "could not find " + esc(e.detail) + " on " + esc(e.bill);
       return '<div class="pk-ev"><span class="k ' + e.kind + '">' + label + "</span> " + esc(e.at) + " · <b>" + esc(e.who) + "</b> " + what + "</div>";
     }).join("") : '<div class="pk-empty">Nothing yet today.</div>';
+    $("pkLateCnt").hidden = !ev.length; $("pkLateCnt").textContent = ev.length;
+    var sc = s.scheduled || [];
+    $("pkSchedCnt").hidden = !sc.length; $("pkSchedCnt").textContent = sc.length;
+    $("pkSched").innerHTML = sc.length ? sc.map(function (b) {
+      return '<div class="pk-bill' + (b.urgent ? " urgent" : "") + '"><div><div class="no">' + billBtn(b) + (b.urgent ? '<span class="pk-u">URGENT</span>' : "") +
+        '</div><div class="sub">' + plural(b.left, "item") + " left</div></div><div class=\"sub\">Comes back " + esc(b.when_day) + ", <b>" + esc(b.when) + "</b></div>" +
+        '<div><button type="button" class="pk-btn sm" data-back="' + b.id + '">Bring back now</button></div></div>';
+    }).join("") : '<div class="pk-empty">No rescheduled bills.</div>';
+    $("pkClose").innerHTML = s.day_closed != null ?
+      '<div class="pk-closed">Today is closed: <b>' + s.day_closed + " bills</b>. The checkers' day total is fixed at " + s.day_closed + ".</div>" :
+      '<button type="button" class="pk-btn ghost" id="pkCloseBtn">Close today</button> <span class="pk-sub">Counts today\'s bills and fixes it as the checkers\' day total. Unfinished bills move to Rescheduled.</span>';
+    renderBoard(s);
     rule(s);
+  }
+
+  // ---- leaderboard (both roles) ------------------------------------------
+  var charts = {};
+  function chartLib(cb) {
+    if (window.Chart) return cb();
+    if (chartLib.loading) return chartLib.loading.push(cb);
+    chartLib.loading = [cb];
+    var sc = document.createElement("script"); sc.src = "/static/js/chart.umd.min.js";
+    sc.onload = function () { chartLib.loading.forEach(function (f) { f(); }); chartLib.loading = null; };
+    document.head.appendChild(sc);
+  }
+  function renderBoard(s) {
+    var rows = s.board || [], me = s.me;
+    var mine = rows.filter(function (r) { return r.id === me; })[0];
+    var h = (mine ? '<div class="pk-closed" style="margin:0 0 10px;background:var(--accent-tint,#eef4ff);color:var(--ink)">You are <b>#' + mine.rank + "</b> of " + rows.length + " today.</div>" : "") +
+      '<div style="overflow-x:auto"><table class="pk-board"><thead><tr><th>#</th><th>Picker</th><th>Bills</th><th>Items</th><th>On time</th><th>Points</th><th>Items/hr</th></tr></thead><tbody>' +
+      (rows.length ? rows.map(function (r) {
+        return '<tr class="' + (r.id === me ? "me" : "") + '"><td><span class="pk-rank r' + r.rank + '">' + r.rank + "</span></td><td>" + esc(r.name) + "</td><td>" + r.bills + "</td><td>" + r.items +
+          "</td><td>" + (r.grabs ? Math.round(r.on_time_pct) + "%" : "—") + "</td><td>" + (r.points > 0 ? "+" : "") + r.points + "</td><td>" + (r.rate || "—") + "</td></tr>";
+      }).join("") : '<tr><td colspan="7" class="pk-empty">No pickers yet.</td></tr>') + "</tbody></table></div>" +
+      '<div class="pk-charts"><div><div class="pk-sub" style="font-weight:700">Bills and items today</div><canvas id="pkBar1" role="img" aria-label="Bills and items per picker"></canvas></div>' +
+      '<div><div class="pk-sub" style="font-weight:700">Share of items picked</div><canvas id="pkPie" role="img" aria-label="Share of items per picker"></canvas></div></div>';
+    var key = JSON.stringify(rows.map(function (r) { return [r.id, r.bills, r.items, r.points]; }));
+    if ($("pkBoard").getAttribute("data-key") === key && $("pkBar1")) return;   // nothing changed
+    $("pkBoard").setAttribute("data-key", key);
+    $("pkBoard").innerHTML = h;
+    chartLib(function () {
+      Object.keys(charts).forEach(function (k) { charts[k].destroy(); }); charts = {};
+      var names = rows.map(function (r) { return r.name; });
+      var pal = ["#146B4A", "#E8A13A", "#1E40AF", "#C8553D", "#7C3AED", "#0E7490", "#B45309", "#475569"];
+      charts.bar = new Chart($("pkBar1"), {type: "bar", data: {labels: names, datasets: [
+        {label: "Bills", data: rows.map(function (r) { return r.bills; }), backgroundColor: "#1E40AF"},
+        {label: "Items", data: rows.map(function (r) { return r.items; }), backgroundColor: "#146B4A"}]},
+        options: {responsive: true, maintainAspectRatio: false, animation: false, scales: {y: {beginAtZero: true, ticks: {precision: 0}}}}});
+      var withItems = rows.filter(function (r) { return r.items > 0; });
+      charts.pie = new Chart($("pkPie"), {type: "doughnut", data: {labels: withItems.map(function (r) { return r.name; }),
+        datasets: [{data: withItems.map(function (r) { return r.items; }), backgroundColor: withItems.map(function (r, i) { return pal[i % pal.length]; })}]},
+        options: {responsive: true, maintainAspectRatio: false, animation: false, plugins: {legend: {position: "bottom"}}}});
+    });
+  }
+
+  // ---- bill timeline ---------------------------------------------------------
+  function openBill(id) {
+    fetch("/pick/bill/" + id + ".json", {credentials: "same-origin"}).then(function (r) { return r.json(); }).then(function (b) {
+      if (!b.bill_no) return;
+      $("pkModalTitle").innerHTML = esc(b.bill_no) + (b.urgent ? '<span class="pk-u">URGENT</span>' : "");
+      var tl = '<div class="pk-sub">' + plural(b.items, "item") + " · " + (b.status === "done" ? "complete in " + b.minutes + " min" : b.status) + "</div>" +
+        '<div class="pk-tl"><div>Added at <b>' + esc(b.added) + "</b></div>" +
+        b.grabs.map(function (g) {
+          var late = g.outcome === "late";
+          return '<div class="' + (late ? "late" : "") + '"><b>' + esc(g.picker) + "</b> took " + plural(g.items, "item") + " at " + esc(g.took) +
+            " · due " + esc(g.due) + (g.done ? " · done " + esc(g.done) + " (" + g.minutes + " min)" : g.status === "cancelled" ? " · released" : " · <i>picking now</i>") +
+            (g.missing ? " · " + g.missing + " not found" : "") + (late ? ' · <b style="color:var(--bad-ink)">' + g.late_min + " min late</b>" : "") +
+            (g.done ? " · " + (g.points > 0 ? "+" : "") + g.points + " pts" : "") + "</div>";
+        }).join("") +
+        b.missing.map(function (m) { return '<div class="miss">' + esc(m.by) + " could not find <b>" + esc(m.item) + " ×" + m.qty + "</b> at " + esc(m.at) + " · " + esc(m.status) + "</div>"; }).join("") +
+        (b.completed ? '<div class="end">Completed at <b>' + esc(b.completed) + "</b> · total " + b.minutes + " min</div>" : "") + "</div>";
+      $("pkModalBody").innerHTML = tl;
+      $("pkModal").hidden = false; $("pkModalX").focus();
+    });
+  }
+  function closeModal() { $("pkModal").hidden = true; }
+
+  // ---- tabs ---------------------------------------------------------------
+  function showTab(t) {
+    Array.prototype.forEach.call(app.querySelectorAll(".pk-tabs [data-tab]"), function (b) { b.setAttribute("aria-selected", String(b.getAttribute("data-tab") === t)); });
+    Array.prototype.forEach.call(app.querySelectorAll("[data-panel]"), function (p) { p.hidden = p.getAttribute("data-panel") !== t; });
+    try { sessionStorage.setItem("pkTab-" + role, t); } catch (e) {}
+    if (t === "board") Object.keys(charts).forEach(function (k) { charts[k].resize(); });
   }
 
   function load() {
@@ -279,7 +437,26 @@
   }
 
   app.addEventListener("click", function (e) {
+    if (e.target.id === "pkModal") { closeModal(); return; }
     var b = e.target.closest("button"); if (!b || b.disabled) return;
+    if (b.hasAttribute("data-tab")) { showTab(b.getAttribute("data-tab")); return; }
+    if (b.hasAttribute("data-open")) { openBill(b.getAttribute("data-open")); return; }
+    if (b.id === "pkModalX") { closeModal(); return; }
+    if (b.hasAttribute("data-resch")) {
+      var box = $("rs" + b.getAttribute("data-resch")); box.hidden = !box.hidden;
+      if (!box.hidden) { var d = new Date(Date.now() + 3600000), ins = box.querySelectorAll("input");
+        ins[0].value = d.getFullYear() + "-" + ("0" + (d.getMonth() + 1)).slice(-2) + "-" + ("0" + d.getDate()).slice(-2);
+        ins[1].value = ("0" + d.getHours()).slice(-2) + ":" + ("0" + d.getMinutes()).slice(-2); ins[0].focus(); }
+      return;
+    }
+    if (b.hasAttribute("data-rsave")) { var bx = $("rs" + b.getAttribute("data-rsave")).querySelectorAll("input");
+      post("/pick/bill/" + b.getAttribute("data-rsave") + "/reschedule", {date: bx[0].value, time: bx[1].value}); return; }
+    if (b.hasAttribute("data-back")) { post("/pick/bill/" + b.getAttribute("data-back") + "/bring_back"); return; }
+    if (b.id === "pkCloseBtn") {
+      if (b.getAttribute("data-sure") === "1") post("/pick/close_day");
+      else { b.setAttribute("data-sure", "1"); b.textContent = "Tap again to close today"; }
+      return;
+    }
     if (b.hasAttribute("data-take")) {
       var id = b.getAttribute("data-take"), v = +($("take" + id) || {}).value;
       if (!v) { say("Type how many items you are taking.", false); $("take" + id).focus(); return; }
@@ -321,6 +498,8 @@
     else if (e.target.id && e.target.id.indexOf("take") === 0) { var btn = app.querySelector('[data-take="' + e.target.id.slice(4) + '"]'); if (btn) btn.click(); }
   });
 
+  document.addEventListener("keydown", function (e) { if (e.key === "Escape" && !$("pkModal").hidden) closeModal(); });
+  try { var lastTab = sessionStorage.getItem("pkTab-" + role); if (lastTab && app.querySelector('[data-tab="' + lastTab + '"]')) showTab(lastTab); } catch (e) {}
   load();
   setInterval(load, 10000);
   setInterval(tick, 1000);

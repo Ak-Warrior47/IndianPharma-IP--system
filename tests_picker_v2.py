@@ -366,6 +366,82 @@ check("9.27 The picker's scorecard order is Bills, Items, On time, Points",
 ad = ca.get("/dashboard").data.decode()
 check("9.28 The assigner's form shows the prefix and no 'e.g.' hint", 'id="pkPrefix"' in ad and "e.g." not in ad.split('id="pkAdd"')[1][:900])
 
+# ---- 10. Sections: leaderboard, bill-wise, timeline, reschedule, close day ----
+sb = c1.get("/pick/state.json").get_json()
+board = sb["board"]
+check("10.1 The leaderboard ranks by bills first, then items",
+      all((board[i]["bills"], board[i]["items"]) >= (board[i + 1]["bills"], board[i + 1]["items"]) for i in range(len(board) - 1)),
+      str([(r["name"], r["bills"], r["items"]) for r in board]))
+check("10.2 Every picker is on it with a rank", all("rank" in r for r in board) and any(r["id"] == ids["p1"] for r in board))
+check("10.3 The picker sees their own bills, bill by bill", sb["my_bills"] and all("bill_no" in r and "items" in r for r in sb["my_bills"]))
+tl = c1.get("/pick/bill/%d.json" % NB).get_json()
+check("10.4 A bill's timeline lists every grab with who, items, times and outcome",
+      tl["bill_no"].endswith("5001") and len(tl["grabs"]) >= 2 and all(g["took"] and g["picker"] for g in tl["grabs"]))
+check("10.5 ...and the missing items with who reported them", any(m["item"] == "Dolo 650" for m in tl["missing"]))
+check("10.6 ...and when it was added and completed, in 12-hour time", tl["added"].endswith(("AM", "PM")) and tl["completed"])
+code, j = jpost(ca, "/pick/bill", {"bill_no": "6001", "items": 3})
+with app.app_context():
+    RB = PickBill.query.filter_by(bill_no=A.fy_prefix() + "6001").first().id
+tomorrow = (datetime.utcnow() + A.IST + timedelta(days=1)).strftime("%Y-%m-%d")
+code, j = jpost(c1, "/pick/bill/%d/reschedule" % RB, {"date": tomorrow, "time": "10:30"})
+check("10.7 Only the assigner can reschedule", code == 403)
+code, j = jpost(ca, "/pick/bill/%d/reschedule" % RB, {"date": "2020-01-01", "time": "10:00"})
+check("10.8 A time in the past is refused", code == 400)
+code, j = jpost(ca, "/pick/bill/%d/reschedule" % RB, {"date": tomorrow, "time": "10:30"})
+s10 = ca.get("/pick/state.json").get_json()
+check("10.9 Rescheduled bills leave the live list and appear under Rescheduled with the time",
+      code == 200 and not any(b["id"] == RB for b in s10["bills"] if b["status"] == "open")
+      and any(r["id"] == RB and r["when"] == "10:30 AM" for r in s10["scheduled"]), str(s10["scheduled"]))
+code, j = jpost(c2, "/pick/claim", {"bill_id": RB, "items": 1})
+check("10.10 Pickers can't take a rescheduled bill", code == 400)
+with app.app_context():
+    db.session.get(PickBill, RB).scheduled_for = datetime.utcnow() - timedelta(minutes=1)
+    db.session.commit()
+    A.alert_late_picks()
+    check("10.11 At its time a rescheduled bill comes back on its own", db.session.get(PickBill, RB).status == "open")
+    for cl in PickClaim.query.filter_by(status="active").all():
+        cl.status = "cancelled"
+    db.session.commit()
+    A.PickDay.query.delete()
+    db.session.commit()
+code, j = jpost(c1, "/pick/close_day")
+check("10.12 Only the assigner can close the day", code == 403)
+code, j = jpost(ca, "/pick/close_day")
+with app.app_context():
+    pdz = A.PickDay.query.filter_by(day=date.today()).first()
+    start = datetime.combine(date.today(), datetime.min.time())
+    n_today = PickBill.query.filter(PickBill.created_at >= start, PickBill.status != "cancelled").count()
+    check("10.13 Closing the day counts today's bills (not cancelled)", code == 200 and pdz and pdz.total_bills == n_today,
+          "%s vs %s: %s" % (pdz and pdz.total_bills, n_today, j))
+    check("10.14 Unfinished bills move to Rescheduled for 9:00 AM next day",
+          db.session.get(PickBill, RB).status == "scheduled"
+          and (db.session.get(PickBill, RB).scheduled_for + A.IST).strftime("%H:%M") == "09:00")
+    row = A.checker_team_day_totals([date.today()])[date.today()]
+    check("10.15 The checkers' day total is fixed to the closed day's bills", row["total"] == n_today and row["mode"] == "assigned", str(row))
+code, j = jpost(ca, "/pick/close_day")
+check("10.16 A day can be closed only once", code == 400)
+with app.app_context():
+    chk = Employee.query.filter_by(email="pk_chk@x.com").first()
+    if not chk:
+        chk = Employee(name="PK Checker", email="pk_chk@x.com", staff_type="checker")
+        chk.set_password(PW)
+        db.session.add(chk)
+        db.session.commit()
+cc = login("pk_chk@x.com")
+cd = cc.get("/dashboard").data.decode()
+check("10.17 The checker's day-total box is filled in and locked", ('value="%d" readonly' % n_today) in cd and "Pick Assigner closed today" in cd)
+with app.app_context():
+    A.PickDay.query.delete()
+    e = Employee.query.filter_by(email="pk_chk@x.com").first()
+    if e:
+        db.session.delete(e)
+    db.session.commit()
+ad = ca.get("/dashboard").data.decode()
+check("10.18 The assigner's screen has Live, Late report, Leaderboard, Rescheduled and Rules tabs",
+      all('data-tab="%s"' % t in ad for t in ("live", "late", "board", "sched", "rules")))
+check("10.19 The picker's screen has Live, Leaderboard, My bills and Rules tabs",
+      all('data-tab="%s"' % t in c1.get("/dashboard").data.decode() for t in ("live", "board", "mine", "rules")))
+
 # ---- 8. Trial copy: test accounts and banner, never on the live database -----
 TRIAL = ["ravi@pharmaip.com", "lisa@pharmaip.com", "smriti@pharmaip.com", "deepti@pharmaip.com",
          "amit@pharmaip.com"]
