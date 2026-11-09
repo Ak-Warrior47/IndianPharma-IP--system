@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta name="csrf-token" content="{{ csrf_token() }}">
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<script>(function(){try{var t=localStorage.getItem('ip-theme');if(t)document.documentElement.setAttribute('data-theme',t);}catch(e){}})();</script>
+<title>Picking — Indian Pharma</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/ip.css') }}">
+<link rel="manifest" href="{{ url_for('static', filename='manifest.json') }}">
+<style>
+.pa-sum{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px;margin:0 0 16px}
+.pa-sum div{border:1px solid var(--line);border-radius:12px;padding:10px 12px;background:var(--surface,#fff)}
+.pa-sum b{display:block;font-size:22px;font-variant-numeric:tabular-nums}
+.pa-sum span{font-size:11px;font-weight:700;color:var(--ink-3);text-transform:uppercase;letter-spacing:.5px}
+.pa-day{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:0 0 12px}
+.pa-day input{padding:8px 10px;border:1.5px solid var(--line);border-radius:10px;font:inherit}
+.pa-tw{overflow-x:auto}
+.pa-red{color:var(--bad-ink,#991b1b);font-weight:700}
+.pa-t{width:100%;border-collapse:collapse;font-size:14px}
+.pa-t th{text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.4px;color:var(--ink-3);padding:8px;border-bottom:1px solid var(--line);white-space:nowrap}
+.pa-t td{padding:9px 8px;border-bottom:1px solid var(--line);font-variant-numeric:tabular-nums}
+</style>
+</head>
+<body>
+<header class="ip-topbar">
+  <div class="ip-brand"><span class="ip-brand__mark">IP</span> Pharma IP System</div>
+  <nav class="ip-navlinks">
+    <a href="{{ url_for('admin_dashboard') }}" class="ip-btn ip-btn--ghost">Dashboard</a>
+    <a href="{{ url_for('logout') }}" class="ip-btn">Log out</a>
+  </nav>
+</header>
+<main class="ip-shell">
+  <div class="ip-head"><div><h1>Picking</h1>
+    <div class="ip-head__sub">The live picking floor, the leaderboard, and every bill and missing item by day.</div></div></div>
+
+  {% if day == today %}
+  {% include '_picking.html' %}
+  {% endif %}
+
+  <section class="ip-card" style="margin-top:16px" id="reports">
+    <div class="ip-card__title">Reports</div>
+    <form class="pa-day" method="get" action="{{ url_for('picking_admin') }}#reports">
+      <label for="paDate">Day</label>
+      <input type="date" id="paDate" name="date" value="{{ day.isoformat() }}" max="{{ today.isoformat() }}">
+      <button class="ip-btn" type="submit">Show</button>
+      <a class="ip-btn ip-btn--ghost" href="{{ url_for('picking_report_csv', date=day.isoformat()) }}">Download CSV</a>
+    </form>
+    <div class="pa-sum">
+      <div><span>Bills</span><b>{{ rep.totals.bills }}</b></div>
+      <div><span>Items</span><b>{{ rep.totals['items'] }}</b></div>
+      <div><span>Picked</span><b>{{ rep.totals.picked }}</b></div>
+      <div><span>Missing reported</span><b>{{ rep.totals.missing }}</b></div>
+      <div><span>Late grabs</span><b>{{ rep.late }}</b></div>
+      <div><span>Bills left waiting</span><b>{{ rep.idle }}</b></div>
+    </div>
+    {% if rep.closed is not none %}<p class="ip-head__sub">Day closed by the Pick Assigner: {{ rep.closed }} bills (the checkers' day total).</p>{% endif %}
+
+    <h3 style="margin:14px 0 6px">Bill numbers</h3>
+    <div class="pa-tw"><table class="pa-t" id="paBills">
+      <thead><tr><th>Bill number</th><th>Items</th><th>Picked</th><th>Missing</th><th>Pickers (items)</th><th>Added</th><th>Completed</th><th>Minutes</th><th>Status</th></tr></thead>
+      <tbody>
+      {% for b in rep.bills %}
+        <tr><td><strong>{{ b.bill_no }}</strong>{% if b.urgent %} <span class="pa-red">URGENT</span>{% endif %}</td>
+          <td>{{ b['items'] }}</td><td>{{ b.picked }}</td>
+          <td>{% if b.missing %}<span class="pa-red">{{ b.missing }}</span>{% else %}0{% endif %}</td>
+          <td>{{ b.pickers or '—' }}{% if b.late %} <span class="pa-red">· {{ b.late }} late</span>{% endif %}</td>
+          <td>{{ b.added }}</td><td>{{ b.completed or '—' }}</td><td>{{ b.minutes if b.minutes is not none else '—' }}</td>
+          <td>{{ {'open': 'Open', 'done': 'Complete', 'cancelled': 'Cancelled', 'scheduled': 'Rescheduled'}.get(b.status, b.status) }}</td></tr>
+      {% else %}
+        <tr><td colspan="9" style="color:var(--ink-3)">No bills on this day.</td></tr>
+      {% endfor %}
+      </tbody></table></div>
+
+    <h3 style="margin:18px 0 6px">Missing items</h3>
+    <div class="pa-tw"><table class="pa-t" id="paMissing">
+      <thead><tr><th>Bill number</th><th>Item</th><th>Qty</th><th>Reported by</th><th>At</th><th>Status</th></tr></thead>
+      <tbody>
+      {% for m in rep.missing %}
+        <tr><td>{{ m.bill_no }}</td><td><strong>{{ m.item }}</strong></td><td>{{ m.qty }}</td><td>{{ m.by }}</td><td>{{ m.at }}</td><td>{{ m.status }}</td></tr>
+      {% else %}
+        <tr><td colspan="6" style="color:var(--ink-3)">No missing items reported on this day.</td></tr>
+      {% endfor %}
+      </tbody></table></div>
+
+    <h3 style="margin:18px 0 6px">Pickers</h3>
+    <div class="pa-tw"><table class="pa-t">
+      <thead><tr><th>#</th><th>Picker</th><th>Bills</th><th>Items</th><th>On time</th><th>Points</th><th>Missing</th></tr></thead>
+      <tbody>
+      {% for r in rep.board %}
+        <tr><td>{{ r.rank }}</td><td>{{ r.name }}</td><td>{{ r.bills }}</td><td>{{ r['items'] }}</td>
+          <td>{{ (r.on_time_pct|round|int ~ '%') if r.grabs else '—' }}</td><td>{{ r.points }}</td><td>{{ r.missing }}</td></tr>
+      {% endfor %}
+      </tbody></table></div>
+  </section>
+</main>
+<script src="{{ url_for('static', filename='js/push.js') }}" defer></script>
+<script src="{{ url_for('static', filename='js/enter-next.js') }}" defer></script>
+</body>
+</html>

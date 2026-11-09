@@ -160,7 +160,7 @@ tbody tr:hover { background: var(--brand-tint); }
         {% for a in archives %}
         <tr>
           <td><strong>{{ a.month_str }}</strong></td>
-          <td>{{ a.generated_at.strftime('%d %b %Y %H:%M') if a.generated_at else '—' }}</td>
+          <td>{{ a.generated_at|dt12(true) if a.generated_at else '—' }}</td>
           <td>{{ a.emp_count }} staff</td>
           <td>
             <a href="/admin/reports/{{ a.month_str }}" class="btn-dl">Download ZIP</a>

@@ -443,7 +443,7 @@ var NOTES_BY_EMP = {
   {% for emp_id, notes in notes_by_emp.items() %}
   "{{ emp_id }}": [
     {% for n in notes %}
-    {"note": {{ n.note|tojson }}, "created_at": "{{ n.created_at.strftime('%d %b %Y %H:%M') }}"},
+    {"note": {{ n.note|tojson }}, "created_at": "{{ n.created_at|dt12(true) }}"},
     {% endfor %}
   ],
   {% endfor %}
@@ -472,6 +472,7 @@ var NOTES_BY_EMP = {
         <a href="/admin/day">Day View (any date)</a>
         <a href="/admin/reports">Reports Archive</a>
         <a href="/admin/bulk_import">Bulk Import</a>
+        <a href="/picking">Picking</a>
         <a href="/admin/diagnostics">Diagnostics</a>
         <div class="nav-menu__sep"></div>
         <a href="/admin/export_csv">Export CSV</a>
@@ -601,7 +602,7 @@ var NOTES_BY_EMP = {
           <div style="font-size:13px;font-weight:700;color:var(--ink);">{{ req_emp.name if req_emp else 'Employee #' ~ req.emp_id }}</div>
           <div style="font-size:12px;color:var(--ink-3);margin-top:2px;">
             Requesting: <strong>{{ req.requested_date.strftime('%d %b %Y') }}</strong>
-            &nbsp;·&nbsp; Requested {{ req.created_at.strftime('%d %b %Y %H:%M') }}
+            &nbsp;·&nbsp; Requested {{ req.created_at|dt12(true) }}
           </div>
           {% if req.reason %}<div style="font-size:12px;color:var(--ink-3);margin-top:2px;">Reason: {{ req.reason }}</div>{% endif %}
         </div>
@@ -721,7 +722,7 @@ var NOTES_BY_EMP = {
               <td>{{ '%g'|format(ev.value) }} <span style="font-size:11px;color:var(--ink-3);">{{ ev.unit }}</span></td>
               <td>{{ '%g'|format(ev.previous) if ev.previous else 'first' }}</td>
               <td>{{ ev.level }}</td>
-              <td>{{ ev.created_at.strftime('%d %b %H:%M') }}</td></tr>
+              <td>{{ ev.created_at|dt12 }}</td></tr>
         {% endfor %}</tbody>
       </table>
     </div>
@@ -1724,5 +1725,6 @@ function switchLB(tab){
   <script src="{{ url_for('static', filename='js/ux.js') }}" defer></script>
 <script src="{{ url_for('static', filename='js/email-suggest.js') }}" defer></script>
 <script src="{{ url_for('static', filename='js/push.js') }}" defer></script>
+<script src="{{ url_for('static', filename='js/enter-next.js') }}" defer></script>
 </body>
 </html>

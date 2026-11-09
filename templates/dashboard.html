@@ -596,8 +596,14 @@ button[disabled] { opacity: .45; cursor: not-allowed; transform: none; }
         {% if staff_type == 'checker' %}
         <div class="field">
           <label>Day's Total Sales Bills (whole team)</label>
+          {% if g.assigned_day_total is not none %}
+          <input type="number" name="bills_received" id="f_bills_received" min="0" value="{{ g.assigned_day_total }}" readonly
+                 style="background:var(--line)" oninput="updateCheckerTotals()">
+          <small>Fixed: the Pick Assigner closed today with {{ g.assigned_day_total }} bills.</small>
+          {% else %}
           <input type="number" name="bills_received" id="f_bills_received" min="0" value="0" required oninput="updateCheckerTotals()">
           <small>The WHOLE day's sales bills — the same number for every checker, not just yours</small>
+          {% endif %}
         </div>
         <div class="field">
           <label>Pending Bills (worked out for you)</label>
@@ -1141,7 +1147,7 @@ button[disabled] { opacity: .45; cursor: not-allowed; transform: none; }
                   <div style="font-size:11px;color:var(--ink-3);">
                     {{ st.packages }} pkt{% if st.dist_from_prev_km %} · {{ st.dist_from_prev_km }} km from prev{% endif %}
                     {% if st.reached_at %}
-                    · <strong style="color:var(--ok-ink);">Done {{ st.reached_at.strftime('%H:%M') }}</strong>{% if st.minutes_from_prev %} · {{ st.minutes_from_prev }} min{% endif %}
+                    · <strong style="color:var(--ok-ink);">Done {{ st.reached_at|t12 }}</strong>{% if st.minutes_from_prev %} · {{ st.minutes_from_prev }} min{% endif %}
                     {% if st.note %} · <em style="color:var(--ink-3);">{{ st.note.replace('RCVD: ', '') }}</em>{% endif %}
                     {% endif %}
                   </div>
@@ -1182,7 +1188,7 @@ button[disabled] { opacity: .45; cursor: not-allowed; transform: none; }
             <div class="delivery-timer" data-departure="{{ trip.departure_time.strftime('%Y-%m-%dT%H:%M:%S') }}Z"
                  style="font-size:22px;font-weight:800;color:#0891b2;font-variant-numeric:tabular-nums;letter-spacing:1px;">00:00</div>
           </div>
-          <span style="margin-left:auto;font-size:11px;color:#155e75;">Started {{ trip.departure_time.strftime('%H:%M') }} UTC</span>
+          <span style="margin-left:auto;font-size:11px;color:#155e75;">Started {{ trip.departure_time|t12 }}</span>
         </div>
         {% endif %}
         <p style="font-size:12px;color:var(--ink-3);margin:8px 0 0;">Complete each store above — assignment auto-closes when all are done.</p>
@@ -2469,5 +2475,6 @@ function pinSearch(){
   <script src="{{ url_for('static', filename='js/palette.js') }}" defer></script>
   <script src="{{ url_for('static', filename='js/ux.js') }}" defer></script>
 <script src="{{ url_for('static', filename='js/push.js') }}" defer></script>
+<script src="{{ url_for('static', filename='js/enter-next.js') }}" defer></script>
 </body>
 </html>

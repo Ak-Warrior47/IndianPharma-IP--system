@@ -1966,6 +1966,20 @@ def ist12(dt):
     return (dt + IST).strftime("%I:%M %p").lstrip("0")
 
 
+@app.template_filter("t12")
+def _t12_filter(dt):
+    """Jinja: a UTC time as Indian 12-hour time, e.g. 2:05 PM."""
+    return ist12(dt) if dt else ""
+
+
+@app.template_filter("dt12")
+def _dt12_filter(dt, year=False):
+    """Jinja: date and 12-hour Indian time, e.g. 09 Nov 2:05 PM."""
+    if not dt:
+        return ""
+    return (dt + IST).strftime("%d %b %Y" if year else "%d %b") + " " + ist12(dt)
+
+
 def fy_prefix(d=None):
     """Bill number prefix for the financial year (April to March): IP2627/."""
     d = d or (datetime.utcnow() + IST).date()
@@ -2336,6 +2350,39 @@ def picker_bill_list(emp_id, day=None):
         r["late"] = r["late"] or c.outcome == "late"
         r["last"] = ist12(c.done_at)
     return list(by.values())
+
+
+def pick_report(day):
+    """Admin report for one day: every bill and every missing item."""
+    start = datetime.combine(day, datetime.min.time())
+    names = {e.id: e.name for e in Employee.query.all()}
+    bills = []
+    for b in PickBill.query.filter(PickBill.created_at >= start, PickBill.created_at < start + timedelta(days=1)) \
+            .order_by(PickBill.created_at).all():
+        pr = pick_bill_progress(b)
+        claims = PickClaim.query.filter(PickClaim.bill_id == b.id, PickClaim.status == "done").all()
+        by = {}
+        for c in claims:
+            by[c.picker_id] = by.get(c.picker_id, 0) + (c.picked if c.picked is not None else c.items)
+        reported = sum(m.qty for m in PickMissing.query.filter_by(bill_id=b.id).all())
+        bills.append({"id": b.id, "bill_no": b.bill_no, "items": b.items, "urgent": bool(b.is_urgent), "status": b.status,
+                      "picked": pr["done"], "missing": reported, "unavailable": pr["unavailable"],
+                      "late": sum(1 for c in claims if c.outcome == "late"),
+                      "pickers": ", ".join("%s %d" % (names.get(k, "#%d" % k), v) for k, v in by.items()),
+                      "added": ist12(b.created_at), "completed": ist12(b.completed_at),
+                      "minutes": round((b.completed_at - b.created_at).total_seconds() / 60.0, 1) if b.completed_at else None})
+    missing = [{"bill_no": (db.session.get(PickBill, m.bill_id).bill_no if db.session.get(PickBill, m.bill_id) else ""),
+                "item": m.item_name, "qty": m.qty, "by": names.get(m.picker_id, ""), "at": ist12(m.reported_at),
+                "status": {"open": "Waiting for assigner", "reassigned": "Reassigned", "unavailable": "Not available"}.get(m.status, m.status)}
+               for m in PickMissing.query.filter(PickMissing.reported_at >= start, PickMissing.reported_at < start + timedelta(days=1))
+               .order_by(PickMissing.reported_at).all()]
+    events = PickEvent.query.filter_by(day=day).order_by(PickEvent.at).all()
+    return {"day": day, "bills": bills, "missing": missing, "board": pick_board(day),
+            "late": sum(1 for e in events if e.kind == "late"), "idle": sum(1 for e in events if e.kind == "idle"),
+            "closed": pick_day_total(day),
+            "totals": {"bills": len([b for b in bills if b["status"] != "cancelled"]),
+                       "items": sum(b["items"] for b in bills if b["status"] != "cancelled"),
+                       "picked": sum(b["picked"] for b in bills), "missing": sum(b["missing"] for b in bills)}}
 
 
 def picker_pick_stats(emp_id, dates):
@@ -5039,7 +5086,7 @@ def dashboard():
                         'staff_type': staff_type,
                         'accuracy': ne.accuracy,
                         'last_entry': today.strftime('%Y-%m-%d'),
-                        'last_entry_time': datetime.utcnow().strftime('%H:%M'),
+                        'last_entry_time': ist12(datetime.utcnow()),
                     })
 
                     # Feature 5: Compute auto badges (never breaks main flow)
@@ -8608,7 +8655,7 @@ def pick_state():
     if role == "picker" and emp and (not emp.last_seen_at or datetime.utcnow() - emp.last_seen_at > timedelta(seconds=60)):
         emp.last_seen_at = datetime.utcnow()
         db.session.commit()
-    return jsonify(picking_state(emp, "picker" if role == "picker" else "pick_assigner"))
+    return jsonify(picking_state(emp, "picker" if (role == "picker" and not is_admin) else "pick_assigner"))
 
 
 @app.route("/pick/bill", methods=["POST"])
@@ -8697,6 +8744,42 @@ def pick_missing_action(missing_id, action):
                        else "Marked as not available.")
 
 
+@app.route("/picking")
+@admin_required
+def picking_admin():
+    """Admin: the live picking floor and the day's reports."""
+    try:
+        day = datetime.strptime(request.args.get("date", ""), "%Y-%m-%d").date()
+    except ValueError:
+        day = date.today()
+    return render_template("picking_admin.html", rep=pick_report(day), today=date.today(), day=day,
+                           staff_type="pick_assigner")
+
+
+@app.route("/picking/report.csv")
+@admin_required
+def picking_report_csv():
+    try:
+        day = datetime.strptime(request.args.get("date", ""), "%Y-%m-%d").date()
+    except ValueError:
+        day = date.today()
+    r = pick_report(day)
+    buf = io.StringIO()
+    w = csv.writer(buf)
+    w.writerow(["Bill number", "Urgent", "Items", "Picked", "Missing reported", "Not available", "Late grabs",
+                "Pickers (items)", "Added", "Completed", "Minutes", "Status"])
+    for b in r["bills"]:
+        w.writerow([b["bill_no"], "yes" if b["urgent"] else "", b["items"], b["picked"], b["missing"], b["unavailable"],
+                    b["late"], b["pickers"], b["added"], b["completed"], b["minutes"] if b["minutes"] is not None else "", b["status"]])
+    w.writerow([])
+    w.writerow(["Missing items"])
+    w.writerow(["Bill number", "Item", "Qty", "Reported by", "At", "Status"])
+    for m in r["missing"]:
+        w.writerow([m["bill_no"], m["item"], m["qty"], m["by"], m["at"], m["status"]])
+    return Response(buf.getvalue(), mimetype="text/csv",
+                    headers={"Content-Disposition": "attachment; filename=picking-%s.csv" % day.isoformat()})
+
+
 @app.route("/pick/bill/<int:bill_id>.json")
 @login_required
 def pick_bill_detail(bill_id):
@@ -8780,7 +8863,7 @@ def notifications_list():
         return jsonify({"ok": True, "unread": unread, "items": [
             {"id": n.id, "title": n.title, "body": n.body, "link": n.link,
              "is_read": bool(n.is_read),
-             "ago": n.created_at.strftime("%d %b %H:%M") if n.created_at else ""}
+             "ago": _dt12_filter(n.created_at)}
             for n in notes
         ]})
     except Exception as e:

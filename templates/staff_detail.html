@@ -1224,8 +1224,8 @@ body { display: grid; grid-template-columns: 236px minmax(0, 1fr); min-height: 1
           {% for t in staff_trips %}
           <tr style="border-bottom:1px solid var(--border-2);{% if loop.last %}border-bottom:none;{% endif %}">
             <td style="padding:8px 10px;color:var(--navy);font-weight:600;">{{ t.trip_date.strftime('%d %b %Y') if t.trip_date else '-' }}</td>
-            <td style="padding:8px 10px;">{{ t.departure_time.strftime('%H:%M') if t.departure_time else '-' }}</td>
-            <td style="padding:8px 10px;">{{ t.arrival_time.strftime('%H:%M') if t.arrival_time else '-' }}</td>
+            <td style="padding:8px 10px;">{{ t.departure_time|t12 if t.departure_time else '-' }}</td>
+            <td style="padding:8px 10px;">{{ t.arrival_time|t12 if t.arrival_time else '-' }}</td>
             <td style="padding:8px 10px;text-align:right;">{{ t.duration_minutes ~ ' min' if t.duration_minutes else '-' }}</td>
             <td style="padding:8px 10px;text-align:center;font-weight:700;color:{{ 'var(--ok)' if t.is_on_time else 'var(--bad)' }};">{{ 'Yes' if t.is_on_time else 'No' }}</td>
           </tr>
@@ -1291,5 +1291,6 @@ body { display: grid; grid-template-columns: 236px minmax(0, 1fr); min-height: 1
 })();
 </script>
 <script src="{{ url_for('static', filename='js/ux.js') }}" defer></script>
+<script src="{{ url_for('static', filename='js/enter-next.js') }}" defer></script>
 </body>
 </html>

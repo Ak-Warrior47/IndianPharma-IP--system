@@ -442,6 +442,45 @@ check("10.18 The assigner's screen has Live, Late report, Leaderboard, Reschedul
 check("10.19 The picker's screen has Live, Leaderboard, My bills and Rules tabs",
       all('data-tab="%s"' % t in c1.get("/dashboard").data.decode() for t in ("live", "board", "mine", "rules")))
 
+# ---- 11. Admin: picking page, reports, CSV; 12-hour time; Enter key ------------
+with app.app_context():
+    adm = Employee.query.filter_by(email="pk_adm@x.com").first()
+    if not adm:
+        adm = Employee(name="PK Admin", email="pk_adm@x.com", staff_type="picker", is_admin=True)
+        adm.set_password(PW)
+        db.session.add(adm)
+        db.session.commit()
+cadm = login("pk_adm@x.com")
+pa = cadm.get("/picking").data.decode()
+check("11.1 The admin has a Picking page with the live floor", 'id="pickApp"' in pa and 'data-role="assigner"' in pa)
+check("11.2 ...listing every bill number of the day", 'id="paBills"' in pa and (A.fy_prefix() + "5001") in pa)
+check("11.3 ...and every missing item with who reported it", 'id="paMissing"' in pa and "Dolo 650" in pa and "PK P3" in pa)
+check("11.3b No dict-method text leaks onto the page (the .items Jinja trap)", "built-in method" not in pa)
+check("11.4 The admin page links to it", 'href="/picking"' in cadm.get("/admin_dashboard").data.decode())
+st_admin = cadm.get("/pick/state.json").get_json()
+check("11.5 The admin sees the assigner's view of the live data", "pickers" in st_admin and "events" in st_admin)
+csvr = cadm.get("/picking/report.csv")
+body = csvr.data.decode()
+check("11.6 The day's report downloads as CSV with bills and missing items",
+      csvr.mimetype == "text/csv" and "Bill number" in body and (A.fy_prefix() + "5001") in body and "Dolo 650" in body)
+check("11.7 Staff cannot open the admin picking page", c1.get("/picking", follow_redirects=True).data.find(b'id="paBills"') == -1)
+old = cadm.get("/picking?date=2020-01-01").data.decode()
+check("11.8 Another day's report can be shown", "No bills on this day." in old)
+with app.app_context():
+    check("11.9 Times show as 12-hour Indian time", A._t12_filter(datetime(2026, 11, 9, 8, 35)) == "2:05 PM"
+          and A._dt12_filter(datetime(2026, 11, 9, 20, 0)) == "10 Nov 1:30 AM")
+    e = Employee.query.filter_by(email="pk_adm@x.com").first()
+    if e:
+        db.session.delete(e)
+        db.session.commit()
+import glob as _glob  # noqa: E402
+_no24 = [f for f in _glob.glob(os.path.join(REPO, "templates", "*.html"))
+         if "strftime('%H:%M')" in open(f).read() or "strftime('%d %b %H:%M')" in open(f).read()]
+check("11.10 No page shows 24-hour times any more", not _no24, str(_no24))
+_forms = [f for f in _glob.glob(os.path.join(REPO, "templates", "*.html"))
+          if "<form" in open(f).read() and not f.endswith("_picking.html") and "js/enter-next.js" not in open(f).read()]
+check("11.11 Every page with a form has Enter-to-next-field", not _forms, str(_forms))
+
 # ---- 8. Trial copy: test accounts and banner, never on the live database -----
 TRIAL = ["ravi@pharmaip.com", "lisa@pharmaip.com", "smriti@pharmaip.com", "deepti@pharmaip.com",
          "amit@pharmaip.com"]

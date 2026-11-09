@@ -319,8 +319,8 @@ tbody tr:hover td { background: var(--surface-2); }
             {% else %}<span class="badge badge-failed">{{ a.status }}</span>{% endif %}
           </td>
           <td style="white-space:nowrap;font-size:11px;">
-            {% if trip and trip.departure_time %}{{ trip.departure_time.strftime('%H:%M') }}{% else %}<span style="color:var(--muted);">—</span>{% endif %}
-            {% if trip and trip.arrival_time %}→ {{ trip.arrival_time.strftime('%H:%M') }}{% endif %}
+            {% if trip and trip.departure_time %}{{ trip.departure_time|t12 }}{% else %}<span style="color:var(--muted);">—</span>{% endif %}
+            {% if trip and trip.arrival_time %}→ {{ trip.arrival_time|t12 }}{% endif %}
           </td>
           <td>
             {% if trip and trip.duration_minutes %}{{ trip.duration_minutes }} min
@@ -343,7 +343,7 @@ tbody tr:hover td { background: var(--surface-2); }
                 <span style="color:#3730a3;font-weight:700;">{{ st.place_name }}</span>
                 {% if st.area %}<span style="color:#6366f1;"> ({{ st.area }})</span>{% endif %}
                 {% if st.dist_from_prev_km %} <span style="color:var(--muted);">{{ st.dist_from_prev_km }}km</span>{% endif %}
-                {% if st.reached_at %} <span style="color:#16a34a;font-weight:700;">{{ st.reached_at.strftime('%H:%M') }}</span>{% endif %}
+                {% if st.reached_at %} <span style="color:#16a34a;font-weight:700;">{{ st.reached_at|t12 }}</span>{% endif %}
               </div>
               {% endfor %}
               {% if ns2.tkm > 0 %}<div style="font-size:11px;font-weight:700;color:var(--muted);margin-top:2px;">Total: {{ ns2.tkm|round(2) }} km</div>{% endif %}
@@ -393,7 +393,7 @@ tbody tr:hover td { background: var(--surface-2); }
           </span>
         </div>
         <div style="font-size:11px;color:var(--muted);">
-          {% if trip and trip.departure_time %}Departed {{ trip.departure_time.strftime('%H:%M UTC') }}{% endif %}
+          {% if trip and trip.departure_time %}Departed {{ trip.departure_time|t12 }}{% endif %}
           {% if trip and trip.duration_minutes %} · <strong>{{ trip.duration_minutes }} min total</strong>{% endif %}
           {% if trip and trip.is_on_time is not none %}
             · <span style="font-weight:700;color:{{ '#16a34a' if trip.is_on_time else '#dc2626' }};">{{ 'On-time' if trip.is_on_time else 'Late' }}</span>
@@ -423,7 +423,7 @@ tbody tr:hover td { background: var(--surface-2); }
               </div>
               {% if st.reached_at %}
               <div style="text-align:right;flex-shrink:0;">
-                <div style="font-size:12px;font-weight:700;color:#166534;">{{ st.reached_at.strftime('%H:%M') }}</div>
+                <div style="font-size:12px;font-weight:700;color:#166534;">{{ st.reached_at|t12 }}</div>
                 {% if st.minutes_from_prev %}<div style="font-size:11px;color:var(--muted);">+{{ st.minutes_from_prev }} min</div>{% endif %}
               </div>
               {% else %}
@@ -441,7 +441,7 @@ tbody tr:hover td { background: var(--surface-2); }
         <!-- Final total -->
         {% if trip and trip.arrival_time and trip.departure_time %}
         <div style="margin-left:-24px;padding:8px 12px;background:#f0fdf4;border:1px solid #86efac;border-radius:10px;font-size:12px;font-weight:700;color:#166534;">
-          All delivered · Total time: {{ trip.duration_minutes }} min · Finished {{ trip.arrival_time.strftime('%H:%M UTC') }}
+          All delivered · Total time: {{ trip.duration_minutes }} min · Finished {{ trip.arrival_time|t12 }}
         </div>
         {% endif %}
       </div>
@@ -466,7 +466,7 @@ tbody tr:hover td { background: var(--surface-2); }
               'pkts': st.packages, 'ptype': st.packet_type or '',
               'km': st.dist_from_prev_km or 0,
               'rider': rider_name,
-              'time': st.reached_at.strftime('%H:%M') if st.reached_at else '',
+              'time': st.reached_at|t12 if st.reached_at else '',
               'mins': st.minutes_from_prev or 0,
               'rcvd': rcvd}) %}
         {% endif %}
@@ -659,5 +659,6 @@ function loadAllBreadcrumbs() {
 </script>
   <script src="{{ url_for('static', filename='js/palette.js') }}" defer></script>
   <script src="{{ url_for('static', filename='js/ux.js') }}" defer></script>
+<script src="{{ url_for('static', filename='js/enter-next.js') }}" defer></script>
 </body>
 </html>

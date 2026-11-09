@@ -93,7 +93,7 @@
         <tbody>
         {% for e in errors %}
           <tr>
-            <td class="nowrap">{{ e.last_at.strftime('%d %b %H:%M') }} UTC</td>
+            <td class="nowrap">{{ e.last_at|dt12 }}</td>
             <td class="nowrap"><code style="font-size:var(--fs-small);">{{ e.method }} {{ e.path or '(background)' }}</code></td>
             <td class="nowrap">{{ e.user_name or '—' }}</td>
             <td class="ip-small">{{ e.message }}
@@ -253,5 +253,6 @@
 </main>
   <script src="{{ url_for('static', filename='js/palette.js') }}" defer></script>
   <script src="{{ url_for('static', filename='js/ux.js') }}" defer></script>
+<script src="{{ url_for('static', filename='js/enter-next.js') }}" defer></script>
 </body>
 </html>
