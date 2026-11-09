@@ -600,6 +600,71 @@ with app.app_context():
         db.session.delete(e)
         db.session.commit()
 
+# ---- 14. Admin sees it all: Picking today card, database status --------------
+with app.app_context():
+    adm = Employee.query.filter_by(email="pk_adm4@x.com").first()
+    if not adm:
+        adm = Employee(name="PK Admin4", email="pk_adm4@x.com", staff_type="picker", is_admin=True)
+        adm.set_password(PW)
+        db.session.add(adm)
+        db.session.commit()
+ca4 = login("pk_adm4@x.com")
+ad14 = ca4.get("/admin_dashboard").data.decode()
+check("14.1 The admin dashboard has a Picking today card with today's figures and links",
+      'id="pickingToday"' in ad14 and "Picking now" in ad14 and "/picking/report.pdf?period=today" in ad14)
+dg = ca4.get("/admin/diagnostics").data.decode()
+check("14.2 Diagnostics lists every picking table and whether it is saved",
+      'id="dbTables"' in dg and all(t in dg for t in ("pick_bills", "pick_claims", "pick_missing", "pick_events", "push_subs")))
+with app.app_context():
+    chk = {t["table"]: t for t in A.database_check()}
+    check("14.3 Every table the picking system uses can be read", all(t["ok"] for t in chk.values()), str([t for t in chk.values() if not t["ok"]]))
+    e = Employee.query.filter_by(email="pk_adm4@x.com").first()
+    if e:
+        db.session.delete(e)
+        db.session.commit()
+
+# ---- 15. Speed, order, focus mode, pending/completed, picker dashboard ---------
+from sqlalchemy import event as _event  # noqa: E402
+_n = [0]
+with app.app_context():
+    _event.listen(db.engine, "before_cursor_execute", lambda *a_, **k_: _n.__setitem__(0, _n[0] + 1))
+    for i in range(12):                    # plenty of bills on screen
+        db.session.add(PickBill(bill_no="SPD%d" % i, items=4))
+    db.session.commit()
+A._ALERTS_LAST[0] = __import__("time").time()
+_n[0] = 0
+ca.get("/pick/state.json")
+qa = _n[0]
+_n[0] = 0
+c2.get("/pick/state.json")
+qp = _n[0]
+check("15.1 An assigner refresh takes a fixed handful of database queries, not one per bill", qa <= 25, "%d queries" % qa)
+check("15.2 A picker refresh too", qp <= 25, "%d queries" % qp)
+_n[0] = 0
+cadm.get("/picking?tab=reports&period=month")
+check("15.3 The admin report stays a handful of queries", _n[0] <= 25, "%d queries" % _n[0])
+st15 = ca.get("/pick/state.json").get_json()
+opn = [b for b in st15["bills"] if b["status"] == "open" and not b["urgent"]]
+check("15.4 Bills are listed in order: urgent first, then oldest first",
+      all(opn[i]["id"] < opn[i + 1]["id"] for i in range(len(opn) - 1)), str([b["id"] for b in opn][:6]))
+_pk15 = open(os.path.join(REPO, "templates", "_picking.html")).read()
+check("15.5 While picking, only that bill shows (focus mode hides the list)",
+      "#pickApp.pk-focus #pkBills{display:none}" in _pk15 and 'id="pkMineBill"' in _pk15)
+check("15.6 The assigner splits bills into Pending and Completed", 'data-bview="pending"' in _pk15 and 'data-bview="done"' in _pk15)
+check("15.7 Taps answer at once (Starting / Saved shown before the server replies)",
+      'b.textContent = "Starting' in _pk15 and 'b.textContent = "Saved"' in _pk15)
+pd15 = c2.get("/dashboard").data.decode()
+check("15.8 The picker's dashboard no longer shows the old picker cards",
+      "Recent History" not in pd15 and "Hard-Level Target" not in pd15 and "Monthly Target" not in pd15)
+check("15.9 Picking comes first, before the multitask section",
+      pd15.find('id="pickApp"') != -1 and (pd15.find("MULTITASK") == -1 or pd15.find('id="pickApp"') < pd15.find("MULTITASK")))
+check("15.10 The admin top bar has a Picking button", 'id="navPicking"' in cadm.get("/admin_dashboard").data.decode())
+check("15.11 On a phone the welcome banner is hidden for pickers, so the bills come first",
+      "dash-hero-pick" in pd15 and ".dash-hero-pick { display: none; }" in pd15)
+with app.app_context():
+    PickBill.query.filter(PickBill.bill_no.like("SPD%")).delete(synchronize_session=False)
+    db.session.commit()
+
 # ---- 8. Trial copy: test accounts and banner, never on the live database -----
 TRIAL = ["ravi@pharmaip.com", "lisa@pharmaip.com", "smriti@pharmaip.com", "deepti@pharmaip.com",
          "amit@pharmaip.com"]

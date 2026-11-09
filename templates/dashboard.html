@@ -204,6 +204,10 @@ button[disabled] { opacity: .45; cursor: not-allowed; transform: none; }
   .btn-submit { width: 100%; padding: 13px 20px; }
   .yn-btn { min-width: 72px; padding: 12px 18px; }
 }
+/* Pickers and pick assigners: on a phone the work card comes first. */
+@media (max-width: 640px), (max-height: 500px) {
+  .dash-hero-pick { display: none; }
+}
 </style>
 <link rel="manifest" href="{{ url_for('static', filename='manifest.json') }}">
 <meta name="theme-color" content="#146B4A">
@@ -247,7 +251,7 @@ button[disabled] { opacity: .45; cursor: not-allowed; transform: none; }
 </nav>
 
 <!-- ANIMATED DARK HERO BANNER -->
-<div class="dash-hero">
+<div class="dash-hero{% if staff_type in ('picker','pick_assigner') %} dash-hero-pick{% endif %}">
   <div class="dash-hero-orb dash-orb1"></div>
   <div class="dash-hero-orb dash-orb2"></div>
   <canvas class="dash-hero-canvas" id="dashCanvas"></canvas>
@@ -305,47 +309,7 @@ button[disabled] { opacity: .45; cursor: not-allowed; transform: none; }
     {% endfor %}{% endif %}
   {% endwith %}
 
-  {% if levels is defined and levels %}
-  {# Level-up system: a better-than-good day that beats the best day ever
-     becomes the new target. The same for best week and best month. #}
-  <div class="ip-card lvl-card" style="margin-bottom:var(--s4);">
-    <div class="ip-card__head">
-      <div>
-        <div class="ip-card__title">Level {{ levels.level }}</div>
-        <div class="ip-card__sub">Beat your best day, week or month on a good day and you level up — your best day becomes your new target.</div>
-      </div>
-      {% if levels.target %}<span class="ip-pill ip-pill--info">Target {{ levels.fmt(levels.target) }} {{ levels.unit if levels.scored else 'a day' }}</span>{% endif %}
-    </div>
-    <div class="ip-card__body">
-      <div class="ip-metrics">
-        {% for label, rec in [('Best day', levels.day), ('Best week', levels.week), ('Best month', levels.month)] %}
-        <div class="ip-metric">
-          <div class="ip-metric__label">{{ label }}</div>
-          <div class="ip-metric__value">{{ levels.fmt(rec.best_value) if rec and rec.best_value else '—' }}</div>
-          <div class="ip-metric__foot">{% if rec and rec.best_start %}{{ levels.unit }}{% if label == 'Best day' %} · {{ rec.best_start.strftime('%d %b') }}{% elif label == 'Best week' %} · week of {{ rec.best_start.strftime('%d %b') }}{% else %} · {{ rec.best_start.strftime('%B') }}{% endif %} · level {{ rec.level or 0 }}{% else %}not set yet{% endif %}</div>
-        </div>
-        {% endfor %}
-      </div>
-      {% if levels.events %}
-      <details style="margin-top:12px;">
-        <summary style="cursor:pointer;font-weight:600;">Level-up history</summary>
-        <div class="ip-tablewrap" style="margin-top:8px;">
-          <table class="ip-table">
-            <thead><tr><th>When</th><th>Record</th><th class="num">New best</th><th class="num">Beat</th><th class="num">Level</th></tr></thead>
-            <tbody>{% for ev in levels.events %}
-              <tr><td class="nowrap">{{ ev.created_at.strftime('%d %b %Y') }}</td>
-                  <td>{{ {'day':'Best day','week':'Best week','month':'Best month'}[ev.period] }} · {{ ev.start.strftime('%d %b') }}</td>
-                  <td class="num">{{ levels.fmt(ev.value) }} <span class="ip-small ip-muted">{{ ev.unit }}</span></td>
-                  <td class="num">{{ levels.fmt(ev.previous) if ev.previous else 'first' }}</td>
-                  <td class="num">{{ ev.level }}</td></tr>
-            {% endfor %}</tbody>
-          </table>
-        </div>
-      </details>
-      {% endif %}
-    </div>
-  </div>
-  {% endif %}
+  {% if not (staff_type in ('picker', 'pick_assigner')) %}{% include '_level_card.html' %}{% endif %}
 
   {# A checker's own record: best day this month and last month, with a nudge. #}
   {% if checker_bests is defined and checker_bests %}
@@ -368,6 +332,7 @@ button[disabled] { opacity: .45; cursor: not-allowed; transform: none; }
   {% endif %}
 
 
+  {% if not (staff_type in ('picker', 'pick_assigner')) %}
   <!-- PENDING PAST ENTRY WINDOWS -->
   {% if pending_windows %}
   <div class="pending-banner">
@@ -501,6 +466,8 @@ button[disabled] { opacity: .45; cursor: not-allowed; transform: none; }
   </div>
   {% endif %}
   {% endif %}
+
+  {% endif %}{# end: sections pickers no longer use #}
 
   {% if staff_type in ('picker', 'pick_assigner') %}
   {% include '_picking.html' %}
@@ -1033,6 +1000,8 @@ button[disabled] { opacity: .45; cursor: not-allowed; transform: none; }
     </form>
   </div>
 
+  {% if staff_type in ('picker', 'pick_assigner') %}{% include '_level_card.html' %}{% endif %}
+
   <!-- ════ DELIVERY GPS TRACKING MODULE ════ -->
   {% if staff_type == 'delivery' %}
   <div class="card" style="margin-bottom:20px;border-left:4px solid #0ea5e9;">
@@ -1492,6 +1461,7 @@ button[disabled] { opacity: .45; cursor: not-allowed; transform: none; }
   </div>
   {% endif %}
 
+  {% if not (staff_type in ('picker', 'pick_assigner')) %}
   <!-- CHART + PERIOD SUMMARY -->
   {% if trend_labels %}
   <div class="two-col">
@@ -1743,6 +1713,7 @@ button[disabled] { opacity: .45; cursor: not-allowed; transform: none; }
     </div>
   </div>
   {% endif %}
+  {% endif %}{# end: sections pickers no longer use #}
 
 </div>
 

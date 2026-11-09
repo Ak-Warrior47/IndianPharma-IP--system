@@ -73,14 +73,14 @@ SRC = open(os.path.join(REPO, "templates", "admin.html")).read()
 SRC_BODY = re.sub(r"<style[\s\S]*?</style>", "", SRC)
 src_panes = re.findall(r'data-pane="([a-z]+)"', SRC_BODY)
 panes = re.findall(r'data-pane="([a-z]+)"', body)
-check("2.1 All thirteen panels are assigned to a tab", len(src_panes) == 13,
+check("2.1 All fourteen panels are assigned to a tab", len(src_panes) == 14,
       "found %d" % len(src_panes))
 check("2.2 No panel names a tab that does not exist",
       set(src_panes) <= set(TABS), "stray: %s" % (set(src_panes) - set(TABS)))
 check("2.3 Every tab has something in it",
       set(src_panes) == set(TABS), "empty: %s" % (set(TABS) - set(src_panes)))
 check("2.4 Each panel also declares its order within its tab",
-      len(re.findall(r'data-ord="\d+"', SRC_BODY)) == 13)
+      len(re.findall(r'data-ord="\d+"', SRC_BODY)) == 14)
 check("2.5 Nothing rendered on the page sits outside a tab",
       set(panes) <= set(TABS) and len(panes) >= 10,
       "rendered %d: %s" % (len(panes), set(panes)))

@@ -122,6 +122,17 @@
     </div>
     <div class="ip-card__body">
       <div class="ip-small ip-muted">{{ db_note }}</div>
+      {% if db_tables %}
+      <div class="ip-tablewrap" style="margin-top:10px"><table class="ip-table" id="dbTables">
+        <thead><tr><th>Data</th><th>Table</th><th style="text-align:right">Rows</th><th>Saved?</th>{% if db_tables[0].protected is not none %}<th>Public API closed</th>{% endif %}</tr></thead>
+        <tbody>
+        {% for t in db_tables %}
+          <tr><td>{{ t.label }}</td><td><code>{{ t.table }}</code></td><td style="text-align:right">{{ t.rows if t.ok else '—' }}</td>
+            <td>{% if t.ok %}<span class="ip-pill ip-pill--ok">Yes</span>{% else %}<span class="ip-pill ip-pill--bad">No</span> <span class="ip-small">{{ t.note }}</span>{% endif %}</td>
+            {% if db_tables[0].protected is not none %}<td>{% if t.protected %}<span class="ip-pill ip-pill--ok">Yes</span>{% else %}<span class="ip-pill ip-pill--bad">No</span>{% endif %}</td>{% endif %}</tr>
+        {% endfor %}
+        </tbody></table></div>
+      {% endif %}
     </div>
   </section>
 

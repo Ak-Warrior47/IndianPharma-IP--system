@@ -82,6 +82,14 @@
 .pk-ev .k{display:inline-block;min-width:62px;font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.4px}
 .pk-ev .k.late{color:var(--bad-ink)} .pk-ev .k.idle{color:var(--warn-ink)} .pk-ev .k.missing{color:#7c3aed}
 .pk-empty{padding:12px 0;color:var(--ink-3);font-size:14px}
+#pickApp.pk-focus [data-collapse="pkBills"],#pickApp.pk-focus #pkBills{display:none}
+#pickApp.pk-focus .pk-tabs{display:none}
+.pk-btn.saving{opacity:.7;pointer-events:none}
+.pk-seg{display:inline-flex;border:1.5px solid var(--line);border-radius:10px;overflow:hidden;margin:0 0 8px}
+.pk-seg button{border:0;background:transparent;padding:7px 14px;font:650 13.5px system-ui,sans-serif;color:var(--ink-2);cursor:pointer}
+.pk-seg button b{display:inline-block;min-width:18px;margin-left:4px;padding:0 5px;border-radius:9px;background:var(--line);color:var(--ink);font-size:11.5px}
+.pk-seg button[aria-pressed="true"]{background:var(--brand);color:#fff}
+.pk-seg button[aria-pressed="true"] b{background:rgba(255,255,255,.25);color:#fff}
 #pickApp [hidden]{display:none!important}
 .pk-tabs{display:flex;gap:4px;overflow-x:auto;margin:0 0 12px;border-bottom:1px solid var(--line);scrollbar-width:none}
 .pk-tabs button{flex:none;border:0;background:transparent;padding:9px 12px;font:700 14px system-ui,sans-serif;color:var(--ink-3);border-bottom:2.5px solid transparent;cursor:pointer;white-space:nowrap}
@@ -110,7 +118,11 @@
 @media (min-width:700px){ .pk-modal{align-items:center} .pk-sheet{border-radius:16px} }
 @media (max-width:640px){ .pk-charts{grid-template-columns:1fr} }
 @media (max-width:640px){
-  .pk-stats{grid-template-columns:repeat(3,minmax(0,1fr))}
+  .pk-stats{grid-template-columns:repeat(5,minmax(0,1fr));gap:4px}
+  .pk-stat{padding:6px 5px;text-align:center}
+  .pk-stat b{font-size:16px}
+  .pk-stat span{font-size:8.5px;letter-spacing:.2px}
+  .pk-clock{font-size:36px}
   .pk-bill{grid-template-columns:1fr;gap:6px}
   .pk-add{grid-template-columns:1fr 1fr}
   .pk-add .pk-btn{grid-column:1/-1}
@@ -141,6 +153,7 @@
         <div style="font-size:17px;font-weight:800" id="pkMineText"></div></div>
       <div class="pk-clock" id="pkClock">0:00</div>
     </div>
+    <div class="pk-sub" id="pkMineBill" style="margin-top:4px"></div>
     <div class="pk-bar"><i id="pkBar" style="width:100%"></i></div>
     <div class="pk-row" style="justify-content:space-between">
       <span id="pkLateText" class="pk-sub" style="color:var(--ink-2)"></span>
@@ -187,8 +200,14 @@
   <div class="section-label pk-sec" style="margin-top:14px" data-collapse="pkPickWrap"><span>Pickers right now</span></div>
   <div id="pkPickWrap"><div class="pk-key"><span><i style="background:#3b5bdb"></i>Free</span><span><i style="background:#e05252"></i>Picking</span><span><i style="background:#b91c1c"></i>Late</span></div>
   <div class="pk-row" id="pkPickers"><span class="pk-empty">Loading…</span></div></div>
-  <div class="section-label pk-sec" style="margin-top:14px" data-collapse="pkBills"><span>Today's bills</span></div>
-  <div id="pkBills"><div class="pk-empty">Loading…</div></div>
+  <div class="section-label pk-sec" style="margin-top:14px" data-collapse="pkBillsWrap"><span>Today's bills</span></div>
+  <div id="pkBillsWrap">
+    <div class="pk-seg" role="group" aria-label="Which bills">
+      <button type="button" data-bview="pending" aria-pressed="true">Pending <b id="pkPendN">0</b></button>
+      <button type="button" data-bview="done" aria-pressed="false">Completed <b id="pkDoneN">0</b></button>
+    </div>
+    <div id="pkBills"><div class="pk-empty">Loading…</div></div>
+  </div>
   <div id="pkClose" style="margin-top:14px"></div>
   </section>
   <section data-panel="late" hidden>
@@ -219,7 +238,7 @@
   "use strict";
   var app = document.getElementById("pickApp");
   if (!app) return;
-  var role = app.getAttribute("data-role"), mine = null, mineAt = 0, lastState = null;
+  var role = app.getAttribute("data-role"), mine = null, mineAt = 0, lastState = null, billView = "pending";
   var tok = (document.querySelector('meta[name="csrf-token"]') || {}).content || "";
   function $(id) { return document.getElementById(id); }
   function esc(s) { return String(s == null ? "" : s).replace(/[&<>"]/g, function (c) { return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]; }); }
@@ -276,6 +295,13 @@
     }
     var open = s.bills.filter(function (b) { return b.status === "open"; });
     var urgentLeft = open.some(function (b) { return b.urgent && b.left > 0; });
+    // While picking, show only that bill: hide the list until Done.
+    var focus = !!mine;
+    app.classList.toggle("pk-focus", focus);
+    if (mine) {
+      var mb = s.bills.filter(function (b) { return b.id === mine.bill_id; })[0];
+      $("pkMineBill").innerHTML = mb ? '<div class="pk-row" style="margin:2px 0">' + prog(mb) + '<span>' + mb.done + " / " + mb.items + " picked · " + mb.left + " left</span></div>" + taken(mb) : "";
+    }
     if (!open.length) { $("pkBills").innerHTML = '<div class="pk-empty">No open bills right now. You will get a notification when one is added.</div>'; }
     else {
       var keep = {};
@@ -317,7 +343,12 @@
       return '<span class="pk-chip ' + (lt ? "late" : "busy") + '" data-due="' + (Date.now() + r.seconds_left * 1000) + '">' + esc(r.name) + " · " + esc(r.bill_no) + " · " + plural(r.items, "item") + ' · <b class="pk-left"></b>' +
         ' <button type="button" class="pk-btn ghost sm" data-release="' + r.claim_id + '">Release</button></span>';
     }).join("") : '<span class="pk-empty">No pickers set up yet.</span>';
-    $("pkBills").innerHTML = s.bills.length ? s.bills.map(function (b) {
+    var pend = s.bills.filter(function (b) { return b.status === "open"; });
+    var fin = s.bills.filter(function (b) { return b.status === "done" || b.status === "cancelled"; })
+      .sort(function (a, b) { return b.id - a.id; });   // newest first
+    $("pkPendN").textContent = pend.length; $("pkDoneN").textContent = fin.length;
+    var shown = billView === "done" ? fin : pend;
+    $("pkBills").innerHTML = shown.length ? shown.map(function (b) {
       var st = b.status === "done" ? "Complete in " + b.minutes + " min" : b.status === "cancelled" ? "Cancelled" :
         (b.missing ? b.missing + " missing · " : "") + (b.left ? b.left + " left" : b.active ? "being picked" : "waiting for you");
       var miss = b.missing_rows.length ? '<div class="pk-miss"><b>Not found:</b> ' + b.missing_rows.map(function (m) {
@@ -332,7 +363,7 @@
         "<div>" + (b.status === "open" ? '<div class="pk-row" style="gap:6px"><button type="button" class="pk-btn ghost sm" data-resch="' + b.id + '">Reschedule</button>' +
         '<button type="button" class="pk-btn bad sm" data-cancel="' + b.id + '">Cancel</button></div><div class="pk-resch" id="rs' + b.id + '" hidden>' +
         '<input type="date" aria-label="Date"><input type="time" aria-label="Time"><button type="button" class="pk-btn sm" data-rsave="' + b.id + '">Save</button></div>' : "") + "</div></div>";
-    }).join("") : '<div class="pk-empty">No bills yet today. Add the first one above.</div>';
+    }).join("") : '<div class="pk-empty">' + (billView === "done" ? "No completed bills yet today." : "No pending bills. Add one above.") + "</div>";
     var ev = s.events || [];
     $("pkEvents").innerHTML = lateByPerson(ev);
     renderUrgent(s.urgent || []);
@@ -540,6 +571,12 @@
     if (e.target.id === "pkModal") { closeModal(); return; }
     var b = e.target.closest("button"); if (!b || b.disabled) return;
     if (b.hasAttribute("data-tab")) { showTab(b.getAttribute("data-tab")); return; }
+    if (b.hasAttribute("data-bview")) {
+      billView = b.getAttribute("data-bview");
+      Array.prototype.forEach.call(app.querySelectorAll("[data-bview]"), function (x) { x.setAttribute("aria-pressed", String(x === b)); });
+      if (lastState) renderAssigner(lastState);
+      return;
+    }
     if (b.hasAttribute("data-open")) { openBill(b.getAttribute("data-open")); return; }
     if (b.id === "pkModalX") { closeModal(); return; }
     if (b.hasAttribute("data-resch")) {
@@ -560,9 +597,11 @@
     if (b.hasAttribute("data-take")) {
       var id = b.getAttribute("data-take"), v = +($("take" + id) || {}).value;
       if (!v) { say("Type how many items you are taking.", false); $("take" + id).focus(); return; }
-      b.disabled = true; post("/pick/claim", { bill_id: +id, items: v });
+      b.disabled = true; b.classList.add("saving"); b.textContent = "Starting…";
+      post("/pick/claim", { bill_id: +id, items: v });
     } else if (b.id === "pkDone") {
-      b.disabled = true; post("/pick/done", { claim_id: mine.id }).then(function () { b.disabled = false; });
+      b.disabled = true; b.classList.add("saving"); b.textContent = "Saved";
+      post("/pick/done", { claim_id: mine.id }).then(function () { b.disabled = false; b.classList.remove("saving"); b.textContent = "Done — all picked"; });
     } else if (b.id === "pkRepBtn") {
       $("pkRep").hidden = !$("pkRep").hidden; if (!$("pkRep").hidden && !$("pkRepRows").children.length) repRow();
     } else if (b.id === "pkRepAdd") { repRow();

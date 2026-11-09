@@ -461,6 +461,7 @@ var NOTES_BY_EMP = {
     <!-- Navigation, then exports. Colour is reserved for status elsewhere in
          the app, so these are one consistent control rather than eleven
          differently-coloured ones competing for attention. -->
+    <a href="/picking" class="btn-export" id="navPicking" style="border-color:var(--brand);color:var(--brand);font-weight:700">Picking</a>
     <a href="/admin/checklist" class="btn-export">Checklists</a>
     <a href="/admin/delivery" class="btn-export">Delivery</a>
     <a href="/delivery/leaderboard" class="btn-export">Leaderboard</a>
@@ -708,6 +709,34 @@ var NOTES_BY_EMP = {
   </div>
 
   <!-- RECENT LEVEL-UPS -->
+  <div data-pane="today" data-ord="0" class="card" style="margin-bottom:20px;" id="pickingToday">
+    <div class="card-header">
+      <div class="card-title">Picking today</div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap">
+        <a class="btn-export" href="/picking?tab=live">Live floor</a>
+        <a class="btn-export" href="/picking?tab=reports&period=today">Reports</a>
+        <a class="btn-export" href="/picking?tab=board&period=today">Leaderboard</a>
+        <a class="btn-export" href="/picking/report.pdf?period=today">PDF</a>
+      </div>
+    </div>
+    {% if picking_today %}{% set pt = picking_today %}
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(110px,1fr));gap:10px;margin-bottom:12px">
+      {% for label, val, warn in [('Bills', pt.totals.bills, false), ('Items', pt.totals['items'], false), ('Picked', pt.totals.picked, false),
+                                  ('Open now', pt.open, false), ('Picking now', pt.active, false), ('Missing', pt.totals.missing, pt.totals.missing > 0),
+                                  ('Late', pt.late, pt.late > 0), ('Left waiting', pt.idle, pt.idle > 0)] %}
+      <div style="border:1px solid var(--line);border-radius:12px;padding:9px 11px">
+        <div style="font-size:10.5px;font-weight:700;color:var(--ink-3);text-transform:uppercase;letter-spacing:.4px">{{ label }}</div>
+        <div style="font-size:22px;font-weight:750;font-variant-numeric:tabular-nums;{{ 'color:#991b1b' if warn else '' }}">{{ val }}</div></div>
+      {% endfor %}
+    </div>
+    {% if pt.top and pt.top[0].bills %}
+    <div style="font-size:13.5px;color:var(--ink-2)"><b>Top pickers:</b>
+      {% for x in pt.top %}{% if x.bills %}<span style="margin-right:12px">{{ x.rank }}. {{ x.name }} — {{ x.bills }} bills, {{ x['items'] }} items, {{ x.points }} pts</span>{% endif %}{% endfor %}</div>
+    {% else %}<div style="font-size:13.5px;color:var(--ink-3)">No picking yet today.</div>{% endif %}
+    {% if pt.closed is not none %}<div style="font-size:13px;color:var(--ink-3);margin-top:6px">Day closed: {{ pt.closed }} bills (the checkers' day total).</div>{% endif %}
+    {% else %}<div style="font-size:13.5px;color:var(--ink-3)">Picking data could not load. See Diagnostics.</div>{% endif %}
+  </div>
+
   <div data-pane="today" data-ord="4" class="card" style="margin-bottom:20px;">
     <div class="card-header">
       <div class="card-title">Recent Level-ups <span class="cnt">{{ recent_levelups|length }} (7 days)</span></div>
