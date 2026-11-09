@@ -158,7 +158,7 @@ check("4.1 Normal time is 30 s per item", SEC == 30)
 check("4.2 Done in normal time: 1.5 per item", A.pick_points(3, due, due - timedelta(seconds=1)) == 4.5)
 check("4.3 Exactly at the end of normal time still counts", A.pick_points(3, due, due) == 4.5)
 check("4.4 Extra time (find): 1 per item, no cut", A.pick_points(3, due, due + timedelta(seconds=60)) == 3.0)
-check("4.4b Extra time (report): still 1 per item", A.pick_points(3, due, due + timedelta(seconds=120)) == 3.0)
+check("4.4b Report time: still allowed, but 0.5 per item", A.pick_points(3, due, due + timedelta(seconds=120)) == 1.5)
 check("4.4c 90 s after the 125 s extra time = 2 started minutes late: -2",
       A.pick_points(3, due, due + timedelta(seconds=125 + 90)) == -2)
 check("4.5 Very late is capped at -5", A.pick_points(3, due, due + timedelta(minutes=30)) == -5)
@@ -332,14 +332,21 @@ with app.app_context():
     t1 = datetime.utcnow() - timedelta(seconds=2 * 30 + 100)        # past normal + find, inside report
     rc = A.claim_items(ids["p1"], rw.id, 2, now=t1)
     check("9.21 The phase is 'report' after normal + find time", A.pick_phase(rc, datetime.utcnow()) == "report")
-    try:
-        A.finish_claim(ids["p1"], rc.id)
-        locked = False
-    except A.PickError as exc:
-        locked = "Report" in str(exc)
-    check("9.22 In report-only time, picking is locked: Done is refused", locked)
-    rc2, _ = A.finish_claim(ids["p1"], rc.id, missing=[("Crocin", 2)])
-    check("9.23 Reporting is still allowed then, with no points cut on picked items", rc2.outcome == "report")
+    rcid = rc.id
+    rc2, _ = A.finish_claim(ids["p1"], rcid, missing=[("Crocin", 1)])
+    check("9.22 In report time a picker can still submit (1 picked, 1 reported)", rc2.outcome == "report" and rc2.picked == 1)
+    check("9.23 ...but it is worth less: 0.5 per item picked", abs(rc2.points - 0.5) < 0.01, str(rc2.points))
+    mrw = A.PickMissing.query.filter_by(claim_id=rcid).first()
+    A.handle_missing(mrw.id, "unavailable")
+    check("9.23b A confirmed-missing item reported in report time also pays 0.5", abs(db.session.get(PickClaim, rcid).points - 1.0) < 0.01,
+          str(db.session.get(PickClaim, rcid).points))
+    db.session.add(PickBill(bill_no="RW2", items=2))
+    db.session.commit()
+    rw2 = PickBill.query.filter_by(bill_no="RW2").first()
+    rc3 = A.claim_items(ids["p1"], rw2.id, 2, now=t1)
+    rc3, _ = A.finish_claim(ids["p1"], rc3.id)
+    check("9.23c Done with everything picked in report time is allowed too: 2 x 0.5 = 1",
+          rc3.outcome == "report" and abs(rc3.points - 1.0) < 0.01, "%s %s" % (rc3.outcome, rc3.points))
     # idle warning: free picker leaves a waiting bill 2 minutes
     Notification.query.filter_by(emp_id=ids["p2"]).delete()
     PickEvent.query.filter_by(kind="idle").delete()

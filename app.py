@@ -113,6 +113,8 @@ PICK_EXTRA_SECONDS = 125          # after normal time: first half find, second h
 PICK_IDLE_SECONDS = 120           # a free picker has this long to take a waiting bill
 PICK_URGENT_POOL = 10.0           # bonus points per urgent bill, shared by items picked
 PICK_ONTIME_RATE = 1.5            # points per item finished within normal time
+PICK_EXTRA_RATE = 1.0             # per item finished in extra time to find
+PICK_REPORT_RATE = 0.5            # per item finished in report time (still allowed, worth less)
 PICK_LATE_CAP = 5
 
 # Hourly volume targets used by the scoring formulas. Set them to what this
@@ -1951,8 +1953,8 @@ def get_complaint_deduction(staff_type: str, emp_id: int = None) -> float:
 # ─── Bill-based picking: the rules ───────────────────────────────────────────
 # Timeline of one grab of n items (s = 30 s per item, 20 s on an urgent bill):
 #   normal time   0 .. n*s            pick or report; finishing here earns most
-#   find time     + 62.5 s            still pick or report; no points cut
-#   report time   + 62.5 s            picking locked: only report missing items
+#   find time     + 62.5 s            still pick or report; 1 point per item
+#   report time   + 62.5 s            still Done or report; 0.5 point per item
 #   late          after that          late penalty and the assigner is alerted
 class PickError(Exception):
     """A picking action that cannot be done; the message is shown to the user."""
@@ -2028,8 +2030,10 @@ def pick_points(items, due, done, picked=None, missing=0):
     half = timedelta(seconds=PICK_EXTRA_SECONDS / 2.0)
     if done <= due:                       # normal time: more points; missing reported now counts in full
         return round(PICK_ONTIME_RATE * (picked + missing), 1)
-    if done <= due + 2 * half:            # find or report time: no cut
-        return float(picked)
+    if done <= due + half:                # extra time to find
+        return round(PICK_EXTRA_RATE * picked, 1)
+    if done <= due + 2 * half:            # report time: still allowed, worth less
+        return round(PICK_REPORT_RATE * picked, 1)
     late_min = math.ceil((done - due - 2 * half).total_seconds() / 60.0)
     return -float(min(PICK_LATE_CAP, max(1, late_min)))
 
@@ -2242,8 +2246,6 @@ def finish_claim(picker_id, claim_id, now=None, day=None, picked=None, missing=N
     bill = db.session.get(PickBill, c.bill_id)
     tnow = clock_now(bill, now)              # a paused bill's timer is stopped
     phase = pick_phase(c, tnow)
-    if phase == "report" and not missing:
-        raise PickError("Picking time is over. Report the items you could not find.")
     c.done_at, c.status, c.picked, c.missing = now, "done", picked, m_qty
     c.work_date = day or date.today()      # same day boundary as the rest of the app
     c.outcome = {"normal": "ontime", "find": "extra", "report": "report", "late": "late"}[phase]
@@ -2289,7 +2291,8 @@ def handle_missing(missing_id, action, now=None):
         # rate of when they reported it (normal time 1.5, extra time 1).
         rc = db.session.get(PickClaim, m.claim_id)
         if rc and rc.outcome in ("ontime", "extra", "report"):
-            rc.points = round(float(rc.points or 0) + (PICK_ONTIME_RATE if rc.outcome == "ontime" else 1.0) * m.qty, 1)
+            rate = {"ontime": PICK_ONTIME_RATE, "extra": PICK_EXTRA_RATE}.get(rc.outcome, PICK_REPORT_RATE)
+            rc.points = round(float(rc.points or 0) + rate * m.qty, 1)
     if action == "reassign":
         # the items go back on the bill as ordinary items to pick
         bill = db.session.get(PickBill, m.bill_id)

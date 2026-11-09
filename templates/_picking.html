@@ -309,7 +309,7 @@ body.pk-full .pk-msg.on{position:sticky;top:0;z-index:2}
     $("pkRule").innerHTML = '<ul class="pk-sub" style="font-size:14px;color:var(--ink-2);padding-left:18px;margin:0;line-height:1.6">' +
       "<li><b>Normal time:</b> " + s.seconds_per_item + " s per item (urgent bills " + s.urgent_seconds + " s). Done in this time: <b>1.5 points per item</b>.</li>" +
       "<li><b>Extra time to find:</b> " + h + " s more. Done now: <b>1 point per item</b>, no cut.</li>" +
-      "<li><b>Report only:</b> " + h + " s more. Picking is locked; report the items you could not find.</li>" +
+      "<li><b>Report time:</b> " + h + " s more. You can still press Done or report items you could not find, but it is worth less: <b>0.5 point per item</b>.</li>" +
       "<li><b>Late</b> after that: −1 point per minute, at most −" + s.late_cap + ". The Pick Assigner is alerted.</li>" +
       "<li><b>Item not found:</b> report it with the name and quantity. It is paid once the assigner confirms it is not available.</li>" +
       "<li><b>Paused bill:</b> when the assigner pauses a bill, your timer stops and you lose nothing. It starts again from where it stopped when the bill is resumed.</li>" +
@@ -609,12 +609,12 @@ body.pk-full .pk-msg.on{position:sticky;top:0;z-index:2}
       else { phase = "late"; left = r; total = 1; }
       $("pkMine").className = "pk-mine" + (phase === "normal" ? "" : " " + phase) + (mine.paused ? " paused" : "");
       $("pkPhase").textContent = mine.paused ? "Paused by assigner — timer stopped" :
-        {normal: "Normal time", find: "Extra time to find", report: "Report only — picking locked", late: "Late"}[phase];
+        {normal: "Normal time", find: "Extra time to find", report: "Report time — fewer points", late: "Late"}[phase];
       $("pkClock").textContent = (phase === "late" ? "−" : "") + clock(left);
       $("pkBar").style.width = Math.max(0, Math.min(100, 100 * left / Math.max(total, 1))) + "%";
       $("pkLateText").textContent = mine.paused ? "Your time is safe. It starts again when the assigner resumes the bill." : {normal: "Finish now for 1.5 points per item.", find: "Still time to find them: 1 point per item.",
-        report: "Picking is closed. Report the items you could not find.", late: "Late by " + clock(left) + " — points are dropping."}[phase];
-      $("pkDone").disabled = phase === "report";
+        report: "Submit now: 0.5 point per item. Report any item you could not find.", late: "Late by " + clock(left) + " — points are dropping."}[phase];
+      $("pkDone").disabled = false;
     }
     if (role !== "picker") {
       Array.prototype.forEach.call(document.querySelectorAll(".pk-chip[data-due]"), function (c) {
