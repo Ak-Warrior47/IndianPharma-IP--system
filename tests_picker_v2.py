@@ -788,6 +788,55 @@ check("17.3 While picking, the screen shows only that bill, full screen",
       "body.pk-full #pickApp{position:fixed;inset:0" in _pk16 and 'document.body.classList.toggle("pk-full", focus)' in _pk16)
 check("17.4 The full-screen timer shows the bill number first, big",
       'class="pk-billno">Bill' in _pk16 and "body.pk-full #pkMine .pk-billno" in _pk16)
+
+# ---- 18. Instant buttons; Pause all / Resume all / Close all -----------------
+with app.app_context():
+    for c in PickClaim.query.filter_by(status="active").all():
+        c.status = "cancelled"
+    for b in PickBill.query.filter_by(status="open").all():
+        b.status = "cancelled"
+    db.session.commit()
+    B18a, B18b, B18c = _fresh("PSE2001", 4), _fresh("PSE2002", 4), _fresh("PSE2003", 4)
+code, j = jpost(c1, "/pick/claim", {"bill_id": B18a, "items": 2})
+check("18.1 An action's reply carries the fresh screen, so the phone does not ask again",
+      code == 200 and "state" in j and j["state"].get("mine", {}).get("bill_id") == B18a, str(j)[:200])
+code, j = jpost(c1, "/pick/claim", {"bill_id": B18b, "items": 1})
+check("18.2 A refused action also carries the screen, to undo the instant change", code == 400 and "state" in j)
+code, j = jpost(c1, "/pick/bills/pause_all")
+check("18.3 A picker cannot pause all", code == 403)
+code, j = jpost(ca, "/pick/bills/pause_all")
+with app.app_context():
+    paused = [db.session.get(PickBill, i).paused_at is not None for i in (B18a, B18b, B18c)]
+check("18.4 Pause all pauses every pending bill", code == 200 and all(paused) and "3 bills paused" in j.get("message", ""), str(j.get("message")))
+code, j = jpost(ca, "/pick/bills/pause_all")
+check("18.5 Pause all with nothing running says so", code == 400)
+stp18 = c1.get("/pick/state.json").get_json()
+check("18.6 The picker's timer stops with Pause all", stp18["mine"]["paused"] is True)
+code, j = jpost(ca, "/pick/bills/resume_all")
+with app.app_context():
+    resumed = [db.session.get(PickBill, i).paused_at is None for i in (B18a, B18b, B18c)]
+check("18.7 Resume all resumes them", code == 200 and all(resumed), str(j.get("message")))
+code, j = jpost(ca, "/pick/bills/close_all")
+with app.app_context():
+    st18 = [db.session.get(PickBill, i).status for i in (B18a, B18b, B18c)]
+    act = PickClaim.query.filter_by(bill_id=B18a, status="active").count()
+check("18.8 Close all closes every pending bill and frees the pickers", code == 200 and st18 == ["cancelled"] * 3 and act == 0, str(st18))
+code, j = jpost(ca, "/pick/bills/close_all")
+check("18.9 Close all with nothing pending says so", code == 400)
+code, j = jpost(ca, "/pick/bills/explode")
+check("18.10 Unknown bulk actions are refused", code == 404)
+check("18.11 The assigner screen has Pause all, Resume all and Close all (with tap-again)",
+      'id="pkPauseAll"' in _pk16 or 'id="pkPauseAll"' in open(os.path.join(REPO, "templates", "_picking.html")).read())
+_pk18 = open(os.path.join(REPO, "templates", "_picking.html")).read()
+check("18.12 ...Resume all and Close all, which asks to tap again", 'id="pkResumeAll"' in _pk18 and 'Tap again: close all' in _pk18)
+check("18.13 Buttons change the screen at once, before the server answers",
+      "if (now && lastState) { var c = aged(lastState); now(c); draw(c); }" in _pk18)
+check("18.14 The 10-second refresh waits while an action is on its way", "if (inFlight) return;" in _pk18)
+with app.app_context():
+    PickClaim.query.filter(PickClaim.bill_id.in_([B18a, B18b, B18c])).delete(synchronize_session=False)
+    PickEvent.query.filter(PickEvent.bill_id.in_([B18a, B18b, B18c])).delete(synchronize_session=False)
+    PickBill.query.filter(PickBill.id.in_([B18a, B18b, B18c])).delete(synchronize_session=False)
+    db.session.commit()
 with app.app_context():
     PickClaim.query.filter(PickClaim.bill_id.in_(
         [b.id for b in PickBill.query.filter(PickBill.bill_no.like("PSE%")).all()])).delete(synchronize_session=False)

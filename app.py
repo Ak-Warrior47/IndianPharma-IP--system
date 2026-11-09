@@ -2379,6 +2379,68 @@ def resume_bill(bill_id, now=None):
     return bill, secs
 
 
+def plural_s(n, word):
+    return "%d %s%s" % (n, word, "" if n == 1 else "s")
+
+
+def pause_all_bills(now=None):
+    """Pause every open bill that is not paused yet. Returns how many."""
+    now = now or datetime.utcnow()
+    bills = PickBill.query.filter(PickBill.status == "open", PickBill.paused_at.is_(None)).with_for_update().all()
+    if not bills:
+        db.session.rollback()
+        raise PickError("No running bills to pause.")
+    ids = [b.id for b in bills]
+    for b in bills:
+        b.paused_at = now
+        _pick_event("paused", None, b.id, detail="timer paused (all)")
+    who = [c.picker_id for c in PickClaim.query.filter(PickClaim.bill_id.in_(ids), PickClaim.status == "active").all()]
+    db.session.commit()
+    if who:
+        notify_many(who, "All bills paused", "Your timer is stopped. Wait for the assigner to resume.")
+    return len(bills)
+
+
+def resume_all_bills(now=None):
+    """Resume every paused bill; running grabs get their paused time back."""
+    now = now or datetime.utcnow()
+    bills = PickBill.query.filter(PickBill.status == "open", PickBill.paused_at.isnot(None)).with_for_update().all()
+    if not bills:
+        db.session.rollback()
+        raise PickError("No paused bills.")
+    ids = [b.id for b in bills]
+    for b in bills:
+        secs = _unpause(b, now)
+        _pick_event("resumed", None, b.id, minutes=round(secs / 60.0, 1), detail="paused for %d:%02d (all)" % (secs // 60, secs % 60))
+    who = [c.picker_id for c in PickClaim.query.filter(PickClaim.bill_id.in_(ids), PickClaim.status == "active").all()]
+    db.session.commit()
+    notify_many(who or [p.id for p in free_pickers()], "Bills resumed",
+                "Your timer is running again." if who else "Bills are open to pick again.")
+    return len(bills)
+
+
+def close_all_bills(now=None):
+    """Cancel every pending bill (open or paused). Grabs in progress are
+    cancelled too; finished grabs keep their points. Returns how many."""
+    now = now or datetime.utcnow()
+    bills = PickBill.query.filter(PickBill.status == "open").with_for_update().all()
+    if not bills:
+        db.session.rollback()
+        raise PickError("No pending bills to close.")
+    ids = [b.id for b in bills]
+    who = []
+    for c in PickClaim.query.filter(PickClaim.bill_id.in_(ids), PickClaim.status == "active").all():
+        c.status = "cancelled"
+        who.append(c.picker_id)
+    for b in bills:
+        _unpause(b, now)
+        b.status = "cancelled"
+    db.session.commit()
+    if who:
+        notify_many(who, "Bills closed by the assigner", "Your current items were cancelled. No points lost.")
+    return len(bills)
+
+
 def reschedule_bill(bill_id, when_utc):
     """Move an unfinished bill to a later time. Grabs in progress must finish first."""
     bill = db.session.get(PickBill, bill_id)
@@ -2872,14 +2934,15 @@ def run_late_pick_alerts():
         alert_late_picks()
 
 
-def picking_state(emp, staff_type):
+def picking_state(emp, staff_type, alerts=True):
     """Everything the picking screens show, as plain JSON-able data. Loads
     the bills, their grabs and missing items, today's finished grabs and the
     names in a few queries, whatever the number of bills or pickers."""
     now = datetime.utcnow()
     today = date.today()
     day_start = datetime.combine(today, datetime.min.time())
-    alert_late_picks(now, throttle=True)
+    if alerts:
+        alert_late_picks(now, throttle=True)
     # In order: urgent first, then oldest first (the order bills were made).
     bills = (PickBill.query.filter(or_(PickBill.status == "open", PickBill.created_at >= day_start))
              .order_by(PickBill.is_urgent.desc(), PickBill.created_at.asc()).limit(150).all())
@@ -9068,10 +9131,30 @@ def _pick_role():
     return session.get("staff_type", ""), bool(session.get("is_admin"))
 
 
+def _session_pick_state():
+    """The caller's live screen data, so an action's reply can redraw the
+    screen at once instead of the phone asking again (one trip, not two)."""
+    role, is_admin = _pick_role()
+    if role not in ("picker", "pick_assigner") and not is_admin:
+        return None
+    try:
+        db.session.rollback()   # drop anything a failed action left behind
+        emp = db.session.get(Employee, session.get("user_id"))
+        return picking_state(emp, "picker" if (role == "picker" and not is_admin) else "pick_assigner", alerts=False)
+    except Exception as exc:
+        db.session.rollback()
+        logger.warning("pick state for reply: %s", exc)
+        return None
+
+
 def _pick_reply(ok, msg, code=200):
     """JSON for the live screens; a flash and redirect for plain form posts."""
     if request.is_json or request.headers.get("X-Requested-With") == "fetch":
-        return jsonify({"ok": ok, "message": msg}), (200 if ok else code)
+        out = {"ok": ok, "message": msg}
+        st = _session_pick_state()
+        if st is not None:
+            out["state"] = st
+        return jsonify(out), (200 if ok else code)
     flash(msg, "success" if ok else "warning")
     return redirect(url_for("dashboard"))
 
@@ -9186,6 +9269,23 @@ def pick_resume_bill(bill_id):
     except PickError as exc:
         return _pick_reply(False, str(exc), 400)
     return _pick_reply(True, "Bill %s resumed after %d:%02d." % (b.bill_no, secs // 60, secs % 60))
+
+
+@app.route("/pick/bills/<action>", methods=["POST"])
+@login_required
+def pick_bills_bulk(action):
+    role, is_admin = _pick_role()
+    if role != "pick_assigner" and not is_admin:
+        return _pick_reply(False, "Only the Pick Assigner can do this.", 403)
+    fn = {"pause_all": pause_all_bills, "resume_all": resume_all_bills, "close_all": close_all_bills}.get(action)
+    if not fn:
+        return _pick_reply(False, "Unknown action.", 404)
+    try:
+        n = fn()
+    except PickError as exc:
+        return _pick_reply(False, str(exc), 400)
+    word = {"pause_all": "paused", "resume_all": "resumed", "close_all": "closed"}[action]
+    return _pick_reply(True, "%s %s." % (plural_s(n, "bill"), word))
 
 
 @app.route("/pick/missing/<int:missing_id>/<action>", methods=["POST"])

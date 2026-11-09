@@ -98,6 +98,7 @@
 .pk-seg button[aria-pressed="true"] b{background:rgba(255,255,255,.25);color:#fff}
 #pickApp [hidden]{display:none!important}
 .pk-tabs .cnt.ok{background:var(--ok)}
+.pk-bulk{gap:6px;margin:0 0 8px}
 .pk-n{display:inline-block;min-width:20px;margin-left:6px;padding:0 6px;border-radius:9px;background:var(--line);color:var(--ink);font-size:12px;line-height:20px;text-align:center}
 .pk-link{border:0;background:none;padding:0;font:inherit;color:var(--brand);font-weight:700;text-decoration:underline;cursor:pointer}
 /* Picking one bill: the whole screen is that bill, nothing else. */
@@ -253,6 +254,7 @@ body.pk-full .pk-msg.on{position:sticky;top:0;z-index:2}
   <div class="pk-row" id="pkPickers"><span class="pk-empty">Loading…</span></div></div>
   <div class="section-label pk-sec" style="margin-top:14px" data-collapse="pkBillsWrap"><span>Pending bills <b class="pk-n" id="pkPendN">0</b></span></div>
   <div id="pkBillsWrap">
+    <div class="pk-row pk-bulk" id="pkBulk" hidden></div>
     <div id="pkBills"><div class="pk-empty">Loading…</div></div>
     <div class="pk-note">Finished bills move to the <button type="button" class="pk-link" data-tab="done">Completed</button> tab.</div>
   </div>
@@ -290,20 +292,43 @@ body.pk-full .pk-msg.on{position:sticky;top:0;z-index:2}
   "use strict";
   var app = document.getElementById("pickApp");
   if (!app) return;
-  var role = app.getAttribute("data-role"), mine = null, mineAt = 0, lastState = null;
+  var role = app.getAttribute("data-role"), mine = null, mineAt = 0, lastState = null, lastAt = 0, inFlight = 0;
   var tok = (document.querySelector('meta[name="csrf-token"]') || {}).content || "";
   function $(id) { return document.getElementById(id); }
   function esc(s) { return String(s == null ? "" : s).replace(/[&<>"]/g, function (c) { return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]; }); }
   function clock(sec) { var a = Math.abs(Math.round(sec)), m = Math.floor(a / 60), s = a % 60; return m + ":" + (s < 10 ? "0" : "") + s; }
   function plural(n, w) { return n + " " + w + (n === 1 ? "" : "s"); }
   function say(text, good) { var m = $("pkMsg"); m.textContent = text; m.className = "pk-msg on " + (good ? "good" : "warn"); clearTimeout(say.t); say.t = setTimeout(function () { m.className = "pk-msg"; }, 7000); }
-  function post(url, body) {
+  // Every action: the screen changes at once (instant), the server reply
+  // then carries the fresh screen, so there is one trip, not two.
+  function post(url, body, now) {
+    inFlight++;
+    if (now && lastState) { var c = aged(lastState); now(c); draw(c); }
     return fetch(url, { method: "POST", credentials: "same-origin",
       headers: { "Content-Type": "application/json", "X-Requested-With": "fetch", "X-CSRFToken": tok },
       body: JSON.stringify(body || {}) })
-      .then(function (r) { return r.json().catch(function () { return { ok: false, message: "Something went wrong." }; }); })
-      .then(function (j) { say(j.message || (j.ok ? "Done." : "Could not do that."), j.ok); load(); return j; });
+      .then(function (r) { return r.json().catch(function () { return { ok: false, message: "Something went wrong." }; }); },
+            function () { return { ok: false, message: "No connection. Try again." }; })
+      .then(function (j) {
+        inFlight = Math.max(0, inFlight - 1);
+        say(j.message || (j.ok ? "Done." : "Could not do that."), j.ok);
+        if (j.state && j.state.bills) { lastState = j.state; lastAt = Date.now(); draw(j.state); } else { load(); }
+        return j;
+      });
   }
+  function draw(st) { (role === "picker" ? renderPicker : renderAssigner)(st); tick(); }
+  // A copy of the last screen data with its timers moved on to now.
+  function aged(st) {
+    var c = JSON.parse(JSON.stringify(st)), dt = Math.round((Date.now() - lastAt) / 1000);
+    (c.bills || []).forEach(function (b) {
+      if (b.status === "open") { if (b.paused) b.paused_for += dt; else b.elapsed += dt; }
+      (b.taken || []).forEach(function (t) { if (t.left != null && !b.paused) t.left -= dt; });
+    });
+    (c.pickers || []).forEach(function (r) { if (!r.free && !r.paused) { r.seconds_left -= dt; if (r.late_by != null) r.late_by += dt; } });
+    if (c.mine && !c.mine.paused) { c.mine.normal_left -= dt; c.mine.find_left -= dt; c.mine.report_left -= dt; }
+    return c;
+  }
+  function billIn(st, id) { return (st.bills || []).filter(function (b) { return b.id === +id; })[0]; }
   function rule(s) {
     var h = Math.round(s.extra_seconds / 2);
     $("pkRule").innerHTML = '<ul class="pk-sub" style="font-size:14px;color:var(--ink-2);padding-left:18px;margin:0;line-height:1.6">' +
@@ -404,6 +429,11 @@ body.pk-full .pk-msg.on{position:sticky;top:0;z-index:2}
     var fin = s.bills.filter(function (b) { return b.status === "done" || b.status === "cancelled"; })
       .sort(function (a, b) { return b.id - a.id; });   // newest first
     $("pkPendN").textContent = pend.length;
+    var running = pend.filter(function (b) { return !b.paused; }).length, held = pend.length - running;
+    $("pkBulk").hidden = !pend.length;
+    $("pkBulk").innerHTML = (running ? '<button type="button" class="pk-btn ghost sm" id="pkPauseAll">Pause all (' + running + ")</button>" : "") +
+      (held ? '<button type="button" class="pk-btn ok sm" id="pkResumeAll">Resume all (' + held + ")</button>" : "") +
+      (pend.length ? '<button type="button" class="pk-btn bad sm" id="pkCloseAll" data-n="' + pend.length + '">Close all</button>' : "");
     $("pkDoneCnt").hidden = !fin.length; $("pkDoneCnt").textContent = fin.length;
     function asgRow(b) {
       var st = b.status === "done" ? "Complete in " + b.minutes + " min" : b.status === "cancelled" ? "Cancelled" : b.paused ? "paused" :
@@ -585,11 +615,11 @@ body.pk-full .pk-msg.on{position:sticky;top:0;z-index:2}
   }
 
   function load() {
+    if (inFlight) return;                   // an action's reply will redraw
     fetch("/pick/state.json", { credentials: "same-origin" }).then(function (r) { return r.json(); }).then(function (s) {
-      if (!s || !s.bills) return;
-      lastState = s;
-      (role === "picker" ? renderPicker : renderAssigner)(s);
-      tick();
+      if (!s || !s.bills || inFlight) return;
+      lastState = s; lastAt = Date.now();
+      draw(s);
     }).catch(function () {});
   }
 
@@ -614,7 +644,7 @@ body.pk-full .pk-msg.on{position:sticky;top:0;z-index:2}
       $("pkBar").style.width = Math.max(0, Math.min(100, 100 * left / Math.max(total, 1))) + "%";
       $("pkLateText").textContent = mine.paused ? "Your time is safe. It starts again when the assigner resumes the bill." : {normal: "Finish now for 1.5 points per item.", find: "Still time to find them: 1 point per item.",
         report: "Submit now: 0.5 point per item. Report any item you could not find.", late: "Late by " + clock(left) + " — points are dropping."}[phase];
-      $("pkDone").disabled = false;
+      $("pkDone").disabled = !mine.id;
     }
     if (role !== "picker") {
       Array.prototype.forEach.call(document.querySelectorAll(".pk-chip[data-due]"), function (c) {
@@ -658,10 +688,20 @@ body.pk-full .pk-msg.on{position:sticky;top:0;z-index:2}
       var id = b.getAttribute("data-take"), v = +($("take" + id) || {}).value;
       if (!v) { say("Type how many items you are taking.", false); $("take" + id).focus(); return; }
       b.disabled = true; b.classList.add("saving"); b.textContent = "Starting…";
-      post("/pick/claim", { bill_id: +id, items: v });
+      post("/pick/claim", { bill_id: +id, items: v }, function (c) {
+        var bl = billIn(c, id); if (!bl) return;
+        var per = bl.urgent ? c.urgent_seconds : c.seconds_per_item, half = Math.round(c.extra_seconds / 2), n = v * per;
+        bl.active += v; bl.left = Math.max(0, bl.left - v);
+        c.mine = { id: 0, bill_id: bl.id, bill_no: bl.bill_no, items: v, urgent: bl.urgent, paused: false,
+                   normal_left: n, find_left: n + half, report_left: n + 2 * half, seconds_total: n };
+      });
     } else if (b.id === "pkDone") {
+      if (!mine || !mine.id) return;
       b.disabled = true; b.classList.add("saving"); b.textContent = "Saved";
-      post("/pick/done", { claim_id: mine.id }).then(function () { b.disabled = false; b.classList.remove("saving"); b.textContent = "Done — all picked"; });
+      var mid = mine.id;
+      say("Saved. Working out your points…", true);
+      post("/pick/done", { claim_id: mid }, function (c) { c.mine = null; })
+        .then(function () { b.disabled = false; b.classList.remove("saving"); b.textContent = "Done — all picked"; });
     } else if (b.id === "pkRepBtn") {
       $("pkRep").hidden = !$("pkRep").hidden; if (!$("pkRep").hidden && !$("pkRepRows").children.length) repRow();
     } else if (b.id === "pkRepAdd") { repRow();
@@ -670,24 +710,62 @@ body.pk-full .pk-msg.on{position:sticky;top:0;z-index:2}
         var i = r.querySelectorAll("input"); return { item: i[0].value.trim(), qty: +i[1].value || 0 };
       }).filter(function (m) { return m.item || m.qty; });
       if (!rows.length) { say("Write the missing item and how many.", false); return; }
-      post("/pick/done", { claim_id: mine.id, missing: rows });
+      if (!mine || !mine.id) return;
+      post("/pick/done", { claim_id: mine.id, missing: rows }, function (c) { c.mine = null; });
     } else if (b.id === "pkAddBtn") { addBill();
-    } else if (b.hasAttribute("data-release")) { post("/pick/claim/" + b.getAttribute("data-release") + "/release");
-    } else if (b.hasAttribute("data-miss")) { post("/pick/missing/" + b.getAttribute("data-miss") + "/" + b.getAttribute("data-act"));
-    } else if (b.hasAttribute("data-pause")) { b.classList.add("saving"); b.textContent = "Pausing…"; post("/pick/bill/" + b.getAttribute("data-pause") + "/pause");
-    } else if (b.hasAttribute("data-resume")) { b.classList.add("saving"); b.textContent = "Resuming…"; post("/pick/bill/" + b.getAttribute("data-resume") + "/resume");
+    } else if (b.hasAttribute("data-release")) {
+      var cl = +b.getAttribute("data-release");
+      post("/pick/claim/" + cl + "/release", null, function (c) {
+        (c.pickers || []).forEach(function (r) { if (r.claim_id === cl) { r.free = true; delete r.late_by; } });
+      });
+    } else if (b.hasAttribute("data-miss")) {
+      var mi = +b.getAttribute("data-miss");
+      post("/pick/missing/" + mi + "/" + b.getAttribute("data-act"), null, function (c) {
+        (c.bills || []).forEach(function (bl) { bl.missing_rows = bl.missing_rows.filter(function (m) { return m.id !== mi; }); });
+      });
+    } else if (b.hasAttribute("data-pause")) {
+      var pid = b.getAttribute("data-pause");
+      post("/pick/bill/" + pid + "/pause", null, function (c) { setPaused(c, function (bl) { return bl.id === +pid; }, true); });
+    } else if (b.hasAttribute("data-resume")) {
+      var rid = b.getAttribute("data-resume");
+      post("/pick/bill/" + rid + "/resume", null, function (c) { setPaused(c, function (bl) { return bl.id === +rid; }, false); });
     } else if (b.hasAttribute("data-cancel")) {
-      if (b.getAttribute("data-sure") === "1") post("/pick/bill/" + b.getAttribute("data-cancel") + "/cancel");
+      var cid = b.getAttribute("data-cancel");
+      if (b.getAttribute("data-sure") === "1") post("/pick/bill/" + cid + "/cancel", null, function (c) { var bl = billIn(c, cid); if (bl) bl.status = "cancelled"; });
       else { b.setAttribute("data-sure", "1"); b.textContent = "Tap again to cancel"; }
+    } else if (b.id === "pkPauseAll") {
+      post("/pick/bills/pause_all", null, function (c) { setPaused(c, function () { return true; }, true); });
+    } else if (b.id === "pkResumeAll") {
+      post("/pick/bills/resume_all", null, function (c) { setPaused(c, function () { return true; }, false); });
+    } else if (b.id === "pkCloseAll") {
+      if (b.getAttribute("data-sure") === "1") {
+        post("/pick/bills/close_all", null, function (c) {
+          (c.bills || []).forEach(function (bl) { if (bl.status === "open") bl.status = "cancelled"; });
+          (c.pickers || []).forEach(function (r) { r.free = true; delete r.late_by; });
+        });
+      } else { b.setAttribute("data-sure", "1"); b.textContent = "Tap again: close all " + b.getAttribute("data-n") + " pending bills"; }
     }
   });
+  function setPaused(c, which, on) {
+    var names = {};
+    (c.bills || []).forEach(function (bl) {
+      if (bl.status === "open" && which(bl) && !!bl.paused !== on) { bl.paused = on; bl.paused_for = 0; names[bl.bill_no] = 1; }
+    });
+    (c.pickers || []).forEach(function (r) { if (!r.free && names[r.bill_no]) r.paused = on; });
+  }
   function addBill() {
     var no = $("pkBillNo").value.trim(), it = $("pkBillItems").value;
     if (!no) { say("Type the bill number.", false); $("pkBillNo").focus(); return; }
     if (!+it) { say("Type how many items.", false); $("pkBillItems").focus(); return; }
-    post("/pick/bill", { bill_no: no, items: +it }).then(function (j) {
-      if (j.ok) { $("pkBillNo").value = ""; $("pkBillItems").value = ""; }
-      $("pkBillNo").focus();
+    // Clear the boxes at once for the next bill; put them back if it fails.
+    $("pkBillNo").value = ""; $("pkBillItems").value = ""; $("pkBillNo").focus();
+    post("/pick/bill", { bill_no: no, items: +it }, function (c) {
+      var u = /u$/i.test(no), n = +it;
+      c.bills.push({ id: -Date.now(), bill_no: (c.prefix || "") + no.replace(/u$/i, ""), items: n, status: "open", urgent: u,
+        score: 0, done: 0, active: 0, left: n, missing: 0, taken: [], pickers: [], missing_rows: [], elapsed: 0,
+        paused: false, paused_for: 0, minutes: null, added: "now", completed: "" });
+    }).then(function (j) {
+      if (!j.ok && !$("pkBillNo").value && !$("pkBillItems").value) { $("pkBillNo").value = no; $("pkBillItems").value = it; }
     });
   }
   // Enter moves to the next empty field, and submits when all are filled.
