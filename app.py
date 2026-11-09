@@ -702,10 +702,9 @@ class MultitaskEntry(db.Model):
         """
         st = self.secondary_type
         fields = {
-            "picker": [("Bills Rcvd", self.total_bills_received),
-                       ("SB Picked", self.sales_bills_open),
-                       ("Items Picked", self.picked), ("Missed", self.missed),
-                       ("CS Open", self.cs_sales_open), ("Packing", self.packing_done)],
+            # from the live bill picking (no typed numbers any more)
+            "picker": [("Bills picked", self.sales_bills_open),
+                       ("Items picked", self.picked), ("Not found", self.missed)],
             "checker": [("Bills Rcvd", self.bills_received),
                         ("SB Checked", self.sales_bills_open),
                         ("CS Checked", self.cs_sales_open),
@@ -1382,8 +1381,12 @@ MULTITASK_HEADLINE = {
 }
 
 
+MULTITASK_LABELS = {"other": "Breakage & Expiry"}   # "Other" told nobody what it was
+
+
 def multitask_role_label(role):
-    return (role or "other").replace("_", " ").title()
+    role = role or "other"
+    return MULTITASK_LABELS.get(role, role.replace("_", " ").title())
 
 
 def multitask_report(days=30):
@@ -2260,7 +2263,7 @@ def mt_picking_today(emp_id):
         return False
 
 
-app.jinja_env.globals.update(mt_picking_today=mt_picking_today, pick_today=lambda: date.today(),
+app.jinja_env.globals.update(mt_label=lambda r: multitask_role_label(r), mt_picking_today=mt_picking_today, pick_today=lambda: date.today(),
                              pick_times=lambda: pick_times(), app_build=APP_BUILD)
 
 
@@ -5321,6 +5324,10 @@ def _save_multitask_entry(emp_id, entry_date, primary_role):
     roles = [r for r in (x.strip() for x in roles)
              if r and r != primary_role and not (r in seen or seen.add(r))]
     if not roles:
+        return 0
+    if len(roles) > 1:
+        # The owner's rule: one extra role at a time.
+        flash("Choose one extra role at a time (you chose %s)." % ", ".join(multitask_role_label(r) for r in roles), "danger")
         return 0
 
     def mi(k):
@@ -9344,6 +9351,9 @@ def _pick_view():
     """Which picking screen the caller gets: 'assigner' (Pick Assigner, admin),
     'picker' (pickers, and any other staff picking as a multitask role), or None."""
     role, is_admin = _pick_role()
+    as_picker = (request.headers.get("X-Pick-As") == "picker" or request.args.get("as") == "picker")
+    if role and not is_admin and as_picker:
+        return "picker"          # e.g. a Pick Assigner picking as a multitask role
     if is_admin or role == "pick_assigner":
         return "assigner"
     return "picker" if role else None
@@ -9547,6 +9557,17 @@ def _report_name(r):
     span = r["day_from"].isoformat() if r["single_day"] else "%s_to_%s" % (r["day_from"].isoformat(), r["day_to"].isoformat())
     who = ("-" + re.sub(r"[^A-Za-z0-9]+", "-", r["picker_name"]).strip("-").lower()) if r["picker_name"] else ""
     return "picking-%s%s" % (span, who)
+
+
+@app.route("/pick/me")
+@login_required
+def pick_me():
+    """The picker screen on its own page: a Pick Assigner (or anyone) picking
+    bills as their multitask role. Finished picks count as Picker multitask."""
+    if session.get("is_admin"):
+        return redirect(url_for("picking_admin"))
+    return render_template("pick_me.html", user_name=session.get("user_name", ""), today=date.today(),
+                           staff_type=session.get("staff_type", ""))
 
 
 @app.route("/picking/times", methods=["POST"])

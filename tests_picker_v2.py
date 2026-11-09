@@ -872,8 +872,39 @@ check("19.8 After picking, the Picker box opens by itself next time",
 sup_html = open(os.path.join(REPO, "templates", "supervisor.html")).read()
 check("19.9 The supervisor's multitask box uses the live picking too", "mt_p_picked" not in sup_html and "_mt_picker.html" in sup_html)
 dash_asg = ca.get("/dashboard").data.decode()
-check("19.10 A Pick Assigner's multitask list has no Picker box (one picking screen only)",
-      dash_asg.count('id="pickApp"') == 1 and 'id="mt_picker"' not in dash_asg)
+check("19.10 A Pick Assigner can choose Picker in multitask: it opens the picker screen on its own page",
+      dash_asg.count('id="pickApp"') == 1 and 'id="mt_picker"' in dash_asg and 'id="mtPickLink"' in dash_asg
+      and 'value="picker"' in dash_asg)
+pm = ca.get("/pick/me").data.decode()
+check("19.10b The assigner's picker page shows the picker screen", 'data-role="picker"' in pm and 'data-helper="1"' in pm)
+with app.app_context():
+    B19b = _fresh("PSE3101", 3)
+sp = ca.get("/pick/state.json?as=picker").get_json()
+check("19.10c As a picker the assigner gets the picker data", "today" in sp and "pickers" not in sp)
+r19 = ca.post("/pick/claim", json={"bill_id": B19b, "items": 2}, headers={"X-Requested-With": "fetch", "X-Pick-As": "picker"})
+j19 = r19.get_json() or {}
+check("19.10d The assigner can take items as a multitask picker", r19.status_code == 200 and j19.get("state", {}).get("mine"), str(j19.get("message")))
+r19 = ca.post("/pick/done", json={"claim_id": j19["state"]["mine"]["id"]}, headers={"X-Requested-With": "fetch", "X-Pick-As": "picker"})
+with app.app_context():
+    amt = A.MultitaskEntry.query.filter_by(emp_id=ASG_ID, entry_date=date.today(), secondary_type="picker").first()
+    check("19.10e ...and it counts as their Picker multitask", amt is not None and amt.picked == 2, str(amt and amt.picked))
+    check("19.10f The multitask summary shows picking words, not the old typed fields",
+          amt is not None and "Items picked: 2" in amt.summary and "CS Open" not in amt.summary and "Bills Rcvd" not in amt.summary, amt and amt.summary)
+    A.MultitaskEntry.query.filter_by(emp_id=ASG_ID).delete()
+    PickClaim.query.filter_by(bill_id=B19b).delete()
+    PickBill.query.filter_by(id=B19b).delete()
+    db.session.commit()
+check("19.10g 'Other' is now called 'Breakage & Expiry'", "Breakage &amp; Expiry" in hd and A.multitask_role_label("other") == "Breakage & Expiry")
+r19 = ch.post("/dashboard", data={"multitask_only": "1", "multitask_roles": ["billing", "delivery"], "mt_b_bills": "3",
+                                   "mt_s_quantity__delivery": "2"}, follow_redirects=True)
+with app.app_context():
+    n2 = A.MultitaskEntry.query.filter(A.MultitaskEntry.emp_id == HID, A.MultitaskEntry.secondary_type.in_(["billing", "delivery"])).count()
+check("19.10h Only one extra role at a time: choosing two saves neither and says so",
+      n2 == 0 and b"one extra role at a time" in r19.data)
+_sd = open(os.path.join(REPO, "templates", "staff_detail.html")).read()
+check("19.10j The staff profile shows picker multitask as bills / items / not found (no old fields)",
+      "<b>Items picked:</b>" in _sd and "<b>Packing Done:</b>" not in _sd and "<b>SB Picked:</b>" not in _sd)
+check("19.10i Ticking one role unticks the others on the page", "One extra role at a time: choosing one clears the others" in hd)
 # cheap refresh: nothing changed -> tiny answer
 s1 = c2.get("/pick/state.json").get_json()
 s2 = c2.get("/pick/state.json?v=%s" % s1["ver"]).get_json()

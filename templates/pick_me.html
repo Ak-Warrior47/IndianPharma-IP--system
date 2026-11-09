@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="csrf-token" content="{{ csrf_token() }}">
+<title>Pick bills — Indian Pharma</title>
+<link rel="stylesheet" href="{{ url_for('static', filename='css/ip.css') }}">
+<style>
+body{margin:0;background:linear-gradient(180deg,#dde2ea 0%,#d3d9e2 100%);background-attachment:fixed}
+.pm-top{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:10px 16px;background:var(--surface);border-bottom:1px solid var(--line)}
+.pm-top a{font-weight:700;color:var(--brand);text-decoration:none}
+.pm-main{max-width:820px;margin:0 auto;padding:12px 16px 40px}
+.pm-note{font-size:13px;color:var(--ink-2);margin:0 0 8px}
+</style>
+</head>
+<body class="pk-page">
+<div class="pm-top"><b>Pick bills (multitask)</b><a href="{{ url_for('dashboard') }}">&larr; Back to my dashboard</a></div>
+<main class="pm-main">
+  <p class="pm-note">Pick like a picker: type how many items you take, the timer starts, press Done. Your picks are saved as your Picker multitask by themselves.</p>
+  {% set pick_as = 'picker' %}{% include '_picking.html' %}
+</main>
+</body>
+</html>

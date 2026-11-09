@@ -167,7 +167,7 @@
         <div class="ip-stack">
           {% for mt in today_multitask %}
           <div class="ip-between" style="justify-content:flex-start;gap:var(--s3);">
-            <span class="ip-pill ip-pill--accent">{{ mt.secondary_type }}</span>
+            <span class="ip-pill ip-pill--accent">{{ mt_label(mt.secondary_type) }}</span>
             <span class="ip-small">{{ mt.summary }}</span>
             {% if mt.note %}<span class="ip-small ip-muted">{{ mt.note }}</span>{% endif %}
           </div>
@@ -182,14 +182,14 @@
         <input type="hidden" name="multitask_only" value="1">
 
         <fieldset style="border:0;padding:0;margin:0 0 var(--s4);">
-          <legend class="ip-label" style="padding:0;">Which roles did you also work today?</legend>
+          <legend class="ip-label" style="padding:0;">Which role did you also work today? (one)</legend>
           <div style="display:flex;flex-wrap:wrap;gap:var(--s2);">
             {% for r in ['picker','checker','purchaser','delivery','billing','packing','other'] %}
             <label style="display:inline-flex;align-items:center;gap:7px;padding:8px 14px;border:1px solid var(--line-strong);border-radius:var(--r-pill);font-size:var(--fs-small);font-weight:var(--fw-bold);cursor:pointer;background:var(--surface);">
               <input type="checkbox" name="multitask_roles" value="{{ r }}"
                      onchange="toggleMtRole('{{ r }}', this.checked)"{% if r == 'picker' and mt_picking_today(session.get('user_id')) %} checked{% endif %}
                      style="width:16px;height:16px;margin:0;accent-color:var(--brand);cursor:pointer;">
-              {{ r|title }}
+              {{ mt_label(r) }}
             </label>
             {% endfor %}
           </div>
@@ -257,6 +257,15 @@
 
 <script>
   function toggleMtRole(role, on) {
+    // One extra role at a time: choosing one clears the others and their numbers.
+    if (on) {
+      document.querySelectorAll('input[name="multitask_roles"]').forEach(function (cb) {
+        if (cb.value !== role && cb.checked) { cb.checked = false; toggleMtRole(cb.value, false); }
+      });
+    } else {
+      var box = document.getElementById((role === 'picker' || role === 'checker' || role === 'purchaser') ? 'mt_' + role : 'mt_simple_' + role);
+      if (box) box.querySelectorAll('input[type="number"]').forEach(function (i) { if (!i.closest('#pickApp')) i.value = 0; });
+    }
     var id = (role === 'picker' || role === 'checker' || role === 'purchaser')
              ? 'mt_' + role : 'mt_simple_' + role;
     var el = document.getElementById(id);

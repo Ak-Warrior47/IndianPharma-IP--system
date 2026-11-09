@@ -921,7 +921,7 @@ button[disabled] { opacity: .45; cursor: not-allowed; transform: none; }
       <div style="font-size:11px;font-weight:700;color:var(--ok);text-transform:uppercase;letter-spacing:.7px;margin-bottom:6px;">Already logged today</div>
       {% for mt in today_multitask %}
       <div style="display:flex;align-items:center;gap:10px;padding:6px 0;{% if not loop.last %}border-bottom:1px solid rgba(187,247,208,0.6);{% endif %}">
-        <span style="padding:3px 10px;background:var(--accent-tint);color:var(--accent-ink);border-radius:999px;font-size:11px;font-weight:700;text-transform:uppercase;">{{ mt.secondary_type }}</span>
+        <span style="padding:3px 10px;background:var(--accent-tint);color:var(--accent-ink);border-radius:999px;font-size:11px;font-weight:700;text-transform:uppercase;">{{ mt_label(mt.secondary_type) }}</span>
         <span style="font-size:13px;color:var(--ink);">{{ mt.summary }}</span>
         {% if mt.note %}<span style="font-size:12px;color:var(--ink-3);">— {{ mt.note }}</span>{% endif %}
       </div>
@@ -934,15 +934,15 @@ button[disabled] { opacity: .45; cursor: not-allowed; transform: none; }
 <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
       <input type="hidden" name="multitask_only" value="1">
       <div class="field" style="margin-bottom:14px;">
-        <label>Which role(s) did you also work today? <span style="color:var(--ink-3);font-weight:600;">— tick any number, you earn extra points for each</span></label>
+        <label>Which role did you also work today? <span style="color:var(--ink-3);font-weight:600;">— choose one extra role</span></label>
         {% set _p0 = (primary_staff_type or staff_type) %}
         {% set prim = {'biller':'billing','packer':'packing'}.get(_p0, _p0) %}
         <div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:8px;">
           {% for r in ['picker','checker','purchaser','delivery','billing','packing','other'] %}
-          {% if r != prim and not (r == 'picker' and (_p0 == 'pick_assigner' or staff_type in ('picker', 'pick_assigner'))) %}
+          {% if r != prim and not (r == 'picker' and staff_type == 'picker') %}
           <label style="display:inline-flex;align-items:center;gap:6px;padding:8px 14px;border:1.5px solid var(--line);border-radius:999px;font-size:13px;font-weight:700;cursor:pointer;background:rgba(255,255,255,0.9);">
             <input type="checkbox" name="multitask_roles" value="{{ r }}" onchange="toggleMtRole('{{ r }}', this.checked)" style="width:auto;margin:0;cursor:pointer;"{% if r == 'picker' and mt_picking_today(user_id) %} checked{% endif %}>
-            {{ r|title }}
+            {{ mt_label(r) }}
           </label>
           {% endif %}
           {% endfor %}
@@ -950,7 +950,7 @@ button[disabled] { opacity: .45; cursor: not-allowed; transform: none; }
       </div>
 
       <!-- PICKER: the live bill picking (no typed numbers) -->
-      {% if 'picker' != prim and _p0 != 'pick_assigner' and staff_type not in ('picker', 'pick_assigner') %}{% set mt_on = mt_picking_today(user_id) %}{% include '_mt_picker.html' %}{% endif %}
+      {% if 'picker' != prim and staff_type != 'picker' %}{% set mt_on = mt_picking_today(user_id) %}{% set mt_link_only = staff_type == 'pick_assigner' %}{% include '_mt_picker.html' %}{% endif %}
 
       <!-- CHECKER params -->
       <div class="mt-fields" id="mt_checker" style="display:none;">
@@ -1910,6 +1910,15 @@ document.addEventListener('DOMContentLoaded', function(){
 
 // Toggle one role's parameter block when its checkbox is ticked (multi-select)
 function toggleMtRole(role, checked) {
+  // One extra role at a time: choosing one clears the others and their numbers.
+  if (checked) {
+    document.querySelectorAll('input[name="multitask_roles"]').forEach(function (cb) {
+      if (cb.value !== role && cb.checked) { cb.checked = false; toggleMtRole(cb.value, false); }
+    });
+  } else {
+    var box = document.getElementById((role === 'picker' || role === 'checker' || role === 'purchaser') ? ('mt_' + role) : ('mt_simple_' + role));
+    if (box) box.querySelectorAll('input[type="number"]').forEach(function (i) { if (!i.closest('#pickApp')) i.value = 0; });
+  }
   var id = (role === 'picker' || role === 'checker' || role === 'purchaser')
            ? ('mt_' + role) : ('mt_simple_' + role);
   var el = document.getElementById(id);

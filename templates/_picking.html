@@ -357,6 +357,7 @@ body.pk-full .pk-msg.on{position:sticky;top:0;z-index:2}
   if (!app) return;
   var role = app.getAttribute("data-role"), mine = null, mineAt = 0, lastState = null, lastAt = 0, inFlight = 0, loading = false, fullAt = 0;
   var tok = (document.querySelector('meta[name="csrf-token"]') || {}).content || "";
+  var asPicker = app.getAttribute("data-helper") === "1";   // multitask picking: always the picker screen
   function $(id) { return document.getElementById(id); }
   function esc(s) { return String(s == null ? "" : s).replace(/[&<>"]/g, function (c) { return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]; }); }
   function clock(sec) { var a = Math.abs(Math.round(sec)), m = Math.floor(a / 60), s = a % 60; return m + ":" + (s < 10 ? "0" : "") + s; }
@@ -368,7 +369,7 @@ body.pk-full .pk-msg.on{position:sticky;top:0;z-index:2}
     inFlight++;
     if (now && lastState) { var c = aged(lastState); now(c); draw(c); }
     return fetch(url, { method: "POST", credentials: "same-origin",
-      headers: { "Content-Type": "application/json", "X-Requested-With": "fetch", "X-CSRFToken": tok },
+      headers: { "Content-Type": "application/json", "X-Requested-With": "fetch", "X-CSRFToken": tok, "X-Pick-As": asPicker ? "picker" : "" },
       body: JSON.stringify(body || {}) })
       .then(function (r) { return r.json().catch(function () { return { ok: false, message: "Something went wrong." }; }); },
             function () { return { ok: false, message: "No connection. Try again." }; })
@@ -725,7 +726,7 @@ body.pk-full .pk-msg.on{position:sticky;top:0;z-index:2}
     // Ask "anything new since version N?"; a full copy at least once a minute.
     var same = lastState && lastState.ver && Date.now() - fullAt < 60000;
     loading = true;
-    fetch("/pick/state.json" + (same ? "?v=" + lastState.ver : ""), { credentials: "same-origin" })
+    fetch("/pick/state.json?" + (asPicker ? "as=picker&" : "") + (same ? "v=" + lastState.ver : ""), { credentials: "same-origin" })
       .then(function (r) { return r.json(); }).then(function (s) {
         loading = false;
         if (!s || inFlight) return;
