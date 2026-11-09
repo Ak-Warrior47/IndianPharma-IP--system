@@ -1060,6 +1060,8 @@ check("24.11 Alerts on the phone while the app is open (vibrate, beep, notificat
 check("24.12 The assigner has 'Pick bills yourself (multitask)'", 'id="pkPickSelf"' in ca.get("/dashboard").data.decode())
 with app.app_context():
     adm24 = Employee.query.filter_by(email="pk_adm@x.com").first()
+check("24.14 Reschedule pre-fills one hour ahead in India time, whatever the phone's time zone",
+      "Date.now() + 3600000 + 330 * 60000" in _pk24 and "getUTCHours()" in _pk24)
 check("24.13 The admin can pick bills too (picker screen)", 'data-role="picker"' in cadm.get("/pick/me").data.decode())
 check("22.10 The version is the code's fingerprint, the same after a restart", A.APP_BUILD == A._build_id())
 check("21.6 Charts show exact numbers: on top of each bar, and 'Name — number' beside each pie",

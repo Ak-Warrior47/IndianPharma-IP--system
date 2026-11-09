@@ -901,9 +901,11 @@ body.pk-full .pk-msg.on{position:sticky;top:0;z-index:2}
     if (b.id === "pkModalX") { closeModal(); return; }
     if (b.hasAttribute("data-resch")) {
       var box = $("rs" + b.getAttribute("data-resch")); box.hidden = !box.hidden;
-      if (!box.hidden) { var d = new Date(Date.now() + 3600000), ins = box.querySelectorAll("input");
-        ins[0].value = d.getFullYear() + "-" + ("0" + (d.getMonth() + 1)).slice(-2) + "-" + ("0" + d.getDate()).slice(-2);
-        ins[1].value = ("0" + d.getHours()).slice(-2) + ":" + ("0" + d.getMinutes()).slice(-2); ins[0].focus(); }
+      // One hour from now in India time (the server reads the time as IST),
+      // whatever time zone the phone itself is set to.
+      if (!box.hidden) { var d = new Date(Date.now() + 3600000 + 330 * 60000), ins = box.querySelectorAll("input");
+        ins[0].value = d.getUTCFullYear() + "-" + ("0" + (d.getUTCMonth() + 1)).slice(-2) + "-" + ("0" + d.getUTCDate()).slice(-2);
+        ins[1].value = ("0" + d.getUTCHours()).slice(-2) + ":" + ("0" + d.getUTCMinutes()).slice(-2); ins[0].focus(); }
       return;
     }
     if (b.hasAttribute("data-rsave")) { var bx = $("rs" + b.getAttribute("data-rsave")).querySelectorAll("input");
