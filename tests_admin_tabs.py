@@ -208,6 +208,11 @@ check("10.1 The Edit button's show-class is styled to display the box",
       added and all((".modal-backdrop.%s" % c) in SRC for c in added), str(added))
 check("10.2 Each staff row has an Edit button wired to the box", 'onclick="openEditFromBtn(this)"' in html and 'id="editModal"' in html)
 
+_ad = open(os.path.join(REPO, "templates", "admin_delivery.html")).read()
+_db = open(os.path.join(REPO, "templates", "dashboard.html")).read()
+check("10.3 If the online map cannot load, delivery pages keep their buttons working",
+      "if (!window.L)" in _ad and _db.count("if (!window.L)") >= 2)
+
 print("\n" + "=" * 62)
 print("PASSED %d    FAILED %d" % (len(PASSED), len(FAILED)))
 if FAILED:

@@ -2121,6 +2121,7 @@ document.addEventListener('DOMContentLoaded', function() {
     var status = div.dataset.status || 'pending';
     var arrivalRadius = parseInt(div.dataset.arrivalRadius || '200', 10);
     if (isNaN(lat) || isNaN(lng)) return;
+    if (!window.L) { div.innerHTML = '<div style="padding:12px;color:var(--ink-3)">Map could not load. Your delivery buttons still work.</div>'; return; }
 
     var assignmentId = div.id.replace('dlmap-', '');
     var map = L.map(div.id, {zoomControl: true, scrollWheelZoom: false}).setView([lat, lng], 14);
@@ -2427,6 +2428,7 @@ function toggleManualPin(ev){
 function initPinMap(){
   if(__pinMap){ __pinMap.invalidateSize(); return; }
   if(typeof L === 'undefined'){ return; }
+  if (!window.L) return;
   __pinMap = L.map('pin-map').setView(ODISHA_CENTER, 11);
   L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
     maxZoom: 19, attribution: '© OpenStreetMap'

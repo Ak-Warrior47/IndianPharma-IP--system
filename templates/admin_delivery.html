@@ -607,6 +607,9 @@ function loadAllBreadcrumbs() {
   if (!mapStops || mapStops.length === 0) return;
   var mapEl = document.getElementById('journey-map');
   if (!mapEl) return;
+  // The map library comes from the internet; if it did not load, say so and
+  // keep the rest of the page (and its buttons) working.
+  if (!window.L) { mapEl.innerHTML = '<div style="padding:16px;color:var(--ink-3)">Map could not load (no internet to the map service). Reload to try again.</div>'; return; }
   var map = L.map('journey-map').setView([storeLat, storeLng], 13);
   _adminMap = map;
   L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
