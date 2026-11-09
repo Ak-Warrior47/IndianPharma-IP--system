@@ -506,6 +506,10 @@ check("12.7 A picker can open their own profile; another picker's is refused",
 tl2 = ca2.get("/pick/bill/%d.json" % NB).get_json()
 check("12.8 The flowchart gets exact times for every grab (start, normal, extra, report, done)",
       all(all(g.get(k) for k in ("s", "n", "f", "r")) for g in tl2["grabs"]) and tl2["t_added"])
+_bf = open(os.path.join(REPO, "static", "js", "billflow.js")).read()
+_pk = open(os.path.join(REPO, "templates", "_picking.html")).read()
+check("12.8b A closed flowchart and hidden boxes really disappear (no invisible layer blocking taps)",
+      ".bf-modal[hidden]{display:none}" in _bf and "#pickApp [hidden]{display:none!important}" in _pk)
 check("12.9 The flowchart script is on the staff, assigner, admin and profile pages",
       all("js/billflow.js" in open(os.path.join(REPO, "templates", f)).read()
           for f in ("dashboard.html", "picking_admin.html", "staff_detail.html")))

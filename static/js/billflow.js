@@ -6,6 +6,7 @@
 (function () {
   "use strict";
   var css = ".bf-modal{position:fixed;inset:0;z-index:9990;background:rgba(15,23,42,.5);display:flex;align-items:flex-end;justify-content:center}" +
+    ".bf-modal[hidden]{display:none}" +
     ".bf-sheet{background:var(--card,#fff);color:var(--ink,#0f172a);width:100%;max-width:760px;max-height:88vh;overflow:auto;border-radius:16px 16px 0 0;padding:16px 16px 20px;font:14px/1.45 system-ui,-apple-system,'Segoe UI',sans-serif}" +
     "@media(min-width:760px){.bf-modal{align-items:center}.bf-sheet{border-radius:16px}}" +
     ".bf-top{display:flex;justify-content:space-between;align-items:flex-start;gap:10px;margin-bottom:6px}.bf-top h3{margin:0;font-size:18px}" +
