@@ -12,6 +12,15 @@
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;450;500;550;600;650;700;750&display=swap">
 <link rel="stylesheet" href="{{ url_for('static', filename='css/ip.css') }}">
 <style>
+.nav-goto{min-width:240px;max-height:75vh;overflow:auto;z-index:1000}
+@media (max-width: 700px){ .nav-menu__panel.nav-goto{position:fixed;left:12px;right:12px;top:110px;min-width:0;max-height:calc(100vh - 130px)} }
+.nav-goto__h{font-size:10.5px;font-weight:800;text-transform:uppercase;letter-spacing:.6px;color:var(--ink-3);padding:8px 12px 2px}
+.goto-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:10px}
+.goto-grp{border:1px solid var(--line);border-radius:12px;padding:10px 12px;background:var(--surface)}
+.goto-grp h3{margin:0 0 6px;font-size:12px;font-weight:800;text-transform:uppercase;letter-spacing:.5px;color:var(--ink-3)}
+.goto-grp a{display:block;padding:7px 0;font-weight:650;font-size:14px;color:var(--ink);text-decoration:none;border-top:1px solid var(--line)}
+.goto-grp a:first-of-type{border-top:0}
+.goto-grp a:hover{color:var(--brand)}
 /* ---------------------------------------------------------------------------
    admin.html on the shared design system.
 
@@ -53,6 +62,8 @@
 .main[data-tab="staff"]  > [data-pane="staff"],
 .main[data-tab="today"]  > [data-pane="today"],
 .main[data-tab="scores"] > [data-pane="scores"],
+.main[data-tab="picking"] > [data-pane="picking"],
+.main[data-tab="multitask"] > [data-pane="multitask"],
 .main[data-tab="admin"]  > [data-pane="admin"] { display: block; }
 [data-ord="1"] { order: 1; } [data-ord="2"] { order: 2; }
 [data-ord="3"] { order: 3; } [data-ord="4"] { order: 4; }
@@ -461,24 +472,32 @@ var NOTES_BY_EMP = {
     <!-- Navigation, then exports. Colour is reserved for status elsewhere in
          the app, so these are one consistent control rather than eleven
          differently-coloured ones competing for attention. -->
+    <!-- One tidy menu instead of a row of ten buttons: every admin page,
+         grouped the way the owner works. Picking stays one tap away. -->
     <a href="/picking" class="btn-export" id="navPicking" style="border-color:var(--brand);color:var(--brand);font-weight:700">Picking</a>
-    <a href="/admin/checklist" class="btn-export">Checklists</a>
-    <a href="/admin/delivery" class="btn-export">Delivery</a>
-    <a href="/delivery/leaderboard" class="btn-export">Leaderboard</a>
-    <a href="/supervisor" class="btn-export">Supervisor</a>
-    <span class="nav-sep" aria-hidden="true"></span>
     <details class="nav-menu">
-      <summary class="btn-export" aria-label="More admin tools">More</summary>
-      <div class="nav-menu__panel">
-        <a href="/admin/day">Day View (any date)</a>
-        <a href="/admin/reports">Reports Archive</a>
-        <a href="/admin/bulk_import">Bulk Import</a>
-        <a href="/picking">Picking</a>
-        <a href="/admin/diagnostics">Diagnostics</a>
-        <div class="nav-menu__sep"></div>
+      <summary class="btn-export" aria-label="All admin pages">Go to</summary>
+      <div class="nav-menu__panel nav-goto">
+        <div class="nav-goto__h">Picking</div>
+        <a href="/picking?tab=live">Live floor and item time</a>
+        <a href="/picking?tab=reports&amp;period=today">Picking reports (PDF, CSV)</a>
+        <a href="/picking?tab=board&amp;period=today">Picking leaderboard</a>
+        <div class="nav-goto__h">Staff work</div>
+        <a href="{{ url_for('admin_multitask_report') }}">Multitask report</a>
+        <a href="/admin/day">Day view (any date)</a>
+        <a href="/supervisor">Supervisor</a>
+        <a href="/admin/checklist">Checklists</a>
+        <div class="nav-goto__h">Delivery</div>
+        <a href="/admin/delivery">Delivery</a>
+        <a href="/delivery/leaderboard">Delivery leaderboard</a>
+        <div class="nav-goto__h">Reports and data</div>
+        <a href="/admin/reports">Reports archive</a>
         <a href="/admin/export_csv">Export CSV</a>
-        <a href="/admin/export_full">Full Data Export (JSON)</a>
-        <a href="/admin/export_all_pdf">All Staff PDFs (ZIP)</a>
+        <a href="/admin/export_all_pdf">All staff PDFs (ZIP)</a>
+        <a href="/admin/export_full">Full data export (JSON)</a>
+        <div class="nav-goto__h">Setup</div>
+        <a href="/admin/bulk_import">Bulk import</a>
+        <a href="/admin/diagnostics">Diagnostics (database)</a>
       </div>
     </details>
     <form method="POST" action="/logout" style="margin:0;">
@@ -535,9 +554,38 @@ var NOTES_BY_EMP = {
   <nav class="tabs" role="tablist" aria-label="Admin sections">
     <button class="tab" role="tab" data-tab="staff"  aria-selected="true">Staff</button>
     <button class="tab" role="tab" data-tab="today"  aria-selected="false">Today</button>
+    <button class="tab" role="tab" data-tab="picking" aria-selected="false">Picking</button>
+    <button class="tab" role="tab" data-tab="multitask" aria-selected="false">Multitask</button>
     <button class="tab" role="tab" data-tab="scores" aria-selected="false">Scores</button>
     <button class="tab" role="tab" data-tab="admin"  aria-selected="false">Setup</button>
   </nav>
+
+  <!-- EVERY ADMIN PAGE, GROUPED: one place to find anything -->
+  <div data-pane="admin" data-ord="0" class="card" style="margin-bottom:20px;" id="gotoAll">
+    <div class="card-header"><div class="card-title">Go to</div></div>
+    <div class="goto-grid">
+      <div class="goto-grp"><h3>Picking</h3>
+        <a href="/picking?tab=live">Live floor and item time</a>
+        <a href="/picking?tab=reports&amp;period=today">Reports (PDF, CSV)</a>
+        <a href="/picking?tab=board&amp;period=today">Leaderboard</a></div>
+      <div class="goto-grp"><h3>Staff work</h3>
+        <a href="{{ url_for('admin_multitask_report') }}">Multitask report</a>
+        <a href="/admin/day">Day view (any date)</a>
+        <a href="/supervisor">Supervisor</a>
+        <a href="/admin/checklist">Checklists</a></div>
+      <div class="goto-grp"><h3>Delivery</h3>
+        <a href="/admin/delivery">Delivery</a>
+        <a href="/delivery/leaderboard">Delivery leaderboard</a></div>
+      <div class="goto-grp"><h3>Reports and data</h3>
+        <a href="/admin/reports">Reports archive</a>
+        <a href="/admin/export_csv">Export CSV</a>
+        <a href="/admin/export_all_pdf">All staff PDFs (ZIP)</a>
+        <a href="/admin/export_full">Full data export (JSON)</a></div>
+      <div class="goto-grp"><h3>Setup</h3>
+        <a href="/admin/bulk_import">Bulk import</a>
+        <a href="/admin/diagnostics">Diagnostics (database)</a></div>
+    </div>
+  </div>
 
   <!-- FEATURE 2: ANNOUNCEMENT / NOTICE BOARD -->
   <div data-pane="admin" data-ord="2" class="card" style="margin-bottom:20px;border-left:4px solid var(--brand);">
@@ -650,7 +698,7 @@ var NOTES_BY_EMP = {
   {% endif %}
 
   <!-- MULTITASK (ROLE 2) REPORTS PANEL — always visible -->
-  <div data-pane="today" data-ord="3" class="card anim-fade-in" style="margin-bottom:20px;border-left:4px solid var(--accent);">
+  <div data-pane="multitask" data-ord="1" class="card anim-fade-in" style="margin-bottom:20px;border-left:4px solid var(--accent);">
     <div class="card-header">
       <div class="card-title">Multitask (Role 2) Reports
         <span class="cnt" style="background:#f5f3ff;color:var(--accent);border-color:var(--accent-line);">{{ recent_multitask|length }} (30 days)</span>
@@ -709,7 +757,7 @@ var NOTES_BY_EMP = {
   </div>
 
   <!-- RECENT LEVEL-UPS -->
-  <div data-pane="today" data-ord="0" class="card" style="margin-bottom:20px;" id="pickingToday">
+  <div data-pane="picking" data-ord="1" class="card" style="margin-bottom:20px;" id="pickingToday">
     <div class="card-header">
       <div class="card-title">Picking today</div>
       <div style="display:flex;gap:6px;flex-wrap:wrap">

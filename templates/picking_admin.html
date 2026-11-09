@@ -217,6 +217,7 @@ details.pa-pk[open] summary::after{content:"Hide"}
     {% if rep.series|length > 1 %}<div style="margin-top:16px;font-size:13px;font-weight:650;color:var(--ink-3)">Bills and items per day</div><canvas id="paDays" role="img" aria-label="Bills and items per day" style="width:100%;height:220px"></canvas>{% endif %}
   </section>
   <script src="{{ url_for('static', filename='js/chart.umd.min.js') }}"></script>
+<script src="{{ url_for('static', filename='js/chart-values.js') }}"></script>
   <script>
   (function () {
     var b = {{ rep.board|map(attribute='name')|list|tojson }}, bills = {{ rep.board|map(attribute='bills')|list|tojson }},

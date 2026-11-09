@@ -945,7 +945,17 @@ check("20.14 The profile shows the staff name", "PK P1" in pr20)
 _pk21 = open(os.path.join(REPO, "templates", "_picking.html")).read()
 check("21.1 When time is over the whole screen turns red (flashing when late), not just the timer",
       'body.pk-full[data-pk-tone="pk-late"] #pickApp{background:#b91c1c' in _pk21 and 'body.pk-full[data-pk-tone="pk-red"] #pickApp{background:#dc2626}' in _pk21
-      and 'phase === "late" ? "pk-late"' in _pk21)
+      and 'late: "pk-late"' in _pk21)
+check("21.5 Normal time makes the whole screen green, extra time orange, paused grey",
+      'body.pk-full[data-pk-tone="pk-green"] #pickApp{background:#15803d}' in _pk21 and
+      'body.pk-full[data-pk-tone="pk-orange"] #pickApp{background:#ea580c}' in _pk21 and
+      '{normal: "pk-green", find: "pk-orange", report: "pk-red", late: "pk-late"}' in _pk21 and 'mine.paused ? "pk-grey"' in _pk21)
+_cv = open(os.path.join(REPO, "static", "js", "chart-values.js")).read()
+check("21.6 Charts show exact numbers: on top of each bar, and 'Name — number' beside each pie",
+      "afterDatasetsDraw" in _cv and 'it.text + " — " + fmt(v)' in _cv and 'el.y - 3' in _cv)
+check("21.7 Every page with charts loads the number add-on",
+      all("chart-values.js" in open(os.path.join(REPO, "templates", f)).read()
+          for f in ("_picking.html", "_picker_profile.html", "picking_admin.html", "staff_detail.html", "dashboard.html", "admin_delivery.html")))
 check("21.2 The red flashing respects reduced motion", 'prefers-reduced-motion:reduce){body.pk-full[data-pk-tone="pk-late"] #pickApp{animation:none}' in _pk21)
 pd21 = c2.get("/dashboard").data.decode()
 ad21 = ca.get("/dashboard").data.decode()

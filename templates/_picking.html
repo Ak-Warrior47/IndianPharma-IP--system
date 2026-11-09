@@ -118,22 +118,27 @@ body.pk-full{overflow:hidden}
 body.pk-full .pk-helper .pk-who{display:flex}
 body.pk-full .pk-who{justify-content:center;max-width:620px;width:100%;margin:0 auto 4px}
 /* Time over: the whole screen goes red, not just the timer box. */
-body.pk-full[data-pk-tone="pk-amber"] #pickApp{background:#fff4dc}
+/* While picking, the whole screen shows the phase:
+   green = normal time, orange = extra time to find, red = time over,
+   flashing red = late, grey = paused by the assigner. */
+body.pk-full[data-pk-tone="pk-green"] #pickApp{background:#15803d}
+body.pk-full[data-pk-tone="pk-orange"] #pickApp{background:#ea580c}
 body.pk-full[data-pk-tone="pk-red"] #pickApp{background:#dc2626}
 body.pk-full[data-pk-tone="pk-late"] #pickApp{background:#b91c1c;animation:pk-alarm 1s steps(2,end) infinite}
-body.pk-full[data-pk-tone="pk-red"] #pkMine,body.pk-full[data-pk-tone="pk-late"] #pkMine{background:transparent;border-color:rgba(255,255,255,.55);box-shadow:none}
-body.pk-full[data-pk-tone="pk-red"] #pkMine .pk-phase,body.pk-full[data-pk-tone="pk-red"] #pkMine .pk-billno,body.pk-full[data-pk-tone="pk-red"] #pkMine .pk-items,body.pk-full[data-pk-tone="pk-red"] #pkMine .pk-clock,body.pk-full[data-pk-tone="pk-red"] #pkMine #pkLateText,body.pk-full[data-pk-tone="pk-late"] #pkMine .pk-phase,body.pk-full[data-pk-tone="pk-late"] #pkMine .pk-billno,body.pk-full[data-pk-tone="pk-late"] #pkMine .pk-items,body.pk-full[data-pk-tone="pk-late"] #pkMine .pk-clock,body.pk-full[data-pk-tone="pk-late"] #pkMine #pkLateText{color:#fff}
-body.pk-full[data-pk-tone="pk-red"] #pkMine .pk-bar,body.pk-full[data-pk-tone="pk-late"] #pkMine .pk-bar{background:rgba(255,255,255,.3)}
-body.pk-full[data-pk-tone="pk-red"] #pkMine .pk-bar i,body.pk-full[data-pk-tone="pk-late"] #pkMine .pk-bar i{background:#fff}
-body.pk-full[data-pk-tone="pk-red"] #pkMine #pkLateText,body.pk-full[data-pk-tone="pk-late"] #pkMine #pkLateText{color:#fff!important;font-weight:700}
-body.pk-full[data-pk-tone="pk-red"] #pkRepBtn,body.pk-full[data-pk-tone="pk-late"] #pkRepBtn{background:#fff;color:#7f1d1d;border-color:#fff}
-body.pk-full[data-pk-tone="pk-red"] .pk-rep,body.pk-full[data-pk-tone="pk-late"] .pk-rep{color:var(--ink)}
-body.pk-full[data-pk-tone="pk-red"] #pkMine .pk-u,body.pk-full[data-pk-tone="pk-late"] #pkMine .pk-u{background:#fff;color:#b91c1c}
-body.pk-full[data-pk-tone="pk-red"] .pk-who b,body.pk-full[data-pk-tone="pk-red"] .pk-whoday,
-body.pk-full[data-pk-tone="pk-late"] .pk-who b,body.pk-full[data-pk-tone="pk-late"] .pk-whoday{color:#fff}
-body.pk-full[data-pk-tone="pk-red"] .pk-whorole,body.pk-full[data-pk-tone="pk-late"] .pk-whorole{background:rgba(255,255,255,.2);color:#fff}
-body.pk-full[data-pk-tone="pk-red"] .pk-msg.on,body.pk-full[data-pk-tone="pk-late"] .pk-msg.on{background:#fff}
+body.pk-full[data-pk-tone="pk-grey"] #pickApp{background:#475569}
 @keyframes pk-alarm{0%{background:#b91c1c}100%{background:#ef4444}}
+body.pk-full.pk-toned #pkMine{background:transparent;border-color:rgba(255,255,255,.55);box-shadow:none;color:#fff}
+body.pk-full.pk-toned #pkMine .pk-phase,body.pk-full.pk-toned #pkMine .pk-billno,body.pk-full.pk-toned #pkMine .pk-items,body.pk-full.pk-toned #pkMine .pk-clock{color:#fff}
+body.pk-full.pk-toned #pkMine #pkLateText{color:#fff!important;font-weight:700}
+body.pk-full.pk-toned #pkMine .pk-bar{background:rgba(255,255,255,.3)}
+body.pk-full.pk-toned #pkMine .pk-bar i{background:#fff}
+body.pk-full.pk-toned #pkMine .pk-u{background:#fff;color:#b91c1c}
+body.pk-full.pk-toned #pkRepBtn{background:#fff;color:#111827;border-color:#fff}
+body.pk-full.pk-toned[data-pk-tone="pk-green"] #pkDone{background:#fff;color:#15803d}
+body.pk-full.pk-toned .pk-rep{color:var(--ink)}
+body.pk-full.pk-toned .pk-who b,body.pk-full.pk-toned .pk-whoday{color:#fff}
+body.pk-full.pk-toned .pk-whorole{background:rgba(255,255,255,.2);color:#fff}
+body.pk-full.pk-toned .pk-msg.on{background:#fff}
 @media (prefers-reduced-motion:reduce){body.pk-full[data-pk-tone="pk-late"] #pickApp{animation:none}}
 body.pk-full .card{transform:none!important;animation:none!important}
 .pk-helper{box-shadow:none;border:1px solid var(--line);margin:8px 0 0}
@@ -413,7 +418,7 @@ body.pk-full .pk-msg.on{position:sticky;top:0;z-index:2}
 
   // ---- picker ----------------------------------------------------------
   function renderPicker(s) {
-    if (!s.mine) document.body.removeAttribute("data-pk-tone");
+    if (!s.mine) { document.body.removeAttribute("data-pk-tone"); document.body.classList.remove("pk-toned"); }
     var t = s.today || {};
     $("pkBillsN").textContent = t.bills || 0;
     $("pkItems").textContent = t.items || 0;
@@ -602,11 +607,21 @@ body.pk-full .pk-msg.on{position:sticky;top:0;z-index:2}
   // ---- leaderboard (both roles) ------------------------------------------
   var charts = {};
   function chartLib(cb) {
-    if (window.Chart) return cb();
+    if (window.Chart && (window.ipChartValues || chartLib.done)) { if (window.ipChartValues) window.ipChartValues(); return cb(); }
+    if (window.Chart) { chartLib.done = true; var cv0 = document.createElement("script"); cv0.src = "/static/js/chart-values.js";
+      cv0.onload = cv0.onerror = function () { if (window.ipChartValues) window.ipChartValues(); cb(); }; document.head.appendChild(cv0); return; }
     if (chartLib.loading) return chartLib.loading.push(cb);
     chartLib.loading = [cb];
     var sc = document.createElement("script"); sc.src = "/static/js/chart.umd.min.js";
-    sc.onload = function () { chartLib.loading.forEach(function (f) { f(); }); chartLib.loading = null; };
+    sc.onload = function () {
+      // exact numbers on bars and pies (static/js/chart-values.js), then draw
+      var cv = document.createElement("script"); cv.src = "/static/js/chart-values.js";
+      cv.onload = cv.onerror = function () {
+        if (window.ipChartValues) window.ipChartValues();
+        chartLib.loading.forEach(function (f) { f(); }); chartLib.loading = null;
+      };
+      document.head.appendChild(cv);
+    };
     document.head.appendChild(sc);
   }
   function renderBoard(s) {
@@ -707,8 +722,8 @@ body.pk-full .pk-msg.on{position:sticky;top:0;z-index:2}
       else { phase = "late"; left = r; total = 1; }
       $("pkMine").className = "pk-mine" + (phase === "normal" ? "" : " " + phase) + (mine.paused ? " paused" : "");
       // the whole screen shows the phase: amber extra time, red once time is over
-      var tone = mine.paused ? "" : (phase === "late" ? "pk-late" : phase === "report" ? "pk-red" : phase === "find" ? "pk-amber" : "");
-      if (document.body.getAttribute("data-pk-tone") !== tone) document.body.setAttribute("data-pk-tone", tone);
+      var tone = mine.paused ? "pk-grey" : {normal: "pk-green", find: "pk-orange", report: "pk-red", late: "pk-late"}[phase];
+      if (document.body.getAttribute("data-pk-tone") !== tone) { document.body.setAttribute("data-pk-tone", tone); document.body.classList.add("pk-toned"); }
       $("pkPhase").textContent = mine.paused ? "Paused by assigner — timer stopped" :
         {normal: "Normal time", find: "Extra time to find", report: "Report time — fewer points", late: "Late"}[phase];
       $("pkClock").textContent = (phase === "late" ? "−" : "") + clock(left);
