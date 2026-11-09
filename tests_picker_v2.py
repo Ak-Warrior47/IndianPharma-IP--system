@@ -651,7 +651,7 @@ check("15.4 Bills are listed in order: urgent first, then oldest first",
 _pk15 = open(os.path.join(REPO, "templates", "_picking.html")).read()
 check("15.5 While picking, only that bill shows (focus mode hides the list)",
       "#pickApp.pk-focus #pkBills{display:none}" in _pk15 and 'id="pkMine"' in _pk15)
-check("15.6 The assigner splits bills into Pending and Completed", 'data-bview="pending"' in _pk15 and 'data-bview="done"' in _pk15)
+check("15.6 The assigner splits bills into Pending and Completed", 'data-tab="done"' in _pk15 and 'id="pkDoneList"' in _pk15)
 check("15.7 Taps answer at once (Starting / Saved shown before the server replies)",
       'b.textContent = "Starting' in _pk15 and 'b.textContent = "Saved"' in _pk15)
 pd15 = c2.get("/dashboard").data.decode()
@@ -770,6 +770,17 @@ with app.app_context():
 check("16.20 The picker's timer shows only their own items (no other staff on the bill)",
       'id="pkMineBill"' not in _pk16)
 check("16.21 The paused picker chip has no stray '+ +' (it showed NaN)", "+ + " not in _pk16)
+
+# ---- 17. Completed bills leave the main list; picking is full screen -------
+check("17.1 Completed bills have their own tab, not mixed into the Live list",
+      '<section data-panel="done" hidden>' in _pk16 and '$("pkBills").innerHTML = pend.length' in _pk16
+      and '$("pkDoneList").innerHTML = fin.length' in _pk16)
+check("17.2 The pickers' list leaves out bills with nothing left to take",
+      "allOpen.filter(function (b) { return b.left > 0; })" in _pk16)
+check("17.3 While picking, the screen shows only that bill, full screen",
+      "body.pk-full #pickApp{position:fixed;inset:0" in _pk16 and 'document.body.classList.toggle("pk-full", focus)' in _pk16)
+check("17.4 The full-screen timer shows the bill number first, big",
+      'class="pk-billno">Bill' in _pk16 and "body.pk-full #pkMine .pk-billno" in _pk16)
 with app.app_context():
     PickClaim.query.filter(PickClaim.bill_id.in_(
         [b.id for b in PickBill.query.filter(PickBill.bill_no.like("PSE%")).all()])).delete(synchronize_session=False)
