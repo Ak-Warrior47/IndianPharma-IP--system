@@ -2375,7 +2375,7 @@ def picker_profile(emp_id, day=None):
         x["points"] = round(x["points"] + r["points"], 1)
         x["grabs"] += 1
         x["late"] = x["late"] or r["late"]
-    return {"day": day, "today": summary([today]), "week": summary(span(monday, today)),
+    return {"picker_id": emp_id, "day": day, "today": summary([today]), "week": summary(span(monday, today)),
             "month": summary(span(today.replace(day=1), today)), "daily": daily, "grabs": bills,
             "bills": list(by_bill.values()), "chosen": summary([day]),
             "events": [{"kind": e.kind, "at": ist12(e.at), "minutes": e.minutes, "detail": e.detail or "",
@@ -2400,13 +2400,26 @@ def picker_bill_list(emp_id, day=None):
     return list(by.values())
 
 
-def pick_report(day):
-    """Admin report for one day: every bill and every missing item."""
-    start = datetime.combine(day, datetime.min.time())
+def pick_report(day_from, day_to=None, picker_id=None):
+    """Admin report for a period (one day or a range), optionally one picker:
+    summary, leaderboard, day-by-day series, every bill, every missing item,
+    the late / waiting log and each picker's bill-wise list."""
+    day_to = day_to or day_from
+    if day_to < day_from:
+        day_from, day_to = day_to, day_from
+    dates = [day_from + timedelta(days=i) for i in range((day_to - day_from).days + 1)]
+    start = datetime.combine(day_from, datetime.min.time())
+    end = datetime.combine(day_to, datetime.min.time()) + timedelta(days=1)
     names = {e.id: e.name for e in Employee.query.all()}
+    pickers = [e for e in Employee.query.filter(Employee.staff_type == "picker").order_by(Employee.name).all() if not e.is_admin]
+    if picker_id:
+        pickers = [e for e in pickers if e.id == picker_id]
+    # the picker filter narrows bills to those they worked on
+    bill_q = PickBill.query.filter(PickBill.created_at >= start, PickBill.created_at < end)
+    if picker_id:
+        bill_q = bill_q.filter(PickBill.id.in_(db.session.query(PickClaim.bill_id).filter(PickClaim.picker_id == picker_id)))
     bills = []
-    for b in PickBill.query.filter(PickBill.created_at >= start, PickBill.created_at < start + timedelta(days=1)) \
-            .order_by(PickBill.created_at).all():
+    for b in bill_q.order_by(PickBill.created_at).all():
         pr = pick_bill_progress(b)
         claims = PickClaim.query.filter(PickClaim.bill_id == b.id, PickClaim.status == "done").all()
         by = {}
@@ -2414,23 +2427,92 @@ def pick_report(day):
             by[c.picker_id] = by.get(c.picker_id, 0) + (c.picked if c.picked is not None else c.items)
         reported = sum(m.qty for m in PickMissing.query.filter_by(bill_id=b.id).all())
         bills.append({"id": b.id, "bill_no": b.bill_no, "items": b.items, "urgent": bool(b.is_urgent), "status": b.status,
+                      "date": (b.created_at + IST).strftime("%d %b"),
                       "picked": pr["done"], "missing": reported, "unavailable": pr["unavailable"],
                       "late": sum(1 for c in claims if c.outcome == "late"),
                       "pickers": ", ".join("%s %d" % (names.get(k, "#%d" % k), v) for k, v in by.items()),
                       "added": ist12(b.created_at), "completed": ist12(b.completed_at),
                       "minutes": round((b.completed_at - b.created_at).total_seconds() / 60.0, 1) if b.completed_at else None})
-    missing = [{"bill_no": (db.session.get(PickBill, m.bill_id).bill_no if db.session.get(PickBill, m.bill_id) else ""),
-                "item": m.item_name, "qty": m.qty, "by": names.get(m.picker_id, ""), "at": ist12(m.reported_at),
-                "status": {"open": "Waiting for assigner", "reassigned": "Reassigned", "unavailable": "Not available"}.get(m.status, m.status)}
-               for m in PickMissing.query.filter(PickMissing.reported_at >= start, PickMissing.reported_at < start + timedelta(days=1))
-               .order_by(PickMissing.reported_at).all()]
-    events = PickEvent.query.filter_by(day=day).order_by(PickEvent.at).all()
-    return {"day": day, "bills": bills, "missing": missing, "board": pick_board(day),
-            "late": sum(1 for e in events if e.kind == "late"), "idle": sum(1 for e in events if e.kind == "idle"),
-            "closed": pick_day_total(day),
-            "totals": {"bills": len([b for b in bills if b["status"] != "cancelled"]),
-                       "items": sum(b["items"] for b in bills if b["status"] != "cancelled"),
-                       "picked": sum(b["picked"] for b in bills), "missing": sum(b["missing"] for b in bills)}}
+    mq = PickMissing.query.filter(PickMissing.reported_at >= start, PickMissing.reported_at < end)
+    if picker_id:
+        mq = mq.filter(PickMissing.picker_id == picker_id)
+    missing = []
+    for m in mq.order_by(PickMissing.reported_at).all():
+        mb = db.session.get(PickBill, m.bill_id)
+        missing.append({"bill_no": mb.bill_no if mb else "", "item": m.item_name, "qty": m.qty, "by": names.get(m.picker_id, ""),
+                        "date": (m.reported_at + IST).strftime("%d %b"), "at": ist12(m.reported_at),
+                        "status": {"open": "Waiting for assigner", "reassigned": "Reassigned", "unavailable": "Not available"}.get(m.status, m.status)})
+    eq = PickEvent.query.filter(PickEvent.day >= day_from, PickEvent.day <= day_to)
+    if picker_id:
+        eq = eq.filter(PickEvent.picker_id == picker_id)
+    events = []
+    for e in eq.order_by(PickEvent.at).all():
+        eb = db.session.get(PickBill, e.bill_id) if e.bill_id else None
+        events.append({"kind": e.kind, "label": {"late": "Late", "idle": "Waiting", "missing": "Missing"}.get(e.kind, e.kind),
+                       "who": names.get(e.picker_id, ""), "bill": eb.bill_no if eb else "", "date": e.day.strftime("%d %b") if e.day else "",
+                       "at": ist12(e.at), "minutes": e.minutes, "detail": e.detail or ""})
+    board = []
+    for e in pickers:
+        st = picker_pick_stats(e.id, dates)
+        board.append({"id": e.id, "name": e.name, "bills": st["bills"], "items": st["items"], "grabs": st["grabs"],
+                      "on_time_pct": round(100.0 * st["on_time"] / st["grabs"], 1) if st["grabs"] else 0.0,
+                      "points": st["points"], "missing": st["missing"],
+                      "rate": round(st["items"] / (st["seconds"] / 3600.0), 1) if st["seconds"] else 0,
+                      "late": sum(1 for x in events if x["kind"] == "late" and x["who"] == e.name),
+                      "idle": sum(1 for x in events if x["kind"] == "idle" and x["who"] == e.name),
+                      "bill_list": [dict(r, day=d.strftime("%d %b")) for d in dates for r in picker_bill_list(e.id, d)]})
+    board.sort(key=lambda r: (-r["bills"], -r["items"], -r["on_time_pct"], -r["points"], r["name"]))
+    for i, r in enumerate(board, 1):
+        r["rank"] = i
+    series = []
+    for d in dates:
+        tot_items = tot_bills = 0
+        for e in pickers:
+            st = picker_pick_stats(e.id, [d])
+            tot_items += st["items"]
+            tot_bills += st["bills"]
+        series.append({"day": d.strftime("%d %b"), "items": tot_items, "bills": tot_bills})
+    live = [b for b in bills if b["status"] != "cancelled"]
+    done = [b for b in bills if b["minutes"] is not None]
+    return {"day": day_from, "day_from": day_from, "day_to": day_to, "picker_id": picker_id,
+            "picker_name": names.get(picker_id) if picker_id else None, "single_day": day_from == day_to,
+            "bills": bills, "missing": missing, "events": events, "board": board, "series": series,
+            "late": sum(1 for e in events if e["kind"] == "late"), "idle": sum(1 for e in events if e["kind"] == "idle"),
+            "closed": pick_day_total(day_from) if day_from == day_to else None,
+            "totals": {"bills": len(live), "items": sum(b["items"] for b in live),
+                       "picked": sum(b["picked"] for b in bills), "missing": sum(b["missing"] for b in bills),
+                       "urgent": sum(1 for b in live if b["urgent"]),
+                       "avg_minutes": round(sum(b["minutes"] for b in done) / len(done), 1) if done else None,
+                       "points": round(sum(r["points"] for r in board), 1)}}
+
+
+def report_period(args):
+    """(from, to, picker_id) from ?from=&to=&picker= or ?date= or ?period=today|week|month."""
+    today = date.today()
+    period = args.get("period", "")
+    if period == "week":
+        f, t = today - timedelta(days=today.weekday()), today
+    elif period == "month":
+        f, t = today.replace(day=1), today
+    else:
+        def _d(k):
+            try:
+                return datetime.strptime(args.get(k, ""), "%Y-%m-%d").date()
+            except ValueError:
+                return None
+        f = _d("from") or _d("date") or today
+        t = _d("to") or f
+    if t > today:
+        t = today
+    if f > t:
+        f = t
+    if (t - f).days > 92:
+        f = t - timedelta(days=92)      # keep a report to about three months
+    try:
+        pid = int(args.get("picker") or 0) or None
+    except ValueError:
+        pid = None
+    return f, t, pid
 
 
 def picker_pick_stats(emp_id, dates):
@@ -8801,40 +8883,83 @@ def pick_missing_action(missing_id, action):
                        else "Marked as not available.")
 
 
+def _report_access(pid):
+    """Admins see every report; a picker may download only their own."""
+    if session.get("is_admin"):
+        return True
+    return pid is not None and pid == session.get("user_id") and session.get("staff_type") == "picker"
+
+
+def _report_name(r):
+    span = r["day_from"].isoformat() if r["single_day"] else "%s_to_%s" % (r["day_from"].isoformat(), r["day_to"].isoformat())
+    who = ("-" + re.sub(r"[^A-Za-z0-9]+", "-", r["picker_name"]).strip("-").lower()) if r["picker_name"] else ""
+    return "picking-%s%s" % (span, who)
+
+
 @app.route("/picking")
 @admin_required
 def picking_admin():
-    """Admin: the live picking floor and the day's reports."""
-    try:
-        day = datetime.strptime(request.args.get("date", ""), "%Y-%m-%d").date()
-    except ValueError:
-        day = date.today()
-    return render_template("picking_admin.html", rep=pick_report(day), today=date.today(), day=day,
-                           staff_type="pick_assigner")
+    """Admin: the live picking floor, reports for any period, the leaderboard."""
+    f, t, pid = report_period(request.args)
+    pickers = [e for e in Employee.query.filter(Employee.staff_type == "picker").order_by(Employee.name).all() if not e.is_admin]
+    return render_template("picking_admin.html", rep=pick_report(f, t, pid), today=date.today(), day=f,
+                           pickers=pickers, staff_type="pick_assigner", timedelta=timedelta,
+                           tab=request.args.get("tab") or ("reports" if request.args else "live"))
 
 
 @app.route("/picking/report.csv")
-@admin_required
+@login_required
 def picking_report_csv():
-    try:
-        day = datetime.strptime(request.args.get("date", ""), "%Y-%m-%d").date()
-    except ValueError:
-        day = date.today()
-    r = pick_report(day)
+    f, t, pid = report_period(request.args)
+    if not _report_access(pid):
+        return redirect(url_for("dashboard"))
+    r = pick_report(f, t, pid)
     buf = io.StringIO()
     w = csv.writer(buf)
-    w.writerow(["Bill number", "Urgent", "Items", "Picked", "Missing reported", "Not available", "Late grabs",
+    w.writerow(["Indian Pharma picking report", r["day_from"].strftime("%d %b %Y") + ("" if r["single_day"] else " to " + r["day_to"].strftime("%d %b %Y")),
+                r["picker_name"] or "All pickers"])
+    w.writerow([])
+    w.writerow(["Leaderboard"])
+    w.writerow(["Rank", "Picker", "Bills", "Items", "On time %", "Points", "Items/hr", "Missing", "Late", "Left waiting"])
+    for x in r["board"]:
+        w.writerow([x["rank"], x["name"], x["bills"], x["items"], x["on_time_pct"], x["points"], x["rate"], x["missing"], x["late"], x["idle"]])
+    w.writerow([])
+    w.writerow(["Bills"])
+    w.writerow(["Date", "Bill number", "Urgent", "Items", "Picked", "Missing reported", "Not available", "Late grabs",
                 "Pickers (items)", "Added", "Completed", "Minutes", "Status"])
     for b in r["bills"]:
-        w.writerow([b["bill_no"], "yes" if b["urgent"] else "", b["items"], b["picked"], b["missing"], b["unavailable"],
+        w.writerow([b["date"], b["bill_no"], "yes" if b["urgent"] else "", b["items"], b["picked"], b["missing"], b["unavailable"],
                     b["late"], b["pickers"], b["added"], b["completed"], b["minutes"] if b["minutes"] is not None else "", b["status"]])
     w.writerow([])
     w.writerow(["Missing items"])
-    w.writerow(["Bill number", "Item", "Qty", "Reported by", "At", "Status"])
+    w.writerow(["Date", "Bill number", "Item", "Qty", "Reported by", "At", "Status"])
     for m in r["missing"]:
-        w.writerow([m["bill_no"], m["item"], m["qty"], m["by"], m["at"], m["status"]])
+        w.writerow([m["date"], m["bill_no"], m["item"], m["qty"], m["by"], m["at"], m["status"]])
+    w.writerow([])
+    w.writerow(["Late report"])
+    w.writerow(["Date", "Time", "What", "Picker", "Bill", "Minutes", "Detail"])
+    for e in r["events"]:
+        w.writerow([e["date"], e["at"], e["label"], e["who"], e["bill"], e["minutes"] if e["minutes"] is not None else "", e["detail"]])
+    w.writerow([])
+    w.writerow(["Bill-wise by picker"])
+    w.writerow(["Picker", "Date", "Bill number", "Items picked", "Not found", "Grabs", "Points", "Late"])
+    for x in r["board"]:
+        for bl in x["bill_list"]:
+            w.writerow([x["name"], bl["day"], bl["bill_no"], bl["items"], bl["missing"], bl["grabs"], bl["points"], "yes" if bl["late"] else ""])
     return Response(buf.getvalue(), mimetype="text/csv",
-                    headers={"Content-Disposition": "attachment; filename=picking-%s.csv" % day.isoformat()})
+                    headers={"Content-Disposition": "attachment; filename=%s.csv" % _report_name(r)})
+
+
+@app.route("/picking/report.pdf")
+@login_required
+def picking_report_pdf():
+    f, t, pid = report_period(request.args)
+    if not _report_access(pid):
+        return redirect(url_for("dashboard"))
+    from picking_pdf import build_picking_pdf
+    r = pick_report(f, t, pid)
+    return Response(build_picking_pdf(r), mimetype="application/pdf",
+                    headers={"Content-Disposition": "attachment; filename=%s.pdf" % _report_name(r)})
 
 
 @app.route("/pick/bill/<int:bill_id>.json")

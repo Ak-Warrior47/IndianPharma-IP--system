@@ -12,17 +12,54 @@
 <link rel="stylesheet" href="{{ url_for('static', filename='css/ip.css') }}">
 <link rel="manifest" href="{{ url_for('static', filename='manifest.json') }}">
 <style>
-.pa-sum{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px;margin:0 0 16px}
-.pa-sum div{border:1px solid var(--line);border-radius:12px;padding:10px 12px;background:var(--surface,#fff)}
-.pa-sum b{display:block;font-size:22px;font-variant-numeric:tabular-nums}
-.pa-sum span{font-size:11px;font-weight:700;color:var(--ink-3);text-transform:uppercase;letter-spacing:.5px}
-.pa-day{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:0 0 12px}
-.pa-day input{padding:8px 10px;border:1.5px solid var(--line);border-radius:10px;font:inherit}
+/* Admin picking: one page, three tabs. Quiet surfaces, numbers first,
+   colour only where it means something (late, missing, urgent). */
+.pa-tabs{display:flex;gap:2px;border-bottom:1px solid var(--line);margin:4px 0 18px;overflow-x:auto}
+.pa-tabs a{padding:10px 16px;font-weight:650;font-size:14.5px;color:var(--ink-3);text-decoration:none;border-bottom:2.5px solid transparent;white-space:nowrap}
+.pa-tabs a[aria-current="page"]{color:var(--brand);border-bottom-color:var(--brand)}
+.pa-filter{display:flex;flex-wrap:wrap;gap:10px;align-items:flex-end;padding:12px 14px;border:1px solid var(--line);border-radius:14px;background:var(--surface,#fff);margin-bottom:16px}
+.pa-filter label{display:block;font-size:11px;font-weight:700;color:var(--ink-3);text-transform:uppercase;letter-spacing:.4px;margin-bottom:4px}
+.pa-filter input,.pa-filter select{padding:8px 10px;border:1.5px solid var(--line);border-radius:10px;font:inherit;background:var(--surface,#fff);color:var(--ink)}
+.pa-quick{display:inline-flex;border:1.5px solid var(--line);border-radius:10px;overflow:hidden}
+.pa-quick a{padding:8px 12px;font-weight:600;font-size:13.5px;color:var(--ink-2);text-decoration:none;border-right:1px solid var(--line)}
+.pa-quick a:last-child{border-right:0}
+.pa-quick a[aria-current="true"]{background:var(--brand);color:#fff}
+.pa-spacer{flex:1}
+.pa-dl{display:inline-flex;align-items:center;gap:6px}
+.pa-period{font-size:13.5px;color:var(--ink-3);margin:-6px 0 14px}
+.pa-sum{display:grid;grid-template-columns:repeat(auto-fit,minmax(132px,1fr));gap:10px;margin:0 0 16px}
+.pa-sum div{border:1px solid var(--line);border-radius:12px;padding:11px 13px;background:var(--surface,#fff)}
+.pa-sum span{display:block;font-size:10.5px;font-weight:700;color:var(--ink-3);text-transform:uppercase;letter-spacing:.5px}
+.pa-sum b{display:block;font-size:24px;font-variant-numeric:tabular-nums;margin-top:2px}
+.pa-sum div.warn b{color:var(--bad-ink,#991b1b)}
+.pa-box{border:1px solid var(--line);border-radius:14px;background:var(--surface,#fff);padding:14px 16px;margin-bottom:16px}
+.pa-box h2{font-size:15.5px;margin:0 0 10px;display:flex;justify-content:space-between;align-items:baseline;gap:8px}
+.pa-box h2 small{font-weight:500;color:var(--ink-3);font-size:13px}
 .pa-tw{overflow-x:auto}
-.pa-red{color:var(--bad-ink,#991b1b);font-weight:700}
 .pa-t{width:100%;border-collapse:collapse;font-size:14px}
-.pa-t th{text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.4px;color:var(--ink-3);padding:8px;border-bottom:1px solid var(--line);white-space:nowrap}
-.pa-t td{padding:9px 8px;border-bottom:1px solid var(--line);font-variant-numeric:tabular-nums}
+.pa-t th{text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.4px;color:var(--ink-3);padding:8px;border-bottom:1px solid var(--line);white-space:nowrap;position:sticky;top:0;background:var(--surface,#fff)}
+.pa-t td{padding:9px 8px;border-bottom:1px solid var(--line);font-variant-numeric:tabular-nums;vertical-align:top}
+.pa-t td.n,.pa-t th.n{text-align:right}
+.pa-t tr.bad td{background:color-mix(in srgb,var(--bad-tint,#fdecec) 60%,transparent)}
+.pa-red{color:var(--bad-ink,#991b1b);font-weight:700}
+.pa-u{background:#b91c1c;color:#fff;font-size:10.5px;font-weight:800;padding:1px 6px;border-radius:6px;margin-left:5px}
+.pa-flow{border:1.5px solid var(--line);background:transparent;border-radius:8px;padding:3px 9px;font:600 12px system-ui,sans-serif;cursor:pointer;color:var(--brand)}
+.pa-charts{display:grid;grid-template-columns:3fr 2fr;gap:16px}
+.pa-charts canvas{width:100%!important;height:260px!important}
+.pa-podium{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin-bottom:16px}
+.pa-podium div{border:1px solid var(--line);border-radius:14px;padding:14px;text-align:center;background:var(--surface,#fff)}
+.pa-podium .r1{border-color:#e7b416;box-shadow:0 0 0 3px rgba(231,180,22,.15)}
+.pa-podium em{font-style:normal;display:inline-grid;place-items:center;width:30px;height:30px;border-radius:50%;font-weight:800;background:var(--line)}
+.pa-podium .r1 em{background:#f5c542}.pa-podium .r2 em{background:#d6d9de}.pa-podium .r3 em{background:#e6b17e}
+.pa-podium b{display:block;font-size:17px;margin:6px 0 2px}
+.pa-podium span{font-size:13px;color:var(--ink-3)}
+details.pa-pk{border-top:1px solid var(--line);padding:8px 0}
+details.pa-pk:first-of-type{border-top:0}
+details.pa-pk summary{cursor:pointer;font-weight:650;list-style:none;display:flex;justify-content:space-between;gap:10px}
+details.pa-pk summary::after{content:"Show bills";font-weight:600;font-size:13px;color:var(--brand)}
+details.pa-pk[open] summary::after{content:"Hide"}
+.pa-empty{color:var(--ink-3);padding:6px 0}
+@media(max-width:760px){.pa-charts{grid-template-columns:1fr}.pa-podium{grid-template-columns:1fr}.pa-spacer{display:none}}
 </style>
 </head>
 <body>
@@ -33,69 +70,152 @@
     <a href="{{ url_for('logout') }}" class="ip-btn">Log out</a>
   </nav>
 </header>
+{% set q = {'from': rep.day_from.isoformat(), 'to': rep.day_to.isoformat(), 'picker': rep.picker_id or ''} %}
 <main class="ip-shell">
   <div class="ip-head"><div><h1>Picking</h1>
-    <div class="ip-head__sub">The live picking floor, the leaderboard, and every bill and missing item by day.</div></div></div>
+    <div class="ip-head__sub">The live floor, reports for any period with PDF and CSV, and the leaderboard.</div></div></div>
 
-  {% if day == today %}
-  {% include '_picking.html' %}
+  <nav class="pa-tabs" aria-label="Picking sections">
+    <a href="{{ url_for('picking_admin', tab='live') }}" {% if tab == 'live' %}aria-current="page"{% endif %}>Live floor</a>
+    <a href="{{ url_for('picking_admin', tab='reports', **q) }}" {% if tab == 'reports' %}aria-current="page"{% endif %}>Reports</a>
+    <a href="{{ url_for('picking_admin', tab='board', **q) }}" {% if tab == 'board' %}aria-current="page"{% endif %}>Leaderboard</a>
+  </nav>
+
+  {% if tab == 'live' %}
+    {% include '_picking.html' %}
+  {% else %}
+  <form class="pa-filter" method="get" action="{{ url_for('picking_admin') }}">
+    <input type="hidden" name="tab" value="{{ tab }}">
+    <div><label>Quick</label>
+      <span class="pa-quick">
+        {% set wk = today - timedelta(days=today.weekday()) %}
+        <a href="{{ url_for('picking_admin', tab=tab, picker=rep.picker_id or '', **{'from': today.isoformat(), 'to': today.isoformat()}) }}" aria-current="{{ 'true' if rep.day_from == today and rep.day_to == today else 'false' }}">Today</a>
+        <a href="{{ url_for('picking_admin', tab=tab, picker=rep.picker_id or '', **{'from': wk.isoformat(), 'to': today.isoformat()}) }}" aria-current="{{ 'true' if rep.day_from == wk and rep.day_to == today and wk != today else 'false' }}">This week</a>
+        <a href="{{ url_for('picking_admin', tab=tab, picker=rep.picker_id or '', **{'from': today.replace(day=1).isoformat(), 'to': today.isoformat()}) }}" aria-current="{{ 'true' if rep.day_from == today.replace(day=1) and rep.day_to == today and today.day != 1 and today.replace(day=1) != wk else 'false' }}">This month</a>
+      </span></div>
+    <div><label for="paFrom">From</label><input type="date" id="paFrom" name="from" value="{{ rep.day_from.isoformat() }}" max="{{ today.isoformat() }}"></div>
+    <div><label for="paTo">To</label><input type="date" id="paTo" name="to" value="{{ rep.day_to.isoformat() }}" max="{{ today.isoformat() }}"></div>
+    <div><label for="paPicker">Picker</label><select id="paPicker" name="picker">
+      <option value="">All pickers</option>
+      {% for p in pickers %}<option value="{{ p.id }}" {% if rep.picker_id == p.id %}selected{% endif %}>{{ p.name }}</option>{% endfor %}
+    </select></div>
+    <button class="ip-btn" type="submit">Show</button>
+    <span class="pa-spacer"></span>
+    <span class="pa-dl">
+      <a class="ip-btn" href="{{ url_for('picking_report_pdf', **q) }}" id="paPdf">Download PDF</a>
+      <a class="ip-btn ip-btn--ghost" href="{{ url_for('picking_report_csv', **q) }}" id="paCsv">CSV</a>
+    </span>
+  </form>
+  <p class="pa-period">{{ rep.day_from.strftime('%d %b %Y') }}{% if not rep.single_day %} – {{ rep.day_to.strftime('%d %b %Y') }}{% endif %} · {{ rep.picker_name or 'All pickers' }}{% if rep.closed is not none %} · Day closed by the Pick Assigner: {{ rep.closed }} bills (the checkers' day total){% endif %}</p>
+  {% set T = rep.totals %}
+  <div class="pa-sum">
+    <div><span>Bills</span><b>{{ T.bills }}</b></div>
+    <div><span>Items</span><b>{{ T['items'] }}</b></div>
+    <div><span>Picked</span><b>{{ T.picked }}</b></div>
+    <div class="{{ 'warn' if T.missing else '' }}"><span>Missing reported</span><b>{{ T.missing }}</b></div>
+    <div><span>Urgent bills</span><b>{{ T.urgent }}</b></div>
+    <div><span>Avg min / bill</span><b>{{ T.avg_minutes if T.avg_minutes is not none else '—' }}</b></div>
+    <div class="{{ 'warn' if rep.late else '' }}"><span>Late grabs</span><b>{{ rep.late }}</b></div>
+    <div class="{{ 'warn' if rep.idle else '' }}"><span>Left waiting</span><b>{{ rep.idle }}</b></div>
+  </div>
   {% endif %}
 
-  <section class="ip-card" style="margin-top:16px" id="reports">
-    <div class="ip-card__title">Reports</div>
-    <form class="pa-day" method="get" action="{{ url_for('picking_admin') }}#reports">
-      <label for="paDate">Day</label>
-      <input type="date" id="paDate" name="date" value="{{ day.isoformat() }}" max="{{ today.isoformat() }}">
-      <button class="ip-btn" type="submit">Show</button>
-      <a class="ip-btn ip-btn--ghost" href="{{ url_for('picking_report_csv', date=day.isoformat()) }}">Download CSV</a>
-    </form>
-    <div class="pa-sum">
-      <div><span>Bills</span><b>{{ rep.totals.bills }}</b></div>
-      <div><span>Items</span><b>{{ rep.totals['items'] }}</b></div>
-      <div><span>Picked</span><b>{{ rep.totals.picked }}</b></div>
-      <div><span>Missing reported</span><b>{{ rep.totals.missing }}</b></div>
-      <div><span>Late grabs</span><b>{{ rep.late }}</b></div>
-      <div><span>Bills left waiting</span><b>{{ rep.idle }}</b></div>
-    </div>
-    {% if rep.closed is not none %}<p class="ip-head__sub">Day closed by the Pick Assigner: {{ rep.closed }} bills (the checkers' day total).</p>{% endif %}
-
-    <h3 style="margin:14px 0 6px">Bill numbers</h3>
+  {% if tab == 'reports' %}
+  <section class="pa-box" id="reports"><h2>Bills <small>{{ rep.bills|length }} · tap Flowchart for the timeline</small></h2>
     <div class="pa-tw"><table class="pa-t" id="paBills">
-      <thead><tr><th>Bill number</th><th>Items</th><th>Picked</th><th>Missing</th><th>Pickers (items)</th><th>Added</th><th>Completed</th><th>Minutes</th><th>Status</th></tr></thead>
+      <thead><tr><th>Date</th><th>Bill number</th><th class="n">Items</th><th class="n">Picked</th><th class="n">Missing</th><th>Pickers (items)</th><th>Added</th><th>Completed</th><th class="n">Minutes</th><th>Status</th><th></th></tr></thead>
       <tbody>
       {% for b in rep.bills %}
-        <tr><td><strong>{{ b.bill_no }}</strong>{% if b.urgent %} <span class="pa-red">URGENT</span>{% endif %}</td>
-          <td>{{ b['items'] }}</td><td>{{ b.picked }}</td>
-          <td>{% if b.missing %}<span class="pa-red">{{ b.missing }}</span>{% else %}0{% endif %}</td>
+        <tr class="{{ 'bad' if b.late or b.missing else '' }}"><td>{{ b.date }}</td><td><strong>{{ b.bill_no }}</strong>{% if b.urgent %}<span class="pa-u">URGENT</span>{% endif %}</td>
+          <td class="n">{{ b['items'] }}</td><td class="n">{{ b.picked }}</td><td class="n">{% if b.missing %}<span class="pa-red">{{ b.missing }}</span>{% else %}0{% endif %}</td>
           <td>{{ b.pickers or '—' }}{% if b.late %} <span class="pa-red">· {{ b.late }} late</span>{% endif %}</td>
-          <td>{{ b.added }}</td><td>{{ b.completed or '—' }}</td><td>{{ b.minutes if b.minutes is not none else '—' }}</td>
-          <td>{{ {'open': 'Open', 'done': 'Complete', 'cancelled': 'Cancelled', 'scheduled': 'Rescheduled'}.get(b.status, b.status) }}</td></tr>
+          <td>{{ b.added }}</td><td>{{ b.completed or '—' }}</td><td class="n">{{ b.minutes if b.minutes is not none else '—' }}</td>
+          <td>{{ {'open': 'Open', 'done': 'Complete', 'cancelled': 'Cancelled', 'scheduled': 'Rescheduled'}.get(b.status, b.status) }}</td>
+          <td><button type="button" class="pa-flow" data-bill-flow="{{ b.id }}">Flowchart</button></td></tr>
       {% else %}
-        <tr><td colspan="9" style="color:var(--ink-3)">No bills on this day.</td></tr>
+        <tr><td colspan="11" class="pa-empty">No bills in this period.</td></tr>
       {% endfor %}
-      </tbody></table></div>
+      </tbody></table></div></section>
 
-    <h3 style="margin:18px 0 6px">Missing items</h3>
+  <section class="pa-box"><h2>Missing items <small>{{ rep.missing|length }}</small></h2>
     <div class="pa-tw"><table class="pa-t" id="paMissing">
-      <thead><tr><th>Bill number</th><th>Item</th><th>Qty</th><th>Reported by</th><th>At</th><th>Status</th></tr></thead>
+      <thead><tr><th>Date</th><th>Bill number</th><th>Item</th><th class="n">Qty</th><th>Reported by</th><th>At</th><th>What happened</th></tr></thead>
       <tbody>
       {% for m in rep.missing %}
-        <tr><td>{{ m.bill_no }}</td><td><strong>{{ m.item }}</strong></td><td>{{ m.qty }}</td><td>{{ m.by }}</td><td>{{ m.at }}</td><td>{{ m.status }}</td></tr>
+        <tr><td>{{ m.date }}</td><td>{{ m.bill_no }}</td><td><strong>{{ m.item }}</strong></td><td class="n">{{ m.qty }}</td><td>{{ m.by }}</td><td>{{ m.at }}</td><td>{{ m.status }}</td></tr>
       {% else %}
-        <tr><td colspan="6" style="color:var(--ink-3)">No missing items reported on this day.</td></tr>
+        <tr><td colspan="7" class="pa-empty">No missing items reported in this period.</td></tr>
       {% endfor %}
-      </tbody></table></div>
+      </tbody></table></div></section>
 
-    <h3 style="margin:18px 0 6px">Pickers</h3>
-    <div class="pa-tw"><table class="pa-t">
-      <thead><tr><th>#</th><th>Picker</th><th>Bills</th><th>Items</th><th>On time</th><th>Points</th><th>Missing</th></tr></thead>
+  <section class="pa-box"><h2>Late report <small>{{ rep.events|length }} · late picks, bills left waiting, missing items</small></h2>
+    <div class="pa-tw"><table class="pa-t" id="paEvents">
+      <thead><tr><th>Date</th><th>Time</th><th>Type</th><th>Picker</th><th>What</th></tr></thead>
       <tbody>
-      {% for r in rep.board %}
-        <tr><td>{{ r.rank }}</td><td>{{ r.name }}</td><td>{{ r.bills }}</td><td>{{ r['items'] }}</td>
-          <td>{{ (r.on_time_pct|round|int ~ '%') if r.grabs else '—' }}</td><td>{{ r.points }}</td><td>{{ r.missing }}</td></tr>
+      {% for e in rep.events %}
+        <tr class="{{ 'bad' if e.kind == 'late' else '' }}"><td>{{ e.date }}</td><td>{{ e.at }}</td><td><strong>{{ e.label }}</strong></td><td>{{ e.who }}</td>
+          <td>{% if e.kind == 'late' %}Late on {{ e.bill }}{% if e.minutes %} — {{ e.minutes }} min{% endif %}{% elif e.kind == 'idle' %}Left {{ e.bill }} waiting {{ e.minutes }} min{% else %}Could not find {{ e.detail }} on {{ e.bill }}{% endif %}</td></tr>
+      {% else %}
+        <tr><td colspan="5" class="pa-empty">Nobody was late or left a bill waiting.</td></tr>
       {% endfor %}
-      </tbody></table></div>
+      </tbody></table></div></section>
+
+  <section class="pa-box"><h2>Each picker, bill by bill</h2>
+    {% for x in rep.board %}
+      <details class="pa-pk" {% if rep.picker_id %}open{% endif %}><summary><span>{{ x.name }} <small style="font-weight:500;color:var(--ink-3)">· {{ x.bills }} bills · {{ x['items'] }} items · {{ (x.on_time_pct|round|int ~ '%') if x.grabs else '—' }} on time · {{ x.points }} pts</small></span></summary>
+        {% if x.bill_list %}<div class="pa-tw"><table class="pa-t" style="margin-top:6px">
+          <thead><tr><th>Date</th><th>Bill number</th><th class="n">Items picked</th><th class="n">Not found</th><th class="n">Grabs</th><th class="n">Points</th><th></th></tr></thead><tbody>
+          {% for bl in x.bill_list %}<tr class="{{ 'bad' if bl.late else '' }}"><td>{{ bl.day }}</td><td><strong>{{ bl.bill_no }}</strong>{% if bl.late %} <span class="pa-red">late</span>{% endif %}</td>
+            <td class="n">{{ bl['items'] }}</td><td class="n">{{ bl.missing or '' }}</td><td class="n">{{ bl.grabs }}</td><td class="n">{{ bl.points }}</td>
+            <td><button type="button" class="pa-flow" data-bill-flow="{{ bl.bill_id }}">Flowchart</button></td></tr>{% endfor %}
+          </tbody></table></div>{% else %}<div class="pa-empty">No bills in this period.</div>{% endif %}
+      </details>
+    {% else %}<div class="pa-empty">No pickers.</div>{% endfor %}
   </section>
+  {% endif %}
+
+  {% if tab == 'board' %}
+  {% set top = rep.board[:3] %}
+  {% if top and top[0].bills %}
+  <div class="pa-podium">
+    {% for x in top %}<div class="r{{ x.rank }}"><em>{{ x.rank }}</em><b>{{ x.name }}</b><span>{{ x.bills }} bills · {{ x['items'] }} items · {{ x.points }} pts</span></div>{% endfor %}
+  </div>
+  {% endif %}
+  <section class="pa-box"><h2>Leaderboard <small>bills first, then items, on time, points</small></h2>
+    <div class="pa-tw"><table class="pa-t" id="paBoard">
+      <thead><tr><th>#</th><th>Picker</th><th class="n">Bills</th><th class="n">Items</th><th class="n">On time</th><th class="n">Points</th><th class="n">Items/hr</th><th class="n">Missing</th><th class="n">Late</th><th class="n">Left waiting</th><th></th></tr></thead>
+      <tbody>
+      {% for x in rep.board %}
+        <tr><td>{{ x.rank }}</td><td><strong>{{ x.name }}</strong></td><td class="n">{{ x.bills }}</td><td class="n">{{ x['items'] }}</td>
+          <td class="n">{{ (x.on_time_pct|round|int ~ '%') if x.grabs else '—' }}</td><td class="n">{{ x.points }}</td><td class="n">{{ x.rate or '—' }}</td>
+          <td class="n">{{ x.missing }}</td><td class="n {{ 'pa-red' if x.late else '' }}">{{ x.late }}</td><td class="n {{ 'pa-red' if x.idle else '' }}">{{ x.idle }}</td>
+          <td><a class="pa-flow" style="text-decoration:none" href="{{ url_for('staff_detail', emp_id=x.id) }}#picking">Profile</a></td></tr>
+      {% endfor %}
+      </tbody></table></div></section>
+  <section class="pa-box"><h2>Charts</h2>
+    <div class="pa-charts"><div><div style="font-size:13px;font-weight:650;color:var(--ink-3)">Bills and items per picker</div><canvas id="paBar" role="img" aria-label="Bills and items per picker"></canvas></div>
+      <div><div style="font-size:13px;font-weight:650;color:var(--ink-3)">Share of items picked</div><canvas id="paPie" role="img" aria-label="Share of items per picker"></canvas></div></div>
+    {% if rep.series|length > 1 %}<div style="margin-top:16px;font-size:13px;font-weight:650;color:var(--ink-3)">Bills and items per day</div><canvas id="paDays" role="img" aria-label="Bills and items per day" style="width:100%;height:220px"></canvas>{% endif %}
+  </section>
+  <script src="{{ url_for('static', filename='js/chart.umd.min.js') }}"></script>
+  <script>
+  (function () {
+    var b = {{ rep.board|map(attribute='name')|list|tojson }}, bills = {{ rep.board|map(attribute='bills')|list|tojson }},
+        items = {{ rep.board|map(attribute='items')|list|tojson }}, series = {{ rep.series|tojson }};
+    var pal = ["#146B4A", "#E8A13A", "#1E40AF", "#C8553D", "#7C3AED", "#0E7490", "#B45309", "#475569"];
+    new Chart(document.getElementById("paBar"), {type: "bar", data: {labels: b, datasets: [{label: "Bills", data: bills, backgroundColor: "#1E40AF"}, {label: "Items", data: items, backgroundColor: "#146B4A"}]},
+      options: {responsive: true, maintainAspectRatio: false, scales: {y: {beginAtZero: true, ticks: {precision: 0}}}}});
+    var nz = b.map(function (n, i) { return [n, items[i]]; }).filter(function (x) { return x[1] > 0; });
+    new Chart(document.getElementById("paPie"), {type: "doughnut", data: {labels: nz.map(function (x) { return x[0]; }), datasets: [{data: nz.map(function (x) { return x[1]; }), backgroundColor: nz.map(function (x, i) { return pal[i % pal.length]; })}]},
+      options: {responsive: true, maintainAspectRatio: false, plugins: {legend: {position: "bottom"}}}});
+    var d = document.getElementById("paDays");
+    if (d) new Chart(d, {type: "line", data: {labels: series.map(function (s) { return s.day; }), datasets: [
+      {label: "Bills", data: series.map(function (s) { return s.bills; }), borderColor: "#1E40AF", backgroundColor: "rgba(30,64,175,.12)", fill: true, tension: .3},
+      {label: "Items", data: series.map(function (s) { return s['items']; }), borderColor: "#146B4A", backgroundColor: "rgba(20,107,74,.12)", fill: true, tension: .3}]},
+      options: {responsive: true, maintainAspectRatio: false, scales: {y: {beginAtZero: true, ticks: {precision: 0}}}}});
+  })();
+  </script>
+  {% endif %}
 </main>
 <script src="{{ url_for('static', filename='js/push.js') }}" defer></script>
 <script src="{{ url_for('static', filename='js/enter-next.js') }}" defer></script>

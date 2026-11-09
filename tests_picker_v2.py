@@ -452,7 +452,9 @@ with app.app_context():
         db.session.commit()
 cadm = login("pk_adm@x.com")
 pa = cadm.get("/picking").data.decode()
-check("11.1 The admin has a Picking page with the live floor", 'id="pickApp"' in pa and 'data-role="assigner"' in pa)
+pa_live = pa
+pa = cadm.get("/picking?tab=reports").data.decode()
+check("11.1 The admin has a Picking page that opens on the live floor", 'id="pickApp"' in pa_live and 'data-role="assigner"' in pa_live)
 check("11.2 ...listing every bill number of the day", 'id="paBills"' in pa and (A.fy_prefix() + "5001") in pa)
 check("11.3 ...and every missing item with who reported it", 'id="paMissing"' in pa and "Dolo 650" in pa and "PK P3" in pa)
 check("11.3b No dict-method text leaks onto the page (the .items Jinja trap)", "built-in method" not in pa)
@@ -464,8 +466,8 @@ body = csvr.data.decode()
 check("11.6 The day's report downloads as CSV with bills and missing items",
       csvr.mimetype == "text/csv" and "Bill number" in body and (A.fy_prefix() + "5001") in body and "Dolo 650" in body)
 check("11.7 Staff cannot open the admin picking page", c1.get("/picking", follow_redirects=True).data.find(b'id="paBills"') == -1)
-old = cadm.get("/picking?date=2020-01-01").data.decode()
-check("11.8 Another day's report can be shown", "No bills on this day." in old)
+old = cadm.get("/picking?tab=reports&from=2020-01-01&to=2020-01-01").data.decode()
+check("11.8 Another day's report can be shown", "No bills in this period." in old)
 with app.app_context():
     check("11.9 Times show as 12-hour Indian time", A._t12_filter(datetime(2026, 11, 9, 8, 35)) == "2:05 PM"
           and A._dt12_filter(datetime(2026, 11, 9, 20, 0)) == "10 Nov 1:30 AM")
@@ -480,6 +482,34 @@ check("11.10 No page shows 24-hour times any more", not _no24, str(_no24))
 _forms = [f for f in _glob.glob(os.path.join(REPO, "templates", "*.html"))
           if "<form" in open(f).read() and not os.path.basename(f).startswith("_") and "js/enter-next.js" not in open(f).read()]
 check("11.11 Every page with a form has Enter-to-next-field", not _forms, str(_forms))
+
+# ---- 11b. Reports for any period, one picker, PDF and CSV, leaderboard -------
+wk = cadm.get("/picking?tab=reports&period=week").data.decode()
+check("11b.1 Reports cover a period (this week), with summary figures", 'id="paBills"' in wk and "Avg min / bill" in wk and "Left waiting" in wk)
+one = cadm.get("/picking?tab=reports&picker=%d" % ids["p3"]).data.decode()
+check("11b.2 Reports can be narrowed to one picker", "PK P3" in one.split('class="pa-period"')[1][:200])
+check("11b.3 Each picker's bills are listed bill by bill", "Each picker, bill by bill" in one and 'data-bill-flow="%d"' % NB in one)
+check("11b.4 The late report is in the reports", 'id="paEvents"' in wk)
+pdf = cadm.get("/picking/report.pdf?period=week")
+check("11b.5 The report downloads as a PDF", pdf.status_code == 200 and pdf.mimetype == "application/pdf" and pdf.data[:5] == b"%PDF-"
+      and len(pdf.data) > 3000 and "attachment" in pdf.headers.get("Content-Disposition", ""), str(len(pdf.data)))
+pdf1 = cadm.get("/picking/report.pdf?picker=%d" % ids["p3"])
+check("11b.6 One picker's PDF is named after them", pdf1.status_code == 200 and "pk-p3" in pdf1.headers.get("Content-Disposition", ""),
+      pdf1.headers.get("Content-Disposition", ""))
+cs = cadm.get("/picking/report.csv?period=month").data.decode()
+check("11b.7 The CSV has every section: leaderboard, bills, missing items, late report, bill-wise",
+      all(x in cs for x in ("Leaderboard", "Bills", "Missing items", "Late report", "Bill-wise by picker")))
+own = c3.get("/picking/report.pdf?picker=%d" % ids["p3"])
+other = c3.get("/picking/report.pdf?picker=%d" % ids["p1"])
+allp = c3.get("/picking/report.pdf")
+check("11b.8 A picker can download their own PDF but nobody else's, and not the full report",
+      own.status_code == 200 and own.data[:5] == b"%PDF-" and other.status_code == 302 and allp.status_code == 302)
+bd = cadm.get("/picking?tab=board&period=month").data.decode()
+check("11b.9 The leaderboard tab ranks pickers for the period, with charts and profile links",
+      'id="paBoard"' in bd and 'id="paBar"' in bd and 'id="paPie"' in bd and "#picking" in bd)
+with app.app_context():
+    f_, t_, p_ = A.report_period({"from": "2020-01-01", "to": date.today().isoformat()})
+    check("11b.11 Very long ranges are capped at 92 days", (t_ - f_).days == 92)
 
 # ---- 12. Staff profile for pickers, bill flowchart, per-picker countdown -------
 with app.app_context():
@@ -497,6 +527,7 @@ check("12.2 ...with Today, This week and This month in the order Bills, Items, O
       < prof.index("<span>On time</span>") < prof.index("<span>Points</span>"))
 check("12.3 ...each grab with took and done times and a flowchart button", 'id="ppGrabs"' in prof and 'data-bill-flow="%d"' % NB in prof)
 check("12.4 ...and a Bill-wise view", 'id="ppBills"' in prof and 'data-ppview="bills"' in prof)
+check("12.4b ...and PDF buttons for the picker's day and month", 'id="ppPdfDay"' in prof and "report.pdf?picker=%d" % ids["p3"] in prof)
 check("12.5 ...and the day's late report", "Late report" in prof and "Dolo 650" in prof)
 check("12.6 The old picker figures (bill fulfilment, workspace, VWCR) are gone from a picker's profile",
       "Bill Fulfilment" not in prof and "Sales Bills Picked" not in prof)

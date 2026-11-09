@@ -53,6 +53,8 @@
     <input type="date" id="ppDay" name="day" value="{{ pp.day.isoformat() }}" max="{{ today_iso }}">
     <button class="pp-flow" type="submit">Show</button>
     <span style="flex:1"></span>
+    <a class="pp-flow" style="text-decoration:none" id="ppPdfDay" href="/picking/report.pdf?picker={{ pp.picker_id }}&from={{ pp.day.isoformat() }}&to={{ pp.day.isoformat() }}">PDF · this day</a>
+    <a class="pp-flow" style="text-decoration:none" href="/picking/report.pdf?picker={{ pp.picker_id }}&period=month">PDF · this month</a>
     <span class="pp-seg" role="group" aria-label="View">
       <button type="button" data-ppview="grabs" aria-pressed="true">Each grab</button>
       <button type="button" data-ppview="bills" aria-pressed="false">Bill-wise</button>
