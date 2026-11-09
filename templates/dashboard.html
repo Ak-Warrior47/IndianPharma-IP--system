@@ -936,9 +936,9 @@ button[disabled] { opacity: .45; cursor: not-allowed; transform: none; }
         {% set prim = {'biller':'billing','packer':'packing'}.get(_p0, _p0) %}
         <div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:8px;">
           {% for r in ['picker','checker','purchaser','delivery','billing','packing','other'] %}
-          {% if r != prim %}
+          {% if r != prim and not (r == 'picker' and (_p0 == 'pick_assigner' or staff_type in ('picker', 'pick_assigner'))) %}
           <label style="display:inline-flex;align-items:center;gap:6px;padding:8px 14px;border:1.5px solid var(--line);border-radius:999px;font-size:13px;font-weight:700;cursor:pointer;background:rgba(255,255,255,0.9);">
-            <input type="checkbox" name="multitask_roles" value="{{ r }}" onchange="toggleMtRole('{{ r }}', this.checked)" style="width:auto;margin:0;cursor:pointer;">
+            <input type="checkbox" name="multitask_roles" value="{{ r }}" onchange="toggleMtRole('{{ r }}', this.checked)" style="width:auto;margin:0;cursor:pointer;"{% if r == 'picker' and mt_picking_today(user_id) %} checked{% endif %}>
             {{ r|title }}
           </label>
           {% endif %}
@@ -946,17 +946,8 @@ button[disabled] { opacity: .45; cursor: not-allowed; transform: none; }
         </div>
       </div>
 
-      <!-- PICKER params -->
-      <div class="mt-fields" id="mt_picker" style="display:none;">
-        <div class="form-grid">
-          <div class="field"><label>Total Bills Received to Pick</label><input type="number" name="mt_p_total_bills" min="0" value="0"></div>
-          <div class="field"><label>Sales Bill Picked</label><input type="number" name="mt_p_sbo" min="0" value="0"></div>
-          <div class="field"><label>Items Picked</label><input type="number" name="mt_p_picked" min="0" value="0"></div>
-          <div class="field"><label>Items Missed</label><input type="number" name="mt_p_missed" min="0" value="0"></div>
-          <div class="field"><label>CS Sales Open</label><input type="number" name="mt_p_cso" min="0" value="0"></div>
-          <div class="field"><label>Packing Done</label><input type="number" name="mt_p_packing" min="0" value="0"></div>
-        </div>
-      </div>
+      <!-- PICKER: the live bill picking (no typed numbers) -->
+      {% if 'picker' != prim and _p0 != 'pick_assigner' and staff_type not in ('picker', 'pick_assigner') %}{% set mt_on = mt_picking_today(user_id) %}{% include '_mt_picker.html' %}{% endif %}
 
       <!-- CHECKER params -->
       <div class="mt-fields" id="mt_checker" style="display:none;">

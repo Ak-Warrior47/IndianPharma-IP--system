@@ -123,8 +123,6 @@ services:
       # Raise it if urgent work is being avoided; 1.0 switches the weighting off.
       - key: URGENT_BILL_WEIGHT
         value: "1.5"
-      - key: PICK_SECONDS_PER_ITEM
-        value: "100"
       # Trial copies only: "1" creates test accounts and shows a "trial" banner,
       # and only when DATABASE_URL is empty. Keep "0" on the live service.
       - key: TRIAL_DEMO

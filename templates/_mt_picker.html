@@ -1,0 +1,6 @@
+{# Multitask Picker: the live bill picking, for staff whose main role is not
+   picker. Their finished grabs become their Picker multitask entry. #}
+<div class="mt-fields" id="mt_picker" style="display:{{ 'block' if mt_on else 'none' }};">
+  <p style="font-size:13px;color:var(--ink-2);margin:0 0 6px">Pick bills here like a picker: type how many items you take, the timer starts, press <b>Done</b>. What you pick is saved as your Picker multitask by itself, no numbers to type.</p>
+  {% set pick_as = 'picker' %}{% include '_picking.html' %}
+</div>

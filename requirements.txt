@@ -17,6 +17,9 @@ reportlab>=4.1.0,<7
 gunicorn>=21.2.0,<24
 eventlet>=0.35.2
 psycopg2-binary>=2.9.9,<3
+# Lets the one eventlet worker serve other phones while it waits on the
+# database (psycopg2 otherwise blocks the whole worker on every query).
+psycogreen>=1.0.2,<2
 # Not imported directly; reportlab needs it for image support.
 # Must stay above 10.4 so a wheel exists on Python 3.12 and 3.13.
 Pillow>=10.4,<14

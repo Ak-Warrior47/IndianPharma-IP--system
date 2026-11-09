@@ -63,6 +63,9 @@ with app.app_context():
     mk("Reg Packer", "r_pak@x.com",  "packer")
     mk("Reg Super",  "r_sup@x.com",  "supervisor", secondary="picker")
     IDS = {e.email: e.id for e in Employee.query.all()}
+    # rows left by earlier runs (or reused SQLite ids) must not count here
+    MultitaskEntry.query.filter_by(emp_id=IDS["r_sup@x.com"]).delete()
+    db.session.commit()
 
 client = csrf_client(app.test_client())
 
@@ -154,8 +157,6 @@ with app.app_context():
 
 # ---- 4. Multitask across every role, with field mapping ----------------
 MULTITASK = {
-    "picker":    {"mt_p_total_bills": "12", "mt_p_sbo": "10", "mt_p_picked": "50",
-                  "mt_p_missed": "3", "mt_p_cso": "1", "mt_p_packing": "5"},
     "checker":   {"mt_c_bills_received": "30", "mt_c_pending": "1", "mt_c_sbo": "4",
                   "mt_c_cso": "2", "mt_c_checked": "60", "mt_c_errors": "7"},
     "purchaser": {"mt_pu_sbo": "15", "mt_pu_checked": "12", "mt_pu_picked": "9",
@@ -175,9 +176,14 @@ for role, fields in MULTITASK.items():
 with app.app_context():
     mts = {m.secondary_type: m
            for m in MultitaskEntry.query.filter_by(emp_id=IDS["r_sup@x.com"]).all()}
-check("4.1 All seven multitask roles saved", len(mts) == 7)
-check("4.2 Picker fields mapped",
-      bool(mts.get("picker")) and mts["picker"].picked == 50 and mts["picker"].total_bills_received == 12)
+check("4.1 All six typed multitask roles saved", len(mts) == 6)
+# Picker as a second role is the live bill picking now: typed picker numbers
+# are ignored, and nothing is saved until bills are actually picked.
+client.post("/supervisor", data={"multitask_only": "1", "multitask_roles": ["picker"], "mt_p_picked": "50",
+                                 "mt_p_total_bills": "12"}, follow_redirects=True)
+with app.app_context():
+    pk_mt = MultitaskEntry.query.filter_by(emp_id=IDS["r_sup@x.com"], secondary_type="picker").first()
+check("4.2 Typed picker numbers are ignored (picking is live now)", pk_mt is None)
 check("4.3 Checker fields mapped",
       bool(mts.get("checker")) and mts["checker"].checked == 60 and mts["checker"].bills_received == 30)
 check("4.4 Purchaser fields mapped",

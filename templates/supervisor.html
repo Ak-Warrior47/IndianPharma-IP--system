@@ -187,7 +187,7 @@
             {% for r in ['picker','checker','purchaser','delivery','billing','packing','other'] %}
             <label style="display:inline-flex;align-items:center;gap:7px;padding:8px 14px;border:1px solid var(--line-strong);border-radius:var(--r-pill);font-size:var(--fs-small);font-weight:var(--fw-bold);cursor:pointer;background:var(--surface);">
               <input type="checkbox" name="multitask_roles" value="{{ r }}"
-                     onchange="toggleMtRole('{{ r }}', this.checked)"
+                     onchange="toggleMtRole('{{ r }}', this.checked)"{% if r == 'picker' and mt_picking_today(session.get('user_id')) %} checked{% endif %}
                      style="width:16px;height:16px;margin:0;accent-color:var(--brand);cursor:pointer;">
               {{ r|title }}
             </label>
@@ -195,16 +195,7 @@
           </div>
         </fieldset>
 
-        <div class="mt-fields" id="mt_picker" style="display:none;">
-          <div class="ip-grid">
-            <div><label class="ip-label">Total Bills Received to Pick</label><input class="ip-input" type="number" name="mt_p_total_bills" min="0" value="0"></div>
-            <div><label class="ip-label">Sales Bill Picked</label><input class="ip-input" type="number" name="mt_p_sbo" min="0" value="0"></div>
-            <div><label class="ip-label">Items Picked</label><input class="ip-input" type="number" name="mt_p_picked" min="0" value="0"></div>
-            <div><label class="ip-label">Items Missed</label><input class="ip-input" type="number" name="mt_p_missed" min="0" value="0"></div>
-            <div><label class="ip-label">CS Sales Open</label><input class="ip-input" type="number" name="mt_p_cso" min="0" value="0"></div>
-            <div><label class="ip-label">Packing Done</label><input class="ip-input" type="number" name="mt_p_packing" min="0" value="0"></div>
-          </div>
-        </div>
+        {% set mt_on = mt_picking_today(session.get('user_id')) %}{% include '_mt_picker.html' %}
         <div class="mt-fields" id="mt_checker" style="display:none;">
           <div class="ip-grid">
             <div><label class="ip-label">Total Bills Received</label><input class="ip-input" type="number" name="mt_c_bills_received" min="0" value="0"></div>

@@ -29,7 +29,7 @@ app.config["TESTING"] = True
 PW = "longpass123"
 PASSED, FAILED = [], []
 SEC = A.PICK_SECONDS_PER_ITEM
-EMAILS = ["pk_asg@x.com", "pk_p1@x.com", "pk_p2@x.com", "pk_p3@x.com", "pk_p4@x.com"]
+EMAILS = ["pk_asg@x.com", "pk_p1@x.com", "pk_p2@x.com", "pk_p3@x.com", "pk_p4@x.com", "pk_hlp@x.com"]
 
 
 def check(name, cond, extra=""):
@@ -45,7 +45,7 @@ def mk(email, st):
         db.session.add(e)
         db.session.commit()
     e.staff_type = st
-    for M in (PickClaim, KPIEntry, Notification, PersonalRecord, LevelEvent):
+    for M in (PickClaim, KPIEntry, Notification, PersonalRecord, LevelEvent, A.MultitaskEntry):
         col = M.picker_id if M is PickClaim else M.emp_id
         M.query.filter(col == e.id).delete(synchronize_session=False)
     db.session.commit()
@@ -69,7 +69,7 @@ with app.app_context():
     PickBill.query.delete()
     db.session.commit()
     asg = mk("pk_asg@x.com", "pick_assigner")
-    p1, p2, p3, p4 = (mk(e, "picker") for e in EMAILS[1:])
+    p1, p2, p3, p4 = (mk(e, "picker") for e in EMAILS[1:5])
     ids = {"p1": p1.id, "p2": p2.id, "p3": p3.id, "p4": p4.id}
     ASG_ID = asg.id
     # other pickers left in the shared test database must not be "busy" here
@@ -81,7 +81,7 @@ check("1.2 It is named 'Pick Assigner'", A.ROLE_DISPLAY_NAMES.get("pick_assigner
 ca = login("pk_asg@x.com")
 dash = ca.get("/dashboard").data.decode()
 check("1.3 The assigner's dashboard shows the Add bill form", 'id="pkAdd"' in dash and "Pick Assigner" in dash)
-c1, c2, c3, c4 = (login(e) for e in EMAILS[1:])
+c1, c2, c3, c4 = (login(e) for e in EMAILS[1:5])
 pdash = c1.get("/dashboard").data.decode()
 check("1.4 The picker's dashboard shows the picking screen", 'id="pkBills"' in pdash)
 check("1.5 The old picker daily form is gone", 'name="total_bills_received"' not in pdash
@@ -154,7 +154,7 @@ with app.app_context():
 # ---- 4. Timer and points -----------------------------------------------------
 t0 = datetime(2026, 1, 5, 10, 0, 0)
 due = t0 + timedelta(seconds=3 * SEC)
-check("4.1 Normal time is 30 s per item", SEC == 30)
+check("4.1 Normal time is 35 s per item by default (urgent 30 s)", SEC == 35 and A.PICK_URGENT_SECONDS == 30)
 check("4.2 Done in normal time: 1.5 per item", A.pick_points(3, due, due - timedelta(seconds=1)) == 4.5)
 check("4.3 Exactly at the end of normal time still counts", A.pick_points(3, due, due) == 4.5)
 check("4.4 Extra time (find): 1 per item, no cut", A.pick_points(3, due, due + timedelta(seconds=60)) == 3.0)
@@ -273,8 +273,8 @@ check("9.6 Urgent bills come first: a normal bill can't be taken while urgent it
 code, j = jpost(c1, "/pick/claim", {"bill_id": UB, "items": 3})
 with app.app_context():
     uc = PickClaim.query.filter_by(picker_id=ids["p1"], status="active").first()
-    check("9.7 Urgent items get 20 s each (3 items = 60 s)",
-          uc is not None and abs((uc.due_at - uc.started_at).total_seconds() - 60) < 1)
+    check("9.7 Urgent items get 30 s each by default (3 items = 90 s)",
+          uc is not None and abs((uc.due_at - uc.started_at).total_seconds() - 90) < 1)
     UC = uc.id
 jpost(c2, "/pick/claim", {"bill_id": UB, "items": 1})
 with app.app_context():
@@ -561,7 +561,7 @@ with app.app_context():
 jpost(c1, "/pick/claim", {"bill_id": CB, "items": 2})
 row = next(b for b in ca.get("/pick/state.json").get_json()["bills"] if b["id"] == CB)
 t = next(t for t in row["taken"] if t["name"] == "PK P1")
-check("12.10 Under a live bill, each picker shows their own time left", t["left"] is not None and 0 < t["left"] <= 60, str(t))
+check("12.10 Under a live bill, each picker shows their own time left", t["left"] is not None and 0 < t["left"] <= 2 * SEC, str(t))
 with app.app_context():
     e = Employee.query.filter_by(email="pk_adm2@x.com").first()
     if e:
@@ -831,7 +831,107 @@ _pk18 = open(os.path.join(REPO, "templates", "_picking.html")).read()
 check("18.12 ...Resume all and Close all, which asks to tap again", 'id="pkResumeAll"' in _pk18 and 'Tap again: close all' in _pk18)
 check("18.13 Buttons change the screen at once, before the server answers",
       "if (now && lastState) { var c = aged(lastState); now(c); draw(c); }" in _pk18)
-check("18.14 The 10-second refresh waits while an action is on its way", "if (inFlight) return;" in _pk18)
+check("18.14 The 10-second refresh waits while an action is on its way", "if (inFlight || loading) return;" in _pk18)
+
+# ---- 19. Multitask picker (live picking) and cheap refreshes ----------------
+with app.app_context():
+    hlp = mk("pk_hlp@x.com", "checker")
+    HID = hlp.id
+    db.session.add(KPIEntry(emp_id=HID, entry_date=date.today(), sales_bills_open=7, checked=40, total_time=9.0))
+    db.session.commit()
+    B19 = _fresh("PSE3001", 5)
+ch = login("pk_hlp@x.com")
+hd = ch.get("/dashboard").data.decode()
+check("19.1 A checker's multitask Picker box has the live picking, not the old number boxes",
+      'id="mt_picker"' in hd and 'data-helper="1"' in hd and 'name="mt_p_picked"' not in hd and 'name="mt_p_total_bills"' not in hd)
+check("19.2 ...and only one picking screen on the page", hd.count('id="pickApp"') == 1)
+sth = ch.get("/pick/state.json").get_json()
+check("19.3 The multitask picker gets the picker screen", "today" in sth and "mine" not in sth and "pickers" not in sth)
+code, j = jpost(ch, "/pick/claim", {"bill_id": B19, "items": 2})
+check("19.4 A checker can take items as a multitask picker", code == 200, str(j.get("message")))
+sta = ca.get("/pick/state.json").get_json()
+hrow = [r for r in sta["pickers"] if r["id"] == HID]
+check("19.5 The assigner sees them in 'Pickers right now', marked multitask", hrow and hrow[0]["helper"] and not hrow[0]["free"])
+code, j = jpost(ch, "/pick/done", {"claim_id": j["state"]["mine"]["id"]})
+with app.app_context():
+    mt = A.MultitaskEntry.query.filter_by(emp_id=HID, entry_date=date.today(), secondary_type="picker").first()
+    ke = KPIEntry.query.filter_by(emp_id=HID, entry_date=date.today()).first()
+    check("19.6 Their picks are saved as their Picker multitask by themselves", mt is not None and mt.picked == 2 and mt.sales_bills_open == 1,
+          str(mt and (mt.picked, mt.sales_bills_open)))
+    check("19.7 Their checker figures are not touched", ke.sales_bills_open == 7 and ke.checked == 40, str((ke.sales_bills_open, ke.checked)))
+hd2 = ch.get("/dashboard").data.decode()
+check("19.8 After picking, the Picker box opens by itself next time",
+      'id="mt_picker" style="display:block;"' in hd2 and 'value="picker" onchange="toggleMtRole(\'picker\', this.checked)" style="width:auto;margin:0;cursor:pointer;" checked' in hd2)
+sup_html = open(os.path.join(REPO, "templates", "supervisor.html")).read()
+check("19.9 The supervisor's multitask box uses the live picking too", "mt_p_picked" not in sup_html and "_mt_picker.html" in sup_html)
+dash_asg = ca.get("/dashboard").data.decode()
+check("19.10 A Pick Assigner's multitask list has no Picker box (one picking screen only)",
+      dash_asg.count('id="pickApp"') == 1 and 'id="mt_picker"' not in dash_asg)
+# cheap refresh: nothing changed -> tiny answer
+s1 = c2.get("/pick/state.json").get_json()
+s2 = c2.get("/pick/state.json?v=%s" % s1["ver"]).get_json()
+check("19.11 A refresh with nothing new gets a tiny 'same' answer", s2 == {"same": True, "ver": s1["ver"], "build": A.APP_BUILD}, str(s2)[:80])
+jpost(ca, "/pick/bill/%d/pause" % B19)
+s3 = c2.get("/pick/state.json?v=%s" % s1["ver"]).get_json()
+check("19.12 After any change the full screen comes back", "bills" in s3 and s3["ver"] != s1["ver"])
+_pk19 = open(os.path.join(REPO, "templates", "_picking.html")).read()
+check("19.13 A closed multitask Picker box does not ask the server",
+      'if (app.offsetParent === null && !document.body.classList.contains("pk-full")) return;' in _pk19)
+check("19.14 The database driver is made cooperative when available (psycogreen)",
+      "patch_psycopg()" in open(os.path.join(REPO, "app.py")).read() and "psycogreen" in open(os.path.join(REPO, "requirements.txt")).read())
+# ---- 20. Admin sets item time; phones reload on a new version --------------
+with app.app_context():
+    adm = Employee.query.filter_by(is_admin=True).first()
+    ADM_EMAIL = adm.email if adm else None
+r = c1.post("/picking/times", data={"normal": "50", "urgent": "40"})
+with app.app_context():
+    check("20.1 A picker cannot change item time", A.pick_times() == (35, 30) and r.status_code in (302, 403))
+r = ca.post("/picking/times", data={"normal": "50", "urgent": "40"})
+with app.app_context():
+    A._PICK_TIMES["at"] = 0
+    check("20.2 Nor can the Pick Assigner (admin only)", A.pick_times() == (35, 30))
+with app.app_context():
+    A.set_pick_times(50, 40)
+    A._PICK_TIMES["at"] = 0
+    check("20.3 The admin's item time is saved and read back", A.pick_times() == (50, 40))
+    try:
+        A.set_pick_times(2, 40); bad = False
+    except A.PickError:
+        bad = True
+    check("20.4 Silly times are refused (5 to 600 s)", bad)
+    B20 = _fresh("PSE4001", 4)
+    B20u = _fresh("PSE4002U", 4, urgent=True)
+    t20 = datetime.utcnow()
+    c20 = A.claim_items(ids["p4"], B20u, 2, now=t20)
+    check("20.5 New urgent picks use the urgent time (2 x 40 s)", c20.due_at == t20 + timedelta(seconds=80))
+    A.release_claim(c20.id)
+    A.cancel_pick_bill(B20u)
+    c20 = A.claim_items(ids["p4"], B20, 2, now=t20)
+    check("20.6 New normal picks use the normal time (2 x 50 s)", c20.due_at == t20 + timedelta(seconds=100))
+    A.release_claim(c20.id)
+st20 = c2.get("/pick/state.json").get_json()
+check("20.7 The phones' rules show the new times", st20["seconds_per_item"] == 50 and st20["urgent_seconds"] == 40)
+with app.app_context():
+    A.set_pick_times(35, 30)
+pa = cadm.get("/picking").data.decode() if "cadm" in globals() else ""
+check("20.8 The admin's Picking page has the Item time box", 'id="paTimes"' in pa and 'name="normal"' in pa and 'name="urgent"' in pa)
+check("20.9 The state says which version is running", st20.get("build") == A.APP_BUILD)
+_pk20 = open(os.path.join(REPO, "templates", "_picking.html")).read()
+check("20.10 Phones reload by themselves when a new version goes live",
+      "function checkBuild(st)" in _pk20 and 'data-build="{{ app_build }}"' in _pk20 and "location.reload()" in _pk20)
+check("20.11 The add-bill row is compact (one short row, small boxes)",
+      'placeholder="Bill no."' in _pk20 and ".pk-add input{height:36px" in _pk20)
+check("20.12 render.yaml no longer sets 100 s per item", "PICK_SECONDS_PER_ITEM" not in open(os.path.join(REPO, "render.yaml")).read())
+with app.app_context():
+    PickClaim.query.filter(PickClaim.bill_id.in_([B20, B20u])).delete(synchronize_session=False)
+    PickBill.query.filter(PickBill.id.in_([B20, B20u])).delete(synchronize_session=False)
+    db.session.commit()
+
+with app.app_context():
+    PickClaim.query.filter_by(bill_id=B19).delete()
+    PickEvent.query.filter_by(bill_id=B19).delete()
+    PickBill.query.filter_by(id=B19).delete()
+    db.session.commit()
 with app.app_context():
     PickClaim.query.filter(PickClaim.bill_id.in_([B18a, B18b, B18c])).delete(synchronize_session=False)
     PickEvent.query.filter(PickEvent.bill_id.in_([B18a, B18b, B18c])).delete(synchronize_session=False)
@@ -878,7 +978,7 @@ with app.app_context():
     for em in EMAILS:
         e = Employee.query.filter_by(email=em).first()
         if e:
-            for M in (KPIEntry, Notification, PersonalRecord, LevelEvent):
+            for M in (KPIEntry, Notification, PersonalRecord, LevelEvent, A.MultitaskEntry):
                 M.query.filter_by(emp_id=e.id).delete()
             PickClaim.query.filter_by(picker_id=e.id).delete()
             db.session.delete(e)

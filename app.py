@@ -1,5 +1,13 @@
 import eventlet
 eventlet.monkey_patch()
+# psycopg2 is C code and blocks the one eventlet worker on every database
+# call, so one phone's refresh made every other phone's tap wait. psycogreen
+# makes those waits cooperative: the worker serves others meanwhile.
+try:
+    from psycogreen.eventlet import patch_psycopg
+    patch_psycopg()
+except Exception:  # not installed (local SQLite runs): nothing to patch
+    pass
 
 import os
 import logging
@@ -20,6 +28,8 @@ from typing import List, Optional, Dict, Any
 from flask import Flask, render_template, request, redirect, url_for, flash, session, Response, jsonify, g, has_request_context
 from flask_sqlalchemy import SQLAlchemy
 from sqlalchemy import or_
+from sqlalchemy import event as sa_event
+from sqlalchemy.orm import Session as SASession
 from flask_socketio import SocketIO, emit
 from flask_mail import Mail, Message as MailMessage
 from werkzeug.security import generate_password_hash, check_password_hash
@@ -107,8 +117,10 @@ VALID_STAFF_TYPES = ("picker", "checker", "purchaser", "delivery", "biller", "pa
 # pickers grab items from it; several pickers share one bill. Every grab gets
 # a timer of items x PICK_SECONDS_PER_ITEM. Done on time earns +1 per item;
 # late costs -1 per started minute over, never more than PICK_LATE_CAP.
-PICK_SECONDS_PER_ITEM = max(5, int(os.environ.get("PICK_SECONDS_PER_ITEM", "30")))
-PICK_URGENT_SECONDS = 20          # per item on an urgent bill
+# Defaults only: the admin sets the real times in Picking > Item time, saved
+# in the database (app_keys). Normal bill 35 s per item, urgent bill 30 s.
+PICK_SECONDS_PER_ITEM = 35        # per item on a normal bill (default)
+PICK_URGENT_SECONDS = 30          # per item on an urgent bill (default)
 PICK_EXTRA_SECONDS = 125          # after normal time: first half find, second half report only
 PICK_IDLE_SECONDS = 120           # a free picker has this long to take a waiting bill
 PICK_URGENT_POOL = 10.0           # bonus points per urgent bill, shared by items picked
@@ -1991,8 +2003,47 @@ def fy_prefix(d=None):
     return "IP%02d%02d/" % (a, (a + 1) % 100)
 
 
+_PICK_TIMES = {"at": 0.0, "normal": PICK_SECONDS_PER_ITEM, "urgent": PICK_URGENT_SECONDS}
+
+
+def pick_times():
+    """(normal, urgent) seconds per item, as the admin set them. Read from the
+    database at most every 30 s; a change by the admin applies at once."""
+    if time.time() - _PICK_TIMES["at"] > 30:
+        try:
+            for k in ("normal", "urgent"):
+                r = db.session.get(AppKey, "pick_sec_" + k)
+                _PICK_TIMES[k] = int(r.value) if r and str(r.value).isdigit() else \
+                    (PICK_SECONDS_PER_ITEM if k == "normal" else PICK_URGENT_SECONDS)
+            _PICK_TIMES["at"] = time.time()
+        except Exception as exc:
+            logger.warning("pick_times: %s", exc)
+    return _PICK_TIMES["normal"], _PICK_TIMES["urgent"]
+
+
+def set_pick_times(normal, urgent):
+    """Admin only (checked by the route). 5 to 600 seconds per item."""
+    try:
+        normal, urgent = int(normal), int(urgent)
+    except (TypeError, ValueError):
+        raise PickError("Type whole seconds per item.")
+    if not (5 <= normal <= 600 and 5 <= urgent <= 600):
+        raise PickError("Time per item must be between 5 and 600 seconds.")
+    for k, v in (("normal", normal), ("urgent", urgent)):
+        r = db.session.get(AppKey, "pick_sec_" + k)
+        if r:
+            r.value = str(v)
+        else:
+            db.session.add(AppKey(name="pick_sec_" + k, value=str(v)))
+    db.session.commit()
+    _PICK_TIMES.update(normal=normal, urgent=urgent, at=time.time())
+    PICK_VER[0] += 1          # phones pick up the new rules text
+    return normal, urgent
+
+
 def pick_seconds(bill):
-    return PICK_URGENT_SECONDS if bill is not None and bill.is_urgent else PICK_SECONDS_PER_ITEM
+    normal, urgent = pick_times()
+    return urgent if bill is not None and bill.is_urgent else normal
 
 
 def pick_windows(c):
@@ -2140,6 +2191,42 @@ def free_pickers():
 
 def _assigners():
     return Employee.query.filter(Employee.staff_type == "pick_assigner").all()
+
+
+PICK_VER = [int(time.time() * 1000)]   # goes up whenever picking data changes
+# This running copy of the app. A new deploy restarts it with a new value;
+# open phones see the change and reload, so nobody keeps an old screen.
+APP_BUILD = str(int(time.time()))
+_SEEN = {}                              # picker id -> last time last_seen_at was written
+
+
+def mt_picking_today(emp_id):
+    """True if this staff member has picked (or is picking) bills today, so the
+    multitask Picker box opens by itself."""
+    if not emp_id:
+        return False
+    try:
+        return bool(PickClaim.query.filter(PickClaim.picker_id == emp_id,
+                                           or_(PickClaim.status == "active", PickClaim.work_date == date.today())).first())
+    except Exception:
+        return False
+
+
+app.jinja_env.globals.update(mt_picking_today=mt_picking_today, pick_today=lambda: date.today(),
+                             pick_times=lambda: pick_times(), app_build=APP_BUILD)
+
+
+def _pick_models():
+    return (PickBill, PickClaim, PickMissing, PickEvent, PickDay)
+
+
+@sa_event.listens_for(SASession, "after_flush")
+def _pick_changed(sess, _ctx):
+    kinds = _pick_models()
+    for o in list(sess.new) + list(sess.dirty) + list(sess.deleted):
+        if isinstance(o, kinds):
+            PICK_VER[0] += 1
+            return
 
 
 PICK_PROBLEM_KINDS = ("late", "idle", "missing")   # paused / resumed are bill history, not problems
@@ -2676,6 +2763,9 @@ def pick_report(day_from, day_to=None, picker_id=None):
         bill_q = bill_q.filter(PickBill.id.in_(db.session.query(PickClaim.bill_id).filter(PickClaim.picker_id == picker_id)))
     bill_rows = bill_q.order_by(PickBill.created_at).all()
     done_claims = _done_claims(dates, picker_id)
+    helper_ids = {c.picker_id for c in done_claims} - {e.id for e in pickers}
+    if helper_ids:   # other staff who picked as a multitask role
+        pickers = sorted(pickers + Employee.query.filter(Employee.id.in_(helper_ids)).all(), key=lambda e: e.name or "")
     bill_map = {b.id: b for b in bill_rows}
     extra = {c.bill_id for c in done_claims} - set(bill_map)
     if extra:
@@ -2795,6 +2885,9 @@ def sync_picker_day(emp_id, d):
     """Keep one KPIEntry per picker per day in step with their finished grabs,
     so leaderboards, reports, history and level-ups keep working unchanged."""
     st = picker_pick_stats(emp_id, [d])
+    emp0 = db.session.get(Employee, emp_id)
+    if emp0 is not None and emp0.staff_type != "picker":
+        return sync_multitask_picking(emp_id, d, st)
     e = KPIEntry.query.filter_by(emp_id=emp_id, entry_date=d).first()
     if not e:
         if not st["grabs"]:
@@ -2814,6 +2907,26 @@ def sync_picker_day(emp_id, d):
     except Exception as exc:
         logger.error("sync_picker_day levels: %s", exc)
     return e
+
+
+def sync_multitask_picking(emp_id, d, st=None):
+    """Other staff who pick bills: their finished grabs become their Picker
+    multitask entry for the day (extra-role points), with no numbers typed.
+    Their main role's own figures are never touched."""
+    st = st or picker_pick_stats(emp_id, [d])
+    mt = MultitaskEntry.query.filter_by(emp_id=emp_id, entry_date=d, secondary_type="picker").first()
+    if not st["grabs"]:
+        return mt
+    if not mt:
+        mt = MultitaskEntry(emp_id=emp_id, entry_date=d, secondary_type="picker")
+        db.session.add(mt)
+    mt.picked = st["items"]
+    mt.missed = st["missing"]
+    mt.sales_bills_open = st["bills"]
+    mt.total_bills_received = st["bills"]
+    db.session.commit()
+    invalidate_request_memos()
+    return mt
 
 
 def sync_picker_day_later(emp_id, d):
@@ -2948,12 +3061,16 @@ def picking_state(emp, staff_type, alerts=True):
              .order_by(PickBill.is_urgent.desc(), PickBill.created_at.asc()).limit(150).all())
     sched = PickBill.query.filter_by(status="scheduled").order_by(PickBill.scheduled_for).all()
     cb, mb = _load_for_bills([b.id for b in bills] + [b.id for b in sched])
-    names = {e.id: e.name for e in Employee.query.all()}
+    emps = Employee.query.all()
+    names = {e.id: e.name for e in emps}
     active_now = {c.picker_id: c for c in PickClaim.query.filter_by(status="active").all()}
     bill_by_id = {b.id: b for b in bills}
     today_claims = _done_claims([today])
     stats = pick_stats_all([today], today_claims)
-    pickers = _pickers()
+    # pickers, plus other staff picking today as a multitask role
+    working = set(active_now) | {c.picker_id for c in today_claims}
+    pickers = sorted([e for e in emps if not e.is_admin and (e.staff_type == "picker" or e.id in working)],
+                     key=lambda e: e.name or "")
 
     def bill_row(b):
         pr = pick_bill_progress(b, cb.get(b.id, []), mb.get(b.id, []))
@@ -2980,7 +3097,7 @@ def picking_state(emp, staff_type, alerts=True):
            "scheduled": [{"id": b.id, "bill_no": b.bill_no, "items": b.items, "urgent": bool(b.is_urgent),
                           "left": pick_bill_progress(b, cb.get(b.id, []), mb.get(b.id, []))["left"], "when": ist12(b.scheduled_for),
                           "when_day": (b.scheduled_for + IST).strftime("%d %b") if b.scheduled_for else ""} for b in sched],
-           "seconds_per_item": PICK_SECONDS_PER_ITEM, "urgent_seconds": PICK_URGENT_SECONDS,
+           "seconds_per_item": pick_times()[0], "urgent_seconds": pick_times()[1],
            "extra_seconds": PICK_EXTRA_SECONDS, "late_cap": PICK_LATE_CAP, "prefix": fy_prefix(),
            "bills": [bill_row(b) for b in bills]}
     if staff_type == "picker":
@@ -3008,7 +3125,7 @@ def picking_state(emp, staff_type, alerts=True):
         rows = []
         for e in pickers:
             c = active_now.get(e.id)
-            r = {"id": e.id, "name": e.name, "free": c is None}
+            r = {"id": e.id, "name": e.name, "free": c is None, "helper": e.staff_type != "picker"}
             if c:
                 b = bill_by_id.get(c.bill_id) or db.session.get(PickBill, c.bill_id)
                 tn = clock_now(b, now)
@@ -5094,7 +5211,6 @@ def _save_multitask_entry(emp_id, entry_date, primary_role):
     # checkbox (or the JS toggle misfires). Auto-include any role that has at least
     # one number entered, so nothing the user typed is ever silently dropped.
     role_fields = {
-        "picker":    ("mt_p_total_bills", "mt_p_sbo", "mt_p_picked", "mt_p_missed", "mt_p_cso", "mt_p_packing"),
         "checker":   ("mt_c_bills_received", "mt_c_pending", "mt_c_sbo", "mt_c_cso", "mt_c_checked", "mt_c_errors"),
         "purchaser": ("mt_pu_sbo", "mt_pu_checked", "mt_pu_picked", "mt_pu_items", "mt_pu_cso", "mt_pu_packing"),
         "billing":   ("mt_b_bills", "mt_b_items", "mt_b_quantity"),
@@ -5132,10 +5248,14 @@ def _save_multitask_entry(emp_id, entry_date, primary_role):
                     breakage_received=0, expire_received=0, breakage_expire_processed=0,
                     item_receive_qty=0, expire_return_qty=0)
         if role == "picker":
-            vals.update(total_bills_received=mi("mt_p_total_bills"),
-                        sales_bills_open=mi("mt_p_sbo"), picked=mi("mt_p_picked"),
-                        missed=mi("mt_p_missed"), cs_sales_open=mi("mt_p_cso"),
-                        packing_done=mi("mt_p_packing"))
+            # Picking as a second role uses the live bill picking: the figures
+            # are the day's finished grabs, never typed in.
+            pst = picker_pick_stats(emp_id, [entry_date])
+            if not pst["grabs"]:
+                flash("Picker: no bills picked yet today. Pick bills in the Picker box; they save themselves.", "info")
+                continue
+            vals.update(total_bills_received=pst["bills"], sales_bills_open=pst["bills"],
+                        picked=pst["items"], missed=pst["missing"])
         elif role == "checker":
             vals.update(bills_received=mi("mt_c_bills_received"),
                         sales_bills_open=mi("mt_c_sbo"), cs_sales_open=mi("mt_c_cso"),
@@ -9131,16 +9251,28 @@ def _pick_role():
     return session.get("staff_type", ""), bool(session.get("is_admin"))
 
 
+def _pick_view():
+    """Which picking screen the caller gets: 'assigner' (Pick Assigner, admin),
+    'picker' (pickers, and any other staff picking as a multitask role), or None."""
+    role, is_admin = _pick_role()
+    if is_admin or role == "pick_assigner":
+        return "assigner"
+    return "picker" if role else None
+
+
 def _session_pick_state():
     """The caller's live screen data, so an action's reply can redraw the
     screen at once instead of the phone asking again (one trip, not two)."""
-    role, is_admin = _pick_role()
-    if role not in ("picker", "pick_assigner") and not is_admin:
+    view = _pick_view()
+    if not view:
         return None
     try:
         db.session.rollback()   # drop anything a failed action left behind
+        ver = PICK_VER[0]
         emp = db.session.get(Employee, session.get("user_id"))
-        return picking_state(emp, "picker" if (role == "picker" and not is_admin) else "pick_assigner", alerts=False)
+        st = picking_state(emp, "picker" if view == "picker" else "pick_assigner", alerts=False)
+        st["ver"], st["build"] = ver, APP_BUILD
+        return st
     except Exception as exc:
         db.session.rollback()
         logger.warning("pick state for reply: %s", exc)
@@ -9163,13 +9295,26 @@ def _pick_reply(ok, msg, code=200):
 @login_required
 def pick_state():
     role, is_admin = _pick_role()
-    if role not in ("picker", "pick_assigner") and not is_admin:
+    view = _pick_view()
+    if not view:
         return jsonify({"ok": False, "message": "Not available for your role."}), 403
+    ver = PICK_VER[0]
+    if role == "picker" and not is_admin:
+        last = _SEEN.get(session.get("user_id"))
+        if not last or time.time() - last > 60:
+            _SEEN[session.get("user_id")] = time.time()
+            emp = db.session.get(Employee, session.get("user_id"))
+            if emp:
+                emp.last_seen_at = datetime.utcnow()
+                db.session.commit()
+    # Nothing changed since the phone's last copy: say so, with no database
+    # work. Timers keep running on the phone.
+    if request.args.get("v") == str(ver):
+        return jsonify({"same": True, "ver": ver, "build": APP_BUILD})
     emp = db.session.get(Employee, session.get("user_id"))
-    if role == "picker" and emp and (not emp.last_seen_at or datetime.utcnow() - emp.last_seen_at > timedelta(seconds=60)):
-        emp.last_seen_at = datetime.utcnow()
-        db.session.commit()
-    return jsonify(picking_state(emp, "picker" if (role == "picker" and not is_admin) else "pick_assigner"))
+    st = picking_state(emp, "picker" if view == "picker" else "pick_assigner")
+    st["ver"], st["build"] = ver, APP_BUILD
+    return jsonify(st)
 
 
 @app.route("/pick/bill", methods=["POST"])
@@ -9190,7 +9335,7 @@ def pick_add_bill():
 @login_required
 def pick_claim():
     role, _ = _pick_role()
-    if role != "picker":
+    if _pick_view() != "picker":
         return _pick_reply(False, "Only pickers can take items.", 403)
     data = request.get_json(silent=True) or request.form
     try:
@@ -9198,7 +9343,7 @@ def pick_claim():
     except (PickError, ValueError) as exc:
         return _pick_reply(False, str(exc) if isinstance(exc, PickError) else "Choose a bill.", 400)
     secs = int(round((c.due_at - c.started_at).total_seconds())) if c.due_at and c.started_at \
-        else int(c.items * PICK_SECONDS_PER_ITEM)
+        else int(c.items * pick_times()[0])
     return _pick_reply(True, "%d item%s taken. You have %d:%02d to pick %s." % (
         c.items, "" if c.items == 1 else "s", secs // 60, secs % 60, "it" if c.items == 1 else "them"))
 
@@ -9207,7 +9352,7 @@ def pick_claim():
 @login_required
 def pick_done():
     role, _ = _pick_role()
-    if role != "picker":
+    if _pick_view() != "picker":
         return _pick_reply(False, "Only pickers can finish items.", 403)
     data = request.get_json(silent=True) or request.form
     missing = data.get("missing") or []
@@ -9315,6 +9460,19 @@ def _report_name(r):
     return "picking-%s%s" % (span, who)
 
 
+@app.route("/picking/times", methods=["POST"])
+@admin_required
+def picking_times():
+    """Admin sets seconds per item for normal and urgent bills. New grabs use
+    it at once; grabs already running keep the time they started with."""
+    try:
+        n, u = set_pick_times(request.form.get("normal"), request.form.get("urgent"))
+        flash("Item time saved: normal bill %d s per item, urgent bill %d s per item." % (n, u), "success")
+    except PickError as exc:
+        flash(str(exc), "warning")
+    return redirect(url_for("picking_admin", tab="live"))
+
+
 @app.route("/picking")
 @admin_required
 def picking_admin():
@@ -9384,8 +9542,7 @@ def picking_report_pdf():
 @app.route("/pick/bill/<int:bill_id>.json")
 @login_required
 def pick_bill_detail(bill_id):
-    role, is_admin = _pick_role()
-    if role not in ("picker", "pick_assigner") and not is_admin:
+    if not _pick_view():
         return jsonify({"ok": False, "message": "Not available for your role."}), 403
     try:
         return jsonify(bill_timeline(bill_id))

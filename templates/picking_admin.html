@@ -60,6 +60,12 @@ details.pa-pk summary::after{content:"Show bills";font-weight:600;font-size:13px
 details.pa-pk[open] summary::after{content:"Hide"}
 .pa-empty{color:var(--ink-3);padding:6px 0}
 @media(max-width:760px){.pa-charts{grid-template-columns:1fr}.pa-podium{grid-template-columns:1fr}.pa-spacer{display:none}}
+.pa-times{display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px;padding:10px 12px;margin:0 0 14px;border:1px solid var(--line);border-radius:12px;background:var(--surface);font-size:14px}
+.pa-times input{width:64px;padding:6px 8px;border:1.5px solid var(--line);border-radius:8px;font-size:15px;text-align:center}
+.pa-save{border:0;border-radius:10px;padding:8px 16px;font-weight:700;font-size:14px;background:var(--brand);color:#fff;cursor:pointer;min-height:38px}
+.pa-times .pa-note{font-size:12px;color:var(--ink-3)}
+.pa-flash{padding:9px 12px;border-radius:10px;margin:0 0 10px;font-size:14px;background:#e8f4ee;color:#0f4a32}
+.pa-flash.warning,.pa-flash.danger{background:var(--warn-tint);color:var(--warn-ink)}
 </style>
 </head>
 <body>
@@ -81,7 +87,18 @@ details.pa-pk[open] summary::after{content:"Hide"}
     <a href="{{ url_for('picking_admin', tab='board', **q) }}" {% if tab == 'board' %}aria-current="page"{% endif %}>Leaderboard</a>
   </nav>
 
+  {% with msgs = get_flashed_messages(with_categories=true) %}{% for cat, m in msgs %}
+    <div class="pa-flash {{ cat }}" role="status">{{ m }}</div>{% endfor %}{% endwith %}
   {% if tab == 'live' %}
+    {% set _t = pick_times() %}
+    <form class="pa-times" id="paTimes" method="post" action="{{ url_for('picking_times') }}">
+      <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+      <b>Item time</b>
+      <label>Normal bill <input type="number" name="normal" min="5" max="600" value="{{ _t[0] }}" inputmode="numeric"> s per item</label>
+      <label>Urgent bill <input type="number" name="urgent" min="5" max="600" value="{{ _t[1] }}" inputmode="numeric"> s per item</label>
+      <button type="submit" class="pa-save">Save</button>
+      <span class="pa-note">Only the admin can change this. New picks use it at once.</span>
+    </form>
     {% include '_picking.html' %}
   {% else %}
   <form class="pa-filter" method="get" action="{{ url_for('picking_admin') }}">
