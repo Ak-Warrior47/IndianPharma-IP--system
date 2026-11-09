@@ -239,9 +239,6 @@ def build_staff_day_pdf(r):
             if p["pick"]["grabs"]:
                 bits.append("%d bill%s, %d items, %s pts" % (p["pick"]["bills"], "" if p["pick"]["bills"] == 1 else "s",
                                                           p["pick"]["items"], p["pick"]["points"]))
-            if p["bills_added"]:
-                bits.append("%d bills added" % p["bills_added"])
-            bits += ["%s %s" % (k, v) for k, v in p["entry"]]
             return "; ".join(bits) or "—"
         story.append(_table(["Name", "Role", "Signed in", "Signed out", "Last seen", "Extra role", "Work"],
                             [[p["name"], p["role"], (p["first_in"] or "—") + ((" (%d times, last %s)" % (p["logins"], p["last_in"])) if p["logins"] > 1 else ""),

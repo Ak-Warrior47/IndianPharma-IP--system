@@ -139,8 +139,8 @@ with app.app_context():
     check("2.15 Not found shows the item name", og[0]["missing"] == 1 and "Crocin" in og[0]["missing_names"], str(og[0]))
     check("2.16 Urgent bill is marked", og[0]["urgent"] is True)
     check("2.17 A running grab shows 'Picking now'", og[1]["result"] == "Picking now" and og[1]["points"] is None)
-    check("2.18 Assigner: bills added counted", by[ASG]["bills_added"] == 2)
-    check("2.19 Checker: typed figures shown", ("Bills checked", 45) in by[CHK]["entry"], str(by[CHK]["entry"]))
+    check("2.18 No 'bills added' count for the assigner", "bills_added" not in by[ASG])
+    check("2.19 No typed figures for other staff", all("entry" not in p for p in r["people"]))
     check("2.20 Sign-in time shown", by[RIA]["first_in"] != "" and by[CHK]["first_in"] == "")
     check("2.21 Sign-out time shown", by[IDLE]["last_out"] != "")
     check("2.22 Day totals", r["totals"]["items"] == 7 and r["totals"]["late"] == 1 and r["totals"]["missing"] == 1, str(r["totals"]))
@@ -179,6 +179,10 @@ check("4.3 Shows every time column", all(h in html for h in ("Took at", "Normal 
 check("4.4 Phone layout: each cell carries its label", 'data-l="Took at"' in html and "@media (max-width:760px)" in html)
 check("4.5 Download PDF link", "/admin/staff-today.pdf?date=" in html)
 check("4.6 Per-person PDF link", "emp=%d" % RIA in html)
+check("4.6b No typed figures or 'bills added' on the page",
+      "bills added" not in html and "Bills checked" not in html and "Day entry" not in html)
+check("4.6c Only people who picked get a detail card", 'id="p%d"' % RIA in html and 'id="p%d"' % CHK not in html
+      and 'id="p%d"' % ASG not in html)
 one = c_adm.get("/admin/staff-today?emp=%d" % OM).get_data(as_text=True)
 check("4.7 Person filter", 'id="p%d"' % OM in one and 'id="p%d"' % RIA not in one)
 fut = c_adm.get("/admin/staff-today?date=2999-01-01").get_data(as_text=True)

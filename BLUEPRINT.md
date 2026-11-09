@@ -150,7 +150,8 @@ month (calendar month). Targets only go up.
   picked, not found (with item names), took at, normal time ends, done at,
   time given, time taken, result (normal / extra / report / late by m:ss /
   picking now) and points, plus first pick, last Done, picking time, free
-  time, items per hour and the late / waiting log. Any date, one person or
+  time, items per hour and the late / waiting log. Other staff show only
+  their sign-in times (no typed figures, no bill counts). Any date, one person or
   everyone; **Download PDF** for the whole day or one person.
   Sign-ins are recorded from 9 Nov 2026 (admins are not tracked).
 - **Picking** (/picking): Live floor (with Item time), Reports for any dates

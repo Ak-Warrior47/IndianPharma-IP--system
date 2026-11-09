@@ -109,28 +109,25 @@
   <section class="st-box"><h2>Who came in ({{ rep.people|length }})</h2>
     {% if rep.people %}
     <div class="st-tw"><table class="st-t" id="stWho">
-      <thead><tr><th>Name</th><th>Role</th><th>Signed in</th><th>Signed out</th><th>Last seen</th><th>Work</th></tr></thead>
+      <thead><tr><th>Name</th><th>Role</th><th>Signed in</th><th>Signed out</th><th>Last seen</th><th>Picking</th></tr></thead>
       <tbody>
       {% for p in rep.people %}
         <tr><td><a href="#p{{ p.id }}"><strong>{{ p.name }}</strong></a></td><td>{{ p.role }}{% if p.multitask %}<br><small>+ {{ p.multitask|join(', ') }}</small>{% endif %}</td>
           <td>{{ p.first_in or '—' }}{% if p.logins > 1 %}<br><small>{{ p.logins }} times, last {{ p.last_in }}</small>{% endif %}</td>
           <td>{{ p.last_out or '—' }}</td><td>{{ p.last_seen or '—' }}</td>
           <td>{% if p.pick.grabs %}{{ p.pick.bills }} bills · {{ p.pick['items'] }} items · {{ p.pick.points }} pts{% endif %}
-              {% if p.bills_added %}{{ p.bills_added }} bills added{% endif %}
-              {% for k, v in p.entry %}{{ k }} {{ v }}{% if not loop.last %} · {% endif %}{% endfor %}
-              {% if not p.pick.grabs and not p.bills_added and not p.entry %}<span class="st-empty">nothing entered yet</span>{% endif %}</td></tr>
+              {% if not p.pick.grabs %}—{% endif %}</td></tr>
       {% endfor %}
       </tbody></table></div>
     {% else %}<div class="st-empty">Nobody signed in or worked on this day.</div>{% endif %}
   </section>
 
-  {% for p in rep.people %}
+  {% for p in rep.people if p.picks %}
   <article class="st-p" id="p{{ p.id }}">
     <header><h3>{{ p.name }} <small>· {{ p.role }}{% if p.multitask %} + {{ p.multitask|join(', ') }}{% endif %}</small></h3>
       <small>Signed in {{ p.first_in or '—' }}{% if p.last_out %} · signed out {{ p.last_out }}{% endif %}{% if p.last_seen %} · last seen {{ p.last_seen }}{% endif %}</small>
       <a href="{{ url_for('admin_staff_today_pdf', date=rep.day.isoformat(), emp=p.id) }}">PDF</a></header>
     <div class="st-in">
-    {% if p.picks %}
       {% set k = p.pick %}
       <div class="st-kv">
         <div><span>Bills</span><b>{{ k.bills }}</b></div>
@@ -171,13 +168,6 @@
           <tbody>{% for e in p.events %}<tr class="{{ 'late' if e.kind == 'late' else '' }}"><td class="st-bill" data-l="What">{{ e.label }} · {{ e.bill }}</td><td data-l="Time">{{ e.at }}</td><td class="n" data-l="Minutes">{{ e.minutes if e.minutes is not none else '' }}</td><td data-l="Detail">{{ e.detail }}</td></tr>{% endfor %}</tbody>
         </table></div>
       {% endif %}
-    {% endif %}
-    {% if p.bills_added %}<p style="margin:6px 0">Bills added for picking: <b>{{ p.bills_added }}</b></p>{% endif %}
-    {% if p.entry %}<div class="st-h4">Day entry</div>
-      <div class="st-kv">{% for k, v in p.entry %}<div><span>{{ k }}</span><b>{{ v }}</b></div>{% endfor %}</div>
-      {% if p.entry_note %}<p style="margin:4px 0;color:var(--ink-2)">Note: {{ p.entry_note }}</p>{% endif %}
-    {% endif %}
-    {% if not p.picks and not p.bills_added and not p.entry %}<div class="st-empty">Signed in, nothing entered yet.</div>{% endif %}
     </div>
   </article>
   {% endfor %}

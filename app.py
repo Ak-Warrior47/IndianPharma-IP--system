@@ -3077,7 +3077,6 @@ def staff_day_report(day, emp_id=None):
         mine_ev = [{"label": {"late": "Late", "idle": "Left waiting", "missing": "Not found"}.get(x.kind, x.kind),
                     "kind": x.kind, "at": ist_sec(x.at), "bill": bills[x.bill_id].bill_no if x.bill_id in bills else "",
                     "minutes": x.minutes, "detail": x.detail or ""} for x in events if x.picker_id == pid]
-        ent = entries.get(pid)
         people.append({
             "id": pid, "name": e.name, "role": ROLE_DISPLAY_NAMES.get(e.staff_type, e.staff_type or ""),
             "staff_type": e.staff_type,
@@ -3094,11 +3093,7 @@ def staff_day_report(day, emp_id=None):
                      "picking_time": _mmss(picking_secs), "free_time": _mmss(max(span - picking_secs, 0)) if span else "",
                      "rate": round(tot["items"] / (picking_secs / 3600.0), 1) if picking_secs >= 1 else None},
             "events": mine_ev,
-            # a picker's day entry is only a copy of their picks (sync_picker_day)
-            "entry": _entry_figs(ent, e.staff_type) if ent and not (e.staff_type == "picker" and rows) else [],
-            "entry_note": (ent.shift_note or "") if ent else "",
             "multitask": [multitask_role_label(m.secondary_type) for m in mts.get(pid, [])],
-            "bills_added": sum(1 for b in added if b.created_by == pid),
         })
     order = {"picker": 0, "pick_assigner": 1}
     people.sort(key=lambda p: (order.get(p["staff_type"], 2), p["first_at"] or end, p["name"] or ""))
