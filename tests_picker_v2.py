@@ -944,13 +944,15 @@ pr20 = cadm.get("/staff/%d" % ids["p1"]).data.decode()
 check("20.14 The profile shows the staff name", "PK P1" in pr20)
 _pk21 = open(os.path.join(REPO, "templates", "_picking.html")).read()
 check("21.1 When time is over the whole screen turns red (flashing when late), not just the timer",
-      'body.pk-full[data-pk-tone="pk-late"] #pickApp{background:#b91c1c' in _pk21 and 'body.pk-full[data-pk-tone="pk-red"] #pickApp{background:#dc2626}' in _pk21
+      'body.pk-full[data-pk-tone="pk-late"] #pickApp{background:#fecaca' in _pk21 and 'body.pk-full[data-pk-tone="pk-red"] #pickApp{background:#fee2e2}' in _pk21
       and 'late: "pk-late"' in _pk21)
-check("21.5 Normal time makes the whole screen green, extra time orange, paused grey",
-      'body.pk-full[data-pk-tone="pk-green"] #pickApp{background:#15803d}' in _pk21 and
+check("21.5 Normal time makes the whole screen light green, extra time orange, paused grey",
+      'body.pk-full[data-pk-tone="pk-green"] #pickApp{background:#d1fae0}' in _pk21 and
       'body.pk-full[data-pk-tone="pk-orange"] #pickApp{background:#ea580c}' in _pk21 and
       '{normal: "pk-green", find: "pk-orange", report: "pk-red", late: "pk-late"}' in _pk21 and 'mine.paused ? "pk-grey"' in _pk21)
 _cv = open(os.path.join(REPO, "static", "js", "chart-values.js")).read()
+check("21.5b Light green and light red screens use dark text so it reads well",
+      "--tone-ink:#14532d" in _pk21 and "--tone-ink:#7f1d1d" in _pk21)
 check("21.6 Charts show exact numbers: on top of each bar, and 'Name — number' beside each pie",
       "afterDatasetsDraw" in _cv and 'it.text + " — " + fmt(v)' in _cv and 'el.y - 3' in _cv)
 check("21.7 Every page with charts loads the number add-on",

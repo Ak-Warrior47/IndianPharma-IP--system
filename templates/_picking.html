@@ -117,16 +117,15 @@ body.pk-full{overflow:hidden}
 .pk-helper .pk-who{display:none}
 body.pk-full .pk-helper .pk-who{display:flex}
 body.pk-full .pk-who{justify-content:center;max-width:620px;width:100%;margin:0 auto 4px}
-/* Time over: the whole screen goes red, not just the timer box. */
 /* While picking, the whole screen shows the phase:
    green = normal time, orange = extra time to find, red = time over,
    flashing red = late, grey = paused by the assigner. */
-body.pk-full[data-pk-tone="pk-green"] #pickApp{background:#15803d}
+body.pk-full[data-pk-tone="pk-green"] #pickApp{background:#d1fae0}
 body.pk-full[data-pk-tone="pk-orange"] #pickApp{background:#ea580c}
-body.pk-full[data-pk-tone="pk-red"] #pickApp{background:#dc2626}
-body.pk-full[data-pk-tone="pk-late"] #pickApp{background:#b91c1c;animation:pk-alarm 1s steps(2,end) infinite}
+body.pk-full[data-pk-tone="pk-red"] #pickApp{background:#fee2e2}
+body.pk-full[data-pk-tone="pk-late"] #pickApp{background:#fecaca;animation:pk-alarm 1s steps(2,end) infinite}
 body.pk-full[data-pk-tone="pk-grey"] #pickApp{background:#475569}
-@keyframes pk-alarm{0%{background:#b91c1c}100%{background:#ef4444}}
+@keyframes pk-alarm{0%{background:#fee2e2}100%{background:#fca5a5}}
 body.pk-full.pk-toned #pkMine{background:transparent;border-color:rgba(255,255,255,.55);box-shadow:none;color:#fff}
 body.pk-full.pk-toned #pkMine .pk-phase,body.pk-full.pk-toned #pkMine .pk-billno,body.pk-full.pk-toned #pkMine .pk-items,body.pk-full.pk-toned #pkMine .pk-clock{color:#fff}
 body.pk-full.pk-toned #pkMine #pkLateText{color:#fff!important;font-weight:700}
@@ -139,6 +138,19 @@ body.pk-full.pk-toned .pk-rep{color:var(--ink)}
 body.pk-full.pk-toned .pk-who b,body.pk-full.pk-toned .pk-whoday{color:#fff}
 body.pk-full.pk-toned .pk-whorole{background:rgba(255,255,255,.2);color:#fff}
 body.pk-full.pk-toned .pk-msg.on{background:#fff}
+/* Light green and light red screens: dark text so it reads well. */
+body.pk-full[data-pk-tone="pk-green"] #pkMine,body.pk-full[data-pk-tone="pk-green"] #pkMine .pk-phase,body.pk-full[data-pk-tone="pk-green"] #pkMine .pk-billno,body.pk-full[data-pk-tone="pk-green"] #pkMine .pk-items,body.pk-full[data-pk-tone="pk-green"] #pkMine .pk-clock,body.pk-full[data-pk-tone="pk-green"] #pkMine #pkLateText,body.pk-full[data-pk-tone="pk-green"] #pkMine .pk-who b,body.pk-full[data-pk-tone="pk-red"] #pkMine,body.pk-full[data-pk-tone="pk-red"] #pkMine .pk-phase,body.pk-full[data-pk-tone="pk-red"] #pkMine .pk-billno,body.pk-full[data-pk-tone="pk-red"] #pkMine .pk-items,body.pk-full[data-pk-tone="pk-red"] #pkMine .pk-clock,body.pk-full[data-pk-tone="pk-red"] #pkMine #pkLateText,body.pk-full[data-pk-tone="pk-red"] #pkMine .pk-who b,body.pk-full[data-pk-tone="pk-late"] #pkMine,body.pk-full[data-pk-tone="pk-late"] #pkMine .pk-phase,body.pk-full[data-pk-tone="pk-late"] #pkMine .pk-billno,body.pk-full[data-pk-tone="pk-late"] #pkMine .pk-items,body.pk-full[data-pk-tone="pk-late"] #pkMine .pk-clock,body.pk-full[data-pk-tone="pk-late"] #pkMine #pkLateText,body.pk-full[data-pk-tone="pk-late"] #pkMine .pk-who b{color:var(--tone-ink)!important}
+body.pk-full[data-pk-tone="pk-green"]{--tone-ink:#14532d;--tone-line:#86efac}
+body.pk-full[data-pk-tone="pk-red"],body.pk-full[data-pk-tone="pk-late"]{--tone-ink:#7f1d1d;--tone-line:#fca5a5}
+body.pk-full[data-pk-tone="pk-green"] .pk-who b,body.pk-full[data-pk-tone="pk-green"] .pk-whoday,body.pk-full[data-pk-tone="pk-red"] .pk-who b,body.pk-full[data-pk-tone="pk-red"] .pk-whoday,body.pk-full[data-pk-tone="pk-late"] .pk-who b,body.pk-full[data-pk-tone="pk-late"] .pk-whoday{color:var(--tone-ink)}
+body.pk-full[data-pk-tone="pk-green"] .pk-whorole,body.pk-full[data-pk-tone="pk-red"] .pk-whorole,body.pk-full[data-pk-tone="pk-late"] .pk-whorole{background:#fff;color:var(--tone-ink)}
+body.pk-full[data-pk-tone="pk-green"] #pkMine,body.pk-full[data-pk-tone="pk-red"] #pkMine,body.pk-full[data-pk-tone="pk-late"] #pkMine{border-color:var(--tone-line)}
+body.pk-full[data-pk-tone="pk-green"] #pkMine .pk-bar,body.pk-full[data-pk-tone="pk-red"] #pkMine .pk-bar,body.pk-full[data-pk-tone="pk-late"] #pkMine .pk-bar{background:rgba(0,0,0,.08)}
+body.pk-full[data-pk-tone="pk-green"] #pkMine .pk-bar i{background:#16a34a}
+body.pk-full[data-pk-tone="pk-red"] #pkMine .pk-bar i,body.pk-full[data-pk-tone="pk-late"] #pkMine .pk-bar i{background:#dc2626}
+body.pk-full.pk-toned[data-pk-tone="pk-green"] #pkDone{background:var(--ok);color:#fff}
+body.pk-full[data-pk-tone="pk-green"] #pkRepBtn,body.pk-full[data-pk-tone="pk-red"] #pkRepBtn,body.pk-full[data-pk-tone="pk-late"] #pkRepBtn{border-color:var(--tone-line)}
+body.pk-full[data-pk-tone="pk-red"] #pkMine .pk-u,body.pk-full[data-pk-tone="pk-late"] #pkMine .pk-u{background:#b91c1c;color:#fff}
 @media (prefers-reduced-motion:reduce){body.pk-full[data-pk-tone="pk-late"] #pickApp{animation:none}}
 body.pk-full .card{transform:none!important;animation:none!important}
 .pk-helper{box-shadow:none;border:1px solid var(--line);margin:8px 0 0}
