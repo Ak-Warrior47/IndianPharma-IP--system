@@ -942,6 +942,15 @@ with app.app_context():
 check("20.13 A staff profile loads in a fixed handful of queries (not one per picker)", sb_n[0] <= 40, "%d queries" % sb_n[0])
 pr20 = cadm.get("/staff/%d" % ids["p1"]).data.decode()
 check("20.14 The profile shows the staff name", "PK P1" in pr20)
+_pk21 = open(os.path.join(REPO, "templates", "_picking.html")).read()
+check("21.1 When time is over the whole screen turns red (flashing when late), not just the timer",
+      'body.pk-full[data-pk-tone="pk-late"] #pickApp{background:#b91c1c' in _pk21 and 'body.pk-full[data-pk-tone="pk-red"] #pickApp{background:#dc2626}' in _pk21
+      and 'phase === "late" ? "pk-late"' in _pk21)
+check("21.2 The red flashing respects reduced motion", 'prefers-reduced-motion:reduce){body.pk-full[data-pk-tone="pk-late"] #pickApp{animation:none}' in _pk21)
+pd21 = c2.get("/dashboard").data.decode()
+ad21 = ca.get("/dashboard").data.decode()
+check("21.3 The picker's screen shows their name at the top", 'class="pk-who"><b>PK P2</b>' in pd21, pd21[pd21.find('pk-who'):pd21.find('pk-who')+80])
+check("21.4 The assigner's screen shows the assigner's name", 'class="pk-who"><b>PK ASG</b>' in ad21 and "Pick Assigner" in ad21)
 check("20.12 render.yaml no longer sets 100 s per item", "PICK_SECONDS_PER_ITEM" not in open(os.path.join(REPO, "render.yaml")).read())
 with app.app_context():
     PickClaim.query.filter(PickClaim.bill_id.in_([B20, B20u])).delete(synchronize_session=False)

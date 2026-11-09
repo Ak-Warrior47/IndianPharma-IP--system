@@ -110,6 +110,31 @@
 .pk-mine .pk-billno{font-size:17px;font-weight:800}
 .pk-mine .pk-items{font-size:14px;font-weight:700;color:var(--ink-2)}
 body.pk-full{overflow:hidden}
+.pk-who{display:flex;align-items:baseline;flex-wrap:wrap;gap:4px 10px;margin:0 0 6px}
+.pk-who b{font-size:18px;font-weight:800;color:var(--ink)}
+.pk-whorole{font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.5px;color:var(--brand);background:var(--accent-tint,#eef4ff);border-radius:6px;padding:2px 7px}
+.pk-whoday{font-size:12px;color:var(--ink-3)}
+.pk-helper .pk-who{display:none}
+body.pk-full .pk-helper .pk-who{display:flex}
+body.pk-full .pk-who{justify-content:center;max-width:620px;width:100%;margin:0 auto 4px}
+/* Time over: the whole screen goes red, not just the timer box. */
+body.pk-full[data-pk-tone="pk-amber"] #pickApp{background:#fff4dc}
+body.pk-full[data-pk-tone="pk-red"] #pickApp{background:#dc2626}
+body.pk-full[data-pk-tone="pk-late"] #pickApp{background:#b91c1c;animation:pk-alarm 1s steps(2,end) infinite}
+body.pk-full[data-pk-tone="pk-red"] #pkMine,body.pk-full[data-pk-tone="pk-late"] #pkMine{background:transparent;border-color:rgba(255,255,255,.55);box-shadow:none}
+body.pk-full[data-pk-tone="pk-red"] #pkMine .pk-phase,body.pk-full[data-pk-tone="pk-red"] #pkMine .pk-billno,body.pk-full[data-pk-tone="pk-red"] #pkMine .pk-items,body.pk-full[data-pk-tone="pk-red"] #pkMine .pk-clock,body.pk-full[data-pk-tone="pk-red"] #pkMine #pkLateText,body.pk-full[data-pk-tone="pk-late"] #pkMine .pk-phase,body.pk-full[data-pk-tone="pk-late"] #pkMine .pk-billno,body.pk-full[data-pk-tone="pk-late"] #pkMine .pk-items,body.pk-full[data-pk-tone="pk-late"] #pkMine .pk-clock,body.pk-full[data-pk-tone="pk-late"] #pkMine #pkLateText{color:#fff}
+body.pk-full[data-pk-tone="pk-red"] #pkMine .pk-bar,body.pk-full[data-pk-tone="pk-late"] #pkMine .pk-bar{background:rgba(255,255,255,.3)}
+body.pk-full[data-pk-tone="pk-red"] #pkMine .pk-bar i,body.pk-full[data-pk-tone="pk-late"] #pkMine .pk-bar i{background:#fff}
+body.pk-full[data-pk-tone="pk-red"] #pkMine #pkLateText,body.pk-full[data-pk-tone="pk-late"] #pkMine #pkLateText{color:#fff!important;font-weight:700}
+body.pk-full[data-pk-tone="pk-red"] #pkRepBtn,body.pk-full[data-pk-tone="pk-late"] #pkRepBtn{background:#fff;color:#7f1d1d;border-color:#fff}
+body.pk-full[data-pk-tone="pk-red"] .pk-rep,body.pk-full[data-pk-tone="pk-late"] .pk-rep{color:var(--ink)}
+body.pk-full[data-pk-tone="pk-red"] #pkMine .pk-u,body.pk-full[data-pk-tone="pk-late"] #pkMine .pk-u{background:#fff;color:#b91c1c}
+body.pk-full[data-pk-tone="pk-red"] .pk-who b,body.pk-full[data-pk-tone="pk-red"] .pk-whoday,
+body.pk-full[data-pk-tone="pk-late"] .pk-who b,body.pk-full[data-pk-tone="pk-late"] .pk-whoday{color:#fff}
+body.pk-full[data-pk-tone="pk-red"] .pk-whorole,body.pk-full[data-pk-tone="pk-late"] .pk-whorole{background:rgba(255,255,255,.2);color:#fff}
+body.pk-full[data-pk-tone="pk-red"] .pk-msg.on,body.pk-full[data-pk-tone="pk-late"] .pk-msg.on{background:#fff}
+@keyframes pk-alarm{0%{background:#b91c1c}100%{background:#ef4444}}
+@media (prefers-reduced-motion:reduce){body.pk-full[data-pk-tone="pk-late"] #pickApp{animation:none}}
 body.pk-full .card{transform:none!important;animation:none!important}
 .pk-helper{box-shadow:none;border:1px solid var(--line);margin:8px 0 0}
 body.pk-full #pickApp{position:fixed;inset:0;z-index:9000;transform:none!important;animation:none;box-shadow:none;margin:0;border:0;border-radius:0;max-width:none;overflow:auto;
@@ -191,8 +216,10 @@ body.pk-full .pk-msg.on{position:sticky;top:0;z-index:2}
 {% set _pk_role = pick_as if pick_as is defined and pick_as else ('picker' if staff_type == 'picker' else 'assigner') %}
 {% set _pk_day = today if today is defined and today else pick_today() %}
 <div class="card pk-card{% if pick_as is defined and pick_as %} pk-helper{% endif %}" id="pickApp" data-role="{{ _pk_role }}" data-build="{{ app_build }}"{% if pick_as is defined and pick_as %} data-helper="1"{% endif %}>
+  {% set _pk_name = session.get('user_name') or (user_name if user_name is defined else '') %}
+  <div class="pk-who"><b>{{ _pk_name }}</b><span class="pk-whorole">{{ 'Picker' if _pk_role == 'picker' else ('Admin' if session.get('is_admin') else 'Pick Assigner') }}</span><span class="pk-whoday">{{ _pk_day.strftime('%a, %d %b') }}</span></div>
   {% if _pk_role == 'picker' %}
-  <div class="section-label">Picking — {{ _pk_day.strftime('%A, %d %b') }}</div>
+  <div class="section-label">Picking</div>
   <div class="pk-msg" id="pkMsg" role="status"></div>
   <div class="pk-tabs" role="tablist" aria-label="Picking">
     <button role="tab" data-tab="live" aria-selected="true">Live</button>
@@ -239,7 +266,7 @@ body.pk-full .pk-msg.on{position:sticky;top:0;z-index:2}
   <section data-panel="rules" hidden><div id="pkRule"></div></section>
 
   {% else %}
-  <div class="section-label">Pick Assigner — {{ _pk_day.strftime('%A, %d %b') }}</div>
+  <div class="section-label">Bills and pickers</div>
   <div class="pk-msg" id="pkMsg" role="status"></div>
   <div class="pk-tabs" role="tablist" aria-label="Pick Assigner">
     <button role="tab" data-tab="live" aria-selected="true">Live</button>
@@ -386,6 +413,7 @@ body.pk-full .pk-msg.on{position:sticky;top:0;z-index:2}
 
   // ---- picker ----------------------------------------------------------
   function renderPicker(s) {
+    if (!s.mine) document.body.removeAttribute("data-pk-tone");
     var t = s.today || {};
     $("pkBillsN").textContent = t.bills || 0;
     $("pkItems").textContent = t.items || 0;
@@ -678,6 +706,9 @@ body.pk-full .pk-msg.on{position:sticky;top:0;z-index:2}
       else if (r >= 0) { phase = "report"; left = r; total = mine.report_left - mine.find_left; }
       else { phase = "late"; left = r; total = 1; }
       $("pkMine").className = "pk-mine" + (phase === "normal" ? "" : " " + phase) + (mine.paused ? " paused" : "");
+      // the whole screen shows the phase: amber extra time, red once time is over
+      var tone = mine.paused ? "" : (phase === "late" ? "pk-late" : phase === "report" ? "pk-red" : phase === "find" ? "pk-amber" : "");
+      if (document.body.getAttribute("data-pk-tone") !== tone) document.body.setAttribute("data-pk-tone", tone);
       $("pkPhase").textContent = mine.paused ? "Paused by assigner — timer stopped" :
         {normal: "Normal time", find: "Extra time to find", report: "Report time — fewer points", late: "Late"}[phase];
       $("pkClock").textContent = (phase === "late" ? "−" : "") + clock(left);
