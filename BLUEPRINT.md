@@ -242,7 +242,7 @@ month (calendar month). Targets only go up.
 | `webpush.py` | Sends phone alerts. |
 | `render.yaml` | How Render runs the site and which settings exist. |
 | `requirements.txt` | The Python packages the site needs. |
-| `tests_*.py`, `run_tests.sh` | About 990 automatic checks, run on every push. |
+| `tests_*.py`, `run_tests.sh` | About 1,010 automatic checks, run on every push. |
 | `CLAUDE.md` | Working rules for the AI that maintains the code. |
 | `BLUEPRINT.md` | This file. |
 | `tools_recommend_targets.py` | Optional helper to suggest hourly targets from history. |

@@ -23,7 +23,7 @@ eventlet worker); the database is Supabase PostgreSQL.
 ## Commands
 - Python is `python3.13`. Unset `DATABASE_URL` for local work: the app falls
   back to SQLite (`instance/pharma_final.db`, untracked).
-- Full suite: `./run_tests.sh` (about 990 checks). One suite:
+- Full suite: `./run_tests.sh` (about 1,010 checks). One suite:
   `python3.13 tests_picker_v2.py`. CI runs the same on every push
   (`.github/workflows/tests.yml`).
 - The suite wipes local test accounts; re-create any you use for browser
