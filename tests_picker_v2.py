@@ -478,8 +478,52 @@ _no24 = [f for f in _glob.glob(os.path.join(REPO, "templates", "*.html"))
          if "strftime('%H:%M')" in open(f).read() or "strftime('%d %b %H:%M')" in open(f).read()]
 check("11.10 No page shows 24-hour times any more", not _no24, str(_no24))
 _forms = [f for f in _glob.glob(os.path.join(REPO, "templates", "*.html"))
-          if "<form" in open(f).read() and not f.endswith("_picking.html") and "js/enter-next.js" not in open(f).read()]
+          if "<form" in open(f).read() and not os.path.basename(f).startswith("_") and "js/enter-next.js" not in open(f).read()]
 check("11.11 Every page with a form has Enter-to-next-field", not _forms, str(_forms))
+
+# ---- 12. Staff profile for pickers, bill flowchart, per-picker countdown -------
+with app.app_context():
+    adm = Employee.query.filter_by(email="pk_adm2@x.com").first()
+    if not adm:
+        adm = Employee(name="PK Admin2", email="pk_adm2@x.com", staff_type="picker", is_admin=True)
+        adm.set_password(PW)
+        db.session.add(adm)
+        db.session.commit()
+ca2 = login("pk_adm2@x.com")
+prof = ca2.get("/staff/%d" % ids["p3"]).data.decode()
+check("12.1 A picker's profile has the bill-by-bill picking section", 'id="picking"' in prof and "Picking — bill by bill" in prof)
+check("12.2 ...with Today, This week and This month in the order Bills, Items, On time, Points",
+      all(x in prof for x in ("Today", "This week", "This month")) and prof.index("<span>Bills</span>") < prof.index("<span>Items</span>")
+      < prof.index("<span>On time</span>") < prof.index("<span>Points</span>"))
+check("12.3 ...each grab with took and done times and a flowchart button", 'id="ppGrabs"' in prof and 'data-bill-flow="%d"' % NB in prof)
+check("12.4 ...and a Bill-wise view", 'id="ppBills"' in prof and 'data-ppview="bills"' in prof)
+check("12.5 ...and the day's late report", "Late report" in prof and "Dolo 650" in prof)
+check("12.6 The old picker figures (bill fulfilment, workspace, VWCR) are gone from a picker's profile",
+      "Bill Fulfilment" not in prof and "Sales Bills Picked" not in prof)
+check("12.7 A picker can open their own profile; another picker's is refused",
+      'id="picking"' in c3.get("/staff/%d" % ids["p3"]).data.decode()
+      and 'id="picking"' not in c1.get("/staff/%d" % ids["p3"], follow_redirects=True).data.decode())
+tl2 = ca2.get("/pick/bill/%d.json" % NB).get_json()
+check("12.8 The flowchart gets exact times for every grab (start, normal, extra, report, done)",
+      all(all(g.get(k) for k in ("s", "n", "f", "r")) for g in tl2["grabs"]) and tl2["t_added"])
+check("12.9 The flowchart script is on the staff, assigner, admin and profile pages",
+      all("js/billflow.js" in open(os.path.join(REPO, "templates", f)).read()
+          for f in ("dashboard.html", "picking_admin.html", "staff_detail.html")))
+code, j = jpost(ca, "/pick/bill", {"bill_no": "7001", "items": 4})
+with app.app_context():
+    CB = PickBill.query.filter_by(bill_no=A.fy_prefix() + "7001").first().id
+    for cl in PickClaim.query.filter_by(status="active").all():
+        cl.status = "cancelled"
+    db.session.commit()
+jpost(c1, "/pick/claim", {"bill_id": CB, "items": 2})
+row = next(b for b in ca.get("/pick/state.json").get_json()["bills"] if b["id"] == CB)
+t = next(t for t in row["taken"] if t["name"] == "PK P1")
+check("12.10 Under a live bill, each picker shows their own time left", t["left"] is not None and 0 < t["left"] <= 60, str(t))
+with app.app_context():
+    e = Employee.query.filter_by(email="pk_adm2@x.com").first()
+    if e:
+        db.session.delete(e)
+        db.session.commit()
 
 # ---- 8. Trial copy: test accounts and banner, never on the live database -----
 TRIAL = ["ravi@pharmaip.com", "lisa@pharmaip.com", "smriti@pharmaip.com", "deepti@pharmaip.com",
@@ -500,7 +544,7 @@ with app.app_context():
     check("8.4 Running it again adds nobody twice", A.seed_trial_demo() == 0
           and Employee.query.filter_by(email="lisa@pharmaip.com").count() == 1)
 tc = app.test_client()
-check("8.5 Every page shows the trial banner", b"Trial copy: not the live app" in tc.get("/login").data)
+check("8.5 Every page shows the trial label", b">Trial copy<" in tc.get("/login").data)
 os.environ.pop("TRIAL_DEMO")
 check("8.6 No banner on a normal (live) copy", b"Trial copy" not in tc.get("/login").data)
 with app.app_context():

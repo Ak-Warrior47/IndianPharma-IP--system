@@ -2304,15 +2304,20 @@ def bill_timeline(bill_id):
     rows = []
     for c in PickClaim.query.filter_by(bill_id=b.id).order_by(PickClaim.started_at).all():
         n, f, r = pick_windows(c)
-        rows.append({"picker": names.get(c.picker_id, ""), "items": c.items,
+        ms = lambda d: int((d - datetime(1970, 1, 1)).total_seconds() * 1000) if d else None
+        rows.append({"s": ms(c.started_at), "n": ms(n), "f": ms(f), "r": ms(r), "e": ms(c.done_at),
+                     "picker": names.get(c.picker_id, ""), "items": c.items,
                      "picked": c.picked if c.picked is not None else (c.items if c.status == "done" else None),
                      "missing": c.missing or 0, "took": ist12(c.started_at), "due": ist12(n), "done": ist12(c.done_at),
                      "status": c.status, "outcome": c.outcome or "", "points": float(c.points or 0) + float(c.bonus or 0),
                      "minutes": round(((c.done_at or datetime.utcnow()) - c.started_at).total_seconds() / 60.0, 1),
                      "late_min": round((c.done_at - r).total_seconds() / 60.0, 1) if c.done_at and c.done_at > r else None})
+    _ms = lambda d: int((d - datetime(1970, 1, 1)).total_seconds() * 1000) if d else None
     miss = [{"item": m.item_name, "qty": m.qty, "by": names.get(m.picker_id, ""), "at": ist12(m.reported_at),
-             "status": m.status} for m in PickMissing.query.filter_by(bill_id=b.id).order_by(PickMissing.reported_at).all()]
-    return {"bill_no": b.bill_no, "items": b.items, "urgent": bool(b.is_urgent), "status": b.status,
+             "t": _ms(m.reported_at), "status": m.status}
+            for m in PickMissing.query.filter_by(bill_id=b.id).order_by(PickMissing.reported_at).all()]
+    return {"t_added": _ms(b.created_at), "t_done": _ms(b.completed_at), "t_now": _ms(datetime.utcnow()),
+            "bill_no": b.bill_no, "items": b.items, "urgent": bool(b.is_urgent), "status": b.status,
             "added": ist12(b.created_at), "completed": ist12(b.completed_at),
             "minutes": round((b.completed_at - b.created_at).total_seconds() / 60.0, 1) if b.completed_at else None,
             "grabs": rows, "missing": miss}
@@ -2333,6 +2338,49 @@ def pick_board(day=None):
     for i, r in enumerate(rows, 1):
         r["rank"] = i
     return rows
+
+
+def picker_profile(emp_id, day=None):
+    """Everything the staff profile shows for a picker on bill-based picking."""
+    today = date.today()
+    day = day or today
+    monday = today - timedelta(days=today.weekday())
+    def span(a, b):
+        return [a + timedelta(days=i) for i in range((b - a).days + 1)]
+    def summary(dates):
+        st = picker_pick_stats(emp_id, dates)
+        return {"bills": st["bills"], "items": st["items"], "grabs": st["grabs"], "missing": st["missing"],
+                "points": st["points"], "on_time_pct": round(100.0 * st["on_time"] / st["grabs"], 1) if st["grabs"] else None,
+                "rate": round(st["items"] / (st["seconds"] / 3600.0), 1) if st["seconds"] else None}
+    days14 = span(today - timedelta(days=13), today)
+    daily = []
+    for d in days14:
+        st = picker_pick_stats(emp_id, [d])
+        daily.append({"day": d.strftime("%d %b"), "bills": st["bills"], "items": st["items"], "points": st["points"]})
+    bills = []
+    for c in PickClaim.query.filter_by(picker_id=emp_id, status="done", work_date=day).order_by(PickClaim.started_at).all():
+        b = db.session.get(PickBill, c.bill_id)
+        bills.append({"bill_id": c.bill_id, "bill_no": b.bill_no if b else "", "urgent": bool(b and b.is_urgent),
+                      "items": c.items, "picked": c.picked if c.picked is not None else c.items, "missing": c.missing or 0,
+                      "took": ist12(c.started_at), "done": ist12(c.done_at),
+                      "minutes": round((c.done_at - c.started_at).total_seconds() / 60.0, 1),
+                      "outcome": {"ontime": "On time", "extra": "Extra time", "report": "Reported", "late": "Late"}.get(c.outcome or "", ""),
+                      "late": c.outcome == "late", "points": round(float(c.points or 0) + float(c.bonus or 0), 1)})
+    by_bill = {}
+    for r in bills:
+        x = by_bill.setdefault(r["bill_id"], {"bill_id": r["bill_id"], "bill_no": r["bill_no"], "urgent": r["urgent"],
+                                              "items": 0, "missing": 0, "points": 0.0, "grabs": 0, "late": False})
+        x["items"] += r["picked"]
+        x["missing"] += r["missing"]
+        x["points"] = round(x["points"] + r["points"], 1)
+        x["grabs"] += 1
+        x["late"] = x["late"] or r["late"]
+    return {"day": day, "today": summary([today]), "week": summary(span(monday, today)),
+            "month": summary(span(today.replace(day=1), today)), "daily": daily, "grabs": bills,
+            "bills": list(by_bill.values()), "chosen": summary([day]),
+            "events": [{"kind": e.kind, "at": ist12(e.at), "minutes": e.minutes, "detail": e.detail or "",
+                        "bill": (db.session.get(PickBill, e.bill_id).bill_no if e.bill_id and db.session.get(PickBill, e.bill_id) else "")}
+                       for e in PickEvent.query.filter_by(picker_id=emp_id, day=day).order_by(PickEvent.at).all()]}
 
 
 def picker_bill_list(emp_id, day=None):
@@ -2534,7 +2582,8 @@ def picking_state(emp, staff_type):
         for pid, r in pr["by"].items():
             ac = active_now.get(pid)
             late_now = bool(ac and ac.bill_id == b.id and pick_phase(ac, now) == "late")
-            taken.append({"name": names.get(pid, "#%d" % pid), "items": r["items"] + r["active"],
+            secs_left = int((ac.due_at - now).total_seconds()) if (ac and ac.bill_id == b.id) else None
+            taken.append({"name": names.get(pid, "#%d" % pid), "items": r["items"] + r["active"], "left": secs_left,
                           "state": "late" if (r["late"] or late_now) else ("picking" if r["active"] else "done")})
         return {"id": b.id, "bill_no": b.bill_no, "items": b.items, "status": b.status, "urgent": bool(b.is_urgent),
                 "done": pr["done"], "active": pr["active"], "left": pr["left"], "missing": pr["missing"],
@@ -4411,9 +4460,9 @@ def seed_trial_demo():
     return made
 
 
-TRIAL_BANNER = ('<div role="note" style="position:sticky;top:0;z-index:9999;background:#7A5208;color:#fff;'
-                'font:600 13px/1.4 system-ui,sans-serif;text-align:center;padding:6px 12px">'
-                'Trial copy: not the live app. Data resets when the server restarts.</div>')
+TRIAL_BANNER = ('<div role="note" style="position:fixed;right:10px;top:10px;z-index:9999;background:#7A5208;color:#fff;'
+                'font:700 11px/1.3 system-ui,sans-serif;padding:4px 9px;border-radius:999px;pointer-events:none;opacity:.92">'
+                'Trial copy</div>')
 
 
 @app.after_request
@@ -5723,7 +5772,15 @@ def staff_detail(emp_id):
         except Exception:
             staff_trips = []
 
+        _pp = None
+        if emp.staff_type == "picker":
+            try:
+                _pday = datetime.strptime(request.args.get("day", ""), "%Y-%m-%d").date()
+            except ValueError:
+                _pday = date.today()
+            _pp = picker_profile(emp.id, _pday)
         return render_template("staff_detail.html",
+            pick_profile=_pp,
             checker_bests=(checker_month_bests(emp.id)
                            if "checker" in (emp.staff_type, emp.secondary_staff_type) else None),
             mt_days=multitask_days_for(emp.id),

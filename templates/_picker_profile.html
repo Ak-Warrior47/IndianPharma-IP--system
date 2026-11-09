@@ -1,0 +1,116 @@
+{# Staff profile, picker on bill-based picking: periods, 14-day chart, the
+   chosen day's grabs or bills (with a flowchart per bill), and the day's
+   late / waiting / missing log. Data: pick_profile from picker_profile(). #}
+{% set pp = pick_profile %}
+<style>
+.pp{margin:18px 0}
+.pp h2{font-size:18px;margin:0 0 10px}
+.pp-periods{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
+.pp-card{background:var(--surface,#fff);border:1px solid var(--line,#dfe4ec);border-radius:14px;padding:12px 14px}
+.pp-card h3{margin:0 0 8px;font-size:12px;text-transform:uppercase;letter-spacing:.5px;color:var(--ink-3,#64748b)}
+.pp-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px 10px}
+.pp-grid div span{display:block;font-size:10.5px;font-weight:700;color:var(--ink-3,#64748b);text-transform:uppercase;letter-spacing:.4px}
+.pp-grid div b{font-size:20px;font-variant-numeric:tabular-nums}
+.pp-grid div.lead b{font-size:24px;color:var(--brand,#1e40af)}
+.pp-chart{margin-top:12px}
+.pp-chart canvas{width:100%!important;height:220px!important}
+.pp-bar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:14px 0 8px}
+.pp-bar input{padding:7px 10px;border:1.5px solid var(--line,#dfe4ec);border-radius:10px;font:inherit}
+.pp-seg{display:inline-flex;border:1.5px solid var(--line,#dfe4ec);border-radius:10px;overflow:hidden}
+.pp-seg button{border:0;background:transparent;padding:7px 12px;font:600 13px system-ui,sans-serif;cursor:pointer;color:var(--ink-2,#334155)}
+.pp-seg button[aria-pressed="true"]{background:var(--brand,#1e40af);color:#fff}
+.pp-t{width:100%;border-collapse:collapse;font-size:14px}
+.pp-t th{text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.4px;color:var(--ink-3,#64748b);padding:7px 6px;border-bottom:1px solid var(--line,#dfe4ec);white-space:nowrap}
+.pp-t td{padding:8px 6px;border-bottom:1px solid var(--line,#dfe4ec);font-variant-numeric:tabular-nums}
+.pp-late{color:var(--bad-ink,#991b1b);font-weight:700}
+.pp-flow{border:1.5px solid var(--line,#dfe4ec);background:transparent;border-radius:8px;padding:4px 9px;font:600 12px system-ui,sans-serif;cursor:pointer;color:var(--brand,#1e40af)}
+.pp-u{background:#b91c1c;color:#fff;font-size:10px;font-weight:800;padding:1px 5px;border-radius:5px;margin-left:4px}
+.pp-ev{font-size:13.5px;padding:5px 0;border-top:1px solid var(--line,#dfe4ec)}
+.pp-ev:first-child{border-top:0}
+.pp-ev b.k{display:inline-block;min-width:64px;font-size:11px;text-transform:uppercase;letter-spacing:.4px}
+.pp-wrap{overflow-x:auto}
+@media(max-width:760px){.pp-periods{grid-template-columns:1fr}}
+</style>
+<section class="pp" id="picking">
+  <h2>Picking — bill by bill</h2>
+  <div class="pp-periods">
+    {% for label, s in [('Today', pp.today), ('This week', pp.week), ('This month', pp.month)] %}
+    <div class="pp-card"><h3>{{ label }}</h3>
+      <div class="pp-grid">
+        <div class="lead"><span>Bills</span><b>{{ s.bills }}</b></div>
+        <div class="lead"><span>Items</span><b>{{ s['items'] }}</b></div>
+        <div><span>On time</span><b>{{ (s.on_time_pct|round|int ~ '%') if s.on_time_pct is not none else '—' }}</b></div>
+        <div><span>Points</span><b>{{ s.points }}</b></div>
+        <div><span>Items/hr</span><b>{{ s.rate if s.rate is not none else '—' }}</b></div>
+        <div><span>Missing</span><b>{{ s.missing }}</b></div>
+      </div></div>
+    {% endfor %}
+  </div>
+  <div class="pp-card pp-chart"><h3>Last 14 days</h3><canvas id="ppChart" role="img" aria-label="Bills and items picked each day for the last 14 days"></canvas></div>
+
+  <form class="pp-bar" method="get" action="#picking">
+    <label for="ppDay"><b>Day</b></label>
+    <input type="date" id="ppDay" name="day" value="{{ pp.day.isoformat() }}" max="{{ today_iso }}">
+    <button class="pp-flow" type="submit">Show</button>
+    <span style="flex:1"></span>
+    <span class="pp-seg" role="group" aria-label="View">
+      <button type="button" data-ppview="grabs" aria-pressed="true">Each grab</button>
+      <button type="button" data-ppview="bills" aria-pressed="false">Bill-wise</button>
+    </span>
+  </form>
+  <div class="pp-card">
+    <div class="pp-grid" style="grid-template-columns:repeat(6,minmax(0,1fr));margin-bottom:8px">
+      <div><span>Bills</span><b>{{ pp.chosen.bills }}</b></div><div><span>Items</span><b>{{ pp.chosen['items'] }}</b></div>
+      <div><span>On time</span><b>{{ (pp.chosen.on_time_pct|round|int ~ '%') if pp.chosen.on_time_pct is not none else '—' }}</b></div>
+      <div><span>Points</span><b>{{ pp.chosen.points }}</b></div><div><span>Items/hr</span><b>{{ pp.chosen.rate if pp.chosen.rate is not none else '—' }}</b></div>
+      <div><span>Missing</span><b>{{ pp.chosen.missing }}</b></div>
+    </div>
+    <div class="pp-wrap" data-pppanel="grabs"><table class="pp-t" id="ppGrabs">
+      <thead><tr><th>Bill</th><th>Took</th><th>Done</th><th>Minutes</th><th>Items</th><th>Picked</th><th>Not found</th><th>Result</th><th>Points</th><th></th></tr></thead>
+      <tbody>
+      {% for g in pp.grabs %}
+        <tr><td><b>{{ g.bill_no }}</b>{% if g.urgent %}<span class="pp-u">U</span>{% endif %}</td><td>{{ g.took }}</td><td>{{ g.done }}</td><td>{{ g.minutes }}</td>
+          <td>{{ g['items'] }}</td><td>{{ g.picked }}</td><td>{{ g.missing or '' }}</td>
+          <td class="{{ 'pp-late' if g.late else '' }}">{{ g.outcome }}</td><td>{{ g.points }}</td>
+          <td><button type="button" class="pp-flow" data-bill-flow="{{ g.bill_id }}">Flowchart</button></td></tr>
+      {% else %}<tr><td colspan="10" style="color:var(--ink-3,#64748b)">No picking on this day.</td></tr>{% endfor %}
+      </tbody></table></div>
+    <div class="pp-wrap" data-pppanel="bills" hidden><table class="pp-t" id="ppBills">
+      <thead><tr><th>Bill</th><th>Items picked</th><th>Not found</th><th>Grabs</th><th>Points</th><th></th></tr></thead>
+      <tbody>
+      {% for b in pp.bills %}
+        <tr><td><b>{{ b.bill_no }}</b>{% if b.urgent %}<span class="pp-u">U</span>{% endif %}{% if b.late %} <span class="pp-late">late</span>{% endif %}</td>
+          <td>{{ b['items'] }}</td><td>{{ b.missing or '' }}</td><td>{{ b.grabs }}</td><td>{{ b.points }}</td>
+          <td><button type="button" class="pp-flow" data-bill-flow="{{ b.bill_id }}">Flowchart</button></td></tr>
+      {% else %}<tr><td colspan="6" style="color:var(--ink-3,#64748b)">No bills on this day.</td></tr>{% endfor %}
+      </tbody></table></div>
+  </div>
+  <div class="pp-card" style="margin-top:12px"><h3>Late report — {{ pp.day.strftime('%d %b') }}</h3>
+    {% for e in pp.events %}
+      <div class="pp-ev"><b class="k" style="color:{{ {'late':'#991b1b','idle':'#8a4208','missing':'#7c3aed'}[e.kind] }}">{{ {'late':'Late','idle':'Waiting','missing':'Missing'}[e.kind] }}</b>
+        {{ e.at }} · {% if e.kind == 'late' %}late on {{ e.bill }}{% if e.minutes %} ({{ e.minutes }} min){% endif %}{% elif e.kind == 'idle' %}left {{ e.bill }} waiting {{ e.minutes }} min{% else %}could not find {{ e.detail }} on {{ e.bill }}{% endif %}</div>
+    {% else %}<div class="pp-ev" style="color:var(--ink-3,#64748b)">Nothing on this day.</div>{% endfor %}
+  </div>
+</section>
+<script>
+(function () {
+  var daily = {{ pp.daily|tojson }};
+  function draw() {
+    if (!window.Chart) {
+      if (!draw.asked) { draw.asked = 1; var sc = document.createElement("script"); sc.src = "/static/js/chart.umd.min.js"; document.head.appendChild(sc); }
+      return setTimeout(draw, 300);
+    }
+    new Chart(document.getElementById("ppChart"), {type: "bar", data: {labels: daily.map(function (d) { return d.day; }), datasets: [
+      {label: "Bills", data: daily.map(function (d) { return d.bills; }), backgroundColor: "#1E40AF"},
+      {label: "Items", data: daily.map(function (d) { return d.items; }), backgroundColor: "#146B4A"}]},
+      options: {responsive: true, maintainAspectRatio: false, scales: {y: {beginAtZero: true, ticks: {precision: 0}}}}});
+  }
+  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", draw); else draw();
+  document.addEventListener("click", function (e) {
+    var b = e.target.closest && e.target.closest("[data-ppview]"); if (!b) return;
+    var v = b.getAttribute("data-ppview");
+    Array.prototype.forEach.call(document.querySelectorAll("[data-ppview]"), function (x) { x.setAttribute("aria-pressed", String(x === b)); });
+    Array.prototype.forEach.call(document.querySelectorAll("[data-pppanel]"), function (p) { p.hidden = p.getAttribute("data-pppanel") !== v; });
+  });
+})();
+</script>

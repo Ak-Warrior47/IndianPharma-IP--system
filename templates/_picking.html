@@ -60,6 +60,7 @@
 .pk-ev .k{display:inline-block;min-width:62px;font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.4px}
 .pk-ev .k.late{color:var(--bad-ink)} .pk-ev .k.idle{color:var(--warn-ink)} .pk-ev .k.missing{color:#7c3aed}
 .pk-empty{padding:12px 0;color:var(--ink-3);font-size:14px}
+#pickApp [hidden]{display:none!important}
 .pk-tabs{display:flex;gap:4px;overflow-x:auto;margin:0 0 12px;border-bottom:1px solid var(--line);scrollbar-width:none}
 .pk-tabs button{flex:none;border:0;background:transparent;padding:9px 12px;font:700 14px system-ui,sans-serif;color:var(--ink-3);border-bottom:2.5px solid transparent;cursor:pointer;white-space:nowrap}
 .pk-tabs button[aria-selected="true"]{color:var(--brand);border-bottom-color:var(--brand)}
@@ -190,7 +191,7 @@
   "use strict";
   var app = document.getElementById("pickApp");
   if (!app) return;
-  var role = app.getAttribute("data-role"), mine = null, mineAt = 0;
+  var role = app.getAttribute("data-role"), mine = null, mineAt = 0, lastState = null;
   var tok = (document.querySelector('meta[name="csrf-token"]') || {}).content || "";
   function $(id) { return document.getElementById(id); }
   function esc(s) { return String(s == null ? "" : s).replace(/[&<>"]/g, function (c) { return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]; }); }
@@ -225,7 +226,8 @@
   function taken(b) {
     if (!b.taken.length) return "";
     return '<div class="pk-taken">Taken by: ' + b.taken.map(function (t) {
-      return '<span class="' + (t.state === "late" ? "late" : "") + '">' + esc(t.name) + " " + t.items + (t.state === "late" ? " (late)" : t.state === "picking" ? " (picking)" : "") + "</span>";
+      var cd = t.left != null ? ' <b class="pk-cd" data-due="' + (Date.now() + t.left * 1000) + '"></b>' : "";
+      return '<span class="' + (t.state === "late" ? "late" : "") + '">' + esc(t.name) + " " + t.items + (t.state === "late" ? " (late)" : t.state === "picking" ? " (picking)" : "") + cd + "</span>";
     }).join(" · ") + "</div>";
   }
 
@@ -367,6 +369,7 @@
 
   // ---- bill timeline ---------------------------------------------------------
   function openBill(id) {
+    if (window.BillFlow) return window.BillFlow.open(id);
     fetch("/pick/bill/" + id + ".json", {credentials: "same-origin"}).then(function (r) { return r.json(); }).then(function (b) {
       if (!b.bill_no) return;
       $("pkModalTitle").innerHTML = esc(b.bill_no) + (b.urgent ? '<span class="pk-u">URGENT</span>' : "");
@@ -398,6 +401,7 @@
   function load() {
     fetch("/pick/state.json", { credentials: "same-origin" }).then(function (r) { return r.json(); }).then(function (s) {
       if (!s || !s.bills) return;
+      lastState = s;
       (role === "picker" ? renderPicker : renderAssigner)(s);
       tick();
     }).catch(function () {});
@@ -405,6 +409,11 @@
 
   function tick() {
     var dt = (Date.now() - mineAt) / 1000;
+    Array.prototype.forEach.call(app.querySelectorAll(".pk-cd[data-due]"), function (c) {
+      var left = Math.round((+c.getAttribute("data-due") - Date.now()) / 1000), extra = (lastState && lastState.extra_seconds) || 125;
+      c.textContent = left >= 0 ? clock(left) + " left" : (-left <= extra ? "extra time " + clock(extra + left) : "late " + clock(left + extra));
+      c.style.color = left >= 0 ? "" : (-left <= extra ? "var(--warn-ink)" : "var(--bad-ink)");
+    });
     if (role === "picker" && mine) {
       var n = mine.normal_left - dt, f = mine.find_left - dt, r = mine.report_left - dt, phase, left, total;
       if (n >= 0) { phase = "normal"; left = n; total = mine.seconds_total; }

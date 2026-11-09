@@ -309,6 +309,9 @@ body { display: grid; grid-template-columns: 236px minmax(0, 1fr); min-height: 1
     </div>
   </section>
 
+  {% if pick_profile %}{% set today_iso = pick_profile.day.today().isoformat() %}{% include '_picker_profile.html' %}{% endif %}
+
+
   <!-- ── SCORECARD KPI STRIP ── -->
   {% if a_stats %}
   <section class="scorecard">
@@ -786,17 +789,13 @@ body { display: grid; grid-template-columns: 236px minmax(0, 1fr); min-height: 1
           <div class="mini"><div class="mini-lbl">Racking Eff.</div><div class="mini-val">{{ pstats.pur_racking_eff or 0 }}<span class="suf">%</span></div></div>
           <div class="mini"><div class="mini-lbl">Speed/hr</div><div class="mini-val">{{ pstats.pur_speed or 0 }}</div></div>
           <div class="mini"><div class="mini-lbl">Log Consistency</div><div class="mini-val">{{ pstats.consistency }}<span class="suf">%</span></div></div>
-        {% elif emp.staff_type == 'picker' %}
-          <div class="mini"><div class="mini-lbl">Bills Received</div><div class="mini-val">{{ pstats.tbr_picker or 0 }}</div></div>
-          <div class="mini"><div class="mini-lbl">Sales Bills Picked</div><div class="mini-val">{{ pstats.tsb }}</div></div>
-          <div class="mini"><div class="mini-lbl">Items Picked</div><div class="mini-val">{{ pstats.tp }}</div></div>
-          <div class="mini"><div class="mini-lbl">Items Missed</div><div class="mini-val">{{ pstats.tm }}</div></div>
-          <div class="mini"><div class="mini-lbl">Bill Fulfilment</div><div class="mini-val">{{ pstats.bill_fulfilment or 0 }}<span class="suf">%</span></div></div>
-          <div class="mini"><div class="mini-lbl">Pick Speed/hr</div><div class="mini-val">{{ pstats.pick_speed }}</div></div>
-          <div class="mini"><div class="mini-lbl">Cleaner Rate</div><div class="mini-val">{{ pstats.cleaner_rate or 0 }}<span class="suf">%</span></div></div>
-          <div class="mini"><div class="mini-lbl">Workspace</div><div class="mini-val">{{ pstats.workspace_score }}<span class="suf">%</span></div></div>
-          <div class="mini"><div class="mini-lbl">Log Consistency</div><div class="mini-val">{{ pstats.consistency }}<span class="suf">%</span></div></div>
-          <div class="mini"><div class="mini-lbl">Potential Eff.</div><div class="mini-val">{{ pstats.potential_eff }}<span class="suf">%</span></div></div>
+        {% elif emp.staff_type == 'picker' and pstats.pick_stats %}
+          <div class="mini"><div class="mini-lbl">Bills</div><div class="mini-val">{{ pstats.pick_stats.bills }}</div></div>
+          <div class="mini"><div class="mini-lbl">Items</div><div class="mini-val">{{ pstats.pick_stats['items'] }}</div></div>
+          <div class="mini"><div class="mini-lbl">On time</div><div class="mini-val">{{ pstats.pick_stats.on_time_pct|round|int }}<span class="suf">%</span></div></div>
+          <div class="mini"><div class="mini-lbl">Points</div><div class="mini-val">{{ pstats.pick_stats.points }}</div></div>
+          <div class="mini"><div class="mini-lbl">Items/hr</div><div class="mini-val">{{ pstats.pick_stats.rate }}</div></div>
+          <div class="mini"><div class="mini-lbl">Missing</div><div class="mini-val">{{ pstats.pick_stats.missing }}</div></div>
         {% else %}
           <div class="mini"><div class="mini-lbl">Total SB Checked</div><div class="mini-val">{{ (pstats.tsb or 0) + (pstats.tcs or 0) }}</div></div>
           <div class="mini"><div class="mini-lbl">Total Items Checked</div><div class="mini-val">{{ pstats.tck_total or pstats.tck or 0 }}</div></div>
@@ -1072,13 +1071,11 @@ body { display: grid; grid-template-columns: 236px minmax(0, 1fr); min-height: 1
       <div class="formula-row"><b>Efficiency Ratio</b> = min(items/200, bills/50) — staff is <b>Efficient</b> only when both = 1.0</div>
       <div class="formula-row"><b>Points (100)</b> = BillRate×25 + CS×20 + Racking×15 + Speed÷60×10 + Entry×8 + VWCR×8 + Pending×5 + EffRatio×4 + Workspace×3 + LogCons×2</div>
       {% elif emp.staff_type == 'picker' %}
-      <div class="formula-row"><b>VWCR</b> = (Picked÷Total) × (Items/hr ÷ 50) × 100, cap 120%</div>
-      <div class="formula-row"><b>Bill Fulfilment</b> = SB Picked ÷ Bills Received × 100</div>
-      <div class="formula-row"><b>Pick Speed</b> = Items ÷ (9 hrs × Days)</div>
-      <div class="formula-row"><b>Cleaner Rate</b> = (Normal×100 + Sweep/Rack×10) ÷ Total Volume</div>
-      <div class="formula-row"><b>Efficiency Ratio</b> = min(items/200, bills/50) — hits hard level only when both = 1.0</div>
-      <div class="formula-row"><b>Workspace</b> = Rack×50% + Table×30% + Sweep×20%</div>
-      <div class="formula-row"><b>Points (100)</b> = VWCR×25 + Fulfilment×18 + Speed÷250×15 + EffRatio×10 + Workspace×10 + CS×8 + Cleaner×7 + LogCons×7</div>
+      <div class="formula-row"><b>On time (40)</b> = grabs finished before the end of extra time ÷ grabs finished</div>
+      <div class="formula-row"><b>Pick speed (30)</b> = items ÷ hours actually picking (take → done, at least 5 s per item), against the target</div>
+      <div class="formula-row"><b>Volume (20)</b> = items per day ÷ 200</div>
+      <div class="formula-row"><b>Consistency (10)</b> = how steady the daily pick rate is</div>
+      <div class="formula-row"><b>Pick points</b> = normal time 1.5 per item · extra time 1 per item · late −1 per minute (max −5) · urgent bills share 10 bonus points by items picked</div>
       {% else %}
       <div class="formula-row"><b>Urgent work</b> = one urgent bill or item counts as {{ a_stats.urgent_weight if a_stats else 1.5 }} normal ones</div>
       <div class="formula-row"><b>Weighted items</b> = Normal items + Urgent items × 1.5 &nbsp;·&nbsp; <b>Weighted bills</b> = Normal bills + Urgent bills × 1.5</div>
@@ -1292,5 +1289,6 @@ body { display: grid; grid-template-columns: 236px minmax(0, 1fr); min-height: 1
 </script>
 <script src="{{ url_for('static', filename='js/ux.js') }}" defer></script>
 <script src="{{ url_for('static', filename='js/enter-next.js') }}" defer></script>
+<script src="{{ url_for('static', filename='js/billflow.js') }}" defer></script>
 </body>
 </html>
