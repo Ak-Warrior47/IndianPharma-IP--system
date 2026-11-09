@@ -40,9 +40,31 @@
 .pk-msg.on{display:block} .pk-msg.good{background:#e8f4ee;color:#0f4a32} .pk-msg.warn{background:var(--warn-tint);color:var(--warn-ink)}
 .pk-note{font-size:12px;color:var(--ink-3);margin-top:8px}
 .pk-chip{display:inline-flex;align-items:center;gap:6px;padding:5px 10px;border-radius:999px;font-size:13px;font-weight:600;border:1px solid var(--line)}
-.pk-chip.free{background:#e8f4ee;border-color:#c9e4d6;color:#0f4a32}
-.pk-chip.busy{background:var(--warn-tint);border-color:var(--warn-line);color:var(--warn-ink)}
-.pk-chip.late{background:var(--bad-tint);color:var(--bad-ink)}
+.pk-chip.free{background:#e8eefc;border-color:#bccbf3;color:#1e3a8a}
+.pk-chip.busy{background:#fdecec;border-color:#f3c2c2;color:#991b1b}
+.pk-chip.late{background:#b91c1c;border-color:#b91c1c;color:#fff}
+.pk-chip.late .pk-btn{color:#fff;border-color:rgba(255,255,255,.5)}
+.pk-key{display:flex;gap:12px;font-size:12px;color:var(--ink-3);margin:-4px 0 8px}
+.pk-key i{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:4px;vertical-align:-1px}
+.pk-score{display:inline-block;font-size:12px;font-weight:700;color:var(--ok);background:#e8f4ee;border-radius:6px;padding:1px 6px;margin-left:6px}
+.pk-lp{border:1px solid var(--line);border-radius:10px;margin-bottom:8px;overflow:hidden}
+.pk-lp > div:first-child{display:flex;justify-content:space-between;gap:8px;padding:7px 10px;background:var(--accent-tint,#eef4ff);font-weight:700;font-size:13.5px}
+.pk-lp > div:first-child span{font-weight:600;font-size:12px;color:var(--ink-3)}
+.pk-lt{width:100%;border-collapse:collapse;font-size:12.5px}
+.pk-lt td{padding:4px 10px;border-top:1px solid var(--line);vertical-align:top}
+.pk-lt td.k{font-weight:800;font-size:11px;text-transform:uppercase;letter-spacing:.3px;white-space:nowrap}
+.pk-lt td.k.late{color:var(--bad-ink)} .pk-lt td.k.idle{color:var(--warn-ink)} .pk-lt td.k.missing{color:#7c3aed}
+.pk-ur{border:1.5px solid #f3b4b4;border-radius:12px;padding:10px 12px;margin-bottom:10px;background:#fff8f8}
+.pk-ur table{width:100%;border-collapse:collapse;font-size:13px;margin-top:6px}
+.pk-ur th{text-align:left;font-size:10.5px;text-transform:uppercase;letter-spacing:.3px;color:var(--ink-3);padding:4px 6px;border-bottom:1px solid var(--line)}
+.pk-ur td{padding:5px 6px;border-bottom:1px solid var(--line);font-variant-numeric:tabular-nums;white-space:nowrap}
+.pk-urtw{overflow-x:auto;-webkit-overflow-scrolling:touch}
+.pk-urtop > div{min-width:0}
+.pk-urtop{display:grid;grid-template-columns:2fr 1fr;gap:12px;align-items:center}
+.pk-urtop canvas{width:100%!important;height:150px!important}
+.pk-sec{display:flex;justify-content:space-between;align-items:center;gap:8px}
+.pk-min{border:1.5px solid var(--line);background:transparent;border-radius:8px;width:28px;height:26px;font-weight:800;line-height:1;cursor:pointer;color:var(--ink-2);flex:none}
+@media(max-width:640px){.pk-urtop{grid-template-columns:1fr}}
 .pk-add{display:grid;grid-template-columns:1fr 110px auto;gap:8px;align-items:end}
 .pk-add label{display:block;font-size:12px;font-weight:700;color:var(--ink-3);margin-bottom:4px}
 .pk-add input{width:100%;padding:9px 10px;border:1.5px solid var(--line);border-radius:10px;font-size:15px}
@@ -136,7 +158,7 @@
       </div>
     </div>
   </div>
-  <div class="section-label" style="margin-top:4px">Open bills</div>
+  <div class="section-label pk-sec" style="margin-top:4px" data-collapse="pkBills"><span>Open bills</span></div>
   <div id="pkBills"><div class="pk-empty">Loading bills…</div></div>
   </section>
   <section data-panel="board" hidden><div id="pkBoard"></div></section>
@@ -149,6 +171,7 @@
   <div class="pk-tabs" role="tablist" aria-label="Pick Assigner">
     <button role="tab" data-tab="live" aria-selected="true">Live</button>
     <button role="tab" data-tab="late" aria-selected="false">Late report <span class="cnt" id="pkLateCnt" hidden></span></button>
+    <button role="tab" data-tab="urgent" aria-selected="false">Urgent <span class="cnt" id="pkUrgCnt" hidden></span></button>
     <button role="tab" data-tab="board" aria-selected="false">Leaderboard</button>
     <button role="tab" data-tab="sched" aria-selected="false">Rescheduled <span class="cnt" id="pkSchedCnt" hidden></span></button>
     <button role="tab" data-tab="rules" aria-selected="false">Rules</button>
@@ -161,15 +184,20 @@
     <div><label for="pkBillItems">Items</label><input id="pkBillItems" name="items" type="number" min="1" max="500" inputmode="numeric" placeholder="0"></div>
     <button class="pk-btn" type="button" id="pkAddBtn">Add bill</button>
   </form>
-  <div class="section-label" style="margin-top:14px">Pickers right now</div>
-  <div class="pk-row" id="pkPickers"><span class="pk-empty">Loading…</span></div>
-  <div class="section-label" style="margin-top:14px">Today's bills</div>
+  <div class="section-label pk-sec" style="margin-top:14px" data-collapse="pkPickWrap"><span>Pickers right now</span></div>
+  <div id="pkPickWrap"><div class="pk-key"><span><i style="background:#3b5bdb"></i>Free</span><span><i style="background:#e05252"></i>Picking</span><span><i style="background:#b91c1c"></i>Late</span></div>
+  <div class="pk-row" id="pkPickers"><span class="pk-empty">Loading…</span></div></div>
+  <div class="section-label pk-sec" style="margin-top:14px" data-collapse="pkBills"><span>Today's bills</span></div>
   <div id="pkBills"><div class="pk-empty">Loading…</div></div>
   <div id="pkClose" style="margin-top:14px"></div>
   </section>
   <section data-panel="late" hidden>
     <div class="pk-sub" style="margin-bottom:6px">Today's late picks, bills left waiting, and missing items. Saved for the admin.</div>
     <div id="pkEvents"><div class="pk-empty">Nothing yet today.</div></div>
+  </section>
+  <section data-panel="urgent" hidden>
+    <div class="pk-sub" style="margin-bottom:6px">Today's urgent bills: who picked what and when, and each share of the 10 bonus points.</div>
+    <div id="pkUrgent"><div class="pk-empty">No urgent bills today.</div></div>
   </section>
   <section data-panel="board" hidden><div id="pkBoard"></div></section>
   <section data-panel="sched" hidden>
@@ -256,10 +284,10 @@
       $("pkBills").innerHTML = open.map(function (b) {
         var can = !mine && b.left > 0 && (b.urgent || !urgentLeft);
         return '<div class="pk-bill' + (b.urgent ? " urgent" : "") + '"><div><div class="no">' + billBtn(b) + (b.urgent ? '<span class="pk-u">URGENT</span>' : "") +
-          '</div><div class="sub">added ' + esc(b.added) + " · " + plural(b.items, "item") + "</div></div>" +
+          '</div><div class="sub">added ' + esc(b.added) + " · " + plural(b.items, "item") + (b.score ? '<span class="pk-score">' + b.score + " pts</span>" : "") + "</div></div>" +
           '<div><div class="pk-row">' + prog(b) + '<span class="sub">' + b.done + " / " + b.items + " picked · <b>" + b.left + " left</b></span></div>" + taken(b) + "</div>" +
           '<div class="pk-take"><input class="pk-in" type="number" min="1" max="' + b.left + '" placeholder="0" inputmode="numeric" aria-label="Items you are taking from ' + esc(b.bill_no) + '" id="take' + b.id + '"' + (can ? "" : " disabled") + ">" +
-          '<button type="button" class="pk-btn" data-take="' + b.id + '"' + (can ? "" : " disabled") + ">Take</button></div></div>";
+          '<button type="button" class="pk-btn" data-take="' + b.id + '"' + (can ? "" : " disabled") + ">Pick</button></div></div>";
       }).join("") + (urgentLeft && !mine ? '<div class="pk-note" style="color:var(--bad-ink)">Urgent bills come first.</div>' : "");
       Object.keys(keep).forEach(function (k) { if ($(k)) $(k).value = keep[k]; });
       if (focused && $(focused)) $(focused).focus();
@@ -284,7 +312,7 @@
       return esc(r.name) + " · " + esc(r.bill_no) + " · " + plural(r.items, "item") + " · late by " + clock(r.late_by);
     }).join("<br>") : "";
     $("pkPickers").innerHTML = p.length ? p.map(function (r) {
-      if (r.free) return '<span class="pk-chip free">' + esc(r.name) + " · free · " + plural(r.today_bills, "bill") + "</span>";
+      if (r.free) return '<span class="pk-chip free">' + esc(r.name) + " · free · " + plural(r.today_bills, "bill") + " · " + r.today_points + " pts</span>";
       var lt = r.phase === "late";
       return '<span class="pk-chip ' + (lt ? "late" : "busy") + '" data-due="' + (Date.now() + r.seconds_left * 1000) + '">' + esc(r.name) + " · " + esc(r.bill_no) + " · " + plural(r.items, "item") + ' · <b class="pk-left"></b>' +
         ' <button type="button" class="pk-btn ghost sm" data-release="' + r.claim_id + '">Release</button></span>';
@@ -298,7 +326,7 @@
           ' <button type="button" class="pk-btn ghost sm" data-miss="' + m.id + '" data-act="unavailable">Not available</button></div>';
       }).join("") + "</div>" : "";
       return '<div class="pk-bill' + (b.urgent ? " urgent" : "") + '"' + (b.missing ? ' style="border-left:4px solid var(--bad);padding-left:8px"' : "") + '><div><div class="no">' + billBtn(b) + (b.urgent ? '<span class="pk-u">URGENT</span>' : "") +
-        '</div><div class="sub">added ' + esc(b.added) + " · " + plural(b.items, "item") + "</div>" +
+        '</div><div class="sub">added ' + esc(b.added) + " · " + plural(b.items, "item") + (b.score ? '<span class="pk-score">' + b.score + " pts</span>" : "") + "</div>" +
         (b.status === "open" ? '<div class="sub">open for <b class="pk-el" data-start="' + (Date.now() - b.elapsed * 1000) + '"></b></div>' : "") + "</div>" +
         '<div><div class="pk-row">' + prog(b) + '<span class="sub">' + b.done + " / " + b.items + " · " + st + "</span></div>" + taken(b) + miss + "</div>" +
         "<div>" + (b.status === "open" ? '<div class="pk-row" style="gap:6px"><button type="button" class="pk-btn ghost sm" data-resch="' + b.id + '">Reschedule</button>' +
@@ -306,12 +334,8 @@
         '<input type="date" aria-label="Date"><input type="time" aria-label="Time"><button type="button" class="pk-btn sm" data-rsave="' + b.id + '">Save</button></div>' : "") + "</div></div>";
     }).join("") : '<div class="pk-empty">No bills yet today. Add the first one above.</div>';
     var ev = s.events || [];
-    $("pkEvents").innerHTML = ev.length ? ev.map(function (e) {
-      var label = e.kind === "late" ? "Late" : e.kind === "idle" ? "Waiting" : "Missing";
-      var what = e.kind === "idle" ? "left " + esc(e.bill) + " waiting " + (e.minutes || 0) + " min" :
-                 e.kind === "late" ? "late on " + esc(e.bill) : "could not find " + esc(e.detail) + " on " + esc(e.bill);
-      return '<div class="pk-ev"><span class="k ' + e.kind + '">' + label + "</span> " + esc(e.at) + " · <b>" + esc(e.who) + "</b> " + what + "</div>";
-    }).join("") : '<div class="pk-empty">Nothing yet today.</div>';
+    $("pkEvents").innerHTML = lateByPerson(ev);
+    renderUrgent(s.urgent || []);
     $("pkLateCnt").hidden = !ev.length; $("pkLateCnt").textContent = ev.length;
     var sc = s.scheduled || [];
     $("pkSchedCnt").hidden = !sc.length; $("pkSchedCnt").textContent = sc.length;
@@ -325,6 +349,73 @@
       '<button type="button" class="pk-btn ghost" id="pkCloseBtn">Close today</button> <span class="pk-sub">Counts today\'s bills and fixes it as the checkers\' day total. Unfinished bills move to Rescheduled.</span>';
     renderBoard(s);
     rule(s);
+  }
+
+  // ---- late report, one block per person -----------------------------------
+  function lateByPerson(ev) {
+    if (!ev.length) return '<div class="pk-empty">Nothing yet today.</div>';
+    var by = {}, order = [];
+    ev.forEach(function (e) { if (!by[e.who]) { by[e.who] = []; order.push(e.who); } by[e.who].push(e); });
+    return order.map(function (who) {
+      var rows = by[who], n = {late: 0, idle: 0, missing: 0};
+      rows.forEach(function (e) { n[e.kind] = (n[e.kind] || 0) + 1; });
+      var sum = [n.late ? n.late + " late" : "", n.idle ? n.idle + " waiting" : "", n.missing ? n.missing + " missing" : ""].filter(Boolean).join(" · ");
+      return '<div class="pk-lp"><div>' + esc(who || "—") + "<span>" + sum + '</span></div><table class="pk-lt"><tbody>' + rows.map(function (e) {
+        var label = {late: "Late", idle: "Waiting", missing: "Missing"}[e.kind] || e.kind;
+        var what = e.kind === "idle" ? "Bill <b>" + esc(e.bill) + "</b> left waiting " + (e.minutes || 0) + " min" :
+                   e.kind === "late" ? "Bill <b>" + esc(e.bill) + "</b>" + (e.minutes ? " · " + e.minutes + " min late" : " · still not finished") :
+                   "Bill <b>" + esc(e.bill) + "</b> · item <b>" + esc(e.item || e.detail) + "</b>" + (e.qty ? " ×" + e.qty : "");
+        return '<tr><td class="k ' + e.kind + '">' + label + '</td><td style="white-space:nowrap">' + esc(e.at) + "</td><td>" + what + "</td></tr>";
+      }).join("") + "</tbody></table></div>";
+    }).join("");
+  }
+
+  // ---- urgent bills: who picked what, when, bonus share, with a pie ----------
+  var urgCharts = [];
+  function renderUrgent(list) {
+    if (!$("pkUrgent")) return;
+    $("pkUrgCnt").hidden = !list.length; $("pkUrgCnt").textContent = list.length;
+    var key = JSON.stringify(list.map(function (u) { return [u.id, u.status, u.score, u.grabs.length]; }));
+    if ($("pkUrgent").getAttribute("data-key") === key) return;
+    $("pkUrgent").setAttribute("data-key", key);
+    urgCharts.forEach(function (c) { c.destroy(); }); urgCharts = [];
+    if (!list.length) { $("pkUrgent").innerHTML = '<div class="pk-empty">No urgent bills today.</div>'; return; }
+    $("pkUrgent").innerHTML = list.map(function (u) {
+      return '<div class="pk-ur"><div class="pk-urtop"><div><div class="no" style="font-weight:800">' + billBtn(u) + '<span class="pk-u">URGENT</span></div>' +
+        '<div class="sub">' + plural(u.items, "item") + " · added " + esc(u.added) + (u.completed ? " · done " + esc(u.completed) + " (" + u.minutes + " min)" : " · " + esc(u.status)) +
+        ' · bill score <b>' + u.score + " pts</b></div>" +
+        '<div class="pk-urtw"><table><thead><tr><th>Picker</th><th>Took</th><th>Done</th><th>Min</th><th>Items</th><th>Result</th><th>Points</th><th>Bonus</th></tr></thead><tbody>' +
+        u.grabs.map(function (g) { return "<tr><td><b>" + esc(g.picker) + "</b></td><td>" + esc(g.took) + "</td><td>" + (esc(g.done) || "—") + "</td><td>" + g.minutes + "</td><td>" + g.picked + "/" + g.items +
+          '</td><td style="' + (g.outcome === "late" ? "color:var(--bad-ink);font-weight:700" : "") + '">' + ({ontime: "On time", extra: "Extra time", report: "Reported", late: "Late"}[g.outcome] || (g.status === "active" ? "Picking" : "")) +
+          "</td><td>" + g.points + "</td><td><b>+" + g.bonus + "</b></td></tr>"; }).join("") + "</tbody></table></div></div>" +
+        '<div><canvas id="urg' + u.id + '" role="img" aria-label="Items per picker on ' + esc(u.bill_no) + '"></canvas></div></div></div>';
+    }).join("");
+    chartLib(function () {
+      var pal = ["#146B4A", "#E8A13A", "#1E40AF", "#C8553D", "#7C3AED", "#0E7490"];
+      list.forEach(function (u) {
+        var by = {}; u.grabs.forEach(function (g) { by[g.picker] = (by[g.picker] || 0) + g.picked; });
+        var names = Object.keys(by).filter(function (n) { return by[n] > 0; }), el = $("urg" + u.id);
+        if (!el || !names.length) return;
+        urgCharts.push(new Chart(el, {type: "doughnut", data: {labels: names, datasets: [{data: names.map(function (n) { return by[n]; }),
+          backgroundColor: names.map(function (n, i) { return pal[i % pal.length]; })}]},
+          options: {responsive: true, maintainAspectRatio: false, animation: false, plugins: {legend: {position: "bottom", labels: {boxWidth: 10, font: {size: 11}}}}}}));
+      });
+    });
+  }
+
+  // ---- minimise / maximise any section ------------------------------------
+  function setupCollapse() {
+    Array.prototype.forEach.call(app.querySelectorAll("[data-collapse]"), function (h) {
+      if (h.querySelector(".pk-min")) return;
+      var id = h.getAttribute("data-collapse"), key = "pkMin-" + role + "-" + id, b = document.createElement("button");
+      b.type = "button"; b.className = "pk-min"; b.setAttribute("aria-controls", id);
+      function apply(min) { var t = $(id); if (t) t.hidden = min; b.textContent = min ? "+" : "−"; b.setAttribute("aria-expanded", String(!min));
+        b.setAttribute("aria-label", (min ? "Show " : "Hide ") + h.textContent.trim()); }
+      var min = false; try { min = sessionStorage.getItem(key) === "1"; } catch (e) {}
+      apply(min);
+      b.addEventListener("click", function () { min = !min; apply(min); try { sessionStorage.setItem(key, min ? "1" : "0"); } catch (e) {} });
+      h.appendChild(b);
+    });
   }
 
   // ---- leaderboard (both roles) ------------------------------------------
@@ -508,6 +599,7 @@
   });
 
   document.addEventListener("keydown", function (e) { if (e.key === "Escape" && !$("pkModal").hidden) closeModal(); });
+  setupCollapse();
   try { var lastTab = sessionStorage.getItem("pkTab-" + role); if (lastTab && app.querySelector('[data-tab="' + lastTab + '"]')) showTab(lastTab); } catch (e) {}
   load();
   setInterval(load, 10000);

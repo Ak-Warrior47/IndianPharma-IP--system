@@ -148,17 +148,19 @@ details.pa-pk[open] summary::after{content:"Hide"}
       {% endfor %}
       </tbody></table></div></section>
 
-  <section class="pa-box"><h2>Late report <small>{{ rep.events|length }} · late picks, bills left waiting, missing items</small></h2>
-    <div class="pa-tw"><table class="pa-t" id="paEvents">
-      <thead><tr><th>Date</th><th>Time</th><th>Type</th><th>Picker</th><th>What</th></tr></thead>
-      <tbody>
-      {% for e in rep.events %}
-        <tr class="{{ 'bad' if e.kind == 'late' else '' }}"><td>{{ e.date }}</td><td>{{ e.at }}</td><td><strong>{{ e.label }}</strong></td><td>{{ e.who }}</td>
-          <td>{% if e.kind == 'late' %}Late on {{ e.bill }}{% if e.minutes %} — {{ e.minutes }} min{% endif %}{% elif e.kind == 'idle' %}Left {{ e.bill }} waiting {{ e.minutes }} min{% else %}Could not find {{ e.detail }} on {{ e.bill }}{% endif %}</td></tr>
-      {% else %}
-        <tr><td colspan="5" class="pa-empty">Nobody was late or left a bill waiting.</td></tr>
-      {% endfor %}
-      </tbody></table></div></section>
+  <section class="pa-box"><h2>Late report <small>{{ rep.events|length }} · grouped by person</small></h2>
+    <div id="paEvents">
+    {% for who, rows in rep.events|groupby('who') %}
+      <div style="border:1px solid var(--line);border-radius:10px;margin-bottom:8px;overflow:hidden">
+        <div style="display:flex;justify-content:space-between;padding:7px 10px;background:var(--accent-tint,#eef4ff);font-weight:700;font-size:13.5px">{{ who or '—' }}
+          <span style="font-weight:600;font-size:12px;color:var(--ink-3)">{{ rows|selectattr('kind','equalto','late')|list|length }} late · {{ rows|selectattr('kind','equalto','idle')|list|length }} waiting · {{ rows|selectattr('kind','equalto','missing')|list|length }} missing</span></div>
+        <table class="pa-t" style="font-size:13px"><tbody>
+        {% for e in rows %}<tr class="{{ 'bad' if e.kind == 'late' else '' }}"><td style="width:70px;white-space:nowrap">{{ e.date }}</td><td style="width:80px;white-space:nowrap">{{ e.at }}</td>
+          <td style="width:80px"><strong style="color:{{ {'late':'#991b1b','idle':'#8a4208','missing':'#7c3aed'}[e.kind] }}">{{ e.label }}</strong></td><td style="width:130px">{{ e.bill }}</td>
+          <td>{% if e.kind == 'late' %}{% if e.minutes %}{{ e.minutes }} min late{% else %}still not finished{% endif %}{% elif e.kind == 'idle' %}left waiting {{ e.minutes }} min{% else %}item <strong>{{ e.detail.rsplit(' x', 1)[0] }}</strong>{% if ' x' in e.detail %} ×{{ e.detail.rsplit(' x', 1)[1] }}{% endif %}{% endif %}</td></tr>{% endfor %}
+        </tbody></table></div>
+    {% else %}<div class="pa-empty">Nobody was late or left a bill waiting.</div>{% endfor %}
+    </div></section>
 
   <section class="pa-box"><h2>Each picker, bill by bill</h2>
     {% for x in rep.board %}

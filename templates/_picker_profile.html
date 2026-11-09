@@ -68,14 +68,14 @@
       <div><span>Missing</span><b>{{ pp.chosen.missing }}</b></div>
     </div>
     <div class="pp-wrap" data-pppanel="grabs"><table class="pp-t" id="ppGrabs">
-      <thead><tr><th>Bill</th><th>Took</th><th>Done</th><th>Minutes</th><th>Items</th><th>Picked</th><th>Not found</th><th>Result</th><th>Points</th><th></th></tr></thead>
+      <thead><tr><th>Bill</th><th>Took</th><th>Done</th><th>Minutes</th><th>Items</th><th>Picked</th><th>Not found</th><th>Result</th><th>Points</th><th>Urgent bonus</th><th></th></tr></thead>
       <tbody>
       {% for g in pp.grabs %}
         <tr><td><b>{{ g.bill_no }}</b>{% if g.urgent %}<span class="pp-u">U</span>{% endif %}</td><td>{{ g.took }}</td><td>{{ g.done }}</td><td>{{ g.minutes }}</td>
           <td>{{ g['items'] }}</td><td>{{ g.picked }}</td><td>{{ g.missing or '' }}</td>
-          <td class="{{ 'pp-late' if g.late else '' }}">{{ g.outcome }}</td><td>{{ g.points }}</td>
+          <td class="{{ 'pp-late' if g.late else '' }}">{{ g.outcome }}</td><td>{{ g.points }}</td><td>{{ ('+' ~ g.bonus) if g.bonus else '' }}</td>
           <td><button type="button" class="pp-flow" data-bill-flow="{{ g.bill_id }}">Flowchart</button></td></tr>
-      {% else %}<tr><td colspan="10" style="color:var(--ink-3,#64748b)">No picking on this day.</td></tr>{% endfor %}
+      {% else %}<tr><td colspan="11" style="color:var(--ink-3,#64748b)">No picking on this day.</td></tr>{% endfor %}
       </tbody></table></div>
     <div class="pp-wrap" data-pppanel="bills" hidden><table class="pp-t" id="ppBills">
       <thead><tr><th>Bill</th><th>Items picked</th><th>Not found</th><th>Grabs</th><th>Points</th><th></th></tr></thead>
@@ -87,16 +87,38 @@
       {% else %}<tr><td colspan="6" style="color:var(--ink-3,#64748b)">No bills on this day.</td></tr>{% endfor %}
       </tbody></table></div>
   </div>
-  <div class="pp-card" style="margin-top:12px"><h3>Late report — {{ pp.day.strftime('%d %b') }}</h3>
+  <div class="pp-card" style="margin-top:12px" id="ppUrgent"><h3>Urgent bills — {{ pp.day.strftime('%d %b') }}</h3>
+    {% if pp.urgent %}
+    <div style="display:grid;grid-template-columns:2fr 1fr;gap:14px;align-items:start">
+      <div class="pp-wrap">
+      {% for u in pp.urgent %}
+        <div style="margin-bottom:10px"><b>{{ u.bill_no }}</b><span class="pp-u">URGENT</span>
+          <span style="color:var(--ink-3,#64748b);font-size:13px"> · {{ u['items'] }} items · added {{ u.added }}{% if u.completed %} · done {{ u.completed }} ({{ u.minutes }} min){% endif %} · bill score {{ u.score }} pts</span>
+          <button type="button" class="pp-flow" data-bill-flow="{{ u.id }}">Flowchart</button>
+          <table class="pp-t" style="margin-top:4px"><thead><tr><th>Picker</th><th>Took</th><th>Done</th><th>Min</th><th>Items</th><th>Result</th><th>Points</th><th>Bonus</th></tr></thead><tbody>
+          {% for g in u.grabs %}<tr {% if g.picker_id == pp.picker_id %}style="background:var(--accent-tint,#eef4ff);font-weight:600"{% endif %}><td>{{ g.picker }}</td><td>{{ g.took }}</td><td>{{ g.done or '—' }}</td><td>{{ g.minutes }}</td>
+            <td>{{ g.picked }}/{{ g['items'] }}</td><td class="{{ 'pp-late' if g.outcome == 'late' else '' }}">{{ {'ontime':'On time','extra':'Extra time','report':'Reported','late':'Late'}.get(g.outcome, 'Picking' if g.status == 'active' else '') }}</td>
+            <td>{{ g.points }}</td><td><b>+{{ g.bonus }}</b></td></tr>{% endfor %}
+          </tbody></table></div>
+      {% endfor %}
+      </div>
+      <div><div style="font-size:12px;font-weight:700;color:var(--ink-3,#64748b);text-transform:uppercase">Urgent vs normal items</div>
+        <canvas id="ppUrgPie" role="img" aria-label="Urgent and normal items picked" style="width:100%;height:190px"></canvas></div>
+    </div>
+    {% else %}<div class="pp-ev" style="color:var(--ink-3,#64748b)">No urgent bills on this day.</div>{% endif %}
+  </div>
+  <div class="pp-card" style="margin-top:12px"><h3>Late report — {{ pp.day.strftime('%d %b') }}{% if pp.events %} · {{ pp.events|selectattr('kind','equalto','late')|list|length }} late · {{ pp.events|selectattr('kind','equalto','idle')|list|length }} waiting · {{ pp.events|selectattr('kind','equalto','missing')|list|length }} missing{% endif %}</h3>
+    {% if pp.events %}<table class="pp-t"><thead><tr><th>Type</th><th>Time</th><th>Bill number</th><th>Item / details</th></tr></thead><tbody>
     {% for e in pp.events %}
-      <div class="pp-ev"><b class="k" style="color:{{ {'late':'#991b1b','idle':'#8a4208','missing':'#7c3aed'}[e.kind] }}">{{ {'late':'Late','idle':'Waiting','missing':'Missing'}[e.kind] }}</b>
-        {{ e.at }} · {% if e.kind == 'late' %}late on {{ e.bill }}{% if e.minutes %} ({{ e.minutes }} min){% endif %}{% elif e.kind == 'idle' %}left {{ e.bill }} waiting {{ e.minutes }} min{% else %}could not find {{ e.detail }} on {{ e.bill }}{% endif %}</div>
-    {% else %}<div class="pp-ev" style="color:var(--ink-3,#64748b)">Nothing on this day.</div>{% endfor %}
+      <tr><td><b style="color:{{ {'late':'#991b1b','idle':'#8a4208','missing':'#7c3aed'}[e.kind] }}">{{ {'late':'Late','idle':'Waiting','missing':'Missing'}[e.kind] }}</b></td><td>{{ e.at }}</td><td>{{ e.bill }}</td>
+        <td>{% if e.kind == 'late' %}{% if e.minutes %}{{ e.minutes }} min late{% else %}still not finished{% endif %}{% elif e.kind == 'idle' %}left waiting {{ e.minutes }} min{% else %}{{ e.detail.rsplit(' x', 1)[0] }}{% if ' x' in e.detail %} ×{{ e.detail.rsplit(' x', 1)[1] }}{% endif %}{% endif %}</td></tr>
+    {% endfor %}</tbody></table>
+    {% else %}<div class="pp-ev" style="color:var(--ink-3,#64748b)">Nothing on this day.</div>{% endif %}
   </div>
 </section>
 <script>
 (function () {
-  var daily = {{ pp.daily|tojson }};
+  var daily = {{ pp.daily|tojson }}, usplit = {{ pp.urgent_split|tojson }};
   function draw() {
     if (!window.Chart) {
       if (!draw.asked) { draw.asked = 1; var sc = document.createElement("script"); sc.src = "/static/js/chart.umd.min.js"; document.head.appendChild(sc); }
@@ -106,6 +128,10 @@
       {label: "Bills", data: daily.map(function (d) { return d.bills; }), backgroundColor: "#1E40AF"},
       {label: "Items", data: daily.map(function (d) { return d.items; }), backgroundColor: "#146B4A"}]},
       options: {responsive: true, maintainAspectRatio: false, scales: {y: {beginAtZero: true, ticks: {precision: 0}}}}});
+    var up = document.getElementById("ppUrgPie");
+    if (up && (usplit.urgent || usplit.normal)) new Chart(up, {type: "doughnut", data: {labels: ["Urgent", "Normal"],
+      datasets: [{data: [usplit.urgent, usplit.normal], backgroundColor: ["#B91C1C", "#146B4A"]}]},
+      options: {responsive: true, maintainAspectRatio: false, plugins: {legend: {position: "bottom"}}}});
   }
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", draw); else draw();
   document.addEventListener("click", function (e) {

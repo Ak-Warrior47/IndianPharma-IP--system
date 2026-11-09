@@ -560,6 +560,46 @@ with app.app_context():
         db.session.delete(e)
         db.session.commit()
 
+# ---- 13. Owner's round: Pick button, red/blue, live score, urgent detail, ---
+#          late report by person, minimise sections
+pdash = c1.get("/dashboard").data.decode()
+check("13.1 The picker's button says Pick", ">Pick</button>" in open(os.path.join(REPO, "templates", "_picking.html")).read() and ">Take<" not in open(os.path.join(REPO, "templates", "_picking.html")).read())
+_pkh = open(os.path.join(REPO, "templates", "_picking.html")).read()
+check("13.2 Free pickers are blue and busy pickers red on the assigner screen",
+      ".pk-chip.free{background:#e8eefc" in _pkh and ".pk-chip.busy{background:#fdecec" in _pkh)
+check("13.3 Sections can be minimised and maximised", 'data-collapse="pkBills"' in _pkh and "function setupCollapse" in _pkh)
+sa13 = ca.get("/pick/state.json").get_json()
+urg = sa13.get("urgent") or []
+check("13.4 The assigner gets today's urgent bills with who picked what, when and the bonus share",
+      urg and all({"picker", "took", "done", "picked", "bonus"} <= set(g) for u in urg for g in u["grabs"]), str(urg)[:200])
+u0 = next((u for u in urg if u["id"] == UB), None)
+check("13.5 Urgent bill shares add up to the 10-point pool (7.5 + 2.5)", u0 and sum(g["bonus"] for g in u0["grabs"]) == 10.0, str(u0))
+check("13.6 Every bill shows its live score (points earned on it)", all("score" in b for b in sa13["bills"])
+      and next(b for b in sa13["bills"] if b["id"] == UB)["score"] > 0)
+ev13 = [e for e in sa13["events"] if e["kind"] == "missing"]
+check("13.7 Late report entries carry the bill number and item name separately", ev13 and ev13[0]["bill"] and ev13[0]["item"] and ev13[0]["qty"])
+check("13.8 The assigner's late report is grouped by person", "function lateByPerson" in _pkh)
+with app.app_context():
+    adm = Employee.query.filter_by(email="pk_adm3@x.com").first()
+    if not adm:
+        adm = Employee(name="PK Admin3", email="pk_adm3@x.com", staff_type="picker", is_admin=True)
+        adm.set_password(PW)
+        db.session.add(adm)
+        db.session.commit()
+ca3 = login("pk_adm3@x.com")
+prof13 = ca3.get("/staff/%d" % ids["p1"]).data.decode()
+check("13.9 The staff profile shows the picker's urgent bills with times, bonus and a pie chart",
+      'id="ppUrgent"' in prof13 and A.fy_prefix() + "5002" in prof13 and 'id="ppUrgPie"' in prof13)
+check("13.10 The profile's grab table shows the urgent bonus in its own column", "Urgent bonus" in prof13)
+rep13 = ca3.get("/picking?tab=reports&period=month").data.decode()
+check("13.11 The admin late report is grouped by person with bill number and item",
+      "grouped by person" in rep13 and "item <strong>Dolo 650</strong>" in rep13)
+with app.app_context():
+    e = Employee.query.filter_by(email="pk_adm3@x.com").first()
+    if e:
+        db.session.delete(e)
+        db.session.commit()
+
 # ---- 8. Trial copy: test accounts and banner, never on the live database -----
 TRIAL = ["ravi@pharmaip.com", "lisa@pharmaip.com", "smriti@pharmaip.com", "deepti@pharmaip.com",
          "amit@pharmaip.com"]

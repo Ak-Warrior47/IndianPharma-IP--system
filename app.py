@@ -2323,6 +2323,32 @@ def bill_timeline(bill_id):
             "grabs": rows, "missing": miss}
 
 
+def urgent_bills(day=None, picker_id=None):
+    """The day's urgent bills: who picked what, when, and each share of the
+    bonus pool. With picker_id, only bills that picker worked on."""
+    day = day or date.today()
+    start = datetime.combine(day, datetime.min.time())
+    names = {e.id: e.name for e in Employee.query.all()}
+    out = []
+    for b in PickBill.query.filter(PickBill.is_urgent.is_(True), PickBill.created_at >= start,
+                                   PickBill.created_at < start + timedelta(days=1)).order_by(PickBill.created_at).all():
+        claims = PickClaim.query.filter(PickClaim.bill_id == b.id, PickClaim.status != "cancelled").order_by(PickClaim.started_at).all()
+        if picker_id and not any(c.picker_id == picker_id for c in claims):
+            continue
+        rows = [{"picker": names.get(c.picker_id, ""), "picker_id": c.picker_id, "items": c.items,
+                 "picked": c.picked if c.picked is not None else (c.items if c.status == "done" else 0),
+                 "took": ist12(c.started_at), "done": ist12(c.done_at), "status": c.status,
+                 "minutes": round(((c.done_at or datetime.utcnow()) - c.started_at).total_seconds() / 60.0, 1),
+                 "outcome": c.outcome or "", "points": round(float(c.points or 0), 1), "bonus": round(float(c.bonus or 0), 1)}
+                for c in claims]
+        out.append({"id": b.id, "bill_no": b.bill_no, "items": b.items, "status": b.status, "added": ist12(b.created_at),
+                    "completed": ist12(b.completed_at),
+                    "minutes": round((b.completed_at - b.created_at).total_seconds() / 60.0, 1) if b.completed_at else None,
+                    "pool": PICK_URGENT_POOL, "grabs": rows,
+                    "score": round(sum(r["points"] + r["bonus"] for r in rows), 1)})
+    return out
+
+
 def pick_board(day=None):
     """Today's leaderboard: bills first, then items, then on time, then points."""
     day = day or date.today()
@@ -2365,7 +2391,8 @@ def picker_profile(emp_id, day=None):
                       "took": ist12(c.started_at), "done": ist12(c.done_at),
                       "minutes": round((c.done_at - c.started_at).total_seconds() / 60.0, 1),
                       "outcome": {"ontime": "On time", "extra": "Extra time", "report": "Reported", "late": "Late"}.get(c.outcome or "", ""),
-                      "late": c.outcome == "late", "points": round(float(c.points or 0) + float(c.bonus or 0), 1)})
+                      "late": c.outcome == "late", "bonus": round(float(c.bonus or 0), 1),
+                      "points": round(float(c.points or 0) + float(c.bonus or 0), 1)})
     by_bill = {}
     for r in bills:
         x = by_bill.setdefault(r["bill_id"], {"bill_id": r["bill_id"], "bill_no": r["bill_no"], "urgent": r["urgent"],
@@ -2375,7 +2402,11 @@ def picker_profile(emp_id, day=None):
         x["points"] = round(x["points"] + r["points"], 1)
         x["grabs"] += 1
         x["late"] = x["late"] or r["late"]
-    return {"picker_id": emp_id, "day": day, "today": summary([today]), "week": summary(span(monday, today)),
+    urg = urgent_bills(day, emp_id)
+    my_urgent = sum(g["picked"] for u in urg for g in u["grabs"] if g["picker_id"] == emp_id)
+    day_items = picker_pick_stats(emp_id, [day])["items"]
+    return {"picker_id": emp_id, "day": day, "urgent": urg, "urgent_split": {"urgent": my_urgent, "normal": max(day_items - my_urgent, 0)},
+            "today": summary([today]), "week": summary(span(monday, today)),
             "month": summary(span(today.replace(day=1), today)), "daily": daily, "grabs": bills,
             "bills": list(by_bill.values()), "chosen": summary([day]),
             "events": [{"kind": e.kind, "at": ist12(e.at), "minutes": e.minutes, "detail": e.detail or "",
@@ -2667,7 +2698,9 @@ def picking_state(emp, staff_type):
             secs_left = int((ac.due_at - now).total_seconds()) if (ac and ac.bill_id == b.id) else None
             taken.append({"name": names.get(pid, "#%d" % pid), "items": r["items"] + r["active"], "left": secs_left,
                           "state": "late" if (r["late"] or late_now) else ("picking" if r["active"] else "done")})
-        return {"id": b.id, "bill_no": b.bill_no, "items": b.items, "status": b.status, "urgent": bool(b.is_urgent),
+        score = round(sum(float(c.points or 0) + float(c.bonus or 0)
+                          for c in PickClaim.query.filter_by(bill_id=b.id, status="done").all()), 1)
+        return {"id": b.id, "bill_no": b.bill_no, "items": b.items, "status": b.status, "urgent": bool(b.is_urgent), "score": score,
                 "done": pr["done"], "active": pr["active"], "left": pr["left"], "missing": pr["missing"],
                 "taken": taken, "pickers": [t["name"] for t in taken],
                 "missing_rows": [{"id": m.id, "item": m.item_name, "qty": m.qty, "by": names.get(m.picker_id, ""),
@@ -2716,10 +2749,14 @@ def picking_state(emp, staff_type):
             r.update({"today_bills": st["bills"], "today_items": st["items"], "today_points": st["points"]})
             rows.append(r)
         out["pickers"] = rows
+        out["urgent"] = urgent_bills(today)
         evs = PickEvent.query.filter_by(day=today).order_by(PickEvent.at.desc()).limit(100).all()
         bill_no = {b.id: b.bill_no for b in PickBill.query.filter(PickBill.id.in_({e.bill_id for e in evs if e.bill_id})).all()} if evs else {}
         out["events"] = [{"kind": e.kind, "who": names.get(e.picker_id, ""), "bill": bill_no.get(e.bill_id, ""),
-                          "at": ist12(e.at), "minutes": e.minutes, "detail": e.detail or ""} for e in evs]
+                          "at": ist12(e.at), "minutes": e.minutes, "detail": e.detail or "",
+                          "item": (e.detail or "").rsplit(" x", 1)[0] if e.kind == "missing" else "",
+                          "qty": int((e.detail or "").rsplit(" x", 1)[1]) if e.kind == "missing" and " x" in (e.detail or "")
+                                 and (e.detail or "").rsplit(" x", 1)[1].isdigit() else None} for e in evs]
     return out
 
 
