@@ -5237,6 +5237,12 @@ except Exception as _e:
 
 @app.route('/health')
 def health_check():
+    """Render asks this every few seconds and restarts the site if it takes
+    more than 5 s. It must answer at once, so it does not wait for the
+    database (a slow database moment once got the site restarted). Add
+    ?db=1 to also check the database."""
+    if request.args.get("db") != "1":
+        return jsonify(status="ok"), 200
     try:
         db.session.execute(db.text("SELECT 1"))
         db_ok = True

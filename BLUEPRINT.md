@@ -150,7 +150,9 @@ month (calendar month). Targets only go up.
 - **No internet**: taps are kept and sent when it is back; buttons never hang.
 - **New version**: open phones reload by themselves.
 - **Saving the free server**: a screen nobody touches for 10 minutes checks
-  every 30 s; after 30 minutes it stops until someone taps it.
+  every 30 s; after 30 minutes it stops until someone taps it. At night
+  (10 PM - 7 AM) it stops after 5 minutes. This lets Render's free server
+  sleep when nobody is working.
 
 ## 8. Speed
 
@@ -170,6 +172,8 @@ month (calendar month). Targets only go up.
   all month, not two), limited build minutes and bandwidth.
 - Builds happen only when files the live app runs change (`render.yaml`
   buildFilter). Tests, this blueprint and notes do not use build minutes.
+- Render's health check uses `/health`, which answers at once without the
+  database, so a slow database moment no longer gets the site restarted.
 - Keep only ONE Render service. A second one (e.g. an old trial copy)
   shares the same free hours and makes them run out early.
 - `DATABASE_URL` always points to Supabase. Never add a Render database.

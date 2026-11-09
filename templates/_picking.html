@@ -1037,6 +1037,9 @@ body.pk-full .pk-msg.on{position:sticky;top:0;z-index:2}
   setInterval(function () {
     if (document.hidden) return;
     var idle = Date.now() - lastTouch, gap = (mine || idle < 600000) ? 3000 : idle < 1800000 ? 30000 : Infinity;
+    // Night (10 PM - 7 AM India time): nobody picking -> stop after 5 minutes.
+    var h = new Date(Date.now() + 330 * 60000).getUTCHours();
+    if (!mine && (h >= 22 || h < 7) && idle >= 300000) gap = Infinity;
     if (Date.now() - lastPoll >= gap) { lastPoll = Date.now(); load(); }
   }, 3000);
   document.addEventListener("visibilitychange", function () { if (!document.hidden) { lastTouch = Date.now(); load(); } });

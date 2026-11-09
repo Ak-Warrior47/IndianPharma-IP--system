@@ -22,6 +22,9 @@ services:
     # One worker on purpose: APScheduler runs in-process, so a second worker
     # would fire the monthly report job twice and send duplicate email.
     startCommand: gunicorn -k eventlet -w 1 app:app --bind 0.0.0.0:$PORT --timeout 120
+    # Render restarts the site if this does not answer within 5 s; /health
+    # answers at once without touching the database.
+    healthCheckPath: /health
     # Free plan has a monthly allowance of build minutes: rebuild only when
     # something the live app runs has changed. Changes to tests, notes and
     # the blueprint do not start a deploy.
