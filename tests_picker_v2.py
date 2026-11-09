@@ -1005,7 +1005,12 @@ csv22 = cadm.get("/picking/report.csv?period=today")
 check("22.9 Reports are never kept stale", "max-age=604800" not in (csv22.headers.get("Cache-Control") or ""))
 _pk23 = open(os.path.join(REPO, "templates", "_picking.html")).read()
 check("23.1 Phones see other phones' changes within about 3 seconds, and stop asking while hidden",
-      "setInterval(function () { if (!document.hidden) load(); }, 3000);" in _pk23 and '"visibilitychange"' in _pk23)
+      "if (document.hidden) return;" in _pk23 and '"visibilitychange"' in _pk23 and "(mine || idle < 600000) ? 3000" in _pk23)
+check("23.1b An untouched screen slows to 30 s after 10 min and stops after 30 min (saves the free server)",
+      "idle < 1800000 ? 30000 : Infinity" in _pk23)
+_ry = open(os.path.join(REPO, "render.yaml")).read()
+check("23.1c Render rebuilds only when the live app changes (tests and notes do not use build minutes)",
+      "buildFilter:" in _ry and "- templates/**" in _ry and "tests_" not in _ry.split("buildFilter:")[1].split("envVars")[0])
 check("23.2 Late / idle alerts no longer make a phone's refresh wait", "alert_late_picks_later(now)" in open(os.path.join(REPO, "app.py")).read())
 # ---- 24. One phone per login, pause grace, switch bill, offline, confirm ----
 c_a = login("pk_p3@x.com")

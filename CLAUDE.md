@@ -13,6 +13,12 @@ eventlet worker); the database is Supabase PostgreSQL.
 - Work on the assigned `claude/...` branch, then fast-forward `main` and push
   both (the owner approved this flow). No pull requests unless asked.
 - Every change ships with tests, and `./run_tests.sh` must be green first.
+- Every change also updates `BLUEPRINT.md` (the owner's plain-language
+  blueprint of the whole software). Rewrite the affected section; never
+  append history. At the end of the day re-check it against the code.
+- Render free plan: push to `main` once per finished request, not per small
+  step (each deploy uses build minutes). `render.yaml` buildFilter skips
+  builds for tests and docs. Keep a single Render service.
 
 ## Commands
 - Python is `python3.13`. Unset `DATABASE_URL` for local work: the app falls
@@ -35,6 +41,7 @@ eventlet worker); the database is Supabase PostgreSQL.
 - `static/js/email-suggest.js`: the @pharmaip.com pop-up. Any page with an
   email input must load it (`tests_email_suggest.py` checks).
 - `utils.py`: the PDF report. `picking_pdf.py`: the picking report PDF.
+- `BLUEPRINT.md`: the whole software in plain words, for the owner.
 - Picking (bill-based): models `PickBill`, `PickClaim`, `PickMissing`,
   `PickEvent`, `PickDay`; `picking_state()` builds every live screen in a
   fixed handful of queries; `templates/_picking.html` is the picker and Pick
