@@ -104,6 +104,11 @@
 #pickApp [hidden]{display:none!important}
 .pk-tabs .cnt.ok{background:var(--ok)}
 .pk-bulk{gap:6px;margin:0 0 8px}
+.pk-urgbox{border:1.5px solid #f3b4b4;background:#fff7f7;border-radius:12px;padding:4px 10px;margin:0 0 10px}
+.pk-grph{font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.5px;color:var(--ink-3);margin:8px 0 2px}
+.pk-urgbox .pk-grph{color:var(--bad-ink)}
+.pk-urgbox .pk-bill.urgent{background:transparent;border:0;padding:8px 0;margin:0;border-top:1px solid #f6d0d0}
+.pk-urgbox .pk-bill.urgent:first-of-type{border-top:0}
 .pk-n{display:inline-block;min-width:20px;margin-left:6px;padding:0 6px;border-radius:9px;background:var(--line);color:var(--ink);font-size:12px;line-height:20px;text-align:center}
 .pk-link{border:0;background:none;padding:0;font:inherit;color:var(--brand);font-weight:700;text-decoration:underline;cursor:pointer}
 /* Picking one bill: the whole screen is that bill, nothing else. */
@@ -120,8 +125,8 @@ body.pk-full .pk-who{justify-content:center;max-width:620px;width:100%;margin:0 
 /* While picking, the whole screen shows the phase:
    green = normal time, orange = extra time to find, red = time over,
    flashing red = late, grey = paused by the assigner. */
-body.pk-full[data-pk-tone="pk-green"] #pickApp{background:#d1fae0}
-body.pk-full[data-pk-tone="pk-orange"] #pickApp{background:#ea580c}
+body.pk-full[data-pk-tone="pk-green"] #pickApp{background:#effcf3}
+body.pk-full[data-pk-tone="pk-orange"] #pickApp{background:#ffedd5}
 body.pk-full[data-pk-tone="pk-red"] #pickApp{background:#fee2e2}
 body.pk-full[data-pk-tone="pk-late"] #pickApp{background:#fecaca;animation:pk-alarm 1s steps(2,end) infinite}
 body.pk-full[data-pk-tone="pk-grey"] #pickApp{background:#475569}
@@ -139,17 +144,21 @@ body.pk-full.pk-toned .pk-who b,body.pk-full.pk-toned .pk-whoday{color:#fff}
 body.pk-full.pk-toned .pk-whorole{background:rgba(255,255,255,.2);color:#fff}
 body.pk-full.pk-toned .pk-msg.on{background:#fff}
 /* Light green and light red screens: dark text so it reads well. */
-body.pk-full[data-pk-tone="pk-green"] #pkMine,body.pk-full[data-pk-tone="pk-green"] #pkMine .pk-phase,body.pk-full[data-pk-tone="pk-green"] #pkMine .pk-billno,body.pk-full[data-pk-tone="pk-green"] #pkMine .pk-items,body.pk-full[data-pk-tone="pk-green"] #pkMine .pk-clock,body.pk-full[data-pk-tone="pk-green"] #pkMine #pkLateText,body.pk-full[data-pk-tone="pk-green"] #pkMine .pk-who b,body.pk-full[data-pk-tone="pk-red"] #pkMine,body.pk-full[data-pk-tone="pk-red"] #pkMine .pk-phase,body.pk-full[data-pk-tone="pk-red"] #pkMine .pk-billno,body.pk-full[data-pk-tone="pk-red"] #pkMine .pk-items,body.pk-full[data-pk-tone="pk-red"] #pkMine .pk-clock,body.pk-full[data-pk-tone="pk-red"] #pkMine #pkLateText,body.pk-full[data-pk-tone="pk-red"] #pkMine .pk-who b,body.pk-full[data-pk-tone="pk-late"] #pkMine,body.pk-full[data-pk-tone="pk-late"] #pkMine .pk-phase,body.pk-full[data-pk-tone="pk-late"] #pkMine .pk-billno,body.pk-full[data-pk-tone="pk-late"] #pkMine .pk-items,body.pk-full[data-pk-tone="pk-late"] #pkMine .pk-clock,body.pk-full[data-pk-tone="pk-late"] #pkMine #pkLateText,body.pk-full[data-pk-tone="pk-late"] #pkMine .pk-who b{color:var(--tone-ink)!important}
+body.pk-full[data-pk-tone="pk-green"] #pkMine,body.pk-full[data-pk-tone="pk-green"] #pkMine .pk-phase,body.pk-full[data-pk-tone="pk-green"] #pkMine .pk-billno,body.pk-full[data-pk-tone="pk-green"] #pkMine .pk-items,body.pk-full[data-pk-tone="pk-green"] #pkMine .pk-clock,body.pk-full[data-pk-tone="pk-green"] #pkMine #pkLateText,body.pk-full[data-pk-tone="pk-green"] #pkMine .pk-who b,body.pk-full[data-pk-tone="pk-red"] #pkMine,body.pk-full[data-pk-tone="pk-red"] #pkMine .pk-phase,body.pk-full[data-pk-tone="pk-red"] #pkMine .pk-billno,body.pk-full[data-pk-tone="pk-red"] #pkMine .pk-items,body.pk-full[data-pk-tone="pk-red"] #pkMine .pk-clock,body.pk-full[data-pk-tone="pk-red"] #pkMine #pkLateText,body.pk-full[data-pk-tone="pk-red"] #pkMine .pk-who b,body.pk-full[data-pk-tone="pk-late"] #pkMine,body.pk-full[data-pk-tone="pk-late"] #pkMine .pk-phase,body.pk-full[data-pk-tone="pk-late"] #pkMine .pk-billno,body.pk-full[data-pk-tone="pk-late"] #pkMine .pk-items,body.pk-full[data-pk-tone="pk-late"] #pkMine .pk-clock,body.pk-full[data-pk-tone="pk-late"] #pkMine #pkLateText,body.pk-full[data-pk-tone="pk-late"] #pkMine .pk-who b,body.pk-full[data-pk-tone="pk-orange"] #pkMine,body.pk-full[data-pk-tone="pk-orange"] #pkMine .pk-phase,body.pk-full[data-pk-tone="pk-orange"] #pkMine .pk-billno,body.pk-full[data-pk-tone="pk-orange"] #pkMine .pk-items,body.pk-full[data-pk-tone="pk-orange"] #pkMine .pk-clock,body.pk-full[data-pk-tone="pk-orange"] #pkMine #pkLateText,body.pk-full[data-pk-tone="pk-orange"] #pkMine .pk-who b{color:var(--tone-ink)!important}
 body.pk-full[data-pk-tone="pk-green"]{--tone-ink:#14532d;--tone-line:#86efac}
 body.pk-full[data-pk-tone="pk-red"],body.pk-full[data-pk-tone="pk-late"]{--tone-ink:#7f1d1d;--tone-line:#fca5a5}
 body.pk-full[data-pk-tone="pk-green"] .pk-who b,body.pk-full[data-pk-tone="pk-green"] .pk-whoday,body.pk-full[data-pk-tone="pk-red"] .pk-who b,body.pk-full[data-pk-tone="pk-red"] .pk-whoday,body.pk-full[data-pk-tone="pk-late"] .pk-who b,body.pk-full[data-pk-tone="pk-late"] .pk-whoday{color:var(--tone-ink)}
 body.pk-full[data-pk-tone="pk-green"] .pk-whorole,body.pk-full[data-pk-tone="pk-red"] .pk-whorole,body.pk-full[data-pk-tone="pk-late"] .pk-whorole{background:#fff;color:var(--tone-ink)}
-body.pk-full[data-pk-tone="pk-green"] #pkMine,body.pk-full[data-pk-tone="pk-red"] #pkMine,body.pk-full[data-pk-tone="pk-late"] #pkMine{border-color:var(--tone-line)}
-body.pk-full[data-pk-tone="pk-green"] #pkMine .pk-bar,body.pk-full[data-pk-tone="pk-red"] #pkMine .pk-bar,body.pk-full[data-pk-tone="pk-late"] #pkMine .pk-bar{background:rgba(0,0,0,.08)}
+body.pk-full[data-pk-tone="pk-green"] #pkMine,body.pk-full[data-pk-tone="pk-red"] #pkMine,body.pk-full[data-pk-tone="pk-late"] #pkMine,body.pk-full[data-pk-tone="pk-orange"] #pkMine{border-color:var(--tone-line)}
+body.pk-full[data-pk-tone="pk-green"] #pkMine .pk-bar,body.pk-full[data-pk-tone="pk-red"] #pkMine .pk-bar,body.pk-full[data-pk-tone="pk-late"] #pkMine .pk-bar,body.pk-full[data-pk-tone="pk-orange"] #pkMine .pk-bar{background:rgba(0,0,0,.08)}
 body.pk-full[data-pk-tone="pk-green"] #pkMine .pk-bar i{background:#16a34a}
 body.pk-full[data-pk-tone="pk-red"] #pkMine .pk-bar i,body.pk-full[data-pk-tone="pk-late"] #pkMine .pk-bar i{background:#dc2626}
 body.pk-full.pk-toned[data-pk-tone="pk-green"] #pkDone{background:var(--ok);color:#fff}
-body.pk-full[data-pk-tone="pk-green"] #pkRepBtn,body.pk-full[data-pk-tone="pk-red"] #pkRepBtn,body.pk-full[data-pk-tone="pk-late"] #pkRepBtn{border-color:var(--tone-line)}
+body.pk-full[data-pk-tone="pk-green"] #pkRepBtn,body.pk-full[data-pk-tone="pk-red"] #pkRepBtn,body.pk-full[data-pk-tone="pk-late"] #pkRepBtn,body.pk-full[data-pk-tone="pk-orange"] #pkRepBtn{border-color:var(--tone-line)}
+body.pk-full[data-pk-tone="pk-orange"]{--tone-ink:#7c2d12;--tone-line:#fdba74}
+body.pk-full[data-pk-tone="pk-orange"] .pk-who b,body.pk-full[data-pk-tone="pk-orange"] .pk-whoday{color:var(--tone-ink)}
+body.pk-full[data-pk-tone="pk-orange"] .pk-whorole{background:#fff;color:var(--tone-ink)}
+body.pk-full[data-pk-tone="pk-orange"] #pkMine .pk-bar i{background:#ea580c}
 body.pk-full[data-pk-tone="pk-red"] #pkMine .pk-u,body.pk-full[data-pk-tone="pk-late"] #pkMine .pk-u{background:#b91c1c;color:#fff}
 @media (prefers-reduced-motion:reduce){body.pk-full[data-pk-tone="pk-late"] #pickApp{animation:none}}
 body.pk-full .card{transform:none!important;animation:none!important}
@@ -400,6 +409,17 @@ body.pk-full .pk-msg.on{position:sticky;top:0;z-index:2}
     if (pa[0] !== pb[0]) return pa[0] < pb[0] ? -1 : 1;
     return (parseInt(pa[pa.length - 1], 10) || 0) - (parseInt(pb[pb.length - 1], 10) || 0);
   }
+  function byNum(a, b) {
+    var pa = String(a.bill_no).split("/"), pb = String(b.bill_no).split("/");
+    if (pa[0] !== pb[0]) return pa[0] < pb[0] ? -1 : 1;
+    return (parseInt(pa[pa.length - 1], 10) || 0) - (parseInt(pb[pb.length - 1], 10) || 0);
+  }
+  // Urgent bills in their own box on top; below it every bill in ascending number order.
+  function grouped(list, row) {
+    var u = list.filter(function (b) { return b.urgent; }), n = list.filter(function (b) { return !b.urgent; });
+    return (u.length ? '<div class="pk-urgbox"><div class="pk-grph">Urgent — pick these first</div>' + u.map(row).join("") + "</div>" : "") +
+      (u.length && n.length ? '<div class="pk-grph">Bills — number order</div>' : "") + n.map(row).join("");
+  }
   function billIn(st, id) { return (st.bills || []).filter(function (b) { return b.id === +id; })[0]; }
   function rule(s) {
     var h = Math.round(s.extra_seconds / 2);
@@ -461,14 +481,14 @@ body.pk-full .pk-msg.on{position:sticky;top:0;z-index:2}
       var keep = {};
       Array.prototype.forEach.call(document.querySelectorAll("#pkBills .pk-in"), function (i) { if (i.value) keep[i.id] = i.value; });
       var focused = document.activeElement && document.activeElement.id;
-      $("pkBills").innerHTML = open.map(function (b) {
+      $("pkBills").innerHTML = grouped(open, function (b) {
         var can = !mine && !b.paused && b.left > 0 && (b.urgent || !urgentLeft);
         return '<div class="pk-bill' + (b.urgent ? " urgent" : "") + (b.paused ? " paused" : "") + '"><div><div class="no">' + billBtn(b) + (b.urgent ? '<span class="pk-u">URGENT</span>' : "") + (b.paused ? '<span class="pk-p">PAUSED</span>' : "") +
           '</div><div class="sub">added ' + esc(b.added) + " · " + plural(b.items, "item") + (b.score ? '<span class="pk-score">' + b.score + " pts</span>" : "") + "</div></div>" +
           '<div><div class="pk-row">' + prog(b) + '<span class="sub">' + b.done + " / " + b.items + " picked · <b>" + b.left + " left</b></span></div>" + taken(b) + "</div>" +
           '<div class="pk-take"><input class="pk-in" type="number" min="1" max="' + b.left + '" placeholder="0" inputmode="numeric" aria-label="Items you are taking from ' + esc(b.bill_no) + '" id="take' + b.id + '"' + (can ? "" : " disabled") + ">" +
           '<button type="button" class="pk-btn" data-take="' + b.id + '"' + (can ? "" : " disabled") + ">Pick</button></div></div>";
-      }).join("") + (urgentLeft && !mine ? '<div class="pk-note" style="color:var(--bad-ink)">Urgent bills come first.</div>' : "") + finNote;
+      }) + (urgentLeft && !mine ? '<div class="pk-note" style="color:var(--bad-ink)">Urgent bills come first.</div>' : "") + finNote;
       Object.keys(keep).forEach(function (k) { if ($(k)) $(k).value = keep[k]; });
       if (focused && $(focused)) $(focused).focus();
     }
@@ -501,13 +521,13 @@ body.pk-full .pk-msg.on{position:sticky;top:0;z-index:2}
     }).join("") : '<span class="pk-empty">No pickers set up yet.</span>';
     var pend = s.bills.filter(function (b) { return b.status === "open"; }).sort(byNo);
     var fin = s.bills.filter(function (b) { return b.status === "done" || b.status === "cancelled"; })
-      .sort(function (a, b) { return b.id - a.id; });   // newest first
+      .sort(byNum);                                       // number order, smallest first
     $("pkPendN").textContent = pend.length;
     var running = pend.filter(function (b) { return !b.paused; }).length, held = pend.length - running;
-    $("pkBulk").hidden = !pend.length;
-    $("pkBulk").innerHTML = (running ? '<button type="button" class="pk-btn ghost sm" id="pkPauseAll">Pause all (' + running + ")</button>" : "") +
-      (held ? '<button type="button" class="pk-btn ok sm" id="pkResumeAll">Resume all (' + held + ")</button>" : "") +
-      (pend.length ? '<button type="button" class="pk-btn bad sm" id="pkCloseAll" data-n="' + pend.length + '">Close all</button>' : "");
+    $("pkBulk").hidden = false;
+    $("pkBulk").innerHTML = '<button type="button" class="pk-btn ghost sm" id="pkPauseAll"' + (running ? "" : " disabled") + ">Pause all (" + running + ")</button>" +
+      '<button type="button" class="pk-btn ok sm" id="pkResumeAll"' + (held ? "" : " disabled") + ">Resume all (" + held + ")</button>" +
+      '<button type="button" class="pk-btn bad sm" id="pkCloseAll" data-n="' + pend.length + '"' + (pend.length ? "" : " disabled") + ">Close all</button>";
     $("pkDoneCnt").hidden = !fin.length; $("pkDoneCnt").textContent = fin.length;
     function asgRow(b) {
       var st = b.status === "done" ? "Complete in " + b.minutes + " min" : b.status === "cancelled" ? "Cancelled" : b.paused ? "paused" :
@@ -529,7 +549,7 @@ body.pk-full .pk-msg.on{position:sticky;top:0;z-index:2}
         '<button type="button" class="pk-btn bad sm" data-cancel="' + b.id + '">Cancel</button></div><div class="pk-resch" id="rs' + b.id + '" hidden>' +
         '<input type="date" aria-label="Date"><input type="time" aria-label="Time"><button type="button" class="pk-btn sm" data-rsave="' + b.id + '">Save</button></div>' : "") + "</div></div>";
     }
-    $("pkBills").innerHTML = pend.length ? pend.map(asgRow).join("") : '<div class="pk-empty">No pending bills. Add one above.</div>';
+    $("pkBills").innerHTML = pend.length ? grouped(pend, asgRow) : '<div class="pk-empty">No pending bills. Add one above.</div>';
     $("pkDoneList").innerHTML = fin.length ? fin.map(asgRow).join("") : '<div class="pk-empty">No completed bills yet today.</div>';
     var ev = s.events || [];
     $("pkEvents").innerHTML = lateByPerson(ev);
@@ -620,14 +640,14 @@ body.pk-full .pk-msg.on{position:sticky;top:0;z-index:2}
   var charts = {};
   function chartLib(cb) {
     if (window.Chart && (window.ipChartValues || chartLib.done)) { if (window.ipChartValues) window.ipChartValues(); return cb(); }
-    if (window.Chart) { chartLib.done = true; var cv0 = document.createElement("script"); cv0.src = "/static/js/chart-values.js";
+    if (window.Chart) { chartLib.done = true; var cv0 = document.createElement("script"); cv0.src = "/static/js/chart-values.js?v={{ app_build }}";
       cv0.onload = cv0.onerror = function () { if (window.ipChartValues) window.ipChartValues(); cb(); }; document.head.appendChild(cv0); return; }
     if (chartLib.loading) return chartLib.loading.push(cb);
     chartLib.loading = [cb];
-    var sc = document.createElement("script"); sc.src = "/static/js/chart.umd.min.js";
+    var sc = document.createElement("script"); sc.src = "/static/js/chart.umd.min.js?v={{ app_build }}";
     sc.onload = function () {
       // exact numbers on bars and pies (static/js/chart-values.js), then draw
-      var cv = document.createElement("script"); cv.src = "/static/js/chart-values.js";
+      var cv = document.createElement("script"); cv.src = "/static/js/chart-values.js?v={{ app_build }}";
       cv.onload = cv.onerror = function () {
         if (window.ipChartValues) window.ipChartValues();
         chartLib.loading.forEach(function (f) { f(); }); chartLib.loading = null;

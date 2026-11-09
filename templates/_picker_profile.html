@@ -121,10 +121,10 @@
   var daily = {{ pp.daily|tojson }}, usplit = {{ pp.urgent_split|tojson }};
   function draw() {
     if (!window.Chart) {
-      if (!draw.asked) { draw.asked = 1; var sc = document.createElement("script"); sc.src = "/static/js/chart.umd.min.js"; document.head.appendChild(sc); }
+      if (!draw.asked) { draw.asked = 1; var sc = document.createElement("script"); sc.src = "/static/js/chart.umd.min.js?v={{ app_build }}"; document.head.appendChild(sc); }
       return setTimeout(draw, 300);
     }
-    if (!window.ipChartValues && !draw.cv) { draw.cv = 1; var cv = document.createElement("script"); cv.src = "/static/js/chart-values.js";
+    if (!window.ipChartValues && !draw.cv) { draw.cv = 1; var cv = document.createElement("script"); cv.src = "/static/js/chart-values.js?v={{ app_build }}";
       cv.onload = cv.onerror = function () { draw(); }; document.head.appendChild(cv); return; }
     if (window.ipChartValues) window.ipChartValues();
     new Chart(document.getElementById("ppChart"), {type: "bar", data: {labels: daily.map(function (d) { return d.day; }), datasets: [

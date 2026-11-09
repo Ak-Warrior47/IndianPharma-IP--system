@@ -204,6 +204,9 @@ button[disabled] { opacity: .45; cursor: not-allowed; transform: none; }
   .btn-submit { width: 100%; padding: 13px 20px; }
   .yn-btn { min-width: 72px; padding: 12px 18px; }
 }
+/* Pickers and pick assigners: a slightly darker page so the white work
+   cards stand out (light theme only; dark theme unchanged). */
+:root:not([data-theme="dark"]) body.pk-page { background: linear-gradient(180deg, #dde2ea 0%, #d3d9e2 100%); background-attachment: fixed; }
 /* Pickers and pick assigners: on a phone the work card comes first. */
 @media (max-width: 640px), (max-height: 500px) {
   .dash-hero-pick { display: none; }
@@ -236,7 +239,7 @@ button[disabled] { opacity: .45; cursor: not-allowed; transform: none; }
 <link rel="manifest" href="{{ url_for('static', filename='manifest.json') }}">
 <meta name="theme-color" content="#146B4A">
 </head>
-<body>
+<body{% if staff_type in ("picker", "pick_assigner") %} class="pk-page"{% endif %}>
 
 <nav class="nav">
   <div class="nav-brand">

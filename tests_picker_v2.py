@@ -947,12 +947,32 @@ check("21.1 When time is over the whole screen turns red (flashing when late), n
       'body.pk-full[data-pk-tone="pk-late"] #pickApp{background:#fecaca' in _pk21 and 'body.pk-full[data-pk-tone="pk-red"] #pickApp{background:#fee2e2}' in _pk21
       and 'late: "pk-late"' in _pk21)
 check("21.5 Normal time makes the whole screen light green, extra time orange, paused grey",
-      'body.pk-full[data-pk-tone="pk-green"] #pickApp{background:#d1fae0}' in _pk21 and
-      'body.pk-full[data-pk-tone="pk-orange"] #pickApp{background:#ea580c}' in _pk21 and
+      'body.pk-full[data-pk-tone="pk-green"] #pickApp{background:#effcf3}' in _pk21 and
+      'body.pk-full[data-pk-tone="pk-orange"] #pickApp{background:#ffedd5}' in _pk21 and
       '{normal: "pk-green", find: "pk-orange", report: "pk-red", late: "pk-late"}' in _pk21 and 'mine.paused ? "pk-grey"' in _pk21)
 _cv = open(os.path.join(REPO, "static", "js", "chart-values.js")).read()
 check("21.5b Light green and light red screens use dark text so it reads well",
       "--tone-ink:#14532d" in _pk21 and "--tone-ink:#7f1d1d" in _pk21)
+_pk22 = open(os.path.join(REPO, "templates", "_picking.html")).read()
+check("22.1 Urgent bills sit in their own box on top; every other bill is in ascending number order",
+      "function grouped(list, row)" in _pk22 and "grouped(open," in _pk22 and "grouped(pend, asgRow)" in _pk22)
+check("22.2 Completed bills are in ascending number order too", ".sort(byNum);" in _pk22)
+check("22.3 Pause all, Resume all and Close all are always shown (greyed out when not needed)",
+      '$("pkBulk").hidden = false;' in _pk22 and '(held ? "" : " disabled") + ">Resume all (' in _pk22)
+check("22.4 Lighter green and a light orange screen with dark text",
+      '#pickApp{background:#effcf3}' in _pk22 and '#pickApp{background:#ffedd5}' in _pk22 and "--tone-ink:#7c2d12" in _pk22)
+pd22 = c2.get("/dashboard").data.decode()
+check("22.5 Picker and assigner pages get a slightly darker background", 'class="pk-page"' in pd22 and "body.pk-page" in pd22)
+g1 = c2.get("/pick/state.json")
+g2 = c2.get("/pick/state.json", headers={"Accept-Encoding": "gzip"})
+check("22.6 Data goes to phones compressed (much smaller)", g2.headers.get("Content-Encoding") == "gzip" and len(g2.data) * 3 < len(g1.data),
+      "%d -> %d" % (len(g1.data), len(g2.data)))
+check("22.7 Script and style links carry the version, so phones can keep them", "?v=%s" % A.APP_BUILD in pd22)
+stt = c2.get("/static/js/chart-values.js?v=" + A.APP_BUILD)
+check("22.8 Phones keep script files for a week", "max-age=604800" in (stt.headers.get("Cache-Control") or ""))
+csv22 = cadm.get("/picking/report.csv?period=today")
+check("22.9 Reports are never kept stale", "max-age=604800" not in (csv22.headers.get("Cache-Control") or ""))
+check("22.10 The version is the code's fingerprint, the same after a restart", A.APP_BUILD == A._build_id())
 check("21.6 Charts show exact numbers: on top of each bar, and 'Name — number' beside each pie",
       "afterDatasetsDraw" in _cv and 'it.text + " — " + fmt(v)' in _cv and 'el.y - 3' in _cv)
 check("21.7 Every page with charts loads the number add-on",

@@ -40,6 +40,24 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 app = Flask(__name__)
+# Phones keep the app's script, style and icon files for a week instead of
+# asking for each again on every page; every link carries ?v=<deploy> (see
+# _static_version) so a new deploy still loads fresh files at once.
+def _send_file_max_age(_name=None):
+    # only the app's own static files; PDFs and CSVs are always fresh
+    try:
+        return 7 * 24 * 3600 if request.endpoint == "static" else None
+    except Exception:
+        return None
+
+
+app.get_send_file_max_age = _send_file_max_age
+
+
+@app.url_defaults
+def _static_version(endpoint, values):
+    if endpoint == "static" and "v" not in values:
+        values["v"] = globals().get("APP_BUILD", "1")
 app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1)
 IS_PRODUCTION = os.environ.get("RENDER") or os.environ.get("DATABASE_URL")
 
@@ -2206,7 +2224,27 @@ def _assigners():
 PICK_VER = [int(time.time() * 1000)]   # goes up whenever picking data changes
 # This running copy of the app. A new deploy restarts it with a new value;
 # open phones see the change and reload, so nobody keeps an old screen.
-APP_BUILD = str(int(time.time()))
+def _build_id():
+    """A fingerprint of this deploy's code, the same on every restart of the
+    same version (a free-tier wake-up must not look like a new version)."""
+    import hashlib
+    h = hashlib.sha1()
+    base = os.path.dirname(os.path.abspath(__file__))
+    for sub in ("", "templates", os.path.join("static", "js"), os.path.join("static", "css")):
+        d = os.path.join(base, sub)
+        if not os.path.isdir(d):
+            continue
+        for fn in sorted(os.listdir(d)):
+            if fn.endswith((".py", ".html", ".js", ".css")) and not fn.startswith("tests"):
+                try:
+                    with open(os.path.join(d, fn), "rb") as f:
+                        h.update(fn.encode()); h.update(f.read())
+                except OSError:
+                    pass
+    return h.hexdigest()[:12]
+
+
+APP_BUILD = _build_id()
 _SEEN = {}                              # picker id -> last time last_seen_at was written
 
 
@@ -4000,6 +4038,32 @@ def build_pdf_payload(emp: "Employee") -> Dict[str, Any]:
 
 
 # ─── Security: headers + brute-force throttling ─────────────────────────────
+
+@app.after_request
+def _compress(resp):
+    """Pages and data go to phones gzip-compressed: a picking screen's data is
+    about five times smaller, which is most of the wait on a mobile network."""
+    try:
+        if (resp.status_code != 200 or resp.direct_passthrough or resp.is_streamed
+                or "Content-Encoding" in resp.headers
+                or "gzip" not in (request.headers.get("Accept-Encoding") or "").lower()):
+            return resp
+        mt = resp.mimetype or ""
+        if not (mt.startswith("text/") or mt in ("application/json", "application/javascript")):
+            return resp
+        data = resp.get_data()
+        if len(data) < 1200:
+            return resp
+        import gzip as _gz
+        z = _gz.compress(data, 5)
+        resp.set_data(z)
+        resp.headers["Content-Encoding"] = "gzip"
+        resp.headers["Content-Length"] = str(len(z))
+        resp.vary.add("Accept-Encoding")
+    except Exception as exc:
+        logger.warning("gzip: %s", exc)
+    return resp
+
 
 @app.after_request
 def _security_headers(resp):
