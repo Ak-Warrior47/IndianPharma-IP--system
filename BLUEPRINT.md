@@ -84,7 +84,8 @@ Staff emails are `name@pharmaip.com`. Only the admin sets someone's role.
   (at the rate of when they were reported). **Reassign** puts them back on
   the bill for someone else.
 - Urgent bill bonus: 10 points per urgent bill, shared by items picked.
-- A free picker who leaves a waiting bill for 2 minutes gets a warning
+- After a bill is added, free pickers have **5 minutes** to take it (they may
+  finish other work first). A free picker who leaves it waiting longer gets a warning
   (no points cut yet). Late picks alert the assigner.
 
 **Assigner controls**
@@ -96,7 +97,10 @@ Staff emails are `name@pharmaip.com`. Only the admin sets someone's role.
 - Pause / Resume one bill. After Pause the picker gets **7 seconds** of
   warning before the timer stops, so they can finish. Once stopped the
   picker may tap "Work on another bill"; their items on the paused bill go
-  back on it. Resume gives the paused time back.
+  back on it. Resume gives the paused time back. No pause time is shown
+  anywhere: a paused bill just says "Paused · timers stopped", the picker's
+  clock is blank while stopped, and reports show time given as items × item
+  time (pause never added).
 - Pause all / Resume all / Close all (Close all asks to tap again).
 - Reschedule a bill to a later time; Bring back now.
 - Close today: counts the day's bills and fixes it as the checkers' day total;
@@ -104,8 +108,10 @@ Staff emails are `name@pharmaip.com`. Only the admin sets someone's role.
 - Order of bills: urgent bills in their own box on top, then every bill by
   number, smallest first. Completed bills are on the Completed tab.
 - Search box above the pending bills: type part of a bill number to show
-  only matching bills (pending and Completed). A newly added bill drops into
-  its place in number order by itself.
+  only matching bills (pending and Completed) and, below, matching bills of
+  **any date**. Tap one to open everything about it: who picked, items,
+  times, items not found. A newly added bill drops into its place in number
+  order by itself.
 
 ## 4. Scores (out of 100) and grades
 
@@ -142,8 +148,15 @@ month (calendar month). Targets only go up.
 
 ## 6. What the admin sees
 
-- **Admin dashboard tabs**: Staff · Today · Picking · Multitask · Scores · Setup.
-- **Go to** menu (top bar) and a Go to grid (Setup): every admin page.
+- **Admin dashboard**, kept simple:
+  - Big buttons at the top for the daily jobs: Live picking, Pick bills
+    yourself, Staff today, Picking reports, Multitask report, Add staff.
+  - **Find a bill**: type a bill number, matching bills of any date appear;
+    tap one for all its details (staff, items, times).
+  - Four tabs: Staff · Today (picking today, multitask reports, notes) ·
+    Scores · Setup.
+  - **Go to** menu (top bar): every other admin page, in one place.
+  - On phones the staff list is cards, no sideways scrolling.
 - **Staff today** (/admin/staff-today; Today tab and Go to menu): everyone
   who signed in or worked on a day, with sign-in / sign-out / last seen
   times and their work. Pickers are shown pick by pick: bill, items taken,

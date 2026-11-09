@@ -140,7 +140,7 @@ VALID_STAFF_TYPES = ("picker", "checker", "purchaser", "delivery", "biller", "pa
 PICK_SECONDS_PER_ITEM = 35        # per item on a normal bill (default)
 PICK_URGENT_SECONDS = 30          # per item on an urgent bill (default)
 PICK_EXTRA_SECONDS = 125          # after normal time: first half find, second half report only
-PICK_IDLE_SECONDS = 120           # a free picker has this long to take a waiting bill
+PICK_IDLE_SECONDS = 300           # a free picker has 5 minutes to take a waiting bill before "waiting" counts
 PICK_URGENT_POOL = 10.0           # bonus points per urgent bill, shared by items picked
 PICK_ONTIME_RATE = 1.5            # points per item finished within normal time
 PICK_EXTRA_RATE = 1.0             # per item finished in extra time to find
@@ -3044,7 +3044,8 @@ def staff_day_report(day, emp_id=None):
         for c in sorted([c for c in claims if c.picker_id == pid], key=lambda c: c.started_at or start):
             b = bills.get(c.bill_id)
             got = c.picked if c.picked is not None else c.items
-            allowed = (c.due_at - c.started_at).total_seconds() if c.due_at and c.started_at else None
+            # items x item time; paused time is never added to it
+            allowed = c.items * pick_seconds(b) if b else None
             first_take = min(first_take, c.started_at) if first_take else c.started_at
             if c.status == "done":
                 took = (c.done_at - c.started_at).total_seconds()
@@ -3252,7 +3253,7 @@ def alert_late_picks_later(now=None):
 def alert_late_picks(now=None, throttle=False):
     """Run once a minute (and from screen refreshes, at most every 15 s):
       - a grab past its report time is late: the assigner is told once
-      - a free picker who has not taken a waiting bill within 2 minutes gets
+      - a free picker who has not taken a waiting bill within 5 minutes gets
         a warning (no points cut for now) and the assigner is told
     Returns how many new late grabs were found."""
     if throttle:
@@ -9946,6 +9947,34 @@ def admin_staff_today_pdf():
     who = ("-" + re.sub(r"[^A-Za-z0-9]+", "-", r["emp_name"]).strip("-").lower()) if r["emp_name"] else ""
     return Response(build_staff_day_pdf(r), mimetype="application/pdf",
                     headers={"Content-Disposition": "attachment; filename=staff-%s%s.pdf" % (d.isoformat(), who)})
+
+
+def find_bills(q, limit=30):
+    """Bills of any date whose number contains the digits typed, newest
+    first, with progress. Two queries whatever the number found."""
+    digits = "".join(ch for ch in (q or "") if ch.isdigit())
+    if not digits:
+        return []
+    rows = (PickBill.query.filter(PickBill.bill_no.like("%" + digits + "%"))
+            .order_by(PickBill.created_at.desc()).limit(limit).all())
+    cb, mb = _load_for_bills([b.id for b in rows])
+    out = []
+    for b in rows:
+        pr = pick_bill_progress(b, cb.get(b.id, []), mb.get(b.id, []))
+        out.append({"id": b.id, "bill_no": b.bill_no, "items": b.items, "urgent": bool(b.is_urgent),
+                    "status": b.status, "done": pr["done"], "left": pr["left"],
+                    "date": (b.created_at + IST).strftime("%d %b %Y") if b.created_at else "",
+                    "added": ist12(b.created_at)})
+    return out
+
+
+@app.route("/pick/bills/find.json")
+@login_required
+def pick_bills_find():
+    """Bill search for the Pick Assigner and admin (bill details are theirs only)."""
+    if _pick_view() != "assigner":
+        return jsonify({"ok": False, "message": "Not available for your role."}), 403
+    return jsonify({"ok": True, "bills": find_bills(request.args.get("q", ""))})
 
 
 @app.route("/pick/bill/<int:bill_id>.json")

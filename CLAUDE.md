@@ -90,6 +90,11 @@ eventlet worker); the database is Supabase PostgreSQL.
 - Staff today (`/admin/staff-today`, `staff_day_report`, PDF in
   `picking_pdf.build_staff_day_pdf`): who signed in (`StaffLogin`, admins not
   tracked) and every pick with all its times.
+- Admin dashboard stays simple: quick-action buttons (`#quick`), Find a bill
+  (`/pick/bills/find.json` + `billflow.js` `data-bill-search`), four tabs
+  (staff, today, scores, admin), one Go to menu. Don't add a second menu.
+- Free pickers get 5 minutes after a bill is added before waiting counts
+  (`PICK_IDLE_SECONDS`). No pause time is shown anywhere.
 - One phone per staff login (`Employee.session_key`): a new sign-in signs the
   old phone out. Admins are exempt.
 - No internet: picking taps queue and send when back; Done counts from the

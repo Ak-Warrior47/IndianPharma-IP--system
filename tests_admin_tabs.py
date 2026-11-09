@@ -27,7 +27,7 @@ from tests_helper import csrf_client  # noqa: E402
 app.config["TESTING"] = True
 PW = "longpass123"
 PASSED, FAILED = [], []
-TABS = ("staff", "today", "picking", "multitask", "scores", "admin")
+TABS = ("staff", "today", "scores", "admin")
 
 
 def check(name, cond, extra=""):
@@ -56,7 +56,7 @@ body = re.sub(r"<style[\s\S]*?</style>", "", html)
 
 # ---- 1. The tab bar -----------------------------------------------------
 check("1.1 The admin dashboard loads", r.status_code == 200)
-check("1.2 There is a tab for each of the six groups",
+check("1.2 There is a tab for each of the four groups",
       all(('data-tab="%s"' % t) in html for t in TABS))
 check("1.3 The tab bar is announced to screen readers",
       'role="tablist"' in html and html.count('role="tab"') >= 4)
@@ -64,7 +64,7 @@ check("1.4 Staff is the tab that opens first",
       'class="main" data-tab="staff"' in html)
 check("1.5 The open tab is marked selected, the rest are not",
       body.count('aria-selected="true"') == 1 and
-      body.count('aria-selected="false"') == 5)
+      body.count('aria-selected="false"') == 3)
 
 # ---- 2. Every panel is in exactly one tab -------------------------------
 # Assigned in the template: a panel that renders only when it has content
@@ -73,14 +73,14 @@ SRC = open(os.path.join(REPO, "templates", "admin.html")).read()
 SRC_BODY = re.sub(r"<style[\s\S]*?</style>", "", SRC)
 src_panes = re.findall(r'data-pane="([a-z]+)"', SRC_BODY)
 panes = re.findall(r'data-pane="([a-z]+)"', body)
-check("2.1 All sixteen panels are assigned to a tab", len(src_panes) == 16,
+check("2.1 All fourteen panels are assigned to a tab", len(src_panes) == 14,
       "found %d" % len(src_panes))
 check("2.2 No panel names a tab that does not exist",
       set(src_panes) <= set(TABS), "stray: %s" % (set(src_panes) - set(TABS)))
 check("2.3 Every tab has something in it",
       set(src_panes) == set(TABS), "empty: %s" % (set(TABS) - set(src_panes)))
 check("2.4 Each panel also declares its order within its tab",
-      len(re.findall(r'data-ord="\d+"', SRC_BODY)) == 16)
+      len(re.findall(r'data-ord="\d+"', SRC_BODY)) == 14)
 check("2.5 Nothing rendered on the page sits outside a tab",
       set(panes) <= set(TABS) and len(panes) >= 10,
       "rendered %d: %s" % (len(panes), set(panes)))
@@ -182,22 +182,31 @@ with app.app_context():
             db.session.delete(e)
     db.session.commit()
 
-# ---- 9. Easier admin: Picking and Multitask tabs, one Go to menu ---------
-check("9.1 Picking has its own tab with today's picking card",
-      re.search(r'data-pane="picking"[^>]*id="pickingToday"', html) is not None)
-check("9.2 Multitask has its own tab with the multitask reports",
-      re.search(r'data-pane="multitask"[\s\S]{0,300}Multitask \(Role 2\) Reports', html) is not None)
+# ---- 9. Easy admin: big buttons for daily jobs, four tabs, one Go to menu ---
+QA = {"qaLive": "/picking?tab=live", "qaPickSelf": "/pick/me", "qaStaffToday": "/admin/staff-today",
+      "qaReports": "/picking?tab=reports", "qaMulti": "/admin/multitask", "qaAdd": "#addEmployee"}
+check("9.1 Daily jobs are big buttons at the top, not hidden in a menu",
+      all(re.search(r'href="%s[^"]*" id="%s"' % (re.escape(u), k), html) for k, u in QA.items()),
+      str([k for k, u in QA.items() if not re.search(r'href="%s[^"]*" id="%s"' % (re.escape(u), k), html)]))
+check("9.2 Picking today and the multitask reports live in the Today tab",
+      re.search(r'data-pane="today"[^>]*id="pickingToday"', html) is not None
+      and re.search(r'data-pane="today"[\s\S]{0,300}Multitask \(Role 2\) Reports', html) is not None)
 check("9.3 The top bar is one 'Go to' menu with every page grouped, not a row of buttons",
       'aria-label="All admin pages">Go to</summary>' in html and 'class="nav-goto__h">Picking' in html
-      and html.count('class="btn-export">Checklists</a>') == 0)
-check("9.4 Setup has a 'Go to' grid of every admin page", 'id="gotoAll"' in html and html.count('class="goto-grp"') == 5)
-gl = re.findall(r'href="(/[^"#]+)"', html.split('id="gotoAll"')[1].split('<!-- FEATURE 2')[0])
+      and html.count('class="btn-export">Checklists</a>') == 0 and 'id="navPicking"' not in html)
+check("9.4 No second copy of the menu (the Setup grid is gone)", 'id="gotoAll"' not in html and 'class="goto-grp"' not in html)
+check("9.4b Add staff jumps to the Add Employee form", 'id="addEmployee"' in html)
+check("9.4c On phones the staff list is cards (labelled cells), not a sideways table",
+      'data-l="Today"' in html and "#staffTable thead { display: none; }" in html)
+check("9.4d The old all-time counters are gone", "Total Entries" not in html and "Items all time" not in html)
+gl = re.findall(r'href="(/[^"#]+)"', html.split('class="nav-menu__panel nav-goto"')[1].split('</details>')[0])
+gl += [u for u in QA.values() if u.startswith("/")]
 bad = []
 for u in sorted(set(gl)):
     rr = client.get(u.replace("&amp;", "&"))
     if rr.status_code >= 400:
         bad.append("%s %s" % (u, rr.status_code))
-check("9.5 Every link in Go to opens (%s)" % (", ".join(bad) or "all fine"), not bad)
+check("9.5 Every link in Go to and the big buttons opens (%s)" % (", ".join(bad) or "all fine"), not bad)
 
 # ---- 10. The staff Edit box really opens ---------------------------------
 # A redesign once renamed the CSS class that shows a modal ("open" -> "active")

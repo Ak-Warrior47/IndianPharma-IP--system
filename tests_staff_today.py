@@ -190,8 +190,8 @@ check("4.8 A future date falls back to today", date.today().isoformat() in fut)
 check("4.9 Staff cannot open it", c_ria.get("/admin/staff-today").status_code in (302, 403))
 check("4.10 Staff cannot download it", c_ria.get("/admin/staff-today.pdf").status_code in (302, 403))
 adm_html = c_adm.get("/admin_dashboard").get_data(as_text=True)
-check("4.11 Admin dashboard links to it (Today tab and Go to)",
-      adm_html.count("/admin/staff-today") >= 3 and 'id="staffTodayCard"' in adm_html)
+check("4.11 Admin dashboard links to it (big button and Go to)",
+      'href="/admin/staff-today" id="qaStaffToday"' in adm_html and 'id="navStaffToday"' in adm_html)
 
 # ---- 5. PDF ------------------------------------------------------------------
 r = c_adm.get("/admin/staff-today.pdf")
@@ -250,6 +250,47 @@ with app.app_context():
 sp = c_ria.get("/pick/state.json").get_json()
 check("7.9 A picker sees no bill details",
       all(b["taken"] == [] and b["missing_rows"] == [] for b in sp.get("bills", [])))
+
+# ---- 8. Pause time is not shown anywhere ------------------------------------
+_pk = open(os.path.join(REPO, "templates", "_picking.html")).read()
+check("8.1 A paused bill shows no 'paused for' counter", "paused for" not in _pk and "Paused · timers stopped" in _pk)
+check("8.2 A paused picker's chip shows no time left", '(r.paused ? "" : \' · <b class="pk-left"></b>\')' in _pk)
+check("8.3 A paused picker's own clock shows no time", '$("pkClock").textContent = stopped ? "" :' in _pk)
+with app.app_context():
+    b = A.add_pick_bill("8301", 2, ASG)
+    cl = A.claim_items(OM, b.id, 2, now=datetime.utcnow() - timedelta(minutes=3))
+    A.pause_bill(b.id, now=datetime.utcnow() - timedelta(minutes=2, seconds=50))
+    A.resume_bill(b.id, now=datetime.utcnow() - timedelta(minutes=1))
+    A.finish_claim(OM, cl.id, now=datetime.utcnow())
+    g = [x for x in A.staff_day_report(date.today(), OM)["people"][0]["picks"] if x["bill_no"].endswith("8301")][0]
+    check("8.4 Time given is items x item time, paused time never added", g["allowed"] == A._mmss(2 * A.pick_times()[0]), g["allowed"])
+
+# ---- 9. Bill search: any date, details for assigner and admin only ------------
+with app.app_context():
+    old = A.add_pick_bill("945612", 3, ASG)
+    old.created_at = datetime.utcnow() - timedelta(days=20)
+    db.session.commit()
+    OLD = old.id
+    cs = A.claim_items(RIA, OLD, 2, now=old.created_at + timedelta(minutes=1))
+    A.finish_claim(RIA, cs.id, now=old.created_at + timedelta(minutes=2))
+j = c_adm.get("/pick/bills/find.json?q=5612").get_json()
+hit = [b for b in j.get("bills", []) if b["id"] == OLD]
+check("9.1 Admin finds a bill from 20 days ago by part of its number", bool(hit), str(j)[:200])
+check("9.2 Result has date, items and how much is left", hit and hit[0]["items"] == 3 and hit[0]["left"] == 1 and hit[0]["date"])
+c_asg2 = login("st_asg@x.com")
+check("9.3 The Pick Assigner can search too", any(b["id"] == OLD for b in c_asg2.get("/pick/bills/find.json?q=945612").get_json()["bills"]))
+c_ria2 = login("st_ria@x.com")
+check("9.4 A picker cannot search bills (bill details are not for staff)", c_ria2.get("/pick/bills/find.json?q=945612").status_code == 403)
+check("9.5 Letters only finds nothing", c_adm.get("/pick/bills/find.json?q=abc").get_json()["bills"] == [])
+tl = c_adm.get("/pick/bill/%d.json" % OLD).get_json()
+check("9.6 Tapping it opens everything: staff, items, times", tl["grabs"] and tl["grabs"][0]["picker"] == "ST Ria"
+      and tl["grabs"][0]["items"] == 2 and tl["grabs"][0]["took"] and tl["grabs"][0]["done"])
+adm_html = c_adm.get("/admin_dashboard").get_data(as_text=True)
+check("9.7 Admin dashboard has a 'Find a bill' box", 'data-bill-search="qaFindOut"' in adm_html and "js/billflow.js" in adm_html)
+check("9.8 The assigner's search also looks at every date", 'data-bill-search="pkFindAll"' in c_asg2.get("/dashboard").get_data(as_text=True))
+_bf = open(os.path.join(REPO, "static", "js", "billflow.js")).read()
+check("9.9 Search results open the bill's full detail", "/pick/bills/find.json" in _bf and 'data-bill-flow="\' + b.id' in _bf)
+check("9.10 Free pickers get 5 minutes after a bill is added before waiting counts", A.PICK_IDLE_SECONDS == 300)
 
 print("\n" + "=" * 62)
 print("PASSED %d    FAILED %d" % (len(PASSED), len(FAILED)))

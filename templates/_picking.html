@@ -340,7 +340,8 @@ body.pk-full .pk-msg.on{position:sticky;top:0;z-index:2}
   <div class="pk-row" id="pkPickers"><span class="pk-empty">Loading…</span></div></div>
   <div class="section-label pk-sec" style="margin-top:14px" data-collapse="pkBillsWrap"><span>Pending bills <b class="pk-n" id="pkPendN">0</b></span></div>
   <div id="pkBillsWrap">
-    <div class="pk-find"><input type="search" id="pkFind" placeholder="Search bill number" inputmode="numeric" aria-label="Search bill number" autocomplete="off"><span id="pkFindN" class="pk-sub"></span></div>
+    <div class="pk-find"><input type="search" id="pkFind" placeholder="Search bill number" inputmode="numeric" aria-label="Search bill number" autocomplete="off" data-bill-search="pkFindAll"><span id="pkFindN" class="pk-sub"></span></div>
+    <div id="pkFindAllWrap" hidden><div class="pk-sub" style="font-weight:700;margin:4px 0">Any date · tap a bill for everything about it</div><div id="pkFindAll"></div></div>
     <div class="pk-row pk-bulk" id="pkBulk" hidden></div>
     <div id="pkBills"><div class="pk-empty">Loading…</div></div>
     <div class="pk-note">Finished bills move to the <button type="button" class="pk-link" data-tab="done">Completed</button> tab.</div>
@@ -549,7 +550,7 @@ body.pk-full .pk-msg.on{position:sticky;top:0;z-index:2}
       "<li><b>Item not found:</b> report it with the name and quantity. It is paid once the assigner confirms it is not available.</li>" +
       "<li><b>Paused bill:</b> when the assigner pauses a bill, your timer stops and you lose nothing. It starts again from where it stopped when the bill is resumed.</li>" +
       "<li><b>Urgent bills</b> (U) come first. 10 bonus points per urgent bill, shared by items picked.</li>" +
-      "<li><b>Waiting bills:</b> if you are free and leave a bill waiting 2 minutes, you get a warning. This will lead to point deductions.</li>" +
+      "<li><b>Waiting bills:</b> after a bill is added you have 5 minutes to take it; if you are free and leave it waiting longer, you get a warning. This will lead to point deductions.</li>" +
       "<li>Bill numbers start with " + esc(s.prefix) + " and change every 1 April. A number can be used only once.</li></ul>";
   }
   // Bill details (timeline: who took what, when) are for the assigner and admin only.
@@ -639,7 +640,7 @@ body.pk-full .pk-msg.on{position:sticky;top:0;z-index:2}
       var who = esc(r.name) + (r.helper ? ' <small>(multitask)</small>' : "");
       if (r.free) return '<span class="pk-chip free" title="Free · ' + plural(r.today_bills, "bill") + " · " + r.today_points + ' pts today">' + who + (r.today_bills ? " · " + r.today_bills : "") + "</span>";
       var lt = r.phase === "late";
-      return '<span class="pk-chip ' + (r.paused ? "paused" : lt ? "late" : "busy") + '" data-due="' + (Date.now() + r.seconds_left * 1000) + '"' + (r.paused ? ' data-frozen="' + r.seconds_left + '"' : "") + ">" + (r.paused ? "Paused · " : "") + who + " · " + esc(r.bill_no) + " · " + plural(r.items, "item") + ' · <b class="pk-left"></b>' +
+      return '<span class="pk-chip ' + (r.paused ? "paused" : lt ? "late" : "busy") + '" data-due="' + (Date.now() + r.seconds_left * 1000) + '"' + (r.paused ? ' data-frozen="' + r.seconds_left + '"' : "") + ">" + (r.paused ? "Paused · " : "") + who + " · " + esc(r.bill_no) + " · " + plural(r.items, "item") + (r.paused ? "" : ' · <b class="pk-left"></b>') +
         ' <button type="button" class="pk-btn ghost sm" data-release="' + r.claim_id + '">Release</button></span>';
     }).join("") : '<span class="pk-empty">No pickers set up yet.</span>';
     // Search: show only bills whose number contains what is typed (both lists).
@@ -649,6 +650,7 @@ body.pk-full .pk-msg.on{position:sticky;top:0;z-index:2}
     var allFin = s.bills.filter(function (b) { return b.status === "done" || b.status === "cancelled"; });
     var pend = allPend.filter(hit).sort(byNo);
     var fin = allFin.filter(hit).sort(byNum);              // number order, smallest first
+    if ($("pkFindAllWrap")) $("pkFindAllWrap").hidden = !q;
     if ($("pkFindN")) $("pkFindN").textContent = q ? (pend.length + " pending, " + fin.length + " completed match") : "";
     $("pkPendN").textContent = pend.length;
     var running = pend.filter(function (b) { return !b.paused; }).length, held = pend.length - running;
@@ -667,7 +669,7 @@ body.pk-full .pk-msg.on{position:sticky;top:0;z-index:2}
       }).join("") + "</div>" : "";
       return '<div class="pk-bill' + (b.urgent ? " urgent" : "") + (b.paused ? " paused" : "") + '"' + (b.missing ? ' style="border-left:4px solid var(--bad);padding-left:8px"' : "") + '><div><div class="no">' + billBtn(b) + (b.urgent ? '<span class="pk-u">URGENT</span>' : "") + (b.paused ? '<span class="pk-p">PAUSED</span>' : "") +
         '</div><div class="sub">added ' + esc(b.added) + " · " + plural(b.items, "item") + (b.score ? '<span class="pk-score">' + b.score + " pts</span>" : "") + "</div>" +
-        (b.status === "open" ? (b.paused ? '<div class="sub">paused for <b class="pk-el" data-start="' + (Date.now() - b.paused_for * 1000) + '"></b> · timers stopped</div>'
+        (b.status === "open" ? (b.paused ? '<div class="sub">Paused · timers stopped</div>'
           : '<div class="sub">open for <b class="pk-el" data-start="' + (Date.now() - b.elapsed * 1000) + '"></b></div>') : "") + "</div>" +
         '<div><div class="pk-row">' + prog(b) + '<span class="sub">' + b.done + " / " + b.items + " · " + st + "</span></div>" + taken(b) + miss + "</div>" +
         "<div>" + (b.status === "open" ? '<div class="pk-row" style="gap:6px">' +
@@ -913,7 +915,7 @@ body.pk-full .pk-msg.on{position:sticky;top:0;z-index:2}
       if (document.body.getAttribute("data-pk-tone") !== tone) { document.body.setAttribute("data-pk-tone", tone); document.body.classList.add("pk-toned"); }
       $("pkPhase").textContent = stopped ? "Paused by assigner — timer stopped" :
         {normal: "Normal time", find: "Extra time to find", report: "Report time — fewer points", late: "Late"}[phase];
-      $("pkClock").textContent = (phase === "late" ? "−" : "") + clock(left);
+      $("pkClock").textContent = stopped ? "" : (phase === "late" ? "−" : "") + clock(left);
       $("pkBar").style.width = Math.max(0, Math.min(100, 100 * left / Math.max(total, 1))) + "%";
       $("pkLateText").textContent = stopped ? "Your time is safe. It starts again when the assigner resumes the bill." : {normal: "Finish now for 1.5 points per item.", find: "Still time to find them: 1 point per item.",
         report: "Submit now: 0.5 point per item. Report any item you could not find.", late: "Late by " + clock(left) + " — points are dropping."}[phase];
@@ -922,7 +924,8 @@ body.pk-full .pk-msg.on{position:sticky;top:0;z-index:2}
     if (role !== "picker") {
       Array.prototype.forEach.call(document.querySelectorAll(".pk-chip[data-due]"), function (c) {
         var left = c.hasAttribute("data-frozen") ? +c.getAttribute("data-frozen") : Math.round((+c.getAttribute("data-due") - Date.now()) / 1000);
-        c.querySelector(".pk-left").textContent = left >= 0 ? clock(left) : "over by " + clock(left);
+        var el = c.querySelector(".pk-left"); if (!el) return;     // paused: no time shown
+        el.textContent = left >= 0 ? clock(left) : "over by " + clock(left);
       });
       Array.prototype.forEach.call(document.querySelectorAll(".pk-el[data-start]"), function (e) {
         e.textContent = clock((Date.now() - +e.getAttribute("data-start")) / 1000);

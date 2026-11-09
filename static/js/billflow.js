@@ -27,6 +27,8 @@
     ".bf-list{border-left:3px solid var(--line,#dfe4ec);margin:12px 0 0 6px;padding-left:14px}" +
     ".bf-list div{position:relative;padding:5px 0}.bf-list div::before{content:'';position:absolute;left:-21px;top:10px;width:11px;height:11px;border-radius:50%;background:#1e40af}" +
     ".bf-list div.late::before{background:#b91c1c}.bf-list div.miss::before{background:#7c3aed}.bf-list div.end::before{background:#15803d}" +
+    ".bf-hit{display:flex;flex-wrap:wrap;align-items:baseline;gap:4px 10px;width:100%;text-align:left;border:1px solid var(--line,#dfe4ec);background:var(--surface,#fff);color:inherit;border-radius:10px;padding:9px 12px;margin:0 0 6px;cursor:pointer;font:inherit}" +
+    ".bf-hit:hover{border-color:var(--brand,#1e40af)}.bf-hit b{font-size:15px}.bf-hit span{font-size:12.5px;color:var(--ink-3,#64748b)}" +
     "@media(max-width:560px){.bf-sum{grid-template-columns:repeat(2,minmax(0,1fr))}.bf-row,.bf-axis{grid-template-columns:74px 1fr}}";
   function esc(s) { return String(s == null ? "" : s).replace(/[&<>"]/g, function (c) { return {"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;"}[c]; }); }
   // Indian time whatever the device clock says, to match the rest of the app
@@ -95,7 +97,36 @@
     }).catch(function () {});
   }
   function late(b) { return b.grabs.filter(function (g) { return g.outcome === "late"; }).length; }
-  window.BillFlow = {open: open, draw: draw};
+  /* Bill search (assigner and admin): type part of a bill number, matching
+     bills of any date are listed, tap one to open everything about it.
+     Markup: <input data-bill-search="resultsId"> <div id="resultsId"></div> */
+  var sq = {};
+  function searchInto(input) {
+    var out = document.getElementById(input.getAttribute("data-bill-search"));
+    if (!out) return;
+    var q = (input.value || "").replace(/\D/g, "");
+    clearTimeout(sq[out.id]);
+    if (!q) { out.innerHTML = ""; return; }
+    ensure();                                   // styles for the result list
+    sq[out.id] = setTimeout(function () {
+      fetch("/pick/bills/find.json?q=" + encodeURIComponent(q), {credentials: "same-origin"})
+        .then(function (r) { return r.json(); }).then(function (d) {
+          if ((input.value || "").replace(/\D/g, "") !== q) return;      // typed on since
+          var bl = (d && d.bills) || [];
+          out.innerHTML = bl.length ? bl.map(function (b) {
+            var st = b.status === "done" ? "complete" : b.status === "cancelled" ? "cancelled" :
+              b.status === "scheduled" ? "rescheduled" : b.left + " left";
+            return '<button type="button" class="bf-hit" data-bill-flow="' + b.id + '"><b>' + esc(b.bill_no) + "</b>" +
+              (b.urgent ? '<span class="bf-u">URGENT</span>' : "") + "<span>" + esc(b.date) + " · " + esc(b.added) + " · " +
+              plural(b.items, "item") + " · " + st + "</span></button>";
+          }).join("") : '<div class="bf-sub" style="padding:6px 2px">No bill with ' + esc(q) + " in its number.</div>";
+        }).catch(function () { out.innerHTML = '<div class="bf-sub">No connection. Try again.</div>'; });
+    }, 220);
+  }
+  document.addEventListener("input", function (e) {
+    if (e.target && e.target.hasAttribute && e.target.hasAttribute("data-bill-search")) searchInto(e.target);
+  });
+  window.BillFlow = {open: open, draw: draw, search: searchInto};
   // any element with data-bill-flow="<id>" opens it
   document.addEventListener("click", function (e) {
     var el = e.target.closest && e.target.closest("[data-bill-flow]");

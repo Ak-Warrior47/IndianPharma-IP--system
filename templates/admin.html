@@ -62,11 +62,10 @@
 .main[data-tab="staff"]  > [data-pane="staff"],
 .main[data-tab="today"]  > [data-pane="today"],
 .main[data-tab="scores"] > [data-pane="scores"],
-.main[data-tab="picking"] > [data-pane="picking"],
-.main[data-tab="multitask"] > [data-pane="multitask"],
 .main[data-tab="admin"]  > [data-pane="admin"] { display: block; }
 [data-ord="1"] { order: 1; } [data-ord="2"] { order: 2; }
 [data-ord="3"] { order: 3; } [data-ord="4"] { order: 4; }
+[data-ord="5"] { order: 5; } [data-ord="6"] { order: 6; }
 /* Flash messages, the stale-validation alert and the overview stats are not
    in any tab -- they are true of the whole page, so they stay above it. */
 .alert, .overview-grid { order: -2; }
@@ -353,6 +352,45 @@ input:focus, select:focus, textarea:focus { outline: none; border-color: var(--b
 [data-theme="dark"] .lv-waiting{background:#1B2B44;color:#A9C4EC}
 [data-theme="dark"] .lv-starting{background:#3A2C10;color:#F1CD86}
 [data-theme="dark"] .lv-not_measured{background:#2A2D33;color:#B7BDC8}
+
+/* ---- Quick actions: the daily jobs, one tap each ---- */
+.qa { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.qa-btn { display: flex; flex-direction: column; justify-content: center; gap: 2px; min-height: 64px;
+          padding: 12px 14px; border: 1px solid var(--line); border-radius: var(--r); background: var(--surface);
+          color: var(--ink); text-decoration: none; box-shadow: var(--sh-0); }
+.qa-btn b { font-size: 15.5px; font-weight: 700; }
+.qa-btn span { font-size: 12.5px; color: var(--ink-3); }
+.qa-btn:hover { border-color: var(--brand); }
+.qa-btn:focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; }
+.qa-main { background: var(--brand); border-color: var(--brand); }
+.qa-main b, .qa-main span { color: #fff; }
+.qa-find { grid-column: 1 / -1; }
+.qa-find label { display: block; font-size: 11px; font-weight: 700; color: var(--ink-3); text-transform: uppercase; letter-spacing: .4px; margin: 2px 0 4px; }
+.qa-find input { width: 100%; padding: 11px 13px; border: 1.5px solid var(--line); border-radius: 10px; font: inherit; font-size: 16px; background: var(--surface); color: var(--ink); }
+.qa-find #qaFindOut:not(:empty) { margin-top: 8px; max-height: 320px; overflow: auto; }
+.qa-stats { grid-column: 1 / -1; font-size: 13.5px; color: var(--ink-3); padding: 2px 2px 0; }
+.qa-stats b { color: var(--ink); font-size: 15px; }
+.qa-stats i { font-style: normal; margin: 0 6px; }
+@media (max-width: 700px) {
+  .qa { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+  .qa-btn { min-height: 58px; padding: 10px 12px; }
+  .qa-btn b { font-size: 14.5px; }
+  .tab { min-width: 0; padding: 10px 6px; }
+  .nav .ipk-trigger kbd { display: none; }
+  /* Staff list as cards: no sideways scrolling on a phone */
+  #staffTable thead { display: none; }
+  #staffTable, #staffTable tbody, #staffTable tr, #staffTable td { display: block; width: 100%; }
+  #staffTable tr { border: 1px solid var(--line); border-radius: 12px; margin: 0 0 10px; padding: 10px 12px; }
+  #staffTable td { border: 0; padding: 3px 0; display: flex; justify-content: space-between; align-items: center; gap: 10px; }
+  #staffTable td::before { content: attr(data-l); font-size: 12px; font-weight: 650; color: var(--ink-3); }
+  #staffTable td.st-who { display: block; padding-bottom: 6px; border-bottom: 1px solid var(--line); margin-bottom: 4px; }
+  #staffTable td.st-who::before, #staffTable td.st-act::before { content: none; }
+  #staffTable td.st-act { display: block; padding-top: 8px; }
+  #staffTable .actions { display: flex; flex-wrap: wrap; gap: 6px; }
+  #staffTable td[data-l="Entries"], #staffTable td[data-l="Week"] { display: none; }
+  #staffTable .actions .btn-sm { min-height: 36px; }
+  .table-wrap:has(#staffTable) { overflow: visible; }
+}
 </style>
 <link rel="manifest" href="{{ url_for('static', filename='manifest.json') }}">
 <meta name="theme-color" content="#146B4A">
@@ -474,7 +512,6 @@ var NOTES_BY_EMP = {
          differently-coloured ones competing for attention. -->
     <!-- One tidy menu instead of a row of ten buttons: every admin page,
          grouped the way the owner works. Picking stays one tap away. -->
-    <a href="/picking" class="btn-export" id="navPicking" style="border-color:var(--brand);color:var(--brand);font-weight:700">Picking</a>
     <details class="nav-menu">
       <summary class="btn-export" aria-label="All admin pages">Go to</summary>
       <div class="nav-menu__panel nav-goto">
@@ -521,28 +558,19 @@ var NOTES_BY_EMP = {
   <!-- Feature 17: Stale Validations Alert -->
 
 
-  <!-- OVERVIEW STATS -->
-  <div class="overview-grid">
-    <div class="ov-card blue">
-      <div class="ov-label">Total Staff</div>
-      <div class="ov-value">{{ emp_count }}</div>
-      <div class="ov-sub">Active employees</div>
-    </div>
-    <div class="ov-card green">
-      <div class="ov-label">Active Today</div>
-      <div class="ov-value">{{ active_today }}</div>
-      <div class="ov-sub">Submitted metrics</div>
-    </div>
-    <div class="ov-card orange">
-      <div class="ov-label">Total Entries</div>
-      <div class="ov-value">{{ total_entries }}</div>
-      <div class="ov-sub">All time records</div>
-    </div>
-    <div class="ov-card">
-      <div class="ov-label">Total Picked</div>
-      <div class="ov-value">{{ "{:,}".format(total_picked) }}</div>
-      <div class="ov-sub">Items all time</div>
-    </div>
+  <!-- QUICK ACTIONS: the jobs the owner does every day, one tap each.
+       (Replaces four all-time counters nobody acted on.) -->
+  <div class="overview-grid qa" id="quick">
+    <a class="qa-btn qa-main" href="/picking?tab=live" id="qaLive"><b>Live picking</b><span>bills, pickers, item time</span></a>
+    <a class="qa-btn" href="/pick/me" id="qaPickSelf"><b>Pick bills yourself</b><span>multitask picking</span></a>
+    <a class="qa-btn" href="/admin/staff-today" id="qaStaffToday"><b>Staff today</b><span>who came in · every pick · PDF</span></a>
+    <a class="qa-btn" href="/picking?tab=reports&amp;period=today" id="qaReports"><b>Picking reports</b><span>any date · PDF · CSV</span></a>
+    <a class="qa-btn" href="{{ url_for('admin_multitask_report') }}" id="qaMulti"><b>Multitask report</b><span>second roles, any date</span></a>
+    <a class="qa-btn" href="#addEmployee" id="qaAdd"><b>Add staff</b><span>new employee login</span></a>
+    <div class="qa-find"><label for="qaFind">Find a bill</label>
+      <input type="search" id="qaFind" data-bill-search="qaFindOut" inputmode="numeric" autocomplete="off" placeholder="Type the bill number, e.g. 4521">
+      <div id="qaFindOut" aria-live="polite"></div></div>
+    <div class="qa-stats">Total Staff <b>{{ emp_count }}</b> <i>·</i> Active Today <b>{{ active_today }}</b> <small>entered figures today</small></div>
   </div>
 
   <!-- ============ TABS ============
@@ -556,40 +584,9 @@ var NOTES_BY_EMP = {
   <nav class="tabs" role="tablist" aria-label="Admin sections">
     <button class="tab" role="tab" data-tab="staff"  aria-selected="true">Staff</button>
     <button class="tab" role="tab" data-tab="today"  aria-selected="false">Today</button>
-    <button class="tab" role="tab" data-tab="picking" aria-selected="false">Picking</button>
-    <button class="tab" role="tab" data-tab="multitask" aria-selected="false">Multitask</button>
     <button class="tab" role="tab" data-tab="scores" aria-selected="false">Scores</button>
     <button class="tab" role="tab" data-tab="admin"  aria-selected="false">Setup</button>
   </nav>
-
-  <!-- EVERY ADMIN PAGE, GROUPED: one place to find anything -->
-  <div data-pane="admin" data-ord="0" class="card" style="margin-bottom:20px;" id="gotoAll">
-    <div class="card-header"><div class="card-title">Go to</div></div>
-    <div class="goto-grid">
-      <div class="goto-grp"><h3>Picking</h3>
-        <a href="/picking?tab=live">Live floor and item time</a>
-        <a href="/picking?tab=reports&amp;period=today">Reports (PDF, CSV)</a>
-        <a href="/picking?tab=board&amp;period=today">Leaderboard</a>
-        <a href="/pick/me">Pick bills yourself (multitask)</a></div>
-      <div class="goto-grp"><h3>Staff work</h3>
-        <a href="/admin/staff-today">Staff today (sign-in, work, times, PDF)</a>
-        <a href="{{ url_for('admin_multitask_report') }}">Multitask report</a>
-        <a href="/admin/day">Day view (any date)</a>
-        <a href="/supervisor">Supervisor</a>
-        <a href="/admin/checklist">Checklists</a></div>
-      <div class="goto-grp"><h3>Delivery</h3>
-        <a href="/admin/delivery">Delivery</a>
-        <a href="/delivery/leaderboard">Delivery leaderboard</a></div>
-      <div class="goto-grp"><h3>Reports and data</h3>
-        <a href="/admin/reports">Reports archive</a>
-        <a href="/admin/export_csv">Export CSV</a>
-        <a href="/admin/export_all_pdf">All staff PDFs (ZIP)</a>
-        <a href="/admin/export_full">Full data export (JSON)</a></div>
-      <div class="goto-grp"><h3>Setup</h3>
-        <a href="/admin/bulk_import">Bulk import</a>
-        <a href="/admin/diagnostics">Diagnostics (database)</a></div>
-    </div>
-  </div>
 
   <!-- FEATURE 2: ANNOUNCEMENT / NOTICE BOARD -->
   <div data-pane="admin" data-ord="2" class="card" style="margin-bottom:20px;border-left:4px solid var(--brand);">
@@ -637,17 +634,6 @@ var NOTES_BY_EMP = {
     {% else %}
     <div class="empty" style="padding:20px;">No announcements yet. Post your first notice above.</div>
     {% endif %}
-  </div>
-
-  <!-- Staff today: who signed in and all their work with times (PDF too) -->
-  <div data-pane="today" data-ord="0" class="card" style="margin-bottom:20px;" id="staffTodayCard">
-    <div class="card-header" style="flex-wrap:wrap;gap:8px">
-      <div class="card-title">Staff today <span class="cnt">who signed in · every pick with times</span></div>
-      <span style="display:flex;gap:8px;flex-wrap:wrap">
-        <a href="/admin/staff-today" class="btn-sm btn-view">Open</a>
-        <a href="/admin/staff-today.pdf" class="btn-sm btn-view">Download PDF</a>
-      </span>
-    </div>
   </div>
 
   <!-- FEATURE 4: PENDING PAST ENTRY REQUESTS -->
@@ -713,7 +699,7 @@ var NOTES_BY_EMP = {
   {% endif %}
 
   <!-- MULTITASK (ROLE 2) REPORTS PANEL — always visible -->
-  <div data-pane="multitask" data-ord="1" class="card anim-fade-in" style="margin-bottom:20px;border-left:4px solid var(--accent);">
+  <div data-pane="today" data-ord="6" class="card anim-fade-in" style="margin-bottom:20px;border-left:4px solid var(--accent);">
     <div class="card-header">
       <div class="card-title">Multitask (Role 2) Reports
         <span class="cnt" style="background:#f5f3ff;color:var(--accent);border-color:var(--accent-line);">{{ recent_multitask|length }} (30 days)</span>
@@ -772,7 +758,7 @@ var NOTES_BY_EMP = {
   </div>
 
   <!-- RECENT LEVEL-UPS -->
-  <div data-pane="picking" data-ord="1" class="card" style="margin-bottom:20px;" id="pickingToday">
+  <div data-pane="today" data-ord="1" class="card" style="margin-bottom:20px;" id="pickingToday">
     <div class="card-header">
       <div class="card-title">Picking today</div>
       <div style="display:flex;gap:6px;flex-wrap:wrap">
@@ -928,7 +914,7 @@ var NOTES_BY_EMP = {
   </div>
 
   <!-- ADD EMPLOYEE -->
-  <div data-pane="staff" data-ord="2" class="card">
+  <div data-pane="staff" data-ord="2" class="card" id="addEmployee">
     <div class="card-header">
       <div class="card-title">Add New Employee</div>
     </div>
@@ -1075,38 +1061,38 @@ var NOTES_BY_EMP = {
           {% set today_flag = (r.last_entry and r.last_entry.strftime('%Y-%m-%d') == today.strftime('%Y-%m-%d')) if r.last_entry else false %}
           {% set this_week  = (r.last_entry and (today - r.last_entry).days <= 6) if r.last_entry else false %}
           <tr>
-            <td>
+            <td class="st-who">
               <div class="emp-name">{{ r.emp.name }}</div>
               <div class="emp-email">{{ r.emp.email }}</div>
             </td>
-            <td>
+            <td data-l="Type">
               <span class="type-badge {% if r.emp.staff_type == 'picker' %}type-picker{% else %}type-checker{% endif %}">
                 {{ r.emp.staff_type }}{% if r.emp.secondary_staff_type %} (+ {{ r.emp.secondary_staff_type }}){% endif %}
               </span>
             </td>
-            <td>{{ r.count }}</td>
-            <td class="score-cell">
+            <td data-l="Entries">{{ r.count }}</td>
+            <td class="score-cell" data-l="Today">
               {% if r.day_stats %}{{ r.day_stats.eff_score }}{% else %}<span style="color:var(--ink-3)" title="No entry yet today">—</span>{% endif %}
             </td>
-            <td class="score-cell">
+            <td class="score-cell" data-l="Week">
               {% if r.week_stats %}{{ r.week_stats.eff_score }}{% else %}<span style="color:var(--ink-3)">—</span>{% endif %}
             </td>
-            <td class="score-cell">
+            <td class="score-cell" data-l="Month">
               {% if r.stats %}{{ r.stats.eff_score }}{% if r.stats.multitask_bonus and r.stats.multitask_bonus > 0 %}<div style="font-size:11px;font-weight:700;color:var(--ok-ink);" title="{{ r.stats.multitask_day_points }} multitask points across {{ r.stats.multitask_days }} day(s), spread over the {{ r.stats.days }} days in this period">incl. +{{ r.stats.multitask_bonus }} multitask</div>{% endif %}{% else %}<span style="color:var(--ink-3)">—</span>{% endif %}
             </td>
-            <td>
+            <td data-l="Grade">
               {% if r.stats %}
                 {% set g = r.stats.grade %}
                 <span class="tag {% if g in ['ELITE','EXCELLENT'] %}tag-ex{% elif g in ['GOOD','PROFICIENT'] %}tag-good{% elif g in ['AVERAGE','SATISFACTORY'] %}tag-avg{% elif g == 'NOT SCORED' %}tag-none{% else %}tag-poor{% endif %}">{{ g }}</span>
               {% else %}<span class="tag tag-none">No data</span>{% endif %}
             </td>
-            <td class="last-entry-cell" data-emp-id="{{ r.emp.id }}">
+            <td class="last-entry-cell" data-l="Last entry" data-emp-id="{{ r.emp.id }}">
               {% if r.last_entry %}
                 <span class="last-seen-dot {% if today_flag %}dot-today{% elif this_week %}dot-week{% else %}dot-old{% endif %}"></span>
                 {{ r.last_entry.strftime('%d %b') }}
               {% else %}<span style="color:var(--ink-3)">Never</span>{% endif %}
             </td>
-            <td>
+            <td class="st-act">
               <div class="actions">
                 <a href="/staff/{{ r.emp.id }}" class="btn-sm btn-view">View</a>
                 <button class="btn-sm btn-edit"
@@ -1818,5 +1804,6 @@ function switchLB(tab){
 <script src="{{ url_for('static', filename='js/email-suggest.js') }}" defer></script>
 <script src="{{ url_for('static', filename='js/push.js') }}" defer></script>
 <script src="{{ url_for('static', filename='js/enter-next.js') }}" defer></script>
+<script src="{{ url_for('static', filename='js/billflow.js') }}" defer></script>
 </body>
 </html>

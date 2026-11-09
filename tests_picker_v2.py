@@ -347,20 +347,26 @@ with app.app_context():
     rc3, _ = A.finish_claim(ids["p1"], rc3.id)
     check("9.23c Done with everything picked in report time is allowed too: 2 x 0.5 = 1",
           rc3.outcome == "report" and abs(rc3.points - 1.0) < 0.01, "%s %s" % (rc3.outcome, rc3.points))
-    # idle warning: free picker leaves a waiting bill 2 minutes
+    # idle warning: free picker leaves a waiting bill 5 minutes
     Notification.query.filter_by(emp_id=ids["p2"]).delete()
     PickEvent.query.filter_by(kind="idle").delete()
     db.session.get(Employee, ids["p2"]).last_seen_at = datetime.utcnow()   # p2 is on the picking screen
     for c in PickClaim.query.filter_by(picker_id=ids["p2"]).all():   # p2 has been free 5 minutes
         if c.done_at:
-            c.done_at = datetime.utcnow() - timedelta(minutes=5)
+            c.done_at = datetime.utcnow() - timedelta(minutes=8)
     db.session.commit()
 
-    db.session.add(PickBill(bill_no="ID1", items=3, created_at=datetime.utcnow() - timedelta(minutes=3)))
+    db.session.add(PickBill(bill_no="ID0", items=3, created_at=datetime.utcnow() - timedelta(minutes=4)))
+    db.session.commit()
+    A.alert_late_picks()
+    check("9.23d A bill waiting 4 minutes is still inside the 5-minute grace: no warning",
+          PickEvent.query.filter_by(kind="idle", picker_id=ids["p2"]).count() == 0)
+    PickBill.query.filter_by(bill_no="ID0").delete()
+    db.session.add(PickBill(bill_no="ID1", items=3, created_at=datetime.utcnow() - timedelta(minutes=6)))
     db.session.commit()
     A.alert_late_picks()
     warn = Notification.query.filter_by(emp_id=ids["p2"]).filter(Notification.title.like("Please take%")).first()
-    check("9.24 A free picker who leaves a bill waiting 2 min gets a warning", warn is not None and "deduction" in (warn.body or ""))
+    check("9.24 A free picker who leaves a bill waiting over 5 min gets a warning", warn is not None and "deduction" in (warn.body or ""))
     check("9.25 ...and it is noted in the late report for the assigner",
           PickEvent.query.filter_by(kind="idle", picker_id=ids["p2"]).count() == 1)
     before = A.picker_pick_stats(ids["p2"], [date.today()])["points"]
@@ -470,7 +476,7 @@ check("11.1 The admin has a Picking page that opens on the live floor", 'id="pic
 check("11.2 ...listing every bill number of the day", 'id="paBills"' in pa and (A.fy_prefix() + "5001") in pa)
 check("11.3 ...and every missing item with who reported it", 'id="paMissing"' in pa and "Dolo 650" in pa and "PK P3" in pa)
 check("11.3b No dict-method text leaks onto the page (the .items Jinja trap)", "built-in method" not in pa)
-check("11.4 The admin page links to it", 'href="/picking"' in cadm.get("/admin_dashboard").data.decode())
+check("11.4 The admin page links to it", 'href="/picking?tab=live"' in cadm.get("/admin_dashboard").data.decode())
 st_admin = cadm.get("/pick/state.json").get_json()
 check("11.5 The admin sees the assigner's view of the live data", "pickers" in st_admin and "events" in st_admin)
 csvr = cadm.get("/picking/report.csv")
@@ -678,7 +684,9 @@ check("15.8 The picker's dashboard no longer shows the old picker cards",
       "Recent History" not in pd15 and "Hard-Level Target" not in pd15 and "Monthly Target" not in pd15)
 check("15.9 Picking comes first, before the multitask section",
       pd15.find('id="pickApp"') != -1 and (pd15.find("MULTITASK") == -1 or pd15.find('id="pickApp"') < pd15.find("MULTITASK")))
-check("15.10 The admin top bar has a Picking button", 'id="navPicking"' in cadm.get("/admin_dashboard").data.decode())
+_adm = cadm.get("/admin_dashboard").data.decode()
+check("15.10 The admin dashboard has big Live picking and Pick bills yourself buttons",
+      'id="qaLive"' in _adm and 'href="/pick/me" id="qaPickSelf"' in _adm)
 check("15.11 On a phone the welcome banner is hidden for pickers, so the bills come first",
       "dash-hero-pick" in pd15 and ".dash-hero-pick { display: none; }" in pd15)
 check("15.12 On a phone the top bar is one swipeable row (no 4-row wrap, search hidden)",
