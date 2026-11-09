@@ -1,4 +1,4 @@
-"""Picking report as a PDF (landscape A4) from pick_report().
+"""Picking report and staff day report as PDFs (landscape A4) from pick_report().
 
 Sections: summary figures, leaderboard, items and bills per day (chart),
 every bill, missing items, late / waiting log, and each picker's bills.
@@ -89,11 +89,22 @@ def _chart(series, width):
     return d
 
 
+def _rules(r):
+    n, u = r.get("times") or (35, 30)
+    half = r.get("extra_seconds", 125) / 2.0
+    return ("Time per item: %d s normal bill, %d s urgent bill; then %g s extra time and %g s report time, then late."
+            % (n, u, half, half))
+
+
+def _made():
+    return (datetime.utcnow() + timedelta(hours=5, minutes=30)).strftime("%d %b %Y, %I:%M %p").replace(" 0", " ")
+
+
 def build_picking_pdf(r):
     buf = io.BytesIO()
     page = landscape(A4)
     period = r["day_from"].strftime("%d %b %Y") + ("" if r["single_day"] else " – " + r["day_to"].strftime("%d %b %Y"))
-    made = (datetime.utcnow() + timedelta(hours=5, minutes=30)).strftime("%d %b %Y, %I:%M %p").replace(" 0", " ")
+    made = _made()
 
     def frame(canvas, doc):
         canvas.saveState()
@@ -105,7 +116,7 @@ def build_picking_pdf(r):
         canvas.drawRightString(page[0] - 12 * mm, page[1] - 4.8 * mm, period)
         canvas.setFillColor(INK3)
         canvas.setFont("Helvetica", 7.5)
-        canvas.drawString(12 * mm, 7 * mm, "Made %s (Indian time). Bill-based picking: normal time 30 s/item (urgent 20 s), then 125 s extra." % made)
+        canvas.drawString(12 * mm, 7 * mm, "Made %s (Indian time). %s" % (made, _rules(r)))
         canvas.drawRightString(page[0] - 12 * mm, 7 * mm, "Page %d" % doc.page)
         canvas.restoreState()
 
@@ -186,5 +197,91 @@ def build_picking_pdf(r):
             story.append(KeepTogether(block) if len(x["bill_list"]) < 18 else block[0])
             if len(x["bill_list"]) >= 18:
                 story.extend(block[1:])
+    doc.build(story, onFirstPage=frame, onLaterPages=frame)
+    return buf.getvalue()
+
+
+def build_staff_day_pdf(r):
+    """Staff day report: everyone who came in, sign-in times, and every
+    picker's grabs with all their times (from staff_day_report)."""
+    buf = io.BytesIO()
+    page = landscape(A4)
+    day = r["day"].strftime("%a %d %b %Y")
+    made = _made()
+
+    def frame(canvas, doc):
+        canvas.saveState()
+        canvas.setFillColor(GREEN)
+        canvas.rect(0, page[1] - 7 * mm, page[0], 7 * mm, stroke=0, fill=1)
+        canvas.setFillColor(colors.white)
+        canvas.setFont("Helvetica-Bold", 9)
+        canvas.drawString(12 * mm, page[1] - 4.8 * mm, "INDIAN PHARMA · Staff day report")
+        canvas.drawRightString(page[0] - 12 * mm, page[1] - 4.8 * mm, day)
+        canvas.setFillColor(INK3)
+        canvas.setFont("Helvetica", 7.5)
+        canvas.drawString(12 * mm, 7 * mm, "Made %s (Indian time). %s" % (made, _rules(r)))
+        canvas.drawRightString(page[0] - 12 * mm, 7 * mm, "Page %d" % doc.page)
+        canvas.restoreState()
+
+    doc = SimpleDocTemplate(buf, pagesize=page, leftMargin=12 * mm, rightMargin=12 * mm, topMargin=14 * mm, bottomMargin=13 * mm,
+                            title="Staff day report %s" % day, author="Indian Pharma")
+    W = page[0] - 24 * mm
+    T = r["totals"]
+    story = [Paragraph("Staff day report", H1),
+             Paragraph("%s · %s" % (day, r["emp_name"] or "Everyone who came in"), SUB), Spacer(1, 6),
+             _cards([("People in", T["people"]), ("Picked today", T["pickers"]), ("Items picked", T["items"]),
+                     ("Pick points", T["points"]), ("Late grabs", T["late"]), ("Not found", T["missing"])], W)]
+
+    story.append(Paragraph("Who came in (%d)" % len(r["people"]), H2))
+    if r["people"]:
+        def work(p):
+            bits = []
+            if p["pick"]["grabs"]:
+                bits.append("%d bill%s, %d items, %s pts" % (p["pick"]["bills"], "" if p["pick"]["bills"] == 1 else "s",
+                                                          p["pick"]["items"], p["pick"]["points"]))
+            if p["bills_added"]:
+                bits.append("%d bills added" % p["bills_added"])
+            bits += ["%s %s" % (k, v) for k, v in p["entry"]]
+            return "; ".join(bits) or "—"
+        story.append(_table(["Name", "Role", "Signed in", "Signed out", "Last seen", "Extra role", "Work"],
+                            [[p["name"], p["role"], (p["first_in"] or "—") + ((" (%d times, last %s)" % (p["logins"], p["last_in"])) if p["logins"] > 1 else ""),
+                              p["last_out"] or "—", p["last_seen"] or "—", ", ".join(p["multitask"]) or "—", work(p)] for p in r["people"]],
+                            [36 * mm, 30 * mm, 40 * mm, 20 * mm, 20 * mm, 26 * mm, W - 172 * mm]))
+    else:
+        story.append(Paragraph("Nobody signed in or worked on this day.", SUB))
+
+    for p in [p for p in r["people"] if p["picks"]]:
+        k = p["pick"]
+        story.append(PageBreak())
+        story.append(Paragraph("%s — %s" % (p["name"], p["role"]), H2))
+        story.append(Paragraph("Signed in %s%s · first pick %s · last Done %s" % (
+            p["first_in"] or "—", (" · signed out %s" % p["last_out"]) if p["last_out"] else "", k["first_take"] or "—", k["last_done"] or "—"), SUB))
+        story.append(Spacer(1, 4))
+        story.append(_cards([("Bills", k["bills"]), ("Items", k["items"]), ("Points", k["points"]),
+                             ("Normal / extra / report / late", "%d / %d / %d / %d" % (k["ontime"], k["extra"], k["report"], k["late"])),
+                             ("Picking time", k["picking_time"] or "—"), ("Free time", k["free_time"] or "—"),
+                             ("Items / hour", k["rate"] or "—"), ("Not found", k["missing"])], W))
+        story.append(Spacer(1, 6))
+        rows, red = [], []
+        for i, g in enumerate(p["picks"]):
+            nf = g["missing"] or ""
+            if g["missing_names"]:
+                nf = "%s (%s)" % (g["missing"], g["missing_names"])
+            rows.append([i + 1, g["bill_no"] + (" (U)" if g["urgent"] else ""), g["items"],
+                         g["picked"] if g["picked"] is not None else "—", nf, g["took_at"], g["due_at"],
+                         g["done_at"] or "—", g["allowed"], g["taken"] or "—", g["result"],
+                         g["points"] if g["points"] is not None else "—"])
+            if g["outcome"] == "late":
+                red.append(i)
+        story.append(_table(["#", "Bill", "Took", "Picked", "Not found", "Took at", "Normal time ends", "Done at",
+                             "Time given", "Time taken", "Result", "Points"], rows,
+                            [8 * mm, 30 * mm, 12 * mm, 14 * mm, W - 217 * mm, 22 * mm, 26 * mm, 22 * mm, 18 * mm, 18 * mm, 26 * mm, 15 * mm],
+                            red_rows=red))
+        if p["events"]:
+            story.append(Paragraph("Late / waiting log", H2))
+            story.append(_table(["Time", "What", "Bill", "Minutes", "Detail"],
+                                [[e["at"], e["label"], e["bill"], e["minutes"] if e["minutes"] is not None else "", e["detail"]] for e in p["events"]],
+                                [26 * mm, 28 * mm, 34 * mm, 18 * mm, W - 106 * mm],
+                                red_rows=[i for i, e in enumerate(p["events"]) if e["kind"] == "late"]))
     doc.build(story, onFirstPage=frame, onLaterPages=frame)
     return buf.getvalue()

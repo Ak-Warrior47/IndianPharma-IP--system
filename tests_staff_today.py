@@ -1,0 +1,257 @@
+"""Staff today: the admin's report of everyone who came in on a day.
+
+The owner asked for the report of each person who signed in today,
+specially pickers: all their work with every time, on a page of its own and
+as a PDF. Sign-ins and sign-outs are now recorded (StaffLogin). Pickers are
+shown grab by grab: bill, items taken, picked, not found (with item names),
+took at, normal time ends, done at, time given, time taken, result (normal /
+extra / report / late N min / picking now) and points.
+
+Run:  python3.13 tests_staff_today.py
+"""
+import os
+import sys
+from datetime import date, datetime, timedelta
+
+os.environ.pop("DATABASE_URL", None)
+REPO = os.path.dirname(os.path.abspath(__file__))
+sys.path.insert(0, REPO)
+
+import app as A  # noqa: E402
+from app import (app, db, Employee, KPIEntry, PickBill, PickClaim, PickMissing, PickEvent,  # noqa: E402
+                 StaffLogin)
+from tests_helper import csrf_client  # noqa: E402
+
+app.config["TESTING"] = True
+PW = "longpass123"
+PASSED, FAILED = [], []
+
+
+def check(name, cond, extra=""):
+    (PASSED if cond else FAILED).append(name)
+    print(("PASS  " if cond else "FAIL  ") + name + (("   " + extra) if extra and not cond else ""))
+
+
+def mk(email, st, name, admin=False):
+    e = Employee.query.filter_by(email=email).first()
+    if not e:
+        e = Employee(name=name, email=email, staff_type=st, is_admin=admin)
+        e.set_password(PW)
+        db.session.add(e)
+        db.session.commit()
+    e.staff_type, e.name, e.is_admin, e.last_seen_at = st, name, admin, None
+    for M, col in ((PickClaim, PickClaim.picker_id), (KPIEntry, KPIEntry.emp_id), (StaffLogin, StaffLogin.emp_id),
+                   (PickMissing, PickMissing.picker_id), (PickEvent, PickEvent.picker_id), (A.MultitaskEntry, A.MultitaskEntry.emp_id)):
+        M.query.filter(col == e.id).delete(synchronize_session=False)
+    db.session.commit()
+    return e
+
+
+def login(email):
+    c = csrf_client(app.test_client())
+    c.post("/login", data={"email": email, "password": PW}, follow_redirects=True)
+    return c
+
+
+with app.app_context():
+    db.create_all()
+    PickMissing.query.delete()
+    PickClaim.query.delete()
+    PickBill.query.delete()
+    StaffLogin.query.delete()
+    db.session.commit()
+    adm = mk("st_adm@x.com", "picker", "ST Admin", admin=True)
+    ria = mk("st_ria@x.com", "picker", "ST Ria")
+    om = mk("st_om@x.com", "picker", "ST Om")
+    asg = mk("st_asg@x.com", "pick_assigner", "ST Asg")
+    chk = mk("st_chk@x.com", "checker", "ST Chk")
+    idle = mk("st_idle@x.com", "packer", "ST Idle")
+    gone = mk("st_gone@x.com", "picker", "ST Gone")
+    RIA, OM, ASG, CHK, IDLE, GONE, ADM = ria.id, om.id, asg.id, chk.id, idle.id, gone.id, adm.id
+
+# ---- 1. Sign-ins are recorded ------------------------------------------------
+c_ria = login("st_ria@x.com")
+c_idle = login("st_idle@x.com")
+c_adm = login("st_adm@x.com")
+with app.app_context():
+    rows = StaffLogin.query.filter_by(emp_id=RIA).all()
+    check("1.1 A staff sign-in writes a row for today", len(rows) == 1 and rows[0].kind == "login" and rows[0].day == date.today())
+    check("1.2 Admin sign-ins are not tracked", StaffLogin.query.filter_by(emp_id=ADM).count() == 0)
+c_idle.get("/logout")
+with app.app_context():
+    check("1.3 Log out writes a sign-out row",
+          [r.kind for r in StaffLogin.query.filter_by(emp_id=IDLE).order_by(StaffLogin.id).all()] == ["login", "logout"])
+    check("1.4 Sign-ins table is on the Diagnostics list", any(t == "staff_logins" for _, t in
+          [(x["label"], x["table"]) for x in A.database_check()]))
+
+# ---- 2. Picking grabs with every time -----------------------------------------
+with app.app_context():
+    n_sec, u_sec = A.pick_times()
+    half = A.PICK_EXTRA_SECONDS / 2.0
+    b1 = A.add_pick_bill("7101", 5, ASG)
+    B1 = b1.id
+    t0 = datetime.utcnow() - timedelta(minutes=40)
+    # Ria: 3 items, done in 60 s (normal time)
+    c1 = A.claim_items(RIA, B1, 3, now=t0)
+    A.finish_claim(RIA, c1.id, now=t0 + timedelta(seconds=60))
+    # Ria: 2 items, done 90 s after report time ended (late 2 min)
+    t1 = t0 + timedelta(minutes=5)
+    c2 = A.claim_items(RIA, B1, 2, now=t1)
+    late_done = c2.due_at + timedelta(seconds=2 * half + 90)
+    A.finish_claim(RIA, c2.id, now=late_done)
+    B2 = A.add_pick_bill("7102U", 4, ASG).id
+    # Om: urgent bill, 3 items, one not found (Crocin)
+    t2 = t0 + timedelta(minutes=2)
+    c3 = A.claim_items(OM, B2, 3, now=t2)
+    A.finish_claim(OM, c3.id, now=t2 + timedelta(seconds=50), picked=2, missing=[("Crocin", 1)])
+    # Om takes the last item and is still picking
+    c4 = A.claim_items(OM, B2, 1, now=datetime.utcnow())
+    # Checker typed an entry today but never signed in on this server
+    db.session.add(KPIEntry(emp_id=CHK, entry_date=date.today(), sales_bills_open=40, cs_sales_open=5, checked=300))
+    # A picker who signed in yesterday only: not in today's report
+    db.session.add(StaffLogin(emp_id=GONE, at=datetime.utcnow() - timedelta(days=1), day=date.today() - timedelta(days=1)))
+    db.session.commit()
+
+    r = A.staff_day_report(date.today())
+    by = {p["id"]: p for p in r["people"]}
+    check("2.1 Everyone who signed in or worked today is listed",
+          {RIA, OM, ASG, CHK, IDLE} <= set(by), str(sorted(by)))
+    check("2.2 Someone who only came yesterday is not listed", GONE not in by)
+    check("2.3 Admins are never listed", ADM not in by)
+    check("2.4 Pickers come first", r["people"][0]["staff_type"] == "picker")
+    g = by[RIA]["picks"]
+    check("2.5 Ria has two grabs, in time order", [x["items"] for x in g] == [3, 2])
+    check("2.6 Normal-time grab: result, points", g[0]["result"] == "Normal time" and g[0]["points"] == 3 * A.PICK_ONTIME_RATE, str(g[0]))
+    check("2.7 Time given = items x item time", g[0]["allowed"] == A._mmss(3 * n_sec), g[0]["allowed"])
+    check("2.8 Time taken = take to Done", g[0]["taken"] == "1:00", g[0]["taken"])
+    check("2.9 Took at / normal ends / done at shown with seconds",
+          g[0]["took_at"] == A.ist_sec(t0) and g[0]["done_at"] == A.ist_sec(t0 + timedelta(seconds=60))
+          and g[0]["due_at"].count(":") == 2)
+    check("2.10 Late grab says how late", g[1]["result"] == "Late 1:30" and g[1]["outcome"] == "late", g[1]["result"])
+    check("2.11 Late grab points are negative", g[1]["points"] == -2.0, str(g[1]["points"]))
+    k = by[RIA]["pick"]
+    check("2.12 Ria totals: bills, items, points, late",
+          k["bills"] == 1 and k["items"] == 5 and k["late"] == 1 and k["ontime"] == 1
+          and k["points"] == round(3 * A.PICK_ONTIME_RATE - 2, 1), str(k))
+    check("2.13 Picking time and free time are worked out", k["picking_time"] and k["free_time"], str(k))
+    check("2.14 Items per hour is worked out", k["rate"] and k["rate"] > 0)
+    og = by[OM]["picks"]
+    check("2.15 Not found shows the item name", og[0]["missing"] == 1 and "Crocin" in og[0]["missing_names"], str(og[0]))
+    check("2.16 Urgent bill is marked", og[0]["urgent"] is True)
+    check("2.17 A running grab shows 'Picking now'", og[1]["result"] == "Picking now" and og[1]["points"] is None)
+    check("2.18 Assigner: bills added counted", by[ASG]["bills_added"] == 2)
+    check("2.19 Checker: typed figures shown", ("Bills checked", 45) in by[CHK]["entry"], str(by[CHK]["entry"]))
+    check("2.20 Sign-in time shown", by[RIA]["first_in"] != "" and by[CHK]["first_in"] == "")
+    check("2.21 Sign-out time shown", by[IDLE]["last_out"] != "")
+    check("2.22 Day totals", r["totals"]["items"] == 7 and r["totals"]["late"] == 1 and r["totals"]["missing"] == 1, str(r["totals"]))
+    one = A.staff_day_report(date.today(), RIA)
+    check("2.23 One person only", [p["id"] for p in one["people"]] == [RIA] and one["emp_name"] == "ST Ria")
+    check("2.24 Another day leaves out today's people",
+          not ({RIA, OM, ASG, IDLE} & {p["id"] for p in A.staff_day_report(date.today() - timedelta(days=3))["people"]}))
+
+# ---- 3. Fixed number of database questions ------------------------------------
+with app.app_context():
+    from sqlalchemy import event
+    n = {"q": 0}
+
+    def _count(*a, **k):
+        n["q"] += 1
+    event.listen(db.engine, "before_cursor_execute", _count)
+    A.staff_day_report(date.today())
+    q1 = n["q"]
+    for i in range(4):
+        e = mk("st_x%d@x.com" % i, "picker", "ST X%d" % i)
+        b = A.add_pick_bill(str(7200 + i), 2, ASG)
+        cl = A.claim_items(e.id, b.id, 2, now=datetime.utcnow() - timedelta(minutes=3))
+        A.finish_claim(e.id, cl.id, now=datetime.utcnow() - timedelta(minutes=2))
+    n["q"] = 0
+    A.staff_day_report(date.today())
+    q2 = n["q"]
+    event.remove(db.engine, "before_cursor_execute", _count)
+    check("3.1 More pickers and bills do not add database questions", q2 <= q1, "%d -> %d" % (q1, q2))
+
+# ---- 4. The page -------------------------------------------------------------
+html = c_adm.get("/admin/staff-today").get_data(as_text=True)
+check("4.1 Admin page opens", 'id="staffToday"' in html)
+check("4.2 Shows names, results, item names",
+      "ST Ria" in html and "Late 1:30" in html and "Normal time" in html and "Crocin" in html and "Picking now" in html)
+check("4.3 Shows every time column", all(h in html for h in ("Took at", "Normal time ends", "Done at", "Time given", "Time taken")))
+check("4.4 Phone layout: each cell carries its label", 'data-l="Took at"' in html and "@media (max-width:760px)" in html)
+check("4.5 Download PDF link", "/admin/staff-today.pdf?date=" in html)
+check("4.6 Per-person PDF link", "emp=%d" % RIA in html)
+one = c_adm.get("/admin/staff-today?emp=%d" % OM).get_data(as_text=True)
+check("4.7 Person filter", 'id="p%d"' % OM in one and 'id="p%d"' % RIA not in one)
+fut = c_adm.get("/admin/staff-today?date=2999-01-01").get_data(as_text=True)
+check("4.8 A future date falls back to today", date.today().isoformat() in fut)
+check("4.9 Staff cannot open it", c_ria.get("/admin/staff-today").status_code in (302, 403))
+check("4.10 Staff cannot download it", c_ria.get("/admin/staff-today.pdf").status_code in (302, 403))
+adm_html = c_adm.get("/admin_dashboard").get_data(as_text=True)
+check("4.11 Admin dashboard links to it (Today tab and Go to)",
+      adm_html.count("/admin/staff-today") >= 3 and 'id="staffTodayCard"' in adm_html)
+
+# ---- 5. PDF ------------------------------------------------------------------
+r = c_adm.get("/admin/staff-today.pdf")
+check("5.1 PDF downloads", r.status_code == 200 and r.data[:4] == b"%PDF" and len(r.data) > 2000)
+check("5.2 PDF file name has the date", date.today().isoformat() in r.headers.get("Content-Disposition", ""))
+r = c_adm.get("/admin/staff-today.pdf?emp=%d" % RIA)
+check("5.3 One person's PDF", r.status_code == 200 and r.data[:4] == b"%PDF" and "st-ria" in r.headers.get("Content-Disposition", ""))
+r = c_adm.get("/admin/staff-today.pdf?date=%s" % (date.today() - timedelta(days=5)).isoformat())
+check("5.4 Empty day still makes a PDF", r.status_code == 200 and r.data[:4] == b"%PDF")
+import picking_pdf  # noqa: E402
+with app.app_context():
+    txt = picking_pdf._rules({"times": A.pick_times(), "extra_seconds": A.PICK_EXTRA_SECONDS})
+    check("5.5 PDF footers state today's item time", ("%d s normal" % A.pick_times()[0]) in txt and "62.5 s" in txt, txt)
+
+# ---- 6. Clean-up on delete ---------------------------------------------------
+with app.app_context():
+    v = mk("st_del@x.com", "picker", "ST Del")
+    db.session.add(StaffLogin(emp_id=v.id, at=datetime.utcnow(), day=date.today()))
+    db.session.commit()
+    VID = v.id
+c_adm.post("/admin/delete_user/%d" % VID, follow_redirects=True)
+with app.app_context():
+    check("6.1 Deleting a staff member deletes their sign-ins",
+          db.session.get(Employee, VID) is None and StaffLogin.query.filter_by(emp_id=VID).count() == 0)
+
+# ---- 7. Pick Assigner: today's totals, closed total for checkers ---------------
+with app.app_context():
+    for M in (PickMissing, PickClaim):
+        M.query.delete()
+    PickBill.query.delete()
+    A.PickDay.query.filter_by(day=date.today()).delete()
+    db.session.commit()
+    a1 = A.add_pick_bill("8101", 4, ASG).id
+    A.add_pick_bill("8102", 3, ASG)
+    A.add_pick_bill("8103", 2, ASG)
+    cc = A.claim_items(RIA, a1, 4, now=datetime.utcnow() - timedelta(minutes=2))
+    A.finish_claim(RIA, cc.id, now=datetime.utcnow() - timedelta(minutes=1))
+c_asg = login("st_asg@x.com")
+st = c_asg.get("/pick/state.json").get_json()
+d = st.get("day") or {}
+check("7.1 Assigner sees bills added today", d.get("added") == 3, str(d))
+check("7.2 ...completed today", d.get("done") == 1, str(d))
+check("7.3 ...pending now and items still to pick", d.get("pending") == 2 and d.get("items_left") == 5, str(d))
+check("7.4 Not closed yet", st.get("day_closed") is None)
+page = c_asg.get("/dashboard").get_data(as_text=True)
+check("7.5 The assigner screen has the Today strip", 'id="pkToday"' in page and "Closed total (checkers)" in page)
+with app.app_context():
+    A.close_pick_day(ASG)
+    st = c_asg.get("/pick/state.json").get_json()
+    check("7.6 After Close today the closed total is the day's bills", st.get("day_closed") == 3)
+    check("7.7 ...and it is the checkers' fixed day total",
+          A.checker_team_day_totals([date.today()])[date.today()]["total"] == 3,
+          str(A.checker_team_day_totals([date.today()])[date.today()]))
+    check("7.8 Open bills moved to Rescheduled when the day closed",
+          PickBill.query.filter_by(status="open").count() == 0)
+sp = c_ria.get("/pick/state.json").get_json()
+check("7.9 A picker sees no bill details",
+      all(b["taken"] == [] and b["missing_rows"] == [] for b in sp.get("bills", [])))
+
+print("\n" + "=" * 62)
+print("PASSED %d    FAILED %d" % (len(PASSED), len(FAILED)))
+if FAILED:
+    print("\nFailures:")
+    for f in FAILED:
+        print("  - " + f)
+print("=" * 62)
+sys.exit(1 if FAILED else 0)

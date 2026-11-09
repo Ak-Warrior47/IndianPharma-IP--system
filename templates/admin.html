@@ -484,6 +484,7 @@ var NOTES_BY_EMP = {
         <a href="/picking?tab=board&amp;period=today">Picking leaderboard</a>
         <a href="/pick/me" id="navPickSelf">Pick bills yourself (multitask)</a>
         <div class="nav-goto__h">Staff work</div>
+        <a href="/admin/staff-today" id="navStaffToday">Staff today (sign-in, work, times)</a>
         <a href="{{ url_for('admin_multitask_report') }}">Multitask report</a>
         <a href="/admin/day">Day view (any date)</a>
         <a href="/supervisor">Supervisor</a>
@@ -571,6 +572,7 @@ var NOTES_BY_EMP = {
         <a href="/picking?tab=board&amp;period=today">Leaderboard</a>
         <a href="/pick/me">Pick bills yourself (multitask)</a></div>
       <div class="goto-grp"><h3>Staff work</h3>
+        <a href="/admin/staff-today">Staff today (sign-in, work, times, PDF)</a>
         <a href="{{ url_for('admin_multitask_report') }}">Multitask report</a>
         <a href="/admin/day">Day view (any date)</a>
         <a href="/supervisor">Supervisor</a>
@@ -635,6 +637,17 @@ var NOTES_BY_EMP = {
     {% else %}
     <div class="empty" style="padding:20px;">No announcements yet. Post your first notice above.</div>
     {% endif %}
+  </div>
+
+  <!-- Staff today: who signed in and all their work with times (PDF too) -->
+  <div data-pane="today" data-ord="0" class="card" style="margin-bottom:20px;" id="staffTodayCard">
+    <div class="card-header" style="flex-wrap:wrap;gap:8px">
+      <div class="card-title">Staff today <span class="cnt">who signed in · every pick with times</span></div>
+      <span style="display:flex;gap:8px;flex-wrap:wrap">
+        <a href="/admin/staff-today" class="btn-sm btn-view">Open</a>
+        <a href="/admin/staff-today.pdf" class="btn-sm btn-view">Download PDF</a>
+      </span>
+    </div>
   </div>
 
   <!-- FEATURE 4: PENDING PAST ENTRY REQUESTS -->

@@ -23,7 +23,7 @@ eventlet worker); the database is Supabase PostgreSQL.
 ## Commands
 - Python is `python3.13`. Unset `DATABASE_URL` for local work: the app falls
   back to SQLite (`instance/pharma_final.db`, untracked).
-- Full suite: `./run_tests.sh` (about 900 checks). One suite:
+- Full suite: `./run_tests.sh` (about 990 checks). One suite:
   `python3.13 tests_picker_v2.py`. CI runs the same on every push
   (`.github/workflows/tests.yml`).
 - The suite wipes local test accounts; re-create any you use for browser
@@ -81,6 +81,15 @@ eventlet worker); the database is Supabase PostgreSQL.
   paused bill go back on it). No "Sure?" step: a picker can never take more
   than the bill's items left (phone shows "Only N items left"; server refuses
   too), and missing quantities can't exceed the items taken.
+- Bill details (who took what, items not found, timelines, bill-by-bill
+  lists, picking PDF/CSV) are for the Pick Assigner and admin only;
+  `picking_state` strips them for pickers, who see only open bills (number,
+  items, left) and their own day totals.
+- The assigner's Today strip shows bills added / completed / pending today
+  and the closed total; Close today's count is the checkers' fixed day total.
+- Staff today (`/admin/staff-today`, `staff_day_report`, PDF in
+  `picking_pdf.build_staff_day_pdf`): who signed in (`StaffLogin`, admins not
+  tracked) and every pick with all its times.
 - One phone per staff login (`Employee.session_key`): a new sign-in signs the
   old phone out. Admins are exempt.
 - No internet: picking taps queue and send when back; Done counts from the

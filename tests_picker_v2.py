@@ -381,8 +381,12 @@ check("10.1 The leaderboard ranks by bills first, then items",
       all((board[i]["bills"], board[i]["items"]) >= (board[i + 1]["bills"], board[i + 1]["items"]) for i in range(len(board) - 1)),
       str([(r["name"], r["bills"], r["items"]) for r in board]))
 check("10.2 Every picker is on it with a rank", all("rank" in r for r in board) and any(r["id"] == ids["p1"] for r in board))
-check("10.3 The picker sees their own bills, bill by bill", sb["my_bills"] and all("bill_no" in r and "items" in r for r in sb["my_bills"]))
-tl = c1.get("/pick/bill/%d.json" % NB).get_json()
+check("10.3 The picker sees only their own day totals, no bill-by-bill list",
+      sb["my_bills"] == [] and sb["today"]["grabs"] >= 1)
+check("10.3b Bill details are hidden from pickers: no 'taken by', no missing rows",
+      all(b["taken"] == [] and b["pickers"] == [] and b["missing_rows"] == [] for b in sb["bills"]))
+check("10.3c A picker cannot open a bill's timeline", c1.get("/pick/bill/%d.json" % NB).status_code == 403)
+tl = ca.get("/pick/bill/%d.json" % NB).get_json()
 check("10.4 A bill's timeline lists every grab with who, items, times and outcome",
       tl["bill_no"].endswith("5001") and len(tl["grabs"]) >= 2 and all(g["took"] and g["picker"] for g in tl["grabs"]))
 check("10.5 ...and the missing items with who reported them", any(m["item"] == "Dolo 650" for m in tl["missing"]))
@@ -510,8 +514,9 @@ check("11b.7 The CSV has every section: leaderboard, bills, missing items, late 
 own = c3.get("/picking/report.pdf?picker=%d" % ids["p3"])
 other = c3.get("/picking/report.pdf?picker=%d" % ids["p1"])
 allp = c3.get("/picking/report.pdf")
-check("11b.8 A picker can download their own PDF but nobody else's, and not the full report",
-      own.status_code == 200 and own.data[:5] == b"%PDF-" and other.status_code == 302 and allp.status_code == 302)
+check("11b.8 Picking reports (bill details) are admin and assigner only: a picker gets none",
+      own.status_code == 302 and other.status_code == 302 and allp.status_code == 302)
+check("11b.8b The Pick Assigner can download the report", ca.get("/picking/report.pdf").data[:5] == b"%PDF-")
 bd = cadm.get("/picking?tab=board&period=month").data.decode()
 check("11b.9 The leaderboard tab ranks pickers for the period, with charts and profile links",
       'id="paBoard"' in bd and 'id="paBar"' in bd and 'id="paPie"' in bd and "#picking" in bd)

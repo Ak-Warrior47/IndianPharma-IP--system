@@ -71,6 +71,16 @@
 .pk-sec{display:flex;justify-content:space-between;align-items:center;gap:8px}
 .pk-min{border:1.5px solid var(--line);background:transparent;border-radius:8px;width:28px;height:26px;font-weight:800;line-height:1;cursor:pointer;color:var(--ink-2);flex:none}
 @media(max-width:640px){.pk-urtop{grid-template-columns:1fr}}
+.pk-today,.pk-myday{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;margin:0 0 12px}
+.pk-myday{grid-template-columns:repeat(auto-fit,minmax(110px,1fr))}
+.pk-today div,.pk-myday div{border:1px solid var(--line);border-radius:12px;padding:8px 10px;background:var(--surface,#fff);min-width:0}
+.pk-today span,.pk-myday span{display:block;font-size:10.5px;font-weight:700;color:var(--ink-3);text-transform:uppercase;letter-spacing:.4px}
+.pk-today b,.pk-myday b{display:block;font-size:22px;font-variant-numeric:tabular-nums;line-height:1.2}
+.pk-today small{display:block;font-size:11.5px;color:var(--ink-3)}
+.pk-today .pend b{color:var(--warn-ink,#9a4b00)}
+.pk-today .fix{border-color:var(--brand)}
+.pk-plain{cursor:default}
+@media(max-width:560px){.pk-today{grid-template-columns:repeat(2,minmax(0,1fr))}}
 .pk-add{display:grid;grid-template-columns:minmax(0,1fr) 84px auto;gap:6px;align-items:center;max-width:460px}
 .pk-sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
 .pk-add input{height:36px;padding:4px 8px!important;font-size:14px!important}
@@ -256,7 +266,7 @@ body.pk-full .pk-msg.on{position:sticky;top:0;z-index:2}
   <div class="pk-tabs" role="tablist" aria-label="Picking">
     <button role="tab" data-tab="live" aria-selected="true">Live</button>
     <button role="tab" data-tab="board" aria-selected="false">Leaderboard</button>
-    <button role="tab" data-tab="mine" aria-selected="false">My bills</button>
+    <button role="tab" data-tab="mine" aria-selected="false">My day</button>
     <button role="tab" data-tab="rules" aria-selected="false">Rules</button>
   </div>
   <section data-panel="live">
@@ -311,6 +321,12 @@ body.pk-full .pk-msg.on{position:sticky;top:0;z-index:2}
     <button role="tab" data-tab="rules" aria-selected="false">Rules</button>
   </div>
   <section data-panel="live">
+  <div class="pk-today" id="pkToday" aria-live="polite">
+    <div><span>Bills today</span><b id="pkTdAdded">0</b></div>
+    <div><span>Completed</span><b id="pkTdDone">0</b></div>
+    <div class="pend"><span>Pending</span><b id="pkTdPend">0</b><small id="pkTdLeft"></small></div>
+    <div class="fix"><span>Closed total (checkers)</span><b id="pkTdClosed">—</b><small id="pkTdClosedNote">not closed yet</small></div>
+  </div>
   <div class="pk-late" id="pkLate" role="alert" hidden></div>
   <form class="pk-add" id="pkAdd" autocomplete="off" novalidate>
     <div><label for="pkBillNo" class="pk-sr">Bill number (add U for urgent)</label>
@@ -536,7 +552,11 @@ body.pk-full .pk-msg.on{position:sticky;top:0;z-index:2}
       "<li><b>Waiting bills:</b> if you are free and leave a bill waiting 2 minutes, you get a warning. This will lead to point deductions.</li>" +
       "<li>Bill numbers start with " + esc(s.prefix) + " and change every 1 April. A number can be used only once.</li></ul>";
   }
-  function billBtn(b) { return '<button type="button" class="pk-open" data-open="' + b.id + '" title="See this bill\'s timeline">' + esc(b.bill_no) + "</button>"; }
+  // Bill details (timeline: who took what, when) are for the assigner and admin only.
+  function billBtn(b) {
+    if (role === "picker") return '<span class="pk-open pk-plain">' + esc(b.bill_no) + "</span>";
+    return '<button type="button" class="pk-open" data-open="' + b.id + '" title="See this bill\'s timeline">' + esc(b.bill_no) + "</button>";
+  }
   function prog(b) {
     return '<div class="pk-prog" title="' + b.done + ' picked, ' + b.active + ' being picked, ' + b.missing + ' missing, ' + b.left + ' left">' +
       '<i class="d" style="width:' + (100 * b.done / b.items) + '%"></i><i class="a" style="width:' + (100 * b.active / b.items) + '%"></i>' +
@@ -595,12 +615,12 @@ body.pk-full .pk-msg.on{position:sticky;top:0;z-index:2}
       Object.keys(keep).forEach(function (k) { if ($(k)) $(k).value = keep[k]; });
       if (focused && $(focused)) $(focused).focus();
     }
-    var mb = s.my_bills || [];
-    $("pkMyBills").innerHTML = mb.length ? '<div class="pk-sub" style="margin-bottom:6px">' + plural(mb.length, "bill") + " today · tap a bill to see its timeline</div>" + mb.map(function (r) {
-      return '<div class="pk-bill"><div><div class="no">' + billBtn({id: r.bill_id, bill_no: r.bill_no}) + (r.urgent ? '<span class="pk-u">URGENT</span>' : "") + '</div><div class="sub">last at ' + esc(r.last) + "</div></div>" +
-        "<div><b>" + plural(r.items, "item") + " picked</b>" + (r.missing ? ' · <span style="color:var(--bad-ink)">' + r.missing + " not found</span>" : "") + (r.late ? ' · <span style="color:var(--bad-ink)">late</span>' : "") +
-        '</div><div class="sub" style="font-weight:700">' + (r.points > 0 ? "+" : "") + r.points + " pts</div></div>";
-    }).join("") : '<div class="pk-empty">No bills picked yet today.</div>';
+    // My day: totals only. Bill-by-bill details are for the assigner and admin.
+    $("pkMyBills").innerHTML = t.grabs ? '<div class="pk-myday">' +
+      "<div><span>Bills</span><b>" + (t.bills || 0) + "</b></div><div><span>Items picked</span><b>" + (t.items || 0) + "</b></div>" +
+      "<div><span>Points</span><b>" + (t.points > 0 ? "+" : "") + (t.points || 0) + "</b></div>" +
+      "<div><span>On time</span><b>" + (t.on_time_pct == null ? "—" : Math.round(t.on_time_pct) + "%") + "</b></div>" +
+      "<div><span>Not found</span><b>" + (t.missing || 0) + "</b></div></div>" : '<div class="pk-empty">No bills picked yet today.</div>';
     if (tabOpen("board")) renderBoard(s);       // charts only when their tab is open
     rule(s);
   }
@@ -672,6 +692,14 @@ body.pk-full .pk-msg.on{position:sticky;top:0;z-index:2}
         '</div><div class="sub">' + plural(b.left, "item") + " left</div></div><div class=\"sub\">Comes back " + esc(b.when_day) + ", <b>" + esc(b.when) + "</b></div>" +
         '<div><button type="button" class="pk-btn sm" data-back="' + b.id + '">Bring back now</button></div></div>';
     }).join("") : '<div class="pk-empty">No rescheduled bills.</div>';
+    var dy = s.day || {};
+    if ($("pkToday")) {
+      $("pkTdAdded").textContent = dy.added || 0; $("pkTdDone").textContent = dy.done || 0;
+      $("pkTdPend").textContent = dy.pending || 0;
+      $("pkTdLeft").textContent = dy.pending ? plural(dy.items_left || 0, "item") + " to pick" : "all done";
+      $("pkTdClosed").textContent = s.day_closed != null ? s.day_closed : "—";
+      $("pkTdClosedNote").textContent = s.day_closed != null ? "fixed day total for checkers" : "not closed yet";
+    }
     $("pkClose").innerHTML = s.day_closed != null ?
       '<div class="pk-closed">Today is closed: <b>' + s.day_closed + " bills</b>. The checkers' day total is fixed at " + s.day_closed + ".</div>" :
       '<button type="button" class="pk-btn ghost" id="pkCloseBtn">Close today</button> <span class="pk-sub">Counts today\'s bills and fixes it as the checkers\' day total. Unfinished bills move to Rescheduled.</span>';

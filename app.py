@@ -946,6 +946,16 @@ class PickEvent(db.Model):
     detail    = db.Column(db.String(200), nullable=True)
 
 
+class StaffLogin(db.Model):
+    """Each sign-in and sign-out, so the admin can see who came in on a day."""
+    __tablename__ = "staff_logins"
+    id     = db.Column(db.Integer, primary_key=True)
+    emp_id = db.Column(db.Integer, db.ForeignKey("employees.id", ondelete="CASCADE"), nullable=False, index=True)
+    at     = db.Column(db.DateTime, default=datetime.utcnow)
+    day    = db.Column(db.Date, index=True)                 # same day boundary as the rest of the app
+    kind   = db.Column(db.String(10), default="login")      # login / logout
+
+
 class ChecklistTemplate(db.Model):
     """A daily task the admin defines for a whole staff type.
 
@@ -2924,7 +2934,7 @@ def pick_report(day_from, day_to=None, picker_id=None):
                        "bills": sum(len(v) for v in per.values())})
     live = [b for b in bills if b["status"] != "cancelled"]
     done = [b for b in bills if b["minutes"] is not None]
-    return {"day": day_from, "day_from": day_from, "day_to": day_to, "picker_id": picker_id,
+    return {"day": day_from, "day_from": day_from, "day_to": day_to, "picker_id": picker_id, "times": pick_times(),
             "picker_name": names.get(picker_id) if picker_id else None, "single_day": day_from == day_to,
             "bills": bills, "missing": missing, "events": events, "board": board, "series": series,
             "late": sum(1 for e in events if e["kind"] == "late"), "idle": sum(1 for e in events if e["kind"] == "idle"),
@@ -2934,6 +2944,173 @@ def pick_report(day_from, day_to=None, picker_id=None):
                        "urgent": sum(1 for b in live if b["urgent"]),
                        "avg_minutes": round(sum(b["minutes"] for b in done) / len(done), 1) if done else None,
                        "points": round(sum(r["points"] for r in board), 1)}}
+
+
+def log_staff_login(emp, kind="login"):
+    """Write a sign-in / sign-out row. Admins are not tracked. Never blocks a login."""
+    if not emp or emp.is_admin:
+        return
+    try:
+        db.session.add(StaffLogin(emp_id=emp.id, at=datetime.utcnow(), day=date.today(), kind=kind))
+        db.session.commit()
+    except Exception as exc:
+        db.session.rollback()
+        logger.warning("login log not saved: %s", exc)
+
+
+def _mmss(secs):
+    """Seconds as 4:05 (or 1:02:05 past an hour)."""
+    if secs is None:
+        return ""
+    secs = max(int(round(secs)), 0)
+    h, r = divmod(secs, 3600)
+    m, s = divmod(r, 60)
+    return ("%d:%02d:%02d" % (h, m, s)) if h else ("%d:%02d" % (m, s))
+
+
+def ist_sec(dt):
+    """A UTC time as Indian time with seconds, e.g. 2:05:09 PM."""
+    if not dt:
+        return ""
+    return (dt + IST).strftime("%I:%M:%S %p").lstrip("0")
+
+
+def _entry_figs(e, st):
+    """The figures one day's typed entry holds, labelled for its role."""
+    if st == "checker":
+        return [("Bills checked", (e.sales_bills_open or 0) + (e.cs_sales_open or 0)),
+                ("of which urgent", e.cs_sales_open or 0),
+                ("Items checked", (e.checked or 0) + (e.errors_found or 0))]
+    if st == "purchaser":
+        return [("PO bills", e.sales_bills_open or 0), ("PO checked", e.checked or 0),
+                ("Items", e.errors_found or 0)]
+    if st == "picker":
+        return [("Bills given", e.total_bills_received or 0), ("Bills picked", e.sales_bills_open or 0),
+                ("Items picked", e.picked or 0), ("Missed", e.missed or 0)]
+    figs = [("Bills", e.bills or e.sales_bills_open or 0), ("Boxes", e.boxes or 0), ("Packed", e.packing_done or 0)]
+    return [f for f in figs if f[1]]
+
+
+def staff_day_report(day, emp_id=None):
+    """Everyone who came in on a day: signed in, or did any work. For each
+    person: sign-in / sign-out times and their work. Picking is shown grab by
+    grab (bill, items, took at, normal time ends, done at, time allowed, time
+    taken, result, points, items not found), with the late / waiting log.
+    A fixed handful of queries, however many staff or bills."""
+    start = datetime.combine(day, datetime.min.time())
+    end = start + timedelta(days=1)
+    now = datetime.utcnow()
+    staff = {e.id: e for e in Employee.query.all() if not e.is_admin}
+    logins = StaffLogin.query.filter(StaffLogin.day == day).order_by(StaffLogin.at).all()
+    claims = PickClaim.query.filter(db.or_(PickClaim.work_date == day,
+                                           db.and_(PickClaim.work_date.is_(None), PickClaim.started_at >= start,
+                                                   PickClaim.started_at < end))).all()
+    bill_ids = {c.bill_id for c in claims}
+    added = PickBill.query.filter(PickBill.created_at >= start, PickBill.created_at < end).all()
+    bills = {b.id: b for b in added}
+    need = bill_ids - set(bills)
+    if need:
+        bills.update({b.id: b for b in PickBill.query.filter(PickBill.id.in_(need)).all()})
+    miss = PickMissing.query.filter(PickMissing.claim_id.in_([c.id for c in claims])).all() if claims else []
+    events = PickEvent.query.filter(PickEvent.day == day, PickEvent.kind.in_(PICK_PROBLEM_KINDS)).order_by(PickEvent.at).all()
+    entries = {e.emp_id: e for e in KPIEntry.query.filter_by(entry_date=day).all()}
+    mts = {}
+    for m in MultitaskEntry.query.filter_by(entry_date=day).all():
+        mts.setdefault(m.emp_id, []).append(m)
+
+    who = set()
+    who.update(l.emp_id for l in logins)
+    who.update(c.picker_id for c in claims)
+    who.update(entries)
+    who.update(mts)
+    who.update(b.created_by for b in added if b.created_by)
+    who.update(e.id for e in staff.values() if e.last_seen_at and start <= e.last_seen_at < end)
+    if emp_id:
+        who &= {emp_id}
+    miss_by = {}
+    for m in miss:
+        miss_by.setdefault(m.claim_id, []).append(m)
+    half = PICK_EXTRA_SECONDS / 2.0
+    people = []
+    for pid in who:
+        e = staff.get(pid)
+        if not e:
+            continue
+        mine = [l for l in logins if l.emp_id == pid]
+        ins = [l.at for l in mine if l.kind == "login"]
+        outs = [l.at for l in mine if l.kind == "logout"]
+        rows, picking_secs, first_take, last_done = [], 0.0, None, None
+        tot = {"bills": set(), "items": 0, "missing": 0, "points": 0.0, "grabs": 0, "ontime": 0, "extra": 0, "report": 0, "late": 0}
+        for c in sorted([c for c in claims if c.picker_id == pid], key=lambda c: c.started_at or start):
+            b = bills.get(c.bill_id)
+            got = c.picked if c.picked is not None else c.items
+            allowed = (c.due_at - c.started_at).total_seconds() if c.due_at and c.started_at else None
+            first_take = min(first_take, c.started_at) if first_take else c.started_at
+            if c.status == "done":
+                took = (c.done_at - c.started_at).total_seconds()
+                picking_secs += max(took, 0)
+                last_done = max(last_done, c.done_at) if last_done else c.done_at
+                tot["bills"].add(c.bill_id)
+                tot["items"] += got
+                tot["missing"] += c.missing or 0
+                tot["points"] += float(c.points or 0) + float(c.bonus or 0)
+                tot["grabs"] += 1
+                out = c.outcome or ("ontime" if c.done_at <= c.due_at else "late")
+                tot[out if out in tot else "late"] += 1
+                if out == "late":
+                    over = (c.done_at - c.due_at).total_seconds() - 2 * half
+                    result = "Late %s" % _mmss(max(over, 1))
+                else:
+                    result = {"ontime": "Normal time", "extra": "Extra time", "report": "Report time"}.get(out, out)
+            else:
+                took, out = None, c.status
+                result = "Picking now" if c.status == "active" else "Given back"
+            rows.append({"bill_no": b.bill_no if b else "", "urgent": bool(b and b.is_urgent), "items": c.items,
+                         "picked": got if c.status == "done" else None, "missing": c.missing or 0,
+                         "missing_names": ", ".join("%s ×%d" % (m.item_name, m.qty or 1) for m in miss_by.get(c.id, [])),
+                         "took_at": ist_sec(c.started_at), "due_at": ist_sec(c.due_at), "done_at": ist_sec(c.done_at),
+                         "allowed": _mmss(allowed), "taken": _mmss(took) if took is not None else "",
+                         "outcome": out, "result": result,
+                         "points": round(float(c.points or 0) + float(c.bonus or 0), 1) if c.status == "done" else None,
+                         "paused": bool(b and b.paused_at and c.status == "active")})
+        span = (last_done - first_take).total_seconds() if (first_take and last_done) else 0
+        mine_ev = [{"label": {"late": "Late", "idle": "Left waiting", "missing": "Not found"}.get(x.kind, x.kind),
+                    "kind": x.kind, "at": ist_sec(x.at), "bill": bills[x.bill_id].bill_no if x.bill_id in bills else "",
+                    "minutes": x.minutes, "detail": x.detail or ""} for x in events if x.picker_id == pid]
+        ent = entries.get(pid)
+        people.append({
+            "id": pid, "name": e.name, "role": ROLE_DISPLAY_NAMES.get(e.staff_type, e.staff_type or ""),
+            "staff_type": e.staff_type,
+            "first_in": ist12(ins[0]) if ins else "", "last_in": ist12(ins[-1]) if len(ins) > 1 else "",
+            "logins": len(ins), "last_out": ist12(outs[-1]) if outs else "",
+            "last_seen": ist12(e.last_seen_at) if e.last_seen_at and start <= e.last_seen_at < end else "",
+            "first_at": ins[0] if ins else first_take,
+            "picks": rows,
+            "pick": {"bills": len(tot["bills"]), "items": tot["items"], "missing": tot["missing"],
+                     "points": round(tot["points"], 1), "grabs": tot["grabs"], "ontime": tot["ontime"],
+                     "extra": tot["extra"], "report": tot["report"], "late": tot["late"],
+                     "on_time_pct": round(100.0 * (tot["grabs"] - tot["late"]) / tot["grabs"]) if tot["grabs"] else None,
+                     "first_take": ist12(first_take), "last_done": ist12(last_done),
+                     "picking_time": _mmss(picking_secs), "free_time": _mmss(max(span - picking_secs, 0)) if span else "",
+                     "rate": round(tot["items"] / (picking_secs / 3600.0), 1) if picking_secs >= 1 else None},
+            "events": mine_ev,
+            # a picker's day entry is only a copy of their picks (sync_picker_day)
+            "entry": _entry_figs(ent, e.staff_type) if ent and not (e.staff_type == "picker" and rows) else [],
+            "entry_note": (ent.shift_note or "") if ent else "",
+            "multitask": [multitask_role_label(m.secondary_type) for m in mts.get(pid, [])],
+            "bills_added": sum(1 for b in added if b.created_by == pid),
+        })
+    order = {"picker": 0, "pick_assigner": 1}
+    people.sort(key=lambda p: (order.get(p["staff_type"], 2), p["first_at"] or end, p["name"] or ""))
+    pickers = [p for p in people if p["picks"]]
+    return {"day": day, "people": people, "emp_id": emp_id,
+            "emp_name": staff[emp_id].name if emp_id and emp_id in staff else None,
+            "times": pick_times(), "extra_seconds": PICK_EXTRA_SECONDS,
+            "totals": {"people": len(people), "pickers": len(pickers),
+                       "items": sum(p["pick"]["items"] for p in people),
+                       "points": round(sum(p["pick"]["points"] for p in people), 1),
+                       "late": sum(p["pick"]["late"] for p in people),
+                       "missing": sum(p["pick"]["missing"] for p in people)}}
 
 
 def report_period(args):
@@ -3174,6 +3351,16 @@ def run_late_pick_alerts():
         alert_late_picks()
 
 
+def _assigner_day(bills, cb, mb, day_start):
+    """Today's bill count for the Pick Assigner: added, completed, pending
+    (every open bill, older ones too) and items still to pick."""
+    today_bills = [b for b in bills if b.created_at and b.created_at >= day_start and b.status != "cancelled"]
+    pend = [b for b in bills if b.status == "open"]
+    left = sum(pick_bill_progress(b, cb.get(b.id, []), mb.get(b.id, []))["left"] for b in pend)
+    return {"added": len(today_bills), "done": sum(1 for b in today_bills if b.status == "done"),
+            "pending": len(pend), "items_left": left}
+
+
 def picking_state(emp, staff_type, alerts=True):
     """Everything the picking screens show, as plain JSON-able data. Loads
     the bills, their grabs and missing items, today's finished grabs and the
@@ -3222,6 +3409,7 @@ def picking_state(emp, staff_type, alerts=True):
 
     out = {"board": pick_board(today, stats, pickers), "me": emp.id if emp else None,
            "day_closed": pick_day_total(today),
+           "day": _assigner_day(bills, cb, mb, day_start),
            "scheduled": [{"id": b.id, "bill_no": b.bill_no, "items": b.items, "urgent": bool(b.is_urgent),
                           "left": pick_bill_progress(b, cb.get(b.id, []), mb.get(b.id, []))["left"], "when": ist12(b.scheduled_for),
                           "when_day": (b.scheduled_for + IST).strftime("%d %b") if b.scheduled_for else ""} for b in sched],
@@ -3240,12 +3428,12 @@ def picking_state(emp, staff_type, alerts=True):
                            "normal_left": int((n - tn).total_seconds()), "find_left": int((f - tn).total_seconds()),
                            "report_left": int((r - tn).total_seconds()),
                            "seconds_total": c.items * pick_seconds(b)}
-        mine_claims = [x for x in today_claims if x.picker_id == emp.id]
-        need = {x.bill_id for x in mine_claims} - set(bill_by_id)
-        bmap = dict(bill_by_id)
-        if need:
-            bmap.update({b.id: b for b in PickBill.query.filter(PickBill.id.in_(need)).all()})
-        out["my_bills"] = picker_bill_list(emp.id, today, mine_claims, bmap)
+        # Bill details (who took what, items not found, bill-by-bill lists)
+        # are for the Pick Assigner and admin only: a picker sees each open
+        # bill's number, items and how many are left, and their own totals.
+        out["my_bills"] = []
+        for r in out["bills"]:
+            r["taken"], r["pickers"], r["missing_rows"] = [], [], []
         st = stats.get(emp.id) or _stats_from([])
         out["today"] = {"bills": st["bills"], "items": st["items"], "grabs": st["grabs"], "points": st["points"],
                         "on_time_pct": round(100.0 * st["on_time"] / st["grabs"], 1) if st["grabs"] else None,
@@ -4980,7 +5168,8 @@ def database_check():
     and (on Supabase) is the public Data API closed off for it."""
     checks = [("Staff", "employees"), ("Picking bills", "pick_bills"), ("Picker grabs", "pick_claims"),
               ("Missing items", "pick_missing"), ("Late / waiting log", "pick_events"), ("Closed days", "pick_days"),
-              ("Phone alert devices", "push_subs"), ("Notifications", "notifications"), ("Daily entries", "kpi_entries")]
+              ("Phone alert devices", "push_subs"), ("Notifications", "notifications"), ("Daily entries", "kpi_entries"),
+              ("Sign-ins", "staff_logins")]
     rls = {}
     try:
         if db.engine.dialect.name == "postgresql":
@@ -5308,6 +5497,7 @@ def login():
                 session["sk"] = key
                 _SESSION_KEYS[user.id] = (key, time.time())
 
+            log_staff_login(user, "login")
             logger.info(f"User login successful: {redact_email(email)}")
             if user.is_admin:
                 return redirect(url_for("admin_dashboard"))
@@ -5338,6 +5528,10 @@ def select_role():
 
 @app.route("/logout", methods=["GET", "POST"])
 def logout():
+    if session.get("user_id"):
+        emp = db.session.get(Employee, session.get("user_id"))
+        if emp:
+            log_staff_login(emp, "logout")
     session.clear()
     return redirect(url_for("login"))
 
@@ -6691,6 +6885,7 @@ def admin_delete_user(emp_id):
             PickMissing.query.filter_by(picker_id=emp_id).delete(synchronize_session=False)
             PickEvent.query.filter_by(picker_id=emp_id).delete(synchronize_session=False)
             PushSub.query.filter_by(emp_id=emp_id).delete(synchronize_session=False)
+            StaffLogin.query.filter_by(emp_id=emp_id).delete(synchronize_session=False)
             PickClaim.query.filter_by(picker_id=emp_id).delete(synchronize_session=False)
             PickBill.query.filter_by(created_by=emp_id).update({"created_by": None}, synchronize_session=False)
             SupervisorBill.query.filter(
@@ -8134,17 +8329,7 @@ def admin_day_view():
                    .order_by(Employee.staff_type, Employee.name).all()):
         st = emp.staff_type
         stats = build_analytics([e], st, emp_id=emp.id) or {}
-        if st == "checker":
-            figs = [("Bills checked", (e.sales_bills_open or 0) + (e.cs_sales_open or 0)),
-                    ("of which urgent", e.cs_sales_open or 0),
-                    ("Items checked", (e.checked or 0) + (e.errors_found or 0))]
-        elif st == "purchaser":
-            figs = [("PO bills", e.sales_bills_open or 0), ("PO checked", e.checked or 0),
-                    ("Items", e.errors_found or 0)]
-        else:
-            figs = [("Bills given", e.total_bills_received or 0),
-                    ("Bills picked", e.sales_bills_open or 0),
-                    ("Items picked", e.picked or 0), ("Missed", e.missed or 0)]
+        figs = _entry_figs(e, st if st in ("checker", "purchaser") else "picker")
         rows.append({"emp": emp, "figs": figs,
                      "score": stats.get("eff_score"), "grade": stats.get("grade")})
 
@@ -9635,10 +9820,8 @@ def pick_missing_action(missing_id, action):
 
 
 def _report_access(pid):
-    """Admins see every report; a picker may download only their own."""
-    if session.get("is_admin"):
-        return True
-    return pid is not None and pid == session.get("user_id") and session.get("staff_type") == "picker"
+    """Picking reports hold bill details: admin and Pick Assigner only."""
+    return bool(session.get("is_admin")) or session.get("staff_type") == "pick_assigner"
 
 
 def _report_name(r):
@@ -9735,10 +9918,45 @@ def picking_report_pdf():
                     headers={"Content-Disposition": "attachment; filename=%s.pdf" % _report_name(r)})
 
 
+def _staff_day_args(args):
+    try:
+        d = datetime.strptime(args.get("date", ""), "%Y-%m-%d").date()
+    except ValueError:
+        d = date.today()
+    d = min(d, date.today())
+    try:
+        eid = int(args.get("emp") or 0) or None
+    except ValueError:
+        eid = None
+    return d, eid
+
+
+@app.route("/admin/staff-today")
+@admin_required
+def admin_staff_today():
+    """Admin: everyone who came in on a day, with sign-in times and all their
+    work; pickers grab by grab with every time."""
+    d, eid = _staff_day_args(request.args)
+    staff = [e for e in Employee.query.order_by(Employee.name).all() if not e.is_admin]
+    return render_template("staff_today.html", rep=staff_day_report(d, eid), staff=staff, today=date.today(),
+                           timedelta=timedelta)
+
+
+@app.route("/admin/staff-today.pdf")
+@admin_required
+def admin_staff_today_pdf():
+    d, eid = _staff_day_args(request.args)
+    from picking_pdf import build_staff_day_pdf
+    r = staff_day_report(d, eid)
+    who = ("-" + re.sub(r"[^A-Za-z0-9]+", "-", r["emp_name"]).strip("-").lower()) if r["emp_name"] else ""
+    return Response(build_staff_day_pdf(r), mimetype="application/pdf",
+                    headers={"Content-Disposition": "attachment; filename=staff-%s%s.pdf" % (d.isoformat(), who)})
+
+
 @app.route("/pick/bill/<int:bill_id>.json")
 @login_required
 def pick_bill_detail(bill_id):
-    if not _pick_view():
+    if _pick_view() != "assigner":
         return jsonify({"ok": False, "message": "Not available for your role."}), 403
     try:
         return jsonify(bill_timeline(bill_id))

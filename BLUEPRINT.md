@@ -51,6 +51,11 @@ Staff emails are `name@pharmaip.com`. Only the admin sets someone's role.
      "Only 5 items left" at once and nothing starts. Missing items can't add
      up to more than the items you took. The server checks the same.
    - One bill at a time per picker.
+   - A picker sees each open bill's number, items and items left, and on
+     "My day" only their own totals (bills, items, points, on time, not
+     found). **Bill details** (who took what, item names not found, bill
+     timelines, bill-by-bill lists, picking PDFs) are shown only to the Pick
+     Assigner and the admin.
 3. **Timer** (per pick): items × item time.
    - Item time is set by the ADMIN only (Picking > Live floor > Item time).
      Defaults: 35 s per item on a normal bill, 30 s on an urgent bill.
@@ -84,6 +89,10 @@ Staff emails are `name@pharmaip.com`. Only the admin sets someone's role.
 
 **Assigner controls**
 
+- **Today strip** at the top: bills added today, completed, pending (with
+  items still to pick) and the closed total. When the assigner taps
+  **Close today**, that day's bill count becomes the checkers' fixed day
+  total (shown as "Closed total (checkers)").
 - Pause / Resume one bill. After Pause the picker gets **7 seconds** of
   warning before the timer stops, so they can finish. Once stopped the
   picker may tap "Work on another bill"; their items on the paused bill go
@@ -135,6 +144,15 @@ month (calendar month). Targets only go up.
 
 - **Admin dashboard tabs**: Staff · Today · Picking · Multitask · Scores · Setup.
 - **Go to** menu (top bar) and a Go to grid (Setup): every admin page.
+- **Staff today** (/admin/staff-today; Today tab and Go to menu): everyone
+  who signed in or worked on a day, with sign-in / sign-out / last seen
+  times and their work. Pickers are shown pick by pick: bill, items taken,
+  picked, not found (with item names), took at, normal time ends, done at,
+  time given, time taken, result (normal / extra / report / late by m:ss /
+  picking now) and points, plus first pick, last Done, picking time, free
+  time, items per hour and the late / waiting log. Any date, one person or
+  everyone; **Download PDF** for the whole day or one person.
+  Sign-ins are recorded from 9 Nov 2026 (admins are not tracked).
 - **Picking** (/picking): Live floor (with Item time), Reports for any dates
   or one picker (PDF and CSV), Leaderboard with charts. Every chart shows
   exact numbers (on bars, in pie slices, "Name — 9 (60%)" beside pies).
@@ -206,11 +224,11 @@ month (calendar month). Targets only go up.
 | `app.py` | The whole server: data tables, pages, scoring, picking, alerts. |
 | `templates/` | One file per page. `_picking.html` is the picking screen. |
 | `static/` | Styles, scripts, icons, the phone-alert worker (`sw.js`). |
-| `utils.py`, `picking_pdf.py` | The PDF reports. |
+| `utils.py`, `picking_pdf.py` | The PDF reports (`picking_pdf.py`: picking report and staff day report). |
 | `webpush.py` | Sends phone alerts. |
 | `render.yaml` | How Render runs the site and which settings exist. |
 | `requirements.txt` | The Python packages the site needs. |
-| `tests_*.py`, `run_tests.sh` | About 900 automatic checks, run on every push. |
+| `tests_*.py`, `run_tests.sh` | About 990 automatic checks, run on every push. |
 | `CLAUDE.md` | Working rules for the AI that maintains the code. |
 | `BLUEPRINT.md` | This file. |
 | `tools_recommend_targets.py` | Optional helper to suggest hourly targets from history. |
