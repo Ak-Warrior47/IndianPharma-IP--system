@@ -91,6 +91,9 @@ Staff emails are `name@pharmaip.com`. Only the admin sets someone's role.
   unfinished bills move to next morning.
 - Order of bills: urgent bills in their own box on top, then every bill by
   number, smallest first. Completed bills are on the Completed tab.
+- Search box above the pending bills: type part of a bill number to show
+  only matching bills (pending and Completed). A newly added bill drops into
+  its place in number order by itself.
 
 ## 4. Scores (out of 100) and grades
 

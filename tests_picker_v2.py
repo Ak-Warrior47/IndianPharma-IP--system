@@ -1073,6 +1073,9 @@ with app.app_context():
 check("24.14 Reschedule pre-fills one hour ahead in India time, whatever the phone's time zone",
       "Date.now() + 3600000 + 330 * 60000" in _pk24 and "getUTCHours()" in _pk24)
 check("24.13 The admin can pick bills too (picker screen)", 'data-role="picker"' in cadm.get("/pick/me").data.decode())
+_pk25 = open(os.path.join(REPO, "templates", "_picking.html")).read()
+check("25.1 The assigner has a bill search that filters pending and completed bills",
+      'id="pkFind"' in _pk25 and "var pend = allPend.filter(hit).sort(byNo);" in _pk25 and "var fin = allFin.filter(hit).sort(byNum);" in _pk25)
 check("22.10 The version is the code's fingerprint, the same after a restart", A.APP_BUILD == A._build_id())
 check("21.6 Charts show exact numbers: on top of each bar, and 'Name — number' beside each pie",
       "afterDatasetsDraw" in _cv and 'it.text + " — " + fmt(v)' in _cv and 'el.y - 3' in _cv)

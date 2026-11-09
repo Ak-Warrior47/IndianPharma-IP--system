@@ -108,6 +108,8 @@
 .pk-pausebar{margin:0 0 8px;padding:10px 12px;border-radius:10px;background:#fff;border:2px solid #475569;color:#1f2937;font-weight:700;text-align:center}
 .pk-tabs .cnt.ok{background:var(--ok)}
 .pk-bulk{gap:6px;margin:0 0 8px}
+.pk-find{display:flex;align-items:center;gap:8px;margin:0 0 8px}
+.pk-find input{flex:1;max-width:320px;height:36px;padding:4px 10px;border:1.5px solid var(--line);border-radius:10px;font-size:14px}
 .pk-urgbox{border:1.5px solid #f3b4b4;background:#fff7f7;border-radius:12px;padding:4px 10px;margin:0 0 10px}
 .pk-grph{font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.5px;color:var(--ink-3);margin:8px 0 2px}
 .pk-urgbox .pk-grph{color:var(--bad-ink)}
@@ -322,6 +324,7 @@ body.pk-full .pk-msg.on{position:sticky;top:0;z-index:2}
   <div class="pk-row" id="pkPickers"><span class="pk-empty">Loading…</span></div></div>
   <div class="section-label pk-sec" style="margin-top:14px" data-collapse="pkBillsWrap"><span>Pending bills <b class="pk-n" id="pkPendN">0</b></span></div>
   <div id="pkBillsWrap">
+    <div class="pk-find"><input type="search" id="pkFind" placeholder="Search bill number" inputmode="numeric" aria-label="Search bill number" autocomplete="off"><span id="pkFindN" class="pk-sub"></span></div>
     <div class="pk-row pk-bulk" id="pkBulk" hidden></div>
     <div id="pkBills"><div class="pk-empty">Loading…</div></div>
     <div class="pk-note">Finished bills move to the <button type="button" class="pk-link" data-tab="done">Completed</button> tab.</div>
@@ -619,9 +622,14 @@ body.pk-full .pk-msg.on{position:sticky;top:0;z-index:2}
       return '<span class="pk-chip ' + (r.paused ? "paused" : lt ? "late" : "busy") + '" data-due="' + (Date.now() + r.seconds_left * 1000) + '"' + (r.paused ? ' data-frozen="' + r.seconds_left + '"' : "") + ">" + (r.paused ? "Paused · " : "") + who + " · " + esc(r.bill_no) + " · " + plural(r.items, "item") + ' · <b class="pk-left"></b>' +
         ' <button type="button" class="pk-btn ghost sm" data-release="' + r.claim_id + '">Release</button></span>';
     }).join("") : '<span class="pk-empty">No pickers set up yet.</span>';
-    var pend = s.bills.filter(function (b) { return b.status === "open"; }).sort(byNo);
-    var fin = s.bills.filter(function (b) { return b.status === "done" || b.status === "cancelled"; })
-      .sort(byNum);                                       // number order, smallest first
+    // Search: show only bills whose number contains what is typed (both lists).
+    var q = (($("pkFind") || {}).value || "").replace(/\s+/g, "").toUpperCase();
+    var hit = function (b) { return !q || String(b.bill_no).toUpperCase().indexOf(q) !== -1; };
+    var allPend = s.bills.filter(function (b) { return b.status === "open"; });
+    var allFin = s.bills.filter(function (b) { return b.status === "done" || b.status === "cancelled"; });
+    var pend = allPend.filter(hit).sort(byNo);
+    var fin = allFin.filter(hit).sort(byNum);              // number order, smallest first
+    if ($("pkFindN")) $("pkFindN").textContent = q ? (pend.length + " pending, " + fin.length + " completed match") : "";
     $("pkPendN").textContent = pend.length;
     var running = pend.filter(function (b) { return !b.paused; }).length, held = pend.length - running;
     $("pkBulk").hidden = false;
@@ -649,7 +657,8 @@ body.pk-full .pk-msg.on{position:sticky;top:0;z-index:2}
         '<button type="button" class="pk-btn bad sm" data-cancel="' + b.id + '">Cancel</button></div><div class="pk-resch" id="rs' + b.id + '" hidden>' +
         '<input type="date" aria-label="Date"><input type="time" aria-label="Time"><button type="button" class="pk-btn sm" data-rsave="' + b.id + '">Save</button></div>' : "") + "</div></div>";
     }
-    $("pkBills").innerHTML = pend.length ? grouped(pend, asgRow) : '<div class="pk-empty">No pending bills. Add one above.</div>';
+    $("pkBills").innerHTML = pend.length ? grouped(pend, asgRow) : '<div class="pk-empty">' +
+      (q ? "No pending bill matches " + esc(q) + (fin.length ? ' — it is on the <button type="button" class="pk-link" data-tab="done">Completed</button> tab.' : ".") : "No pending bills. Add one above.") + "</div>";
     $("pkDoneList").innerHTML = fin.length ? fin.map(asgRow).join("") : '<div class="pk-empty">No completed bills yet today.</div>';
     var ev = s.events || [];
     $("pkEvents").innerHTML = lateByPerson(ev);
@@ -1010,6 +1019,7 @@ body.pk-full .pk-msg.on{position:sticky;top:0;z-index:2}
       if (!j.ok && !$("pkBillNo").value && !$("pkBillItems").value) { $("pkBillNo").value = no; $("pkBillItems").value = it; }
     });
   }
+  app.addEventListener("input", function (e) { if (e.target.id === "pkFind" && lastState) renderAssigner(aged(lastState)); });
   // Enter moves to the next empty field, and submits when all are filled.
   app.addEventListener("keydown", function (e) {
     if (e.key !== "Enter" || !e.target.matches("input")) return;
