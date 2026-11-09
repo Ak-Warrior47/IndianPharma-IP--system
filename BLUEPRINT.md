@@ -165,6 +165,9 @@ month (calendar month). Targets only go up.
 - Every page loads in a small fixed number of database questions, however
   many staff or bills there are.
 - The database wait no longer blocks other phones (psycogreen).
+- Slow phones: charts are drawn only when their tab is open; no hidden
+  animations run; no blur or fixed backgrounds on phones (costly to redraw
+  while scrolling).
 - What code cannot fix: Render's free plan sleeps after 15 minutes with no
   visitors (first visit then takes 30–50 s), and the distance between the
   Render and Supabase regions.

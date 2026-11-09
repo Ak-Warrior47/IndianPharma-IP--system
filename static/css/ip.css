@@ -737,3 +737,10 @@ canvas { max-width: 100%; }
                 border-color 260ms var(--ease);
   }
 }
+
+/* Slow phones: no blur or fixed background repainting while scrolling. */
+@media (max-width: 900px), (hover: none) {
+  body { background-attachment: scroll; }
+  .ip-nav, .nav, [class*="topbar"] { -webkit-backdrop-filter: none; backdrop-filter: none; }
+  .ip-topbar { background: var(--surface); }
+}

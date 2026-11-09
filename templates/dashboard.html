@@ -204,6 +204,13 @@ button[disabled] { opacity: .45; cursor: not-allowed; transform: none; }
   .btn-submit { width: 100%; padding: 13px 20px; }
   .yn-btn { min-width: 72px; padding: 12px 18px; }
 }
+/* Slow phones: frosted-glass blur and fixed backgrounds are costly to redraw
+   while scrolling, so phones get a plain bar and a normal background. */
+@media (max-width: 900px), (hover: none) {
+  .nav { -webkit-backdrop-filter: none !important; backdrop-filter: none !important; background: var(--surface) !important; }
+  body, body.pk-page { background-attachment: scroll !important; }
+  [style*="backdrop-filter"] { -webkit-backdrop-filter: none !important; backdrop-filter: none !important; }
+}
 /* Pickers and pick assigners: a slightly darker page so the white work
    cards stand out (light theme only; dark theme unchanged). */
 :root:not([data-theme="dark"]) body.pk-page { background: linear-gradient(180deg, #dde2ea 0%, #d3d9e2 100%); background-attachment: fixed; }
@@ -2387,29 +2394,9 @@ document.addEventListener('DOMContentLoaded', function(){
 </script>
 
 <script>
-(function(){
-  const c=document.getElementById('dashCanvas');
-  if(!c)return;
-  const ctx=c.getContext('2d');
-  let W,H,pts=[];
-  function resize(){
-    const hero=c.parentElement;
-    W=c.width=hero.offsetWidth; H=c.height=hero.offsetHeight;
-  }
-  resize(); window.addEventListener('resize',resize);
-  for(let i=0;i<60;i++) pts.push({x:Math.random()*2000,y:Math.random()*2000,a:Math.random()*0.5+0.05,s:Math.random()*0.25+0.04,ts:Math.random()*0.015+0.004,td:Math.random()>0.5?1:-1,c:Math.random()<0.6?'#60a5fa':Math.random()<0.5?'#a5f3fc':'#fff'});
-  function draw(){
-    ctx.clearRect(0,0,W,H);
-    for(const p of pts){
-      p.a+=p.ts*p.td; if(p.a>0.6||p.a<0.04)p.td*=-1;
-      p.y-=p.s; if(p.y<0){p.y=H;p.x=Math.random()*W;}
-      ctx.globalAlpha=p.a; ctx.fillStyle=p.c;
-      ctx.fillRect(Math.floor(p.x%W),Math.floor(p.y),1,1);
-    }
-    ctx.globalAlpha=1; requestAnimationFrame(draw);
-  }
-  requestAnimationFrame(draw);
-})();
+/* The old hidden star animation (dashCanvas) redrew 60 times a second on
+   every phone although nobody could see it; removed to keep slow phones fast. */
+
 </script>
 
 <script>

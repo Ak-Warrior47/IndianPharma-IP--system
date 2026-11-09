@@ -1076,6 +1076,13 @@ check("24.13 The admin can pick bills too (picker screen)", 'data-role="picker"'
 _pk25 = open(os.path.join(REPO, "templates", "_picking.html")).read()
 check("25.1 The assigner has a bill search that filters pending and completed bills",
       'id="pkFind"' in _pk25 and "var pend = allPend.filter(hit).sort(byNo);" in _pk25 and "var fin = allFin.filter(hit).sort(byNum);" in _pk25)
+_pk26 = open(os.path.join(REPO, "templates", "_picking.html")).read()
+_db26 = open(os.path.join(REPO, "templates", "dashboard.html")).read()
+check("26.1 Charts are drawn only when their tab is open (no background redraw every refresh)",
+      'if (tabOpen("board")) renderBoard(s);' in _pk26 and 'if (tabOpen("urgent")) renderUrgent' in _pk26 and "function tabOpen(t)" in _pk26)
+check("26.2 The hidden 60-frames-a-second star animation is gone", "requestAnimationFrame(draw)" not in _db26)
+check("26.3 Phones get no blur / fixed background (costly while scrolling)",
+      "backdrop-filter: none !important" in _db26 and "background-attachment: scroll" in open(os.path.join(REPO, "static", "css", "ip.css")).read())
 check("22.10 The version is the code's fingerprint, the same after a restart", A.APP_BUILD == A._build_id())
 check("21.6 Charts show exact numbers: on top of each bar, and 'Name — number' beside each pie",
       "afterDatasetsDraw" in _cv and 'it.text + " — " + fmt(v)' in _cv and 'el.y - 3' in _cv)

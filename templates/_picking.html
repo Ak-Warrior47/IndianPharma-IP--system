@@ -601,7 +601,7 @@ body.pk-full .pk-msg.on{position:sticky;top:0;z-index:2}
         "<div><b>" + plural(r.items, "item") + " picked</b>" + (r.missing ? ' · <span style="color:var(--bad-ink)">' + r.missing + " not found</span>" : "") + (r.late ? ' · <span style="color:var(--bad-ink)">late</span>' : "") +
         '</div><div class="sub" style="font-weight:700">' + (r.points > 0 ? "+" : "") + r.points + " pts</div></div>";
     }).join("") : '<div class="pk-empty">No bills picked yet today.</div>';
-    renderBoard(s);
+    if (tabOpen("board")) renderBoard(s);       // charts only when their tab is open
     rule(s);
   }
 
@@ -662,7 +662,8 @@ body.pk-full .pk-msg.on{position:sticky;top:0;z-index:2}
     $("pkDoneList").innerHTML = fin.length ? fin.map(asgRow).join("") : '<div class="pk-empty">No completed bills yet today.</div>';
     var ev = s.events || [];
     $("pkEvents").innerHTML = lateByPerson(ev);
-    renderUrgent(s.urgent || []);
+    if ($("pkUrgCnt")) { var ul = s.urgent || []; $("pkUrgCnt").hidden = !ul.length; $("pkUrgCnt").textContent = ul.length; }
+    if (tabOpen("urgent")) renderUrgent(s.urgent || []);
     $("pkLateCnt").hidden = !ev.length; $("pkLateCnt").textContent = ev.length;
     var sc = s.scheduled || [];
     $("pkSchedCnt").hidden = !sc.length; $("pkSchedCnt").textContent = sc.length;
@@ -674,7 +675,7 @@ body.pk-full .pk-msg.on{position:sticky;top:0;z-index:2}
     $("pkClose").innerHTML = s.day_closed != null ?
       '<div class="pk-closed">Today is closed: <b>' + s.day_closed + " bills</b>. The checkers' day total is fixed at " + s.day_closed + ".</div>" :
       '<button type="button" class="pk-btn ghost" id="pkCloseBtn">Close today</button> <span class="pk-sub">Counts today\'s bills and fixes it as the checkers\' day total. Unfinished bills move to Rescheduled.</span>';
-    renderBoard(s);
+    if (tabOpen("board")) renderBoard(s);       // charts only when their tab is open
     rule(s);
   }
 
@@ -765,8 +766,11 @@ body.pk-full .pk-msg.on{position:sticky;top:0;z-index:2}
     };
     document.head.appendChild(sc);
   }
+  function tabOpen(t) { var p = app.querySelector('[data-panel="' + t + '"]'); return !!p && !p.hidden; }
   function renderBoard(s) {
     var rows = s.board || [], me = s.me;
+    var key0 = JSON.stringify(rows.map(function (r) { return [r.id, r.bills, r.items, r.points, r.rank]; }));
+    if ($("pkBoard").getAttribute("data-key") === key0 && $("pkBar1")) return;   // nothing changed: no work
     var mine = rows.filter(function (r) { return r.id === me; })[0];
     var h = (mine ? '<div class="pk-closed" style="margin:0 0 10px;background:var(--accent-tint,#eef4ff);color:var(--ink)">You are <b>#' + mine.rank + "</b> of " + rows.length + " today.</div>" : "") +
       '<div style="overflow-x:auto"><table class="pk-board"><thead><tr><th>#</th><th>Picker</th><th>Bills</th><th>Items</th><th>On time</th><th>Points</th><th>Items/hr</th></tr></thead><tbody>' +
@@ -824,7 +828,9 @@ body.pk-full .pk-msg.on{position:sticky;top:0;z-index:2}
     Array.prototype.forEach.call(app.querySelectorAll(".pk-tabs [data-tab]"), function (b) { b.setAttribute("aria-selected", String(b.getAttribute("data-tab") === t)); });
     Array.prototype.forEach.call(app.querySelectorAll("[data-panel]"), function (p) { p.hidden = p.getAttribute("data-panel") !== t; });
     try { sessionStorage.setItem("pkTab-" + role, t); } catch (e) {}
-    if (t === "board") Object.keys(charts).forEach(function (k) { charts[k].resize(); });
+    // tabs with charts are drawn when opened (not on every refresh in the background)
+    if (t === "board" && lastState) renderBoard(lastState);
+    if (t === "urgent" && lastState) renderUrgent(lastState.urgent || []);
   }
 
   function load() {
