@@ -20,5 +20,6 @@ body{margin:0;background:linear-gradient(180deg,#dde2ea 0%,#d3d9e2 100%);backgro
   <p class="pm-note">Pick like a picker: type how many items you take, the timer starts, press Done. Your picks are saved as your Picker multitask by themselves.</p>
   {% set pick_as = 'picker' %}{% include '_picking.html' %}
 </main>
+<script src="{{ url_for('static', filename='js/push.js') }}" defer></script>
 </body>
 </html>

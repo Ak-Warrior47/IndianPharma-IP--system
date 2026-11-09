@@ -146,6 +146,7 @@ PICK_ONTIME_RATE = 1.5            # points per item finished within normal time
 PICK_EXTRA_RATE = 1.0             # per item finished in extra time to find
 PICK_REPORT_RATE = 0.5            # per item finished in report time (still allowed, worth less)
 PICK_LATE_CAP = 5
+PICK_PAUSE_GRACE = 7              # after the assigner pauses, pickers get 7 s before the timer stops
 
 # Hourly volume targets used by the scoring formulas. Set them to what this
 # warehouse can actually reach: a target nobody attains makes those points dead
@@ -218,6 +219,34 @@ def csrf_exempt(view):
     return view
 
 
+_SESSION_KEYS = {}   # emp id -> (session key, when read); one worker, so a login here is seen at once
+
+
+@app.before_request
+def _one_phone():
+    """A staff account signed in on a new phone signs the old phone out."""
+    uid = session.get("user_id")
+    if not uid or session.get("is_admin") or request.endpoint in ("static", "login", "logout", "service_worker"):
+        return None
+    try:
+        cached = _SESSION_KEYS.get(uid)
+        if not cached or time.time() - cached[1] > 20:
+            emp = db.session.get(Employee, uid)
+            cached = ((emp.session_key if emp else None), time.time())
+            _SESSION_KEYS[uid] = cached
+        key = cached[0]
+    except Exception:
+        return None
+    if key and session.get("sk") != key:
+        session.clear()
+        msg = "You were signed out because your account signed in on another phone."
+        if request.is_json or request.headers.get("X-Requested-With") == "fetch" or request.path.endswith(".json"):
+            return jsonify({"ok": False, "logged_out": True, "message": msg}), 401
+        flash(msg, "warning")
+        return redirect(url_for("login"))
+    return None
+
+
 @app.before_request
 def _csrf_protect():
     if request.method in ("GET", "HEAD", "OPTIONS", "TRACE"):
@@ -281,6 +310,7 @@ class Employee(db.Model):
     admin_adjustment = db.Column(db.Float, default=0.0)  # Ongoing +/- pts applied to every score
     admin_adjustment_note = db.Column(db.String(200), default="")  # Reason/notes
     last_seen_at  = db.Column(db.DateTime, nullable=True)   # last time on the picking screen
+    session_key   = db.Column(db.String(32), nullable=True)  # the one phone this account is signed in on
     custom_hourly_target = db.Column(db.Float, nullable=True)  # Override default role target (Phase 1 auto-raise)
     phone         = db.Column(db.String(20), nullable=True)   # Feature 15: phone for OTP reset
     secondary_staff_type = db.Column(db.String(20), nullable=True)  # optional 2nd role for multitasking (kept for compat)
@@ -2097,7 +2127,8 @@ def bill_seconds(b, now=None):
     """How long a bill has been (or was) open, leaving out paused time."""
     if not b or not b.created_at:
         return 0
-    end = b.completed_at or (b.paused_at if b.paused_at else None) or now or datetime.utcnow()
+    now = now or datetime.utcnow()
+    end = b.completed_at or (min(b.paused_at, now) if b.paused_at else None) or now
     return max(int((end - b.created_at).total_seconds()) - int(b.paused_secs or 0), 0)
 
 
@@ -2325,8 +2356,16 @@ def claim_items(picker_id, bill_id, n, now=None):
     if n < 1:
         raise PickError("Type how many items you are taking.")
     db.session.query(Employee).filter_by(id=picker_id).with_for_update().first()
-    if active_claim_for(picker_id):
-        raise PickError("Finish your current items first.")
+    cur = active_claim_for(picker_id)
+    if cur:
+        cb_ = db.session.get(PickBill, cur.bill_id)
+        if cb_ is not None and cb_.paused_at and cb_.paused_at <= now and cb_.id != int(bill_id or 0):
+            # The bill they were on is paused: put those items back on it so
+            # they can work on another bill meanwhile. No points lost.
+            cur.status = "cancelled"
+            db.session.flush()
+        else:
+            raise PickError("Finish your current items first.")
     bill = db.session.query(PickBill).filter_by(id=bill_id).with_for_update().first()
     if not bill or bill.status != "open":
         db.session.rollback()
@@ -2478,12 +2517,13 @@ def pause_bill(bill_id, now=None):
     if bill.paused_at:
         db.session.rollback()
         raise PickError("Bill %s is already paused." % bill.bill_no)
-    bill.paused_at = now
+    bill.paused_at = now + timedelta(seconds=PICK_PAUSE_GRACE)   # 7 s warning first
     _pick_event("paused", None, bill.id, detail="timer paused")
     who = [c.picker_id for c in PickClaim.query.filter_by(bill_id=bill.id, status="active").all()]
     db.session.commit()
     if who:
-        notify_many(who, "Bill %s paused" % bill.bill_no, "Your timer is stopped. Wait for the assigner to resume it.")
+        notify_many(who, "Bill %s paused" % bill.bill_no,
+                    "Your timer stops in %d seconds. You can finish now, or work on another bill." % PICK_PAUSE_GRACE)
     return bill
 
 
@@ -2530,7 +2570,7 @@ def pause_all_bills(now=None):
         raise PickError("No running bills to pause.")
     ids = [b.id for b in bills]
     for b in bills:
-        b.paused_at = now
+        b.paused_at = now + timedelta(seconds=PICK_PAUSE_GRACE)
         _pick_event("paused", None, b.id, detail="timer paused (all)")
     who = [c.picker_id for c in PickClaim.query.filter(PickClaim.bill_id.in_(ids), PickClaim.status == "active").all()]
     db.session.commit()
@@ -2952,7 +2992,7 @@ def sync_picker_day(emp_id, d):
     so leaderboards, reports, history and level-ups keep working unchanged."""
     st = picker_pick_stats(emp_id, [d])
     emp0 = db.session.get(Employee, emp_id)
-    if emp0 is not None and emp0.staff_type != "picker":
+    if emp0 is not None and (emp0.staff_type != "picker" or emp0.is_admin):
         return sync_multitask_picking(emp_id, d, st)
     e = KPIEntry.query.filter_by(emp_id=emp_id, entry_date=d).first()
     if not e:
@@ -3176,7 +3216,8 @@ def picking_state(emp, staff_type, alerts=True):
                 "missing_rows": [{"id": m.id, "item": m.item_name, "qty": m.qty, "by": names.get(m.picker_id, ""),
                                   "at": ist12(m.reported_at)} for m in pr["missing_rows"]],
                 "elapsed": bill_seconds(b, now), "paused": bool(b.paused_at),
-                "paused_for": int((now - b.paused_at).total_seconds()) if b.paused_at else 0,
+                "paused_for": max(0, int((now - b.paused_at).total_seconds())) if b.paused_at else 0,
+                "pause_in": max(0, int((b.paused_at - now).total_seconds())) if b.paused_at else 0,
                 "minutes": mins, "added": ist12(b.created_at), "completed": ist12(b.completed_at)}
 
     out = {"board": pick_board(today, stats, pickers), "me": emp.id if emp else None,
@@ -3195,6 +3236,7 @@ def picking_state(emp, staff_type, alerts=True):
             tn = clock_now(b, now)
             out["mine"] = {"id": c.id, "bill_id": c.bill_id, "bill_no": b.bill_no if b else "", "items": c.items,
                            "urgent": bool(b and b.is_urgent), "paused": bool(b and b.paused_at),
+                           "pause_in": max(0, int((b.paused_at - now).total_seconds())) if (b and b.paused_at) else 0,
                            "normal_left": int((n - tn).total_seconds()), "find_left": int((f - tn).total_seconds()),
                            "report_left": int((r - tn).total_seconds()),
                            "seconds_total": c.items * pick_seconds(b)}
@@ -5251,6 +5293,14 @@ def login():
             session["primary_staff_type"] = user.staff_type
             session["secondary_staff_type"] = user.secondary_staff_type
             session["is_admin"] = bool(user.is_admin)
+            if not user.is_admin:
+                # One phone per staff login: signing in here signs the old phone out.
+                import secrets as _sk
+                key = _sk.token_hex(8)
+                user.session_key = key
+                db.session.commit()
+                session["sk"] = key
+                _SESSION_KEYS[user.id] = (key, time.time())
 
             logger.info(f"User login successful: {redact_email(email)}")
             if user.is_admin:
@@ -9373,7 +9423,7 @@ def _pick_view():
     'picker' (pickers, and any other staff picking as a multitask role), or None."""
     role, is_admin = _pick_role()
     as_picker = (request.headers.get("X-Pick-As") == "picker" or request.args.get("as") == "picker")
-    if role and not is_admin and as_picker:
+    if as_picker and (role or is_admin):
         return "picker"          # e.g. a Pick Assigner picking as a multitask role
     if is_admin or role == "pick_assigner":
         return "assigner"
@@ -9480,7 +9530,18 @@ def pick_done():
         missing = []
     try:
         missing = [(m.get("item"), int(m.get("qty") or 0)) for m in missing if isinstance(m, dict)]
-        c, completed = finish_claim(session.get("user_id"), int(data.get("claim_id") or 0), missing=missing)
+        # Done counts from the moment it was tapped: a phone that lost the
+        # internet sends it when it is back, with how long ago the tap was
+        # (at most 2 minutes, never before the grab started).
+        try:
+            ago = max(0, min(int(data.get("tapped_ms_ago") or 0), 120000))
+        except (TypeError, ValueError):
+            ago = 0
+        tap = datetime.utcnow() - timedelta(milliseconds=ago)
+        cl0 = db.session.get(PickClaim, int(data.get("claim_id") or 0))
+        if cl0 is not None and cl0.started_at and tap < cl0.started_at:
+            tap = cl0.started_at
+        c, completed = finish_claim(session.get("user_id"), int(data.get("claim_id") or 0), missing=missing, now=tap)
     except (PickError, ValueError, TypeError) as exc:
         return _pick_reply(False, str(exc) if isinstance(exc, PickError) else "Nothing to finish.", 400)
     pts = ("%g" % c.points)
@@ -9585,8 +9646,6 @@ def _report_name(r):
 def pick_me():
     """The picker screen on its own page: a Pick Assigner (or anyone) picking
     bills as their multitask role. Finished picks count as Picker multitask."""
-    if session.get("is_admin"):
-        return redirect(url_for("picking_admin"))
     return render_template("pick_me.html", user_name=session.get("user_name", ""), today=date.today(),
                            staff_type=session.get("staff_type", ""))
 

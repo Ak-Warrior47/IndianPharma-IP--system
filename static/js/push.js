@@ -6,6 +6,7 @@
   if (!("serviceWorker" in navigator) || !("PushManager" in window) || !("Notification" in window)) {
     var ios = /iPhone|iPad/.test(navigator.userAgent) && !window.navigator.standalone;
     if (ios) bar("On iPhone: tap Share, then 'Add to Home Screen', open the app from there, then turn on alerts.", null);
+    window.ipPushOn = function () { alert("This browser cannot show phone alerts. Use Chrome, or on iPhone add the app to the Home Screen first."); };
     return;
   }
   var tok = (document.querySelector('meta[name="csrf-token"]') || {}).content || "";
@@ -56,6 +57,7 @@
           "Could not turn on alerts here. Try Chrome, or add the app to the home screen.", null);
       });
   }
+  window.ipPushOn = turnOn;          // the picking screen's "Turn on alerts" button
   // Already on? Refresh the subscription quietly. Otherwise offer the button.
   if (Notification.permission === "granted") {
     navigator.serviceWorker.register("/sw.js", {scope: "/"}).then(function () { return navigator.serviceWorker.ready; })

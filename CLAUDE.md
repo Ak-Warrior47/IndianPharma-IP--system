@@ -69,6 +69,13 @@ eventlet worker); the database is Supabase PostgreSQL.
 - The assigner can Pause / Resume a bill (timers stop, time given back) and
   Pause all / Resume all / Close all. Close today fixes the checker day total.
 - Bills show urgent first in their own box, then ascending bill number.
+- Pause gives pickers a 7 s warning (`PICK_PAUSE_GRACE`) before the timer
+  stops; once stopped they may "Work on another bill" (their items on the
+  paused bill go back on it). Taking 4+ items asks "Sure?" first.
+- One phone per staff login (`Employee.session_key`): a new sign-in signs the
+  old phone out. Admins are exempt.
+- No internet: picking taps queue and send when back; Done counts from the
+  tap (at most 2 minutes back). Admin and assigner can pick via `/pick/me`.
 - While picking, the picker sees only that bill, full screen: light green
   (normal), light orange (extra), light red (time over), flashing (late).
 - Multitask: ONE extra role at a time. Picker as a multitask role is live

@@ -730,7 +730,7 @@ with app.app_context():
     A.pause_bill(B16, now=t0 + timedelta(seconds=10))
     stp = c1.get("/pick/state.json").get_json()
     check("16.9 The picker's timer shows paused and stands still",
-          stp["mine"]["paused"] is True and abs(stp["mine"]["normal_left"] - (2 * A.PICK_SECONDS_PER_ITEM - 10)) <= 2,
+          stp["mine"]["paused"] is True and abs(stp["mine"]["normal_left"] - (2 * A.PICK_SECONDS_PER_ITEM - 10 - A.PICK_PAUSE_GRACE)) <= 2,
           str(stp["mine"]))
     # an hour passes while paused: no late alert
     A.alert_late_picks(now=t0 + timedelta(hours=1))
@@ -738,7 +738,7 @@ with app.app_context():
     A.resume_bill(B16, now=t0 + timedelta(minutes=10, seconds=10))
     c = db.session.get(PickClaim, cid)
     check("16.11 Resume gives the paused time back to the timer",
-          abs((c.due_at - due0).total_seconds() - 600) < 1, str(c.due_at - due0))
+          abs((c.due_at - due0).total_seconds() - (600 - A.PICK_PAUSE_GRACE)) < 1, str(c.due_at - due0))
     c, _ = A.finish_claim(ids["p1"], cid, now=t0 + timedelta(minutes=10, seconds=30))
     check("16.12 Done after a long pause still counts as on time (1.5 a point per item)",
           c.outcome == "ontime" and abs(c.points - 2 * A.PICK_ONTIME_RATE) < 0.01, "%s %s" % (c.outcome, c.points))
@@ -980,7 +980,7 @@ check("21.1 When time is over the whole screen turns red (flashing when late), n
 check("21.5 Normal time makes the whole screen light green, extra time orange, paused grey",
       'body.pk-full[data-pk-tone="pk-green"] #pickApp{background:#effcf3}' in _pk21 and
       'body.pk-full[data-pk-tone="pk-orange"] #pickApp{background:#ffedd5}' in _pk21 and
-      '{normal: "pk-green", find: "pk-orange", report: "pk-red", late: "pk-late"}' in _pk21 and 'mine.paused ? "pk-grey"' in _pk21)
+      '{normal: "pk-green", find: "pk-orange", report: "pk-red", late: "pk-late"}' in _pk21 and 'stopped ? "pk-grey"' in _pk21)
 _cv = open(os.path.join(REPO, "static", "js", "chart-values.js")).read()
 check("21.5b Light green and light red screens use dark text so it reads well",
       "--tone-ink:#14532d" in _pk21 and "--tone-ink:#7f1d1d" in _pk21)
@@ -1007,6 +1007,60 @@ _pk23 = open(os.path.join(REPO, "templates", "_picking.html")).read()
 check("23.1 Phones see other phones' changes within about 3 seconds, and stop asking while hidden",
       "setInterval(function () { if (!document.hidden) load(); }, 3000);" in _pk23 and '"visibilitychange"' in _pk23)
 check("23.2 Late / idle alerts no longer make a phone's refresh wait", "alert_late_picks_later(now)" in open(os.path.join(REPO, "app.py")).read())
+# ---- 24. One phone per login, pause grace, switch bill, offline, confirm ----
+c_a = login("pk_p3@x.com")
+ok_a = c_a.get("/pick/state.json").status_code == 200
+c_b = login("pk_p3@x.com")
+ra = c_a.get("/pick/state.json")
+check("24.1 Signing in on a new phone signs the old phone out", ok_a and ra.status_code == 401 and (ra.get_json() or {}).get("logged_out"))
+check("24.2 The new phone keeps working", c_b.get("/pick/state.json").status_code == 200)
+rd = c_a.get("/dashboard")
+check("24.3 The old phone's pages go to the login page", rd.status_code == 302 and "/login" in rd.headers.get("Location", ""))
+with app.app_context():
+    B24 = _fresh("PSE5001", 4)
+    B24b = _fresh("PSE5002", 4)
+    t24 = datetime.utcnow() - timedelta(seconds=30)
+    c24 = A.claim_items(ids["p4"], B24, 2, now=t24)
+    A.pause_bill(B24, now=datetime.utcnow())
+    b24 = db.session.get(PickBill, B24)
+    check("24.4 After Pause the picker gets 7 seconds before the timer stops",
+          abs((b24.paused_at - datetime.utcnow()).total_seconds() - A.PICK_PAUSE_GRACE) < 2)
+    try:
+        A.claim_items(ids["p4"], B24b, 1); blocked = False
+    except A.PickError:
+        blocked = True
+    check("24.5 During those 7 seconds the picker is still on that bill", blocked)
+    b24.paused_at = datetime.utcnow() - timedelta(seconds=1)      # the 7 s are over
+    db.session.commit()
+    c24b = A.claim_items(ids["p4"], B24b, 1)
+    check("24.6 Once paused, the picker can work on another bill; the paused items go back on their bill",
+          c24b is not None and db.session.get(PickClaim, c24.id).status == "cancelled"
+          and A.pick_bill_progress(db.session.get(PickBill, B24))["left"] == 4)
+    A.release_claim(c24b.id)
+    A.resume_bill(B24)
+    c24c = A.claim_items(ids["p4"], B24, 1, now=datetime.utcnow() - timedelta(seconds=200))
+    C24C = c24c.id
+c_p4 = login("pk_p4@x.com")
+r24 = c_p4.post("/pick/done", json={"claim_id": C24C, "tapped_ms_ago": 190000}, headers={"X-Requested-With": "fetch"})
+with app.app_context():
+    cc = db.session.get(PickClaim, C24C)
+    check("24.7 Done sent late after a network cut counts from the tap (at most 2 minutes back)",
+          r24.status_code == 200 and abs((datetime.utcnow() - cc.done_at).total_seconds() - 120) < 5, str(cc.done_at))
+    PickClaim.query.filter(PickClaim.bill_id.in_([B24, B24b])).delete(synchronize_session=False)
+    PickEvent.query.filter(PickEvent.bill_id.in_([B24, B24b])).delete(synchronize_session=False)
+    PickBill.query.filter(PickBill.id.in_([B24, B24b])).delete(synchronize_session=False)
+    db.session.commit()
+_pk24 = open(os.path.join(REPO, "templates", "_picking.html")).read()
+check("24.8 No internet: taps are kept and sent when it is back, buttons never hang",
+      "var outbox = [];" in _pk24 and 'window.addEventListener("online", flush);' in _pk24 and "setTimeout(function () { if (ctl) ctl.abort(); }, 12000)" in _pk24)
+check("24.9 Taking 4 or more items asks 'Sure?' first", 'v >= 4 && b.getAttribute("data-sure") !== String(v)' in _pk24)
+check("24.10 Paused bill: a 7 s warning, then 'Work on another bill'", 'id="pkPauseBar"' in _pk24 and 'id="pkOther"' in _pk24)
+check("24.11 Alerts on the phone while the app is open (vibrate, beep, notification) and a Turn on button",
+      "function ping(title, body)" in _pk24 and 'id="pkAlerts"' in _pk24 and "window.ipPushOn" in open(os.path.join(REPO, "static", "js", "push.js")).read())
+check("24.12 The assigner has 'Pick bills yourself (multitask)'", 'id="pkPickSelf"' in ca.get("/dashboard").data.decode())
+with app.app_context():
+    adm24 = Employee.query.filter_by(email="pk_adm@x.com").first()
+check("24.13 The admin can pick bills too (picker screen)", 'data-role="picker"' in cadm.get("/pick/me").data.decode())
 check("22.10 The version is the code's fingerprint, the same after a restart", A.APP_BUILD == A._build_id())
 check("21.6 Charts show exact numbers: on top of each bar, and 'Name — number' beside each pie",
       "afterDatasetsDraw" in _cv and 'it.text + " — " + fmt(v)' in _cv and 'el.y - 3' in _cv)

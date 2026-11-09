@@ -102,6 +102,10 @@
 .pk-seg button[aria-pressed="true"]{background:var(--brand);color:#fff}
 .pk-seg button[aria-pressed="true"] b{background:rgba(255,255,255,.25);color:#fff}
 #pickApp [hidden]{display:none!important}
+.pk-btn.pk-ask{background:#b45309}
+.pk-alerts{margin-left:auto;border:1.5px solid #b45309;background:#fff7ed;color:#7c2d12;border-radius:999px;padding:4px 10px;font:700 12px system-ui,sans-serif;cursor:pointer}
+.pk-net{position:sticky;top:0;z-index:5;margin:0 0 8px;padding:9px 12px;border-radius:10px;background:#1f2937;color:#fff;font-size:13.5px;font-weight:600}
+.pk-pausebar{margin:0 0 8px;padding:10px 12px;border-radius:10px;background:#fff;border:2px solid #475569;color:#1f2937;font-weight:700;text-align:center}
 .pk-tabs .cnt.ok{background:var(--ok)}
 .pk-bulk{gap:6px;margin:0 0 8px}
 .pk-urgbox{border:1.5px solid #f3b4b4;background:#fff7f7;border-radius:12px;padding:4px 10px;margin:0 0 10px}
@@ -243,7 +247,7 @@ body.pk-full .pk-msg.on{position:sticky;top:0;z-index:2}
 {% set _pk_day = today if today is defined and today else pick_today() %}
 <div class="card pk-card{% if pick_as is defined and pick_as %} pk-helper{% endif %}" id="pickApp" data-role="{{ _pk_role }}" data-build="{{ app_build }}"{% if pick_as is defined and pick_as %} data-helper="1"{% endif %}>
   {% set _pk_name = session.get('user_name') or (user_name if user_name is defined else '') %}
-  <div class="pk-who"><b>{{ _pk_name }}</b><span class="pk-whorole">{{ 'Picker' if _pk_role == 'picker' else ('Admin' if session.get('is_admin') else 'Pick Assigner') }}</span><span class="pk-whoday">{{ _pk_day.strftime('%a, %d %b') }}</span></div>
+  <div class="pk-who"><b>{{ _pk_name }}</b><span class="pk-whorole">{{ 'Picker' if _pk_role == 'picker' else ('Admin' if session.get('is_admin') else 'Pick Assigner') }}</span><span class="pk-whoday">{{ _pk_day.strftime('%a, %d %b') }}</span><button type="button" class="pk-alerts" id="pkAlerts" hidden>Phone alerts: off — Turn on</button></div>
   {% if _pk_role == 'picker' %}
   <div class="section-label">Picking</div>
   <div class="pk-msg" id="pkMsg" role="status"></div>
@@ -262,6 +266,7 @@ body.pk-full .pk-msg.on{position:sticky;top:0;z-index:2}
     <div class="pk-stat"><span>Items / hr</span><b id="pkRate">—</b></div>
   </div>
   <div class="pk-mine" id="pkMine" hidden>
+    <div class="pk-pausebar" id="pkPauseBar" role="alert" hidden></div>
     <div class="pk-row pk-mtop" style="justify-content:space-between">
       <div><div class="pk-phase" id="pkPhase">Normal time</div>
         <div id="pkMineText"></div></div>
@@ -292,7 +297,7 @@ body.pk-full .pk-msg.on{position:sticky;top:0;z-index:2}
   <section data-panel="rules" hidden><div id="pkRule"></div></section>
 
   {% else %}
-  <div class="section-label">Bills and pickers</div>
+  <div class="section-label pk-sec"><span>Bills and pickers</span>{% if not (pick_as is defined and pick_as) %}<a class="pk-btn ghost sm" href="/pick/me" id="pkPickSelf">Pick bills yourself (multitask)</a>{% endif %}</div>
   <div class="pk-msg" id="pkMsg" role="status"></div>
   <div class="pk-tabs" role="tablist" aria-label="Pick Assigner">
     <button role="tab" data-tab="live" aria-selected="true">Live</button>
@@ -355,7 +360,7 @@ body.pk-full .pk-msg.on{position:sticky;top:0;z-index:2}
   "use strict";
   var app = document.getElementById("pickApp");
   if (!app) return;
-  var role = app.getAttribute("data-role"), mine = null, mineAt = 0, lastState = null, lastAt = 0, inFlight = 0, loading = false, fullAt = 0;
+  var browseOther = false, role = app.getAttribute("data-role"), mine = null, mineAt = 0, lastState = null, lastAt = 0, inFlight = 0, loading = false, fullAt = 0;
   var tok = (document.querySelector('meta[name="csrf-token"]') || {}).content || "";
   var asPicker = app.getAttribute("data-helper") === "1";   // multitask picking: always the picker screen
   function $(id) { return document.getElementById(id); }
@@ -365,22 +370,115 @@ body.pk-full .pk-msg.on{position:sticky;top:0;z-index:2}
   function say(text, good) { var m = $("pkMsg"); m.textContent = text; m.className = "pk-msg on " + (good ? "good" : "warn"); clearTimeout(say.t); say.t = setTimeout(function () { m.className = "pk-msg"; }, 7000); }
   // Every action: the screen changes at once (instant), the server reply
   // then carries the fresh screen, so there is one trip, not two.
+  // Every action: the screen changes at once (instant), the server reply
+  // then carries the fresh screen, so there is one trip, not two.
+  // No internet? The tap is kept and sent by itself when the connection is
+  // back (Done counts from the moment it was tapped), so buttons never hang.
+  var outbox = [];
+  function send(url, body) {
+    var ctl = window.AbortController ? new AbortController() : null;
+    var timer = setTimeout(function () { if (ctl) ctl.abort(); }, 12000);
+    return fetch(url, { method: "POST", credentials: "same-origin", signal: ctl ? ctl.signal : undefined,
+      headers: { "Content-Type": "application/json", "X-Requested-With": "fetch", "X-CSRFToken": tok, "X-Pick-As": asPicker ? "picker" : "" },
+      body: JSON.stringify(body || {}) })
+      .then(function (r) {
+        clearTimeout(timer);
+        return r.json().catch(function () { return { ok: false, message: "Something went wrong." }; }).then(function (j) {
+          if (r.status === 401 && j.logged_out) { alert(j.message); location.href = "/login"; }
+          return j;
+        });
+      }, function () { clearTimeout(timer); return { ok: false, offline: true }; });
+  }
+  function landed(j) {
+    say(j.message || (j.ok ? "Done." : "Could not do that."), j.ok);
+    if (j.state && j.state.bills) { lastState = j.state; lastAt = Date.now(); fullAt = Date.now(); draw(j.state); } else { load(); }
+  }
+  function netBar(on) {
+    var bar = $("pkNet");
+    if (!bar) { bar = document.createElement("div"); bar.id = "pkNet"; bar.className = "pk-net"; bar.setAttribute("role", "status"); app.insertBefore(bar, app.firstChild); }
+    bar.hidden = !on;
+    bar.textContent = on ? "No internet. Your taps are saved and will be sent as soon as the connection is back." : "";
+  }
+  function flush() {
+    if (!outbox.length || flush.busy) return;
+    flush.busy = true;
+    var job = outbox[0], body = JSON.parse(JSON.stringify(job.body || {}));
+    if (/\/pick\/done$/.test(job.url)) body.tapped_ms_ago = Date.now() - job.at;
+    send(job.url, body).then(function (j) {
+      flush.busy = false;
+      if (j.offline) return;                // still offline: try again shortly
+      outbox.shift();
+      if (!outbox.length) netBar(false);
+      landed(j);
+      flush();
+    });
+  }
+  setInterval(flush, 4000);
+  window.addEventListener("online", flush);
   function post(url, body, now) {
     inFlight++;
     if (now && lastState) { var c = aged(lastState); now(c); draw(c); }
-    return fetch(url, { method: "POST", credentials: "same-origin",
-      headers: { "Content-Type": "application/json", "X-Requested-With": "fetch", "X-CSRFToken": tok, "X-Pick-As": asPicker ? "picker" : "" },
-      body: JSON.stringify(body || {}) })
-      .then(function (r) { return r.json().catch(function () { return { ok: false, message: "Something went wrong." }; }); },
-            function () { return { ok: false, message: "No connection. Try again." }; })
-      .then(function (j) {
-        inFlight = Math.max(0, inFlight - 1);
-        say(j.message || (j.ok ? "Done." : "Could not do that."), j.ok);
-        if (j.state && j.state.bills) { lastState = j.state; lastAt = Date.now(); fullAt = Date.now(); draw(j.state); } else { load(); }
-        return j;
-      });
+    var at = Date.now();
+    return send(url, body).then(function (j) {
+      inFlight = Math.max(0, inFlight - 1);
+      if (j.offline) {
+        outbox.push({ url: url, body: body, at: at });
+        netBar(true);
+        return { ok: true, queued: true };
+      }
+      landed(j);
+      return j;
+    });
   }
-  function draw(st) { (role === "picker" ? renderPicker : renderAssigner)(st); tick(); }
+  function draw(st) { notice(st); (role === "picker" ? renderPicker : renderAssigner)(st); tick(); }
+  // Alerts while the app is open: vibrate, a short beep and a phone
+  // notification (when allowed) for what needs this person now.
+  var seen = null, lastEv = null, wasPaused = false, audio = null;
+  function beep() {
+    try {
+      audio = audio || new (window.AudioContext || window.webkitAudioContext)();
+      var o = audio.createOscillator(), g = audio.createGain();
+      o.frequency.value = 880; g.gain.value = 0.15; o.connect(g); g.connect(audio.destination);
+      o.start(); o.stop(audio.currentTime + 0.25);
+    } catch (e) {}
+  }
+  function ping(title, body) {
+    try { if (navigator.vibrate) navigator.vibrate([200, 100, 200]); } catch (e) {}
+    beep();
+    if (window.Notification && Notification.permission === "granted" && navigator.serviceWorker) {
+      navigator.serviceWorker.getRegistration().then(function (reg) {
+        if (reg) reg.showNotification(title, { body: body, tag: "ip-live-" + Date.now(), icon: "/static/icons/icon-192.png", vibrate: [200, 100, 200] });
+      }).catch(function () {});
+    }
+  }
+  function notice(st) {
+    if (!st || !st.bills) return;
+    var open = st.bills.filter(function (b) { return b.status === "open"; });
+    if (role === "picker") {
+      var ids = {}; open.forEach(function (b) { ids[b.id] = 1; });
+      if (seen && !st.mine) {
+        var fresh = open.filter(function (b) { return !seen[b.id] && b.id > 0; });
+        if (fresh.length) ping((fresh[0].urgent ? "URGENT bill " : "New bill ") + fresh[0].bill_no, plural(fresh[0].items, "item") + " to pick");
+      }
+      if (st.mine && st.mine.paused && !wasPaused && seen) ping("Bill " + st.mine.bill_no + " paused", "Your timer stops in a few seconds.");
+      wasPaused = !!(st.mine && st.mine.paused);
+      seen = ids;
+    } else {
+      var n = (st.events || []).length;
+      if (lastEv !== null && n > lastEv) {
+        var e = st.events[0] || {};
+        ping(e.kind === "missing" ? "Missing item on " + e.bill : e.kind === "late" ? e.who + " is late" : "Picking alert", (e.who || "") + " " + (e.detail || ""));
+      }
+      lastEv = n;
+    }
+  }
+  (function alertsButton() {
+    var b = $("pkAlerts"); if (!b) return;
+    var off = !(window.Notification && Notification.permission === "granted");
+    b.hidden = !off;
+    b.onclick = function () { if (window.ipPushOn) window.ipPushOn(); else alert("Open this page in Chrome to turn on phone alerts."); setTimeout(alertsButton, 4000); };
+  })();
+  document.addEventListener("click", function () { if (!audio) { try { audio = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) {} } }, { once: true });
   // A new version went live: reload so every phone runs the same, latest app.
   // Not while typing; at most once every 2 minutes.
   function checkBuild(st) {
@@ -472,7 +570,8 @@ body.pk-full .pk-msg.on{position:sticky;top:0;z-index:2}
     var finishing = allOpen.length - open.length;
     var urgentLeft = open.some(function (b) { return b.urgent && b.left > 0 && !b.paused; });
     // While picking, show only that bill: hide the list until Done.
-    var focus = !!mine;
+    if (!mine || !mine.paused) browseOther = false;
+    var focus = !!mine && !browseOther;
     app.classList.toggle("pk-focus", focus);
     if (focus && !document.body.classList.contains("pk-full")) { showTab("live"); window.scrollTo(0, 0); }
     document.body.classList.toggle("pk-full", focus);
@@ -483,7 +582,7 @@ body.pk-full .pk-msg.on{position:sticky;top:0;z-index:2}
       Array.prototype.forEach.call(document.querySelectorAll("#pkBills .pk-in"), function (i) { if (i.value) keep[i.id] = i.value; });
       var focused = document.activeElement && document.activeElement.id;
       $("pkBills").innerHTML = grouped(open, function (b) {
-        var can = !mine && !b.paused && b.left > 0 && (b.urgent || !urgentLeft);
+        var can = (!mine || browseOther) && !b.paused && b.left > 0 && (b.urgent || !urgentLeft);
         return '<div class="pk-bill' + (b.urgent ? " urgent" : "") + (b.paused ? " paused" : "") + '"><div><div class="no">' + billBtn(b) + (b.urgent ? '<span class="pk-u">URGENT</span>' : "") + (b.paused ? '<span class="pk-p">PAUSED</span>' : "") +
           '</div><div class="sub">added ' + esc(b.added) + " · " + plural(b.items, "item") + (b.score ? '<span class="pk-score">' + b.score + " pts</span>" : "") + "</div></div>" +
           '<div><div class="pk-row">' + prog(b) + '<span class="sub">' + b.done + " / " + b.items + " picked · <b>" + b.left + " left</b></span></div>" + taken(b) + "</div>" +
@@ -727,8 +826,12 @@ body.pk-full .pk-msg.on{position:sticky;top:0;z-index:2}
     var same = lastState && lastState.ver && Date.now() - fullAt < 60000;
     loading = true;
     fetch("/pick/state.json?" + (asPicker ? "as=picker&" : "") + (same ? "v=" + lastState.ver : ""), { credentials: "same-origin" })
-      .then(function (r) { return r.json(); }).then(function (s) {
+      .then(function (r) {
+        if (r.status === 401) { r.json().then(function (j) { if (j.logged_out) { alert(j.message); location.href = "/login"; } }); throw new Error("out"); }
+        return r.json();
+      }).then(function (s) {
         loading = false;
+        if (outbox.length) flush();
         if (!s || inFlight) return;
         checkBuild(s);
         if (s.same) return;                  // nothing changed: timers keep running here
@@ -747,7 +850,15 @@ body.pk-full .pk-msg.on{position:sticky;top:0;z-index:2}
       c.style.color = left >= 0 ? "" : (-left <= extra ? "var(--warn-ink)" : "var(--bad-ink)");
     });
     if (role === "picker" && mine) {
-      if (mine.paused) dt = 0;              // the assigner paused this bill: the clock stands still
+      // Paused by the assigner: 7 s warning first, then the clock stands still.
+      var grace = mine.paused ? Math.max(0, (mine.pause_in || 0) - dt) : 0, stopped = mine.paused && grace <= 0;
+      if (stopped) dt = Math.min(dt, mine.pause_in || 0);
+      var pb = $("pkPauseBar");
+      pb.hidden = !mine.paused;
+      if (mine.paused) {
+        pb.innerHTML = stopped ? 'Paused by the assigner. Your time is safe. <button type="button" class="pk-btn sm" id="pkOther">Work on another bill</button>'
+          : "The assigner paused this bill. Your timer stops in <b>" + Math.ceil(grace) + " s</b> — finish now if you can.";
+      }
       var n = mine.normal_left - dt, f = mine.find_left - dt, r = mine.report_left - dt, phase, left, total;
       if (n >= 0) { phase = "normal"; left = n; total = mine.seconds_total; }
       else if (f >= 0) { phase = "find"; left = f; total = mine.find_left - mine.normal_left; }
@@ -755,13 +866,13 @@ body.pk-full .pk-msg.on{position:sticky;top:0;z-index:2}
       else { phase = "late"; left = r; total = 1; }
       $("pkMine").className = "pk-mine" + (phase === "normal" ? "" : " " + phase) + (mine.paused ? " paused" : "");
       // the whole screen shows the phase: amber extra time, red once time is over
-      var tone = mine.paused ? "pk-grey" : {normal: "pk-green", find: "pk-orange", report: "pk-red", late: "pk-late"}[phase];
+      var tone = stopped ? "pk-grey" : {normal: "pk-green", find: "pk-orange", report: "pk-red", late: "pk-late"}[phase];
       if (document.body.getAttribute("data-pk-tone") !== tone) { document.body.setAttribute("data-pk-tone", tone); document.body.classList.add("pk-toned"); }
-      $("pkPhase").textContent = mine.paused ? "Paused by assigner — timer stopped" :
+      $("pkPhase").textContent = stopped ? "Paused by assigner — timer stopped" :
         {normal: "Normal time", find: "Extra time to find", report: "Report time — fewer points", late: "Late"}[phase];
       $("pkClock").textContent = (phase === "late" ? "−" : "") + clock(left);
       $("pkBar").style.width = Math.max(0, Math.min(100, 100 * left / Math.max(total, 1))) + "%";
-      $("pkLateText").textContent = mine.paused ? "Your time is safe. It starts again when the assigner resumes the bill." : {normal: "Finish now for 1.5 points per item.", find: "Still time to find them: 1 point per item.",
+      $("pkLateText").textContent = stopped ? "Your time is safe. It starts again when the assigner resumes the bill." : {normal: "Finish now for 1.5 points per item.", find: "Still time to find them: 1 point per item.",
         report: "Submit now: 0.5 point per item. Report any item you could not find.", late: "Late by " + clock(left) + " — points are dropping."}[phase];
       $("pkDone").disabled = !mine.id;
     }
@@ -806,6 +917,13 @@ body.pk-full .pk-msg.on{position:sticky;top:0;z-index:2}
     if (b.hasAttribute("data-take")) {
       var id = b.getAttribute("data-take"), v = +($("take" + id) || {}).value;
       if (!v) { say("Type how many items you are taking.", false); $("take" + id).focus(); return; }
+      // 4 or more at once: ask first, in case of a typing slip (tap again to go)
+      if (v >= 4 && b.getAttribute("data-sure") !== String(v)) {
+        b.setAttribute("data-sure", String(v)); b.classList.add("pk-ask"); b.textContent = "Sure? " + v + " items";
+        say("You typed " + v + " items. Tap \"Sure?\" again to start, or change the number.", false);
+        clearTimeout(b._askT); b._askT = setTimeout(function () { b.removeAttribute("data-sure"); b.classList.remove("pk-ask"); b.textContent = "Pick"; }, 5000);
+        return;
+      }
       b.disabled = true; b.classList.add("saving"); b.textContent = "Starting…";
       post("/pick/claim", { bill_id: +id, items: v }, function (c) {
         var bl = billIn(c, id); if (!bl) return;
@@ -821,6 +939,9 @@ body.pk-full .pk-msg.on{position:sticky;top:0;z-index:2}
       say("Saved. Working out your points…", true);
       post("/pick/done", { claim_id: mid }, function (c) { c.mine = null; })
         .then(function () { b.disabled = false; b.classList.remove("saving"); b.textContent = "Done — all picked"; });
+    } else if (b.id === "pkOther") {
+      browseOther = true; if (lastState) draw(lastState);
+      say("Pick another bill. Your items on the paused bill go back on it when you start the new one.", true);
     } else if (b.id === "pkRepBtn") {
       $("pkRep").hidden = !$("pkRep").hidden; if (!$("pkRep").hidden && !$("pkRepRows").children.length) repRow();
     } else if (b.id === "pkRepAdd") { repRow();
