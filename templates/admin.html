@@ -261,7 +261,7 @@ input:focus, select:focus, textarea:focus { outline: none; border-color: var(--b
 .modal-backdrop { position: fixed; inset: 0; background: rgba(11,18,32,.34);
                   -webkit-backdrop-filter: blur(3px); backdrop-filter: blur(3px);
                   z-index: 300; display: none; align-items: center; justify-content: center; padding: var(--s4); }
-.modal-backdrop.active { display: flex; }
+.modal-backdrop.active, .modal-backdrop.open { display: flex; }  /* the Edit button adds "open" */
 .modal { background: var(--surface); border-radius: var(--r-xl);
          box-shadow: var(--sh-3), var(--gloss);
          padding: var(--s5); width: min(620px, 100%); max-height: 88vh; overflow-y: auto;

@@ -117,6 +117,9 @@ eventlet worker); the database is Supabase PostgreSQL.
   check decorators after inserting code above a decorated function.
 - `render.yaml` once forced 100 s per item; item time now lives in the admin
   setting, not an env var.
+- A redesign renamed the modal show-class (`open` -> `active`) but the Edit
+  button still added `open`, so Staff Edit silently stopped opening. When
+  renaming a CSS class, grep the JS that toggles it.
 - Phones on an old page made "slow on one phone, fast on another"; the auto
   reload on a new `APP_BUILD` fixes that, but a deploy still needs one manual
   refresh on pages older than that feature.

@@ -199,6 +199,15 @@ for u in sorted(set(gl)):
         bad.append("%s %s" % (u, rr.status_code))
 check("9.5 Every link in Go to opens (%s)" % (", ".join(bad) or "all fine"), not bad)
 
+# ---- 10. The staff Edit box really opens ---------------------------------
+# A redesign once renamed the CSS class that shows a modal ("open" -> "active")
+# while the Edit button still added "open": the box filled in but stayed hidden.
+added = set(re.findall(r"getElementById\('editModal'\)[\s\S]{0,80}?classList\.add\('([a-z]+)'\)", SRC)) or \
+        set(re.findall(r"modal\.classList\.add\('([a-z]+)'\)", SRC))
+check("10.1 The Edit button's show-class is styled to display the box",
+      added and all((".modal-backdrop.%s" % c) in SRC for c in added), str(added))
+check("10.2 Each staff row has an Edit button wired to the box", 'onclick="openEditFromBtn(this)"' in html and 'id="editModal"' in html)
+
 print("\n" + "=" * 62)
 print("PASSED %d    FAILED %d" % (len(PASSED), len(FAILED)))
 if FAILED:
