@@ -1003,6 +1003,10 @@ stt = c2.get("/static/js/chart-values.js?v=" + A.APP_BUILD)
 check("22.8 Phones keep script files for a week", "max-age=604800" in (stt.headers.get("Cache-Control") or ""))
 csv22 = cadm.get("/picking/report.csv?period=today")
 check("22.9 Reports are never kept stale", "max-age=604800" not in (csv22.headers.get("Cache-Control") or ""))
+_pk23 = open(os.path.join(REPO, "templates", "_picking.html")).read()
+check("23.1 Phones see other phones' changes within about 3 seconds, and stop asking while hidden",
+      "setInterval(function () { if (!document.hidden) load(); }, 3000);" in _pk23 and '"visibilitychange"' in _pk23)
+check("23.2 Late / idle alerts no longer make a phone's refresh wait", "alert_late_picks_later(now)" in open(os.path.join(REPO, "app.py")).read())
 check("22.10 The version is the code's fingerprint, the same after a restart", A.APP_BUILD == A._build_id())
 check("21.6 Charts show exact numbers: on top of each bar, and 'Name — number' beside each pie",
       "afterDatasetsDraw" in _cv and 'it.text + " — " + fmt(v)' in _cv and 'el.y - 3' in _cv)

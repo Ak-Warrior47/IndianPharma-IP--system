@@ -3016,6 +3016,27 @@ def sync_picker_day_later(emp_id, d):
 _ALERTS_LAST = [0.0]
 
 
+def alert_late_picks_later(now=None):
+    """Late / idle alerts without making a phone's refresh wait for them:
+    at most every 15 s, in the background (inline under tests)."""
+    if time.time() - _ALERTS_LAST[0] < 15:
+        return
+    if app.config.get("TESTING"):
+        alert_late_picks(now, throttle=True)
+        return
+    _ALERTS_LAST[0] = time.time()
+    def _job():
+        with app.app_context():
+            try:
+                alert_late_picks()
+            except Exception as exc:
+                logger.error("alert_late_picks (background): %s", exc)
+    try:
+        socketio.start_background_task(_job)
+    except Exception as exc:
+        logger.warning("alerts background: %s", exc)
+
+
 def alert_late_picks(now=None, throttle=False):
     """Run once a minute (and from screen refreshes, at most every 15 s):
       - a grab past its report time is late: the assigner is told once
@@ -3121,7 +3142,7 @@ def picking_state(emp, staff_type, alerts=True):
     today = date.today()
     day_start = datetime.combine(today, datetime.min.time())
     if alerts:
-        alert_late_picks(now, throttle=True)
+        alert_late_picks_later(now)
     # In order: urgent first, then oldest first (the order bills were made).
     bills = (PickBill.query.filter(or_(PickBill.status == "open", PickBill.created_at >= day_start))
              .order_by(PickBill.is_urgent.desc(), PickBill.created_at.asc()).limit(150).all())

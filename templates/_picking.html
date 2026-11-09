@@ -900,7 +900,11 @@ body.pk-full .pk-msg.on{position:sticky;top:0;z-index:2}
   setupCollapse();
   try { var lastTab = sessionStorage.getItem("pkTab-" + role); if (lastTab && app.querySelector('[data-tab="' + lastTab + '"]')) showTab(lastTab); } catch (e) {}
   load();
-  setInterval(load, 10000);
+  // Check for changes every 3 s while the screen is open: nothing changed
+  // costs the server no database work, so other phones see a new bill, a
+  // Done or a pause within about 3 seconds. Nothing while the app is hidden.
+  setInterval(function () { if (!document.hidden) load(); }, 3000);
+  document.addEventListener("visibilitychange", function () { if (!document.hidden) load(); });
   setInterval(tick, 1000);
 })();
 </script>
