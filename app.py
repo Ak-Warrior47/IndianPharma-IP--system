@@ -2041,6 +2041,16 @@ def set_pick_times(normal, urgent):
     return normal, urgent
 
 
+def bill_sort_key(b):
+    """Bills in number order: urgent first (they must be picked first), then
+    the smaller bill number above the bigger one. IP2627/... before IP2728/..."""
+    no = b.bill_no if hasattr(b, "bill_no") else b.get("bill_no", "")
+    pre, _, num = (no or "").rpartition("/")
+    digits = "".join(ch for ch in num if ch.isdigit())
+    urgent = b.is_urgent if hasattr(b, "is_urgent") else b.get("urgent")
+    return (0 if urgent else 1, pre, int(digits) if digits else 0, no)
+
+
 def pick_seconds(bill):
     normal, urgent = pick_times()
     return urgent if bill is not None and bill.is_urgent else normal
@@ -2875,9 +2885,24 @@ def report_period(args):
 
 
 def picker_pick_stats(emp_id, dates):
-    """Finished grabs on these days. The basis of the picker score."""
+    """Finished grabs on these days. The basis of the picker score.
+    Within a page, recent grabs of everyone are loaded once (scoring every
+    picker for leaderboards used to cost one query each)."""
     if emp_id is None:
         return _stats_from([])
+    dates = [d for d in dates if d]
+    if not dates:
+        return _stats_from([])
+    t = date.today()
+    start = (t.replace(day=1) - timedelta(days=62)).replace(day=1)
+    if has_request_context() and min(dates) >= start:
+        def _recent():
+            by = {}
+            for c in PickClaim.query.filter(PickClaim.status == "done", PickClaim.work_date >= start).all():
+                by.setdefault(c.picker_id, []).append(c)
+            return by
+        ds = set(dates)
+        return _stats_from([c for c in req_memo("claims_recent", start, _recent).get(emp_id, []) if c.work_date in ds])
     return _stats_from(_done_claims(dates, emp_id))
 
 
@@ -3099,7 +3124,7 @@ def picking_state(emp, staff_type, alerts=True):
                           "when_day": (b.scheduled_for + IST).strftime("%d %b") if b.scheduled_for else ""} for b in sched],
            "seconds_per_item": pick_times()[0], "urgent_seconds": pick_times()[1],
            "extra_seconds": PICK_EXTRA_SECONDS, "late_cap": PICK_LATE_CAP, "prefix": fy_prefix(),
-           "bills": [bill_row(b) for b in bills]}
+           "bills": [bill_row(b) for b in sorted(bills, key=bill_sort_key)]}
     if staff_type == "picker":
         c = active_now.get(emp.id)
         if c:
@@ -9671,10 +9696,13 @@ def supervisor_strike_summary(emp_id, month_str):
     """Returns dict: mismatches this month, penalty points (scaled, after 5 free), and details.
     Only counts days the supervisor entered an admin-validated super_bills value."""
     try:
-        rows = (SupervisorBill.query
-                .filter(SupervisorBill.staff_id == emp_id,
-                        SupervisorBill.admin_validated == True)  # noqa: E712
-                .all())
+        def _all_validated():
+            by = {}
+            for r_ in SupervisorBill.query.filter(SupervisorBill.admin_validated == True).all():  # noqa: E712
+                by.setdefault(r_.staff_id, []).append(r_)
+            return by
+        # every staff member's validated rows in one query per page, not one each
+        rows = req_memo("sup_bills_validated", 0, _all_validated).get(emp_id, [])
         mismatches = []
         for r in rows:
             if not r.entry_date or r.entry_date.strftime("%Y-%m") != month_str:

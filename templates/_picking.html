@@ -349,6 +349,13 @@ body.pk-full .pk-msg.on{position:sticky;top:0;z-index:2}
     if (c.mine && !c.mine.paused) { c.mine.normal_left -= dt; c.mine.find_left -= dt; c.mine.report_left -= dt; }
     return c;
   }
+  // Number order: urgent first, then the smaller bill number above the bigger.
+  function byNo(a, b) {
+    if (!!a.urgent !== !!b.urgent) return a.urgent ? -1 : 1;
+    var pa = String(a.bill_no).split("/"), pb = String(b.bill_no).split("/");
+    if (pa[0] !== pb[0]) return pa[0] < pb[0] ? -1 : 1;
+    return (parseInt(pa[pa.length - 1], 10) || 0) - (parseInt(pb[pb.length - 1], 10) || 0);
+  }
   function billIn(st, id) { return (st.bills || []).filter(function (b) { return b.id === +id; })[0]; }
   function rule(s) {
     var h = Math.round(s.extra_seconds / 2);
@@ -394,7 +401,7 @@ body.pk-full .pk-msg.on{position:sticky;top:0;z-index:2}
       if (had !== mine.id) { $("pkRep").hidden = true; $("pkRepRows").innerHTML = ""; }
     }
     // Bills with nothing left to take (others are finishing them) drop off the list.
-    var allOpen = s.bills.filter(function (b) { return b.status === "open"; });
+    var allOpen = s.bills.filter(function (b) { return b.status === "open"; }).sort(byNo);
     var open = allOpen.filter(function (b) { return b.left > 0; });
     var finishing = allOpen.length - open.length;
     var urgentLeft = open.some(function (b) { return b.urgent && b.left > 0 && !b.paused; });
@@ -447,7 +454,7 @@ body.pk-full .pk-msg.on{position:sticky;top:0;z-index:2}
       return '<span class="pk-chip ' + (r.paused ? "paused" : lt ? "late" : "busy") + '" data-due="' + (Date.now() + r.seconds_left * 1000) + '"' + (r.paused ? ' data-frozen="' + r.seconds_left + '"' : "") + ">" + (r.paused ? "Paused · " : "") + who + " · " + esc(r.bill_no) + " · " + plural(r.items, "item") + ' · <b class="pk-left"></b>' +
         ' <button type="button" class="pk-btn ghost sm" data-release="' + r.claim_id + '">Release</button></span>';
     }).join("") : '<span class="pk-empty">No pickers set up yet.</span>';
-    var pend = s.bills.filter(function (b) { return b.status === "open"; });
+    var pend = s.bills.filter(function (b) { return b.status === "open"; }).sort(byNo);
     var fin = s.bills.filter(function (b) { return b.status === "done" || b.status === "cancelled"; })
       .sort(function (a, b) { return b.id - a.id; });   // newest first
     $("pkPendN").textContent = pend.length;

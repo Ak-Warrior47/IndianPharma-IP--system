@@ -652,9 +652,16 @@ _n[0] = 0
 cadm.get("/picking?tab=reports&period=month")
 check("15.3 The admin report stays a handful of queries", _n[0] <= 25, "%d queries" % _n[0])
 st15 = ca.get("/pick/state.json").get_json()
+_pk15x = open(os.path.join(REPO, "templates", "_picking.html")).read()
 opn = [b for b in st15["bills"] if b["status"] == "open" and not b["urgent"]]
-check("15.4 Bills are listed in order: urgent first, then oldest first",
-      all(opn[i]["id"] < opn[i + 1]["id"] for i in range(len(opn) - 1)), str([b["id"] for b in opn][:6]))
+check("15.4 Bills are listed in number order (urgent first, then smaller number first)",
+      [A.bill_sort_key(b) for b in st15["bills"]] == sorted(A.bill_sort_key(b) for b in st15["bills"]),
+      str([b["bill_no"] for b in st15["bills"]][:6]))
+check("15.4b Number order is by value, not text: 999 comes before 1000, and urgent stays on top",
+      sorted([{"bill_no": "IP2627/1000", "urgent": False}, {"bill_no": "IP2627/999", "urgent": False},
+              {"bill_no": "IP2627/5000", "urgent": True}], key=A.bill_sort_key) ==
+      [{"bill_no": "IP2627/5000", "urgent": True}, {"bill_no": "IP2627/999", "urgent": False}, {"bill_no": "IP2627/1000", "urgent": False}])
+check("15.4c The phone keeps number order too (also for a bill just added)", "function byNo(a, b)" in _pk15x and ".sort(byNo)" in _pk15x)
 _pk15 = open(os.path.join(REPO, "templates", "_picking.html")).read()
 check("15.5 While picking, only that bill shows (focus mode hides the list)",
       "#pickApp.pk-focus #pkBills{display:none}" in _pk15 and 'id="pkMine"' in _pk15)
@@ -921,6 +928,20 @@ check("20.10 Phones reload by themselves when a new version goes live",
       "function checkBuild(st)" in _pk20 and 'data-build="{{ app_build }}"' in _pk20 and "location.reload()" in _pk20)
 check("20.11 The add-bill row is compact (one short row, small boxes)",
       'placeholder="Bill no."' in _pk20 and ".pk-add input{height:36px" in _pk20)
+with app.app_context():
+    import time as _t
+    sb_n = [0]
+    from sqlalchemy import event as _ev
+    def _cnt(*a, **k): sb_n[0] += 1
+    _ev.listen(db.engine, "before_cursor_execute", _cnt)
+cadm.get("/staff/%d" % ids["p1"])
+sb_n[0] = 0
+cadm.get("/staff/%d" % ids["p1"])
+with app.app_context():
+    _ev.remove(db.engine, "before_cursor_execute", _cnt)
+check("20.13 A staff profile loads in a fixed handful of queries (not one per picker)", sb_n[0] <= 40, "%d queries" % sb_n[0])
+pr20 = cadm.get("/staff/%d" % ids["p1"]).data.decode()
+check("20.14 The profile shows the staff name", "PK P1" in pr20)
 check("20.12 render.yaml no longer sets 100 s per item", "PICK_SECONDS_PER_ITEM" not in open(os.path.join(REPO, "render.yaml")).read())
 with app.app_context():
     PickClaim.query.filter(PickClaim.bill_id.in_([B20, B20u])).delete(synchronize_session=False)
