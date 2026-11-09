@@ -1063,7 +1063,10 @@ with app.app_context():
 _pk24 = open(os.path.join(REPO, "templates", "_picking.html")).read()
 check("24.8 No internet: taps are kept and sent when it is back, buttons never hang",
       "var outbox = [];" in _pk24 and 'window.addEventListener("online", flush);' in _pk24 and "setTimeout(function () { if (ctl) ctl.abort(); }, 12000)" in _pk24)
-check("24.9 Taking 4 or more items asks 'Sure?' first", 'v >= 4 && b.getAttribute("data-sure") !== String(v)' in _pk24)
+check("24.9 No 'Sure?' step any more; typing more than is left on the bill is stopped with the reason",
+      'String(v)) {' not in _pk24 and 'Sure? " + v' not in _pk24 and "if (v > left0) {" in _pk24 and '" left on bill "' in _pk24)
+check("24.9b Missing quantities can't add up to more than the items taken (phone and server)",
+      "if (mine && miss > mine.items)" in _pk24)
 check("24.10 Paused bill: a 7 s warning, then 'Work on another bill'", 'id="pkPauseBar"' in _pk24 and 'id="pkOther"' in _pk24)
 check("24.11 Alerts on the phone while the app is open (vibrate, beep, notification) and a Turn on button",
       "function ping(title, body)" in _pk24 and 'id="pkAlerts"' in _pk24 and "window.ipPushOn" in open(os.path.join(REPO, "static", "js", "push.js")).read())

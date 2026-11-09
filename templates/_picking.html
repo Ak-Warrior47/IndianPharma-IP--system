@@ -102,7 +102,7 @@
 .pk-seg button[aria-pressed="true"]{background:var(--brand);color:#fff}
 .pk-seg button[aria-pressed="true"] b{background:rgba(255,255,255,.25);color:#fff}
 #pickApp [hidden]{display:none!important}
-.pk-btn.pk-ask{background:#b45309}
+.pk-in.pk-bad,#pkRepRows input.pk-bad{border-color:var(--bad);background:#fff1f1;color:var(--bad-ink)}
 .pk-alerts{margin-left:auto;border:1.5px solid #b45309;background:#fff7ed;color:#7c2d12;border-radius:999px;padding:4px 10px;font:700 12px system-ui,sans-serif;cursor:pointer}
 .pk-net{position:sticky;top:0;z-index:5;margin:0 0 8px;padding:9px 12px;border-radius:10px;background:#1f2937;color:#fff;font-size:13.5px;font-weight:600}
 .pk-pausebar{margin:0 0 8px;padding:10px 12px;border-radius:10px;background:#fff;border:2px solid #475569;color:#1f2937;font-weight:700;text-align:center}
@@ -934,12 +934,14 @@ body.pk-full .pk-msg.on{position:sticky;top:0;z-index:2}
     if (b.hasAttribute("data-take")) {
       var id = b.getAttribute("data-take"), v = +($("take" + id) || {}).value;
       if (!v) { say("Type how many items you are taking.", false); $("take" + id).focus(); return; }
-      // 4 or more at once: ask first, in case of a typing slip (tap again to go)
-      if (v >= 4 && b.getAttribute("data-sure") !== String(v)) {
-        b.setAttribute("data-sure", String(v)); b.classList.add("pk-ask"); b.textContent = "Sure? " + v + " items";
-        say("You typed " + v + " items. Tap \"Sure?\" again to start, or change the number.", false);
-        clearTimeout(b._askT); b._askT = setTimeout(function () { b.removeAttribute("data-sure"); b.classList.remove("pk-ask"); b.textContent = "Pick"; }, 5000);
-        return;
+      // Never more than the items still left on the bill (e.g. 10 on the
+      // bill, 5 already taken: at most 5). Checked here at once, and again
+      // by the server.
+      var bl0 = lastState && billIn(lastState, id), left0 = bl0 ? bl0.left : v;
+      if (v > left0) {
+        $("take" + id).classList.add("pk-bad");
+        say("Only " + plural(left0, "item") + " left on bill " + bl0.bill_no + ". You typed " + v + ".", false);
+        $("take" + id).focus(); return;
       }
       b.disabled = true; b.classList.add("saving"); b.textContent = "Starting…";
       post("/pick/claim", { bill_id: +id, items: v }, function (c) {
@@ -967,6 +969,9 @@ body.pk-full .pk-msg.on{position:sticky;top:0;z-index:2}
         var i = r.querySelectorAll("input"); return { item: i[0].value.trim(), qty: +i[1].value || 0 };
       }).filter(function (m) { return m.item || m.qty; });
       if (!rows.length) { say("Write the missing item and how many.", false); return; }
+      var miss = rows.reduce(function (a, m) { return a + (m.qty || 0); }, 0);
+      if (mine && miss > mine.items) { say("You took " + plural(mine.items, "item") + "; missing items can't be more than that (you typed " + miss + ").", false); return; }
+      if (rows.some(function (m) { return !m.item || !m.qty; })) { say("Write each missing item's name and how many.", false); return; }
       if (!mine || !mine.id) return;
       post("/pick/done", { claim_id: mine.id, missing: rows }, function (c) { c.mine = null; });
     } else if (b.id === "pkAddBtn") { addBill();
@@ -1025,7 +1030,24 @@ body.pk-full .pk-msg.on{position:sticky;top:0;z-index:2}
       if (!j.ok && !$("pkBillNo").value && !$("pkBillItems").value) { $("pkBillNo").value = no; $("pkBillItems").value = it; }
     });
   }
-  app.addEventListener("input", function (e) { if (e.target.id === "pkFind" && lastState) renderAssigner(aged(lastState)); });
+  app.addEventListener("input", function (e) {
+    if (e.target.id === "pkFind" && lastState) renderAssigner(aged(lastState));
+    // typing more than is left on the bill: red box and the reason, right away
+    if (e.target.id && e.target.id.indexOf("take") === 0 && lastState) {
+      var bl = billIn(lastState, e.target.id.slice(4)), v = +e.target.value || 0, over = bl && v > bl.left;
+      e.target.classList.toggle("pk-bad", !!over);
+      var btn = app.querySelector('[data-take="' + e.target.id.slice(4) + '"]');
+      if (btn) btn.title = over ? "Only " + bl.left + " left" : "";
+      if (over) say("Only " + plural(bl.left, "item") + " left on bill " + bl.bill_no + ". You typed " + v + ".", false);
+    }
+    // item-not-found quantities can't add up to more than the items taken
+    if (e.target.closest && e.target.closest("#pkRepRows") && mine) {
+      var tot = 0; Array.prototype.forEach.call($("pkRepRows").querySelectorAll('input[type="number"]'), function (i) { tot += +i.value || 0; });
+      var bad = tot > mine.items;
+      Array.prototype.forEach.call($("pkRepRows").querySelectorAll('input[type="number"]'), function (i) { i.classList.toggle("pk-bad", bad); });
+      if (bad) say("You took " + plural(mine.items, "item") + "; missing items can't be more than that (you typed " + tot + ").", false);
+    }
+  });
   // Enter moves to the next empty field, and submits when all are filled.
   app.addEventListener("keydown", function (e) {
     if (e.key !== "Enter" || !e.target.matches("input")) return;

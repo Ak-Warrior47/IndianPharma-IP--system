@@ -46,7 +46,10 @@ Staff emails are `name@pharmaip.com`. Only the admin sets someone's role.
 2. **Picker takes items**: types how many items they take from a bill and
    taps Pick. Several pickers can share one bill.
    - Urgent bills must be picked first.
-   - Taking 4 or more at once asks "Sure?" first (stops typing slips).
+   - You can never take more than the items still left on the bill: if a
+     bill has 10 and 5 are taken, you can take at most 5. Typing more shows
+     "Only 5 items left" at once and nothing starts. Missing items can't add
+     up to more than the items you took. The server checks the same.
    - One bill at a time per picker.
 3. **Timer** (per pick): items × item time.
    - Item time is set by the ADMIN only (Picking > Live floor > Item time).

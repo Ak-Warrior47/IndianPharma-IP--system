@@ -78,7 +78,9 @@ eventlet worker); the database is Supabase PostgreSQL.
 - Bills show urgent first in their own box, then ascending bill number.
 - Pause gives pickers a 7 s warning (`PICK_PAUSE_GRACE`) before the timer
   stops; once stopped they may "Work on another bill" (their items on the
-  paused bill go back on it). Taking 4+ items asks "Sure?" first.
+  paused bill go back on it). No "Sure?" step: a picker can never take more
+  than the bill's items left (phone shows "Only N items left"; server refuses
+  too), and missing quantities can't exceed the items taken.
 - One phone per staff login (`Employee.session_key`): a new sign-in signs the
   old phone out. Admins are exempt.
 - No internet: picking taps queue and send when back; Done counts from the
