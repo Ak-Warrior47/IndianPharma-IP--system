@@ -9019,9 +9019,10 @@ def pick_claim():
         c = claim_items(session.get("user_id"), int(data.get("bill_id") or 0), data.get("items"))
     except (PickError, ValueError) as exc:
         return _pick_reply(False, str(exc) if isinstance(exc, PickError) else "Choose a bill.", 400)
-    mins = c.items * PICK_SECONDS_PER_ITEM / 60.0
-    return _pick_reply(True, "%d item%s taken. You have %s minutes." % (
-        c.items, "" if c.items == 1 else "s", ("%g" % round(mins, 1))))
+    secs = int(round((c.due_at - c.started_at).total_seconds())) if c.due_at and c.started_at \
+        else int(c.items * PICK_SECONDS_PER_ITEM)
+    return _pick_reply(True, "%d item%s taken. You have %d:%02d to pick %s." % (
+        c.items, "" if c.items == 1 else "s", secs // 60, secs % 60, "it" if c.items == 1 else "them"))
 
 
 @app.route("/pick/done", methods=["POST"])

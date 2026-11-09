@@ -112,6 +112,7 @@ check("2.5 A bill needs at least 1 item", code == 400)
 # ---- 3. The owner's example: several pickers share one bill -----------------
 code, j = jpost(c1, "/pick/claim", {"bill_id": BID, "items": 3})
 check("3.1 Picker 1 takes 3 items", code == 200 and j.get("ok"), str(j))
+check("3.1b The reply gives the real time to pick, as m:ss", "You have " in j.get("message", "") and "to pick them" in j.get("message", "") and "minutes" not in j.get("message", ""), j.get("message"))
 code, j = jpost(c1, "/pick/claim", {"bill_id": BID, "items": 1})
 check("3.2 One grab at a time: picker 1 must finish first", code == 400 and "Finish" in j.get("message", ""))
 jpost(c2, "/pick/claim", {"bill_id": BID, "items": 3})
@@ -661,6 +662,14 @@ check("15.9 Picking comes first, before the multitask section",
 check("15.10 The admin top bar has a Picking button", 'id="navPicking"' in cadm.get("/admin_dashboard").data.decode())
 check("15.11 On a phone the welcome banner is hidden for pickers, so the bills come first",
       "dash-hero-pick" in pd15 and ".dash-hero-pick { display: none; }" in pd15)
+check("15.12 On a phone the top bar is one swipeable row (no 4-row wrap, search hidden)",
+      ".nav-right { flex-wrap: nowrap; overflow-x: auto;" in pd15 and ".nav-right .ipk-trigger" in pd15)
+check("15.13 On a phone each bill is one compact row (name left, Pick right, progress under)",
+      'grid-template-areas:"a c" "b b"' in _pk15)
+check("15.14 The optional multitask card folds away on a phone for pickers",
+      "mt-pick" in pd15 and 'class="mt-toggle"' in pd15)
+check("15.15 The notification bell has a visible icon", '<svg' in pd15.split('id="notif-bell"')[1][:900])
+check("15.16 Phone CSS also applies when the phone is held sideways", "(max-height:500px)" in _pk15 and "(max-height: 500px)" in pd15)
 with app.app_context():
     PickBill.query.filter(PickBill.bill_no.like("SPD%")).delete(synchronize_session=False)
     db.session.commit()

@@ -117,15 +117,34 @@
 .pk-closed{padding:10px 12px;border-radius:10px;background:#e8f4ee;color:#0f4a32;font-size:14px;margin-top:12px}
 @media (min-width:700px){ .pk-modal{align-items:center} .pk-sheet{border-radius:16px} }
 @media (max-width:640px){ .pk-charts{grid-template-columns:1fr} }
-@media (max-width:640px){
+@media (max-width:640px),(max-height:500px){
   .pk-stats{grid-template-columns:repeat(5,minmax(0,1fr));gap:4px}
   .pk-stat{padding:6px 5px;text-align:center}
   .pk-stat b{font-size:16px}
   .pk-stat span{font-size:8.5px;letter-spacing:.2px}
   .pk-clock{font-size:36px}
-  .pk-bill{grid-template-columns:1fr;gap:6px}
-  .pk-add{grid-template-columns:1fr 1fr}
-  .pk-add .pk-btn{grid-column:1/-1}
+  /* One compact row per bill: name on the left, action on the right,
+     progress underneath. */
+  .pk-bill{grid-template-columns:minmax(0,1fr) auto;grid-template-areas:"a c" "b b";gap:4px 8px;padding:8px 0}
+  .pk-bill > :nth-child(1){grid-area:a;min-width:0}
+  .pk-bill > :nth-child(2){grid-area:b;min-width:0}
+  .pk-bill > :nth-child(3){grid-area:c;justify-self:end}
+  .pk-bill.urgent{padding:8px}
+  .pk-bill .no{font-size:14.5px}
+  .pk-bill .sub,.pk-sub{font-size:11.5px}
+  .pk-bill .pk-row{gap:6px;flex-wrap:nowrap}
+  .pk-bill .pk-prog{min-width:60px;height:6px}
+  .pk-in{width:52px;padding:7px 4px}
+  .pk-btn{padding:8px 12px}
+  .pk-tabs{margin-bottom:8px}
+  .pk-tabs button{padding:8px 10px;font-size:13.5px}
+  .pk-chip{padding:3px 9px;font-size:12px;gap:4px}
+  #pkPickers{gap:5px}
+  .pk-mine{padding:10px 12px}
+  .pk-add{grid-template-columns:minmax(0,1fr) 72px auto;gap:6px}
+  .pk-add label{font-size:11px}
+  .pk-pre span{padding:0 6px;font-size:13px}
+  .pk-seg button{padding:6px 12px}
 }
 </style>
 
@@ -198,7 +217,7 @@
     <button class="pk-btn" type="button" id="pkAddBtn">Add bill</button>
   </form>
   <div class="section-label pk-sec" style="margin-top:14px" data-collapse="pkPickWrap"><span>Pickers right now</span></div>
-  <div id="pkPickWrap"><div class="pk-key"><span><i style="background:#3b5bdb"></i>Free</span><span><i style="background:#e05252"></i>Picking</span><span><i style="background:#b91c1c"></i>Late</span></div>
+  <div id="pkPickWrap"><div class="pk-key"><span><i style="background:#3b5bdb"></i>Free (number = bills today)</span><span><i style="background:#e05252"></i>Picking</span><span><i style="background:#b91c1c"></i>Late</span></div>
   <div class="pk-row" id="pkPickers"><span class="pk-empty">Loading…</span></div></div>
   <div class="section-label pk-sec" style="margin-top:14px" data-collapse="pkBillsWrap"><span>Today's bills</span></div>
   <div id="pkBillsWrap">
@@ -337,8 +356,9 @@
     $("pkLate").innerHTML = late.length ? "<b>Running late (" + late.length + ")</b>" + late.map(function (r) {
       return esc(r.name) + " · " + esc(r.bill_no) + " · " + plural(r.items, "item") + " · late by " + clock(r.late_by);
     }).join("<br>") : "";
-    $("pkPickers").innerHTML = p.length ? p.map(function (r) {
-      if (r.free) return '<span class="pk-chip free">' + esc(r.name) + " · free · " + plural(r.today_bills, "bill") + " · " + r.today_points + " pts</span>";
+    var rank = function (r) { return r.late_by != null ? 0 : r.free ? 2 : 1; };
+    $("pkPickers").innerHTML = p.length ? p.slice().sort(function (a, b) { return rank(a) - rank(b); }).map(function (r) {
+      if (r.free) return '<span class="pk-chip free" title="Free · ' + plural(r.today_bills, "bill") + " · " + r.today_points + ' pts today">' + esc(r.name) + (r.today_bills ? " · " + r.today_bills : "") + "</span>";
       var lt = r.phase === "late";
       return '<span class="pk-chip ' + (lt ? "late" : "busy") + '" data-due="' + (Date.now() + r.seconds_left * 1000) + '">' + esc(r.name) + " · " + esc(r.bill_no) + " · " + plural(r.items, "item") + ' · <b class="pk-left"></b>' +
         ' <button type="button" class="pk-btn ghost sm" data-release="' + r.claim_id + '">Release</button></span>';

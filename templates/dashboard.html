@@ -208,6 +208,30 @@ button[disabled] { opacity: .45; cursor: not-allowed; transform: none; }
 @media (max-width: 640px), (max-height: 500px) {
   .dash-hero-pick { display: none; }
 }
+/* Phones (upright or sideways): the top bar is two short rows (name, then
+   one swipeable row of buttons) instead of four wrapped rows. */
+@media (max-width: 640px), (max-height: 500px) {
+  .nav { padding: 8px 12px; gap: 6px; flex-wrap: wrap; }
+  .nav-brand { font-size: 15px; gap: 8px; }
+  .nav { position: static; }
+  .nav-right { flex-wrap: nowrap; overflow-x: auto; width: 100%; gap: 6px;
+               padding: 8px 2px 2px; scrollbar-width: none; -webkit-overflow-scrolling: touch; }
+  .nav-right::-webkit-scrollbar { display: none; }
+  .nav-right { -webkit-mask-image: linear-gradient(90deg,#000 88%,transparent); mask-image: linear-gradient(90deg,#000 88%,transparent); }
+  .nav-right a, .nav-right .btn-logout { padding: 6px 11px !important; font-size: 12px !important; }
+  .nav-right > * { flex: none; }
+  .nav-right .ipk-trigger, .nav-right .nav-role1, .nav-right .nav-user { display: none; }
+  .nav-right a, .nav-right .btn-logout { white-space: nowrap; }
+  #notif-dropdown { position: fixed !important; top: 96px !important; left: 12px; right: 12px !important; width: auto !important; }
+  .main { padding-top: 12px; }
+  .mt-pick:not(.mt-open) > :not(.section-label) { display: none; }
+  .mt-pick:not(.mt-open) { padding-bottom: var(--s3); }
+}
+.mt-toggle { display: none; }
+@media (max-width: 640px), (max-height: 500px) {
+  .mt-pick .mt-toggle { display: inline-grid; place-items: center; margin-left: auto; width: 30px; height: 28px;
+    border: 1.5px solid var(--line); border-radius: 8px; background: transparent; font-weight: 800; color: var(--ink-2); cursor: pointer; }
+}
 </style>
 <link rel="manifest" href="{{ url_for('static', filename='manifest.json') }}">
 <meta name="theme-color" content="#146B4A">
@@ -221,13 +245,15 @@ button[disabled] { opacity: .45; cursor: not-allowed; transform: none; }
   </div>
   <div class="nav-right">
     <button class="ip-theme" type="button" aria-pressed="false" aria-label="Switch to dark theme"><svg class="ip-theme__sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="4"></circle><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg><svg class="ip-theme__moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg></button><button class="ipk-trigger" data-ipk-open type="button" aria-label="Open command palette"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"></circle><path d="M20 20l-3.6-3.6"></path></svg><span>Search</span><kbd class="ipk__kbd">&#8984;K</kbd></button>
-    <span class="nav-pill" style="">Role 1: {{ (primary_staff_type or staff_type)|replace('_',' ')|title }}</span>
+    <span class="nav-pill nav-role1" style="">Role 1: {{ (primary_staff_type or staff_type)|replace('_',' ')|title }}</span>
     <span class="nav-user">{{ user_name }}</span>
     <!-- In-app notification bell -->
     <span style="position:relative;display:inline-block;">
       <button type="button" id="notif-bell" title="Notifications"
-        style="position:relative;padding:7px 11px;color:var(--brand);border:1px solid var(--brand-tint-2);border-radius:10px;font-size:14px;cursor:pointer;">
-        <span id="notif-count" style="display:none;position:absolute;top:-6px;right:-6px;background:var(--bad);color:var(--surface);border-radius:999px;font-size:11px;font-weight:700;padding:1px 5px;">0</span>
+        aria-label="Notifications"
+        style="position:relative;padding:7px 11px;color:var(--brand);border:1px solid var(--brand-tint-2);border-radius:10px;font-size:14px;cursor:pointer;line-height:0;">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.9 1.9 0 0 0 3.4 0"/></svg>
+        <span id="notif-count" style="display:none;position:absolute;top:-6px;right:-6px;line-height:16px;background:var(--bad);color:var(--surface);border-radius:999px;font-size:11px;font-weight:700;padding:1px 5px;">0</span>
       </button>
       <div id="notif-dropdown" style="display:none;position:absolute;top:42px;right:0;width:290px;max-height:360px;overflow-y:auto;background:var(--surface);border:1px solid var(--line);border-radius:14px;box-shadow:0 12px 32px rgba(15,23,42,0.18);z-index:1000;">
         <div style="padding:10px 13px;font-size:11px;font-weight:800;color:var(--ink-3);text-transform:uppercase;letter-spacing:.6px;border-bottom:1px solid #eef2f7;">Notifications</div>
@@ -878,10 +904,12 @@ button[disabled] { opacity: .45; cursor: not-allowed; transform: none; }
 
   {# Multitask is available to EVERY role and can be changed every day #}
   <!-- ════ MULTITASK (ROLE 2) REPORT — fill default role above, second role here ════ -->
-  <div class="card multitask-section" style="margin-bottom:20px;border-left:4px solid var(--accent);">
+  <div class="card multitask-section{% if staff_type in ('picker','pick_assigner') %} mt-pick{% endif %}" style="margin-bottom:20px;border-left:4px solid var(--accent);">
     <div class="section-label" style="display:flex;align-items:center;gap:10px;">
       Multitask Roles — Optional
       <span style="font-size:11px;font-weight:700;padding:3px 9px;border-radius:999px;background:var(--accent-tint);color:var(--accent-ink);text-transform:uppercase;letter-spacing:.5px;">Changeable Daily</span>
+      {% if staff_type in ('picker','pick_assigner') %}<button type="button" class="mt-toggle" aria-expanded="false" aria-label="Show multitask roles"
+        onclick="var c=this.closest('.mt-pick');var o=c.classList.toggle('mt-open');this.setAttribute('aria-expanded',o);this.textContent=o?'−':'+';">+</button>{% endif %}
     </div>
     <p style="font-size:12px;color:var(--ink-3);margin:-4px 0 14px;">Your default role is <strong>{{ (primary_staff_type or staff_type)|replace('_',' ')|title }}</strong>. If you also worked other roles today, tick each and fill its numbers — you earn <strong>+10 points per extra role</strong> (up to +30). You can pick different roles each day.</p>
 
