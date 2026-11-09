@@ -205,6 +205,8 @@ button[disabled] { opacity: .45; cursor: not-allowed; transform: none; }
   .yn-btn { min-width: 72px; padding: 12px 18px; }
 }
 </style>
+<link rel="manifest" href="{{ url_for('static', filename='manifest.json') }}">
+<meta name="theme-color" content="#146B4A">
 </head>
 <body>
 
@@ -2466,5 +2468,6 @@ function pinSearch(){
 </script>
   <script src="{{ url_for('static', filename='js/palette.js') }}" defer></script>
   <script src="{{ url_for('static', filename='js/ux.js') }}" defer></script>
+<script src="{{ url_for('static', filename='js/push.js') }}" defer></script>
 </body>
 </html>

@@ -343,6 +343,8 @@ input:focus, select:focus, textarea:focus { outline: none; border-color: var(--b
 [data-theme="dark"] .lv-starting{background:#3A2C10;color:#F1CD86}
 [data-theme="dark"] .lv-not_measured{background:#2A2D33;color:#B7BDC8}
 </style>
+<link rel="manifest" href="{{ url_for('static', filename='manifest.json') }}">
+<meta name="theme-color" content="#146B4A">
 </head>
 <body>
 
@@ -1721,5 +1723,6 @@ function switchLB(tab){
   <script src="{{ url_for('static', filename='js/palette.js') }}" defer></script>
   <script src="{{ url_for('static', filename='js/ux.js') }}" defer></script>
 <script src="{{ url_for('static', filename='js/email-suggest.js') }}" defer></script>
+<script src="{{ url_for('static', filename='js/push.js') }}" defer></script>
 </body>
 </html>

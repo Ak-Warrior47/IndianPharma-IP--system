@@ -10,7 +10,7 @@ rm -f instance/pharma_final.db
 SUITES="tests_regression tests_csrf tests_ui_sweep tests_privacy tests_checklist
 tests_checklist_order tests_scoring tests_palette tests_deploy_config tests_multitask_bonus
 tests_delete_fk tests_schema_reconcile tests_checker_pending tests_multitask_report
-tests_admin_tabs tests_owner_list tests_error_log tests_levels tests_email_suggest tests_picker_v2 tests_picker_attack"
+tests_admin_tabs tests_owner_list tests_error_log tests_levels tests_email_suggest tests_picker_v2 tests_picker_attack tests_push"
 total=0; failed=0; bad=""
 for t in $SUITES; do
   out="$("$PY" "$t.py" 2>&1)"

@@ -4,6 +4,7 @@ eventlet.monkey_patch()
 import os
 import logging
 import math
+import time
 import re
 import io
 import csv
@@ -790,6 +791,24 @@ class Notification(db.Model):
     link       = db.Column(db.String(200), nullable=True)
     is_read    = db.Column(db.Boolean, default=False, index=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+
+class PushSub(db.Model):
+    """A phone or browser that asked for alerts (Web Push subscription)."""
+    __tablename__ = "push_subs"
+    id         = db.Column(db.Integer, primary_key=True)
+    emp_id     = db.Column(db.Integer, db.ForeignKey("employees.id", ondelete="CASCADE"), nullable=False, index=True)
+    endpoint   = db.Column(db.String(600), nullable=False, index=True)
+    p256dh     = db.Column(db.String(200), nullable=False)
+    auth       = db.Column(db.String(100), nullable=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+
+class AppKey(db.Model):
+    """Small server-side values kept in the database (the push key pair)."""
+    __tablename__ = "app_keys"
+    name  = db.Column(db.String(60), primary_key=True)
+    value = db.Column(db.String(400), nullable=False)
 
 
 class PickBill(db.Model):
@@ -3311,6 +3330,71 @@ def log_audit(action, target, details=""):
         db.session.rollback()
 
 
+PUSH_ASYNC = True          # tests switch this off to send inline
+
+
+def vapid_keys():
+    """(public, private) push keys: from VAPID_PUBLIC_KEY / VAPID_PRIVATE_KEY,
+    or made once and kept in the database, so nothing has to be set up."""
+    pub, priv = os.environ.get("VAPID_PUBLIC_KEY", ""), os.environ.get("VAPID_PRIVATE_KEY", "")
+    if pub and priv:
+        return pub, priv
+    a, b = db.session.get(AppKey, "vapid_public"), db.session.get(AppKey, "vapid_private")
+    if a and b:
+        return a.value, b.value
+    import webpush
+    pub, priv = webpush.new_keys()
+    db.session.add(AppKey(name="vapid_public", value=pub))
+    db.session.add(AppKey(name="vapid_private", value=priv))
+    db.session.commit()
+    return pub, priv
+
+
+def push_now(emp_id, title, body="", link=None):
+    """Send an alert to every phone/browser this employee turned alerts on
+    for. Gone subscriptions (404/410) are removed. Returns how many sent."""
+    import webpush
+    sent = 0
+    try:
+        subs = PushSub.query.filter_by(emp_id=emp_id).all()
+        if not subs:
+            return 0
+        pub, priv = vapid_keys()
+        subject = "mailto:" + (os.environ.get("ADMIN_EMAIL") or "admin@pharmaip.com")
+        data = {"title": title[:120], "body": (body or "")[:300], "link": link or "/dashboard",
+                "tag": "ip-%d" % int(time.time() * 1000)}
+        for s_ in subs:
+            try:
+                code = webpush.send({"endpoint": s_.endpoint, "keys": {"p256dh": s_.p256dh, "auth": s_.auth}},
+                                    data, pub, priv, subject)
+                if code in (404, 410):
+                    db.session.delete(s_)
+                elif 200 <= code < 300:
+                    sent += 1
+                else:
+                    logger.warning("push to %s: HTTP %s", emp_id, code)
+            except Exception as exc:
+                logger.warning("push to %s failed: %s", emp_id, exc)
+        db.session.commit()
+    except Exception as exc:
+        db.session.rollback()
+        logger.warning("push_now: %s", exc)
+    return sent
+
+
+def push_to_employee(emp_id, title, body="", link=None):
+    """Phone alert without slowing the request down: sent in the background."""
+    if not PUSH_ASYNC:
+        return push_now(emp_id, title, body, link)
+    def _job():
+        with app.app_context():
+            push_now(emp_id, title, body, link)
+    try:
+        socketio.start_background_task(_job)
+    except Exception as exc:
+        logger.warning("push background: %s", exc)
+
+
 def notify_employee(emp_id, title, body="", link=None, sms=True):
     """Create an in-app notification and optionally send an SMS (if the employee has a phone).
     Best-effort — never raises so callers don't break."""
@@ -3318,6 +3402,7 @@ def notify_employee(emp_id, title, body="", link=None, sms=True):
         n = Notification(emp_id=emp_id, title=title[:150], body=(body or "")[:400], link=link)
         db.session.add(n)
         db.session.commit()
+        push_to_employee(emp_id, title, body, link)
     except Exception as e:
         db.session.rollback()
         logger.warning(f"notify_employee in-app failed: {e}")
@@ -5627,6 +5712,7 @@ def admin_delete_user(emp_id):
             Notification.query.filter_by(emp_id=emp_id).delete(synchronize_session=False)
             PickMissing.query.filter_by(picker_id=emp_id).delete(synchronize_session=False)
             PickEvent.query.filter_by(picker_id=emp_id).delete(synchronize_session=False)
+            PushSub.query.filter_by(emp_id=emp_id).delete(synchronize_session=False)
             PickClaim.query.filter_by(picker_id=emp_id).delete(synchronize_session=False)
             PickBill.query.filter_by(created_by=emp_id).update({"created_by": None}, synchronize_session=False)
             SupervisorBill.query.filter(
@@ -8296,6 +8382,56 @@ def delivery_log_stop(stop_id):
         db.session.rollback()
         logger.error(f"delivery_log_stop: {e}")
         return jsonify({"ok": False, "error": "Server error"}), 500
+
+
+# ─── Phone alerts (Web Push) ────────────────────────────────────────────────
+@app.route("/sw.js")
+def service_worker():
+    """Served from the root so it may show alerts for the whole site."""
+    r = app.send_static_file("sw.js")
+    r.headers["Service-Worker-Allowed"] = "/"
+    r.headers["Cache-Control"] = "no-cache"
+    r.mimetype = "application/javascript"
+    return r
+
+
+@app.route("/push/key")
+@login_required
+def push_key():
+    return jsonify({"key": vapid_keys()[0]})
+
+
+@app.route("/push/subscribe", methods=["POST"])
+@login_required
+def push_subscribe():
+    d = request.get_json(silent=True) or {}
+    sub = d.get("subscription") or {}
+    endpoint = str(sub.get("endpoint") or "")[:600]
+    keys = sub.get("keys") or {}
+    if not endpoint.startswith("https://") or not keys.get("p256dh") or not keys.get("auth"):
+        return jsonify({"ok": False, "message": "That browser did not send a valid subscription."}), 400
+    emp_id = session.get("user_id")
+    PushSub.query.filter_by(endpoint=endpoint).delete()      # one owner per device
+    db.session.add(PushSub(emp_id=emp_id, endpoint=endpoint, p256dh=str(keys["p256dh"])[:200],
+                           auth=str(keys["auth"])[:100]))
+    db.session.commit()
+    return jsonify({"ok": True, "message": "Phone alerts are on."})
+
+
+@app.route("/push/unsubscribe", methods=["POST"])
+@login_required
+def push_unsubscribe():
+    d = request.get_json(silent=True) or {}
+    PushSub.query.filter_by(emp_id=session.get("user_id"), endpoint=str(d.get("endpoint") or "")).delete()
+    db.session.commit()
+    return jsonify({"ok": True, "message": "Phone alerts are off on this device."})
+
+
+@app.route("/push/test", methods=["POST"])
+@login_required
+def push_test():
+    n = push_now(session.get("user_id"), "Test alert", "Phone alerts work on this device.", "/dashboard")
+    return jsonify({"ok": n > 0, "message": "Test alert sent." if n else "No device with alerts on."})
 
 
 # ─── Bill-based picking: routes ─────────────────────────────────────────────

@@ -129,6 +129,12 @@ services:
       # and only when DATABASE_URL is empty. Keep "0" on the live service.
       - key: TRIAL_DEMO
         value: "0"
+      # Phone alerts (Web Push). Optional: if left empty the app makes its own
+      # key pair once and keeps it in the database.
+      - key: VAPID_PUBLIC_KEY
+        sync: false
+      - key: VAPID_PRIVATE_KEY
+        sync: false
 
       # ---- Privacy -------------------------------------------------------
       # Location is the most sensitive data this app holds. Points are recorded
