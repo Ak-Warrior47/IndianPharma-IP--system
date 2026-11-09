@@ -15,6 +15,12 @@
 .pk-phase{font-size:12px;font-weight:800;text-transform:uppercase;letter-spacing:.5px;color:var(--ink-2)}
 .pk-clock{font-size:42px;font-weight:800;line-height:1;font-variant-numeric:tabular-nums;color:var(--ink)}
 .pk-mine.late .pk-clock{color:var(--bad-ink)}
+.pk-mine.paused{border-color:#64748b;background:#f1f5f9}
+.pk-mine.paused .pk-clock{color:#475569}
+.pk-mine.paused .pk-bar i{background:#94a3b8}
+.pk-p{display:inline-block;background:#475569;color:#fff;font-size:10.5px;font-weight:800;padding:1px 6px;border-radius:6px;margin-left:6px;vertical-align:middle}
+.pk-bill.paused{opacity:.75}
+.pk-chip.paused{background:#eef1f5;border-color:#cbd5e1;color:#334155}
 .pk-bar{height:8px;border-radius:6px;background:var(--line);overflow:hidden;margin:8px 0}
 .pk-bar i{display:block;height:100%;background:var(--brand)}
 .pk-mine.find .pk-bar i{background:var(--warn)} .pk-mine.report .pk-bar i{background:#7c3aed} .pk-mine.late .pk-bar i{background:var(--bad)}
@@ -130,6 +136,8 @@
   .pk-bill > :nth-child(2){grid-area:b;min-width:0}
   .pk-bill > :nth-child(3){grid-area:c;justify-self:end}
   .pk-bill.urgent{padding:8px}
+  #pickApp[data-role="assigner"] #pkBills .pk-bill{grid-template-columns:1fr;grid-template-areas:"a" "b" "c"}
+  #pickApp[data-role="assigner"] #pkBills .pk-bill > :nth-child(3){justify-self:start}
   .pk-bill .no{font-size:14.5px}
   .pk-bill .sub,.pk-sub{font-size:11.5px}
   .pk-bill .pk-row{gap:6px;flex-wrap:nowrap}
@@ -172,7 +180,6 @@
         <div style="font-size:17px;font-weight:800" id="pkMineText"></div></div>
       <div class="pk-clock" id="pkClock">0:00</div>
     </div>
-    <div class="pk-sub" id="pkMineBill" style="margin-top:4px"></div>
     <div class="pk-bar"><i id="pkBar" style="width:100%"></i></div>
     <div class="pk-row" style="justify-content:space-between">
       <span id="pkLateText" class="pk-sub" style="color:var(--ink-2)"></span>
@@ -279,6 +286,7 @@
       "<li><b>Report only:</b> " + h + " s more. Picking is locked; report the items you could not find.</li>" +
       "<li><b>Late</b> after that: −1 point per minute, at most −" + s.late_cap + ". The Pick Assigner is alerted.</li>" +
       "<li><b>Item not found:</b> report it with the name and quantity. It is paid once the assigner confirms it is not available.</li>" +
+      "<li><b>Paused bill:</b> when the assigner pauses a bill, your timer stops and you lose nothing. It starts again from where it stopped when the bill is resumed.</li>" +
       "<li><b>Urgent bills</b> (U) come first. 10 bonus points per urgent bill, shared by items picked.</li>" +
       "<li><b>Waiting bills:</b> if you are free and leave a bill waiting 2 minutes, you get a warning. This will lead to point deductions.</li>" +
       "<li>Bill numbers start with " + esc(s.prefix) + " and change every 1 April. A number can be used only once.</li></ul>";
@@ -292,7 +300,7 @@
   function taken(b) {
     if (!b.taken.length) return "";
     return '<div class="pk-taken">Taken by: ' + b.taken.map(function (t) {
-      var cd = t.left != null ? ' <b class="pk-cd" data-due="' + (Date.now() + t.left * 1000) + '"></b>' : "";
+      var cd = t.left != null ? ' <b class="pk-cd" data-due="' + (Date.now() + t.left * 1000) + '"' + (b.paused ? ' data-frozen="' + t.left + '"' : "") + "></b>" : "";
       return '<span class="' + (t.state === "late" ? "late" : "") + '">' + esc(t.name) + " " + t.items + (t.state === "late" ? " (late)" : t.state === "picking" ? " (picking)" : "") + cd + "</span>";
     }).join(" · ") + "</div>";
   }
@@ -313,22 +321,18 @@
       if (had !== mine.id) { $("pkRep").hidden = true; $("pkRepRows").innerHTML = ""; }
     }
     var open = s.bills.filter(function (b) { return b.status === "open"; });
-    var urgentLeft = open.some(function (b) { return b.urgent && b.left > 0; });
+    var urgentLeft = open.some(function (b) { return b.urgent && b.left > 0 && !b.paused; });
     // While picking, show only that bill: hide the list until Done.
     var focus = !!mine;
     app.classList.toggle("pk-focus", focus);
-    if (mine) {
-      var mb = s.bills.filter(function (b) { return b.id === mine.bill_id; })[0];
-      $("pkMineBill").innerHTML = mb ? '<div class="pk-row" style="margin:2px 0">' + prog(mb) + '<span>' + mb.done + " / " + mb.items + " picked · " + mb.left + " left</span></div>" + taken(mb) : "";
-    }
     if (!open.length) { $("pkBills").innerHTML = '<div class="pk-empty">No open bills right now. You will get a notification when one is added.</div>'; }
     else {
       var keep = {};
       Array.prototype.forEach.call(document.querySelectorAll("#pkBills .pk-in"), function (i) { if (i.value) keep[i.id] = i.value; });
       var focused = document.activeElement && document.activeElement.id;
       $("pkBills").innerHTML = open.map(function (b) {
-        var can = !mine && b.left > 0 && (b.urgent || !urgentLeft);
-        return '<div class="pk-bill' + (b.urgent ? " urgent" : "") + '"><div><div class="no">' + billBtn(b) + (b.urgent ? '<span class="pk-u">URGENT</span>' : "") +
+        var can = !mine && !b.paused && b.left > 0 && (b.urgent || !urgentLeft);
+        return '<div class="pk-bill' + (b.urgent ? " urgent" : "") + (b.paused ? " paused" : "") + '"><div><div class="no">' + billBtn(b) + (b.urgent ? '<span class="pk-u">URGENT</span>' : "") + (b.paused ? '<span class="pk-p">PAUSED</span>' : "") +
           '</div><div class="sub">added ' + esc(b.added) + " · " + plural(b.items, "item") + (b.score ? '<span class="pk-score">' + b.score + " pts</span>" : "") + "</div></div>" +
           '<div><div class="pk-row">' + prog(b) + '<span class="sub">' + b.done + " / " + b.items + " picked · <b>" + b.left + " left</b></span></div>" + taken(b) + "</div>" +
           '<div class="pk-take"><input class="pk-in" type="number" min="1" max="' + b.left + '" placeholder="0" inputmode="numeric" aria-label="Items you are taking from ' + esc(b.bill_no) + '" id="take' + b.id + '"' + (can ? "" : " disabled") + ">" +
@@ -360,7 +364,7 @@
     $("pkPickers").innerHTML = p.length ? p.slice().sort(function (a, b) { return rank(a) - rank(b); }).map(function (r) {
       if (r.free) return '<span class="pk-chip free" title="Free · ' + plural(r.today_bills, "bill") + " · " + r.today_points + ' pts today">' + esc(r.name) + (r.today_bills ? " · " + r.today_bills : "") + "</span>";
       var lt = r.phase === "late";
-      return '<span class="pk-chip ' + (lt ? "late" : "busy") + '" data-due="' + (Date.now() + r.seconds_left * 1000) + '">' + esc(r.name) + " · " + esc(r.bill_no) + " · " + plural(r.items, "item") + ' · <b class="pk-left"></b>' +
+      return '<span class="pk-chip ' + (r.paused ? "paused" : lt ? "late" : "busy") + '" data-due="' + (Date.now() + r.seconds_left * 1000) + '"' + (r.paused ? ' data-frozen="' + r.seconds_left + '"' : "") + ">" + (r.paused ? "Paused · " : "") + esc(r.name) + " · " + esc(r.bill_no) + " · " + plural(r.items, "item") + ' · <b class="pk-left"></b>' +
         ' <button type="button" class="pk-btn ghost sm" data-release="' + r.claim_id + '">Release</button></span>';
     }).join("") : '<span class="pk-empty">No pickers set up yet.</span>';
     var pend = s.bills.filter(function (b) { return b.status === "open"; });
@@ -369,18 +373,22 @@
     $("pkPendN").textContent = pend.length; $("pkDoneN").textContent = fin.length;
     var shown = billView === "done" ? fin : pend;
     $("pkBills").innerHTML = shown.length ? shown.map(function (b) {
-      var st = b.status === "done" ? "Complete in " + b.minutes + " min" : b.status === "cancelled" ? "Cancelled" :
+      var st = b.status === "done" ? "Complete in " + b.minutes + " min" : b.status === "cancelled" ? "Cancelled" : b.paused ? "paused" :
         (b.missing ? b.missing + " missing · " : "") + (b.left ? b.left + " left" : b.active ? "being picked" : "waiting for you");
       var miss = b.missing_rows.length ? '<div class="pk-miss"><b>Not found:</b> ' + b.missing_rows.map(function (m) {
         return '<div class="pk-row" style="margin-top:4px">' + esc(m.item) + " ×" + m.qty + " · by " + esc(m.by) + " at " + esc(m.at) +
           ' <button type="button" class="pk-btn sm" data-miss="' + m.id + '" data-act="reassign">Reassign</button>' +
           ' <button type="button" class="pk-btn ghost sm" data-miss="' + m.id + '" data-act="unavailable">Not available</button></div>';
       }).join("") + "</div>" : "";
-      return '<div class="pk-bill' + (b.urgent ? " urgent" : "") + '"' + (b.missing ? ' style="border-left:4px solid var(--bad);padding-left:8px"' : "") + '><div><div class="no">' + billBtn(b) + (b.urgent ? '<span class="pk-u">URGENT</span>' : "") +
+      return '<div class="pk-bill' + (b.urgent ? " urgent" : "") + (b.paused ? " paused" : "") + '"' + (b.missing ? ' style="border-left:4px solid var(--bad);padding-left:8px"' : "") + '><div><div class="no">' + billBtn(b) + (b.urgent ? '<span class="pk-u">URGENT</span>' : "") + (b.paused ? '<span class="pk-p">PAUSED</span>' : "") +
         '</div><div class="sub">added ' + esc(b.added) + " · " + plural(b.items, "item") + (b.score ? '<span class="pk-score">' + b.score + " pts</span>" : "") + "</div>" +
-        (b.status === "open" ? '<div class="sub">open for <b class="pk-el" data-start="' + (Date.now() - b.elapsed * 1000) + '"></b></div>' : "") + "</div>" +
+        (b.status === "open" ? (b.paused ? '<div class="sub">paused for <b class="pk-el" data-start="' + (Date.now() - b.paused_for * 1000) + '"></b> · timers stopped</div>'
+          : '<div class="sub">open for <b class="pk-el" data-start="' + (Date.now() - b.elapsed * 1000) + '"></b></div>') : "") + "</div>" +
         '<div><div class="pk-row">' + prog(b) + '<span class="sub">' + b.done + " / " + b.items + " · " + st + "</span></div>" + taken(b) + miss + "</div>" +
-        "<div>" + (b.status === "open" ? '<div class="pk-row" style="gap:6px"><button type="button" class="pk-btn ghost sm" data-resch="' + b.id + '">Reschedule</button>' +
+        "<div>" + (b.status === "open" ? '<div class="pk-row" style="gap:6px">' +
+        (b.paused ? '<button type="button" class="pk-btn ok sm" data-resume="' + b.id + '">Resume</button>'
+                  : '<button type="button" class="pk-btn ghost sm" data-pause="' + b.id + '">Pause</button>') +
+        '<button type="button" class="pk-btn ghost sm" data-resch="' + b.id + '">Reschedule</button>' +
         '<button type="button" class="pk-btn bad sm" data-cancel="' + b.id + '">Cancel</button></div><div class="pk-resch" id="rs' + b.id + '" hidden>' +
         '<input type="date" aria-label="Date"><input type="time" aria-label="Time"><button type="button" class="pk-btn sm" data-rsave="' + b.id + '">Save</button></div>' : "") + "</div></div>";
     }).join("") : '<div class="pk-empty">' + (billView === "done" ? "No completed bills yet today." : "No pending bills. Add one above.") + "</div>";
@@ -525,6 +533,7 @@
             (g.done ? " · " + (g.points > 0 ? "+" : "") + g.points + " pts" : "") + "</div>";
         }).join("") +
         b.missing.map(function (m) { return '<div class="miss">' + esc(m.by) + " could not find <b>" + esc(m.item) + " ×" + m.qty + "</b> at " + esc(m.at) + " · " + esc(m.status) + "</div>"; }).join("") +
+        (b.pauses || []).map(function (p) { return '<div class="miss">' + (p.kind === "paused" ? "Paused" : "Resumed") + " at <b>" + esc(p.at) + "</b>" + (p.kind === "resumed" ? " · " + esc(p.detail) : "") + "</div>"; }).join("") +
         (b.completed ? '<div class="end">Completed at <b>' + esc(b.completed) + "</b> · total " + b.minutes + " min</div>" : "") + "</div>";
       $("pkModalBody").innerHTML = tl;
       $("pkModal").hidden = false; $("pkModalX").focus();
@@ -552,27 +561,29 @@
   function tick() {
     var dt = (Date.now() - mineAt) / 1000;
     Array.prototype.forEach.call(app.querySelectorAll(".pk-cd[data-due]"), function (c) {
-      var left = Math.round((+c.getAttribute("data-due") - Date.now()) / 1000), extra = (lastState && lastState.extra_seconds) || 125;
+      var left = c.hasAttribute("data-frozen") ? +c.getAttribute("data-frozen") : Math.round((+c.getAttribute("data-due") - Date.now()) / 1000), extra = (lastState && lastState.extra_seconds) || 125;
       c.textContent = left >= 0 ? clock(left) + " left" : (-left <= extra ? "extra time " + clock(extra + left) : "late " + clock(left + extra));
       c.style.color = left >= 0 ? "" : (-left <= extra ? "var(--warn-ink)" : "var(--bad-ink)");
     });
     if (role === "picker" && mine) {
+      if (mine.paused) dt = 0;              // the assigner paused this bill: the clock stands still
       var n = mine.normal_left - dt, f = mine.find_left - dt, r = mine.report_left - dt, phase, left, total;
       if (n >= 0) { phase = "normal"; left = n; total = mine.seconds_total; }
       else if (f >= 0) { phase = "find"; left = f; total = mine.find_left - mine.normal_left; }
       else if (r >= 0) { phase = "report"; left = r; total = mine.report_left - mine.find_left; }
       else { phase = "late"; left = r; total = 1; }
-      $("pkMine").className = "pk-mine" + (phase === "normal" ? "" : " " + phase);
-      $("pkPhase").textContent = {normal: "Normal time", find: "Extra time to find", report: "Report only — picking locked", late: "Late"}[phase];
+      $("pkMine").className = "pk-mine" + (phase === "normal" ? "" : " " + phase) + (mine.paused ? " paused" : "");
+      $("pkPhase").textContent = mine.paused ? "Paused by assigner — timer stopped" :
+        {normal: "Normal time", find: "Extra time to find", report: "Report only — picking locked", late: "Late"}[phase];
       $("pkClock").textContent = (phase === "late" ? "−" : "") + clock(left);
       $("pkBar").style.width = Math.max(0, Math.min(100, 100 * left / Math.max(total, 1))) + "%";
-      $("pkLateText").textContent = {normal: "Finish now for 1.5 points per item.", find: "Still time to find them: 1 point per item.",
+      $("pkLateText").textContent = mine.paused ? "Your time is safe. It starts again when the assigner resumes the bill." : {normal: "Finish now for 1.5 points per item.", find: "Still time to find them: 1 point per item.",
         report: "Picking is closed. Report the items you could not find.", late: "Late by " + clock(left) + " — points are dropping."}[phase];
       $("pkDone").disabled = phase === "report";
     }
     if (role !== "picker") {
       Array.prototype.forEach.call(document.querySelectorAll(".pk-chip[data-due]"), function (c) {
-        var left = Math.round((+c.getAttribute("data-due") - Date.now()) / 1000);
+        var left = c.hasAttribute("data-frozen") ? +c.getAttribute("data-frozen") : Math.round((+c.getAttribute("data-due") - Date.now()) / 1000);
         c.querySelector(".pk-left").textContent = left >= 0 ? clock(left) : "over by " + clock(left);
       });
       Array.prototype.forEach.call(document.querySelectorAll(".pk-el[data-start]"), function (e) {
@@ -634,6 +645,8 @@
     } else if (b.id === "pkAddBtn") { addBill();
     } else if (b.hasAttribute("data-release")) { post("/pick/claim/" + b.getAttribute("data-release") + "/release");
     } else if (b.hasAttribute("data-miss")) { post("/pick/missing/" + b.getAttribute("data-miss") + "/" + b.getAttribute("data-act"));
+    } else if (b.hasAttribute("data-pause")) { b.classList.add("saving"); b.textContent = "Pausing…"; post("/pick/bill/" + b.getAttribute("data-pause") + "/pause");
+    } else if (b.hasAttribute("data-resume")) { b.classList.add("saving"); b.textContent = "Resuming…"; post("/pick/bill/" + b.getAttribute("data-resume") + "/resume");
     } else if (b.hasAttribute("data-cancel")) {
       if (b.getAttribute("data-sure") === "1") post("/pick/bill/" + b.getAttribute("data-cancel") + "/cancel");
       else { b.setAttribute("data-sure", "1"); b.textContent = "Tap again to cancel"; }

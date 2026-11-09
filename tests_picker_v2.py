@@ -650,7 +650,7 @@ check("15.4 Bills are listed in order: urgent first, then oldest first",
       all(opn[i]["id"] < opn[i + 1]["id"] for i in range(len(opn) - 1)), str([b["id"] for b in opn][:6]))
 _pk15 = open(os.path.join(REPO, "templates", "_picking.html")).read()
 check("15.5 While picking, only that bill shows (focus mode hides the list)",
-      "#pickApp.pk-focus #pkBills{display:none}" in _pk15 and 'id="pkMineBill"' in _pk15)
+      "#pickApp.pk-focus #pkBills{display:none}" in _pk15 and 'id="pkMine"' in _pk15)
 check("15.6 The assigner splits bills into Pending and Completed", 'data-bview="pending"' in _pk15 and 'data-bview="done"' in _pk15)
 check("15.7 Taps answer at once (Starting / Saved shown before the server replies)",
       'b.textContent = "Starting' in _pk15 and 'b.textContent = "Saved"' in _pk15)
@@ -672,6 +672,109 @@ check("15.15 The notification bell has a visible icon", '<svg' in pd15.split('id
 check("15.16 Phone CSS also applies when the phone is held sideways", "(max-height:500px)" in _pk15 and "(max-height: 500px)" in pd15)
 with app.app_context():
     PickBill.query.filter(PickBill.bill_no.like("SPD%")).delete(synchronize_session=False)
+    db.session.commit()
+
+# ---- 16. Assigner pauses a bill: timers stop ---------------------------------
+def _fresh(no, items=6, urgent=False):
+    b = PickBill(bill_no=no, items=items, created_by=ASG_ID, is_urgent=urgent, status="open")
+    db.session.add(b)
+    db.session.commit()
+    return b.id
+
+with app.app_context():
+    for c in PickClaim.query.filter_by(status="active").all():
+        c.status = "cancelled"
+    for b in PickBill.query.filter_by(status="open").all():
+        b.status = "cancelled"
+    db.session.commit()
+    B16 = _fresh("PSE1001")
+code, j = jpost(c1, "/pick/bill/%d/pause" % B16)
+check("16.1 A picker cannot pause a bill", code == 403)
+code, j = jpost(ca, "/pick/bill/%d/pause" % B16)
+with app.app_context():
+    check("16.2 The assigner pauses a bill", code == 200 and db.session.get(PickBill, B16).paused_at is not None, str(j))
+code, j = jpost(ca, "/pick/bill/%d/pause" % B16)
+check("16.3 Pausing twice is refused", code == 400 and "already paused" in j.get("message", ""))
+code, j = jpost(c1, "/pick/claim", {"bill_id": B16, "items": 2})
+check("16.4 Nobody can take items from a paused bill", code == 400 and "paused" in j.get("message", ""), str(j))
+st16 = ca.get("/pick/state.json").get_json()
+r16 = [b for b in st16["bills"] if b["id"] == B16][0]
+check("16.5 The assigner's screen shows the bill as paused", r16["paused"] is True)
+_ad = ca.get("/dashboard").data.decode()
+_pk16 = open(os.path.join(REPO, "templates", "_picking.html")).read()
+check("16.6 The assigner has Pause and Resume buttons", 'data-pause="' in _pk16 and 'data-resume="' in _pk16)
+code, j = jpost(ca, "/pick/bill/%d/resume" % B16)
+with app.app_context():
+    check("16.7 Resume opens it again", code == 200 and db.session.get(PickBill, B16).paused_at is None, str(j))
+code, j = jpost(ca, "/pick/bill/%d/resume" % B16)
+check("16.8 Resuming a bill that is not paused is refused", code == 400)
+
+with app.app_context():
+    t0 = datetime.utcnow() - timedelta(seconds=20)
+    c = A.claim_items(ids["p1"], B16, 2, now=t0)           # urgent? no: 2 x normal seconds
+    cid, due0 = c.id, c.due_at
+    A.pause_bill(B16, now=t0 + timedelta(seconds=10))
+    stp = c1.get("/pick/state.json").get_json()
+    check("16.9 The picker's timer shows paused and stands still",
+          stp["mine"]["paused"] is True and abs(stp["mine"]["normal_left"] - (2 * A.PICK_SECONDS_PER_ITEM - 10)) <= 2,
+          str(stp["mine"]))
+    # an hour passes while paused: no late alert
+    A.alert_late_picks(now=t0 + timedelta(hours=1))
+    check("16.10 No late alert while the bill is paused", not db.session.get(PickClaim, cid).late_alerted)
+    A.resume_bill(B16, now=t0 + timedelta(minutes=10, seconds=10))
+    c = db.session.get(PickClaim, cid)
+    check("16.11 Resume gives the paused time back to the timer",
+          abs((c.due_at - due0).total_seconds() - 600) < 1, str(c.due_at - due0))
+    c, _ = A.finish_claim(ids["p1"], cid, now=t0 + timedelta(minutes=10, seconds=30))
+    check("16.12 Done after a long pause still counts as on time (1.5 a point per item)",
+          c.outcome == "ontime" and abs(c.points - 2 * A.PICK_ONTIME_RATE) < 0.01, "%s %s" % (c.outcome, c.points))
+
+    # finishing while paused uses the stopped clock
+    B16b = _fresh("PSE1002", 4)
+    t1 = datetime.utcnow() - timedelta(hours=2)
+    c = A.claim_items(ids["p2"], B16b, 1, now=t1)
+    A.pause_bill(B16b, now=t1 + timedelta(seconds=5))
+    c, _ = A.finish_claim(ids["p2"], c.id, now=t1 + timedelta(hours=1))
+    check("16.13 Done while still paused is on time", c.outcome == "ontime", c.outcome)
+    A.resume_bill(B16b)
+
+    # bill time leaves out the pause
+    b = db.session.get(PickBill, B16)
+    b.created_at = t0 - timedelta(minutes=1)
+    b.paused_secs = 600
+    b.completed_at = t0 + timedelta(minutes=12)
+    db.session.commit()
+    check("16.14 A bill's total time leaves out the paused time", A.bill_minutes(b) == 3.0, str(A.bill_minutes(b)))
+
+    # a paused urgent bill does not block normal bills
+    BU = _fresh("PSE1003U", 3, urgent=True)
+    BN = _fresh("PSE1004", 3)
+    A.pause_bill(BU)
+    try:
+        cc = A.claim_items(ids["p3"], BN, 1)
+        ok16 = True
+        A.release_claim(cc.id)
+    except A.PickError as exc:
+        ok16 = str(exc)
+    check("16.15 A paused urgent bill does not hold up the normal bills", ok16 is True, str(ok16))
+    A.cancel_pick_bill(BU)
+    check("16.16 Cancelling a paused bill clears the pause", db.session.get(PickBill, BU).paused_at is None)
+
+    evk = {e["kind"] for e in A.picking_state(db.session.get(Employee, ASG_ID), "pick_assigner")["events"]}
+    check("16.17 Pause / resume do not show up in the late report", not ({"paused", "resumed"} & evk), str(evk))
+    tl = A.bill_timeline(B16)
+    check("16.18 The bill's timeline lists its pauses", [p["kind"] for p in tl["pauses"]][:2] == ["paused", "resumed"], str(tl["pauses"]))
+    n16 = Notification.query.filter(Notification.emp_id == ids["p1"], Notification.title.like("%paused%")).count()
+    check("16.19 The picker on the bill is told it was paused", n16 >= 1)
+
+check("16.20 The picker's timer shows only their own items (no other staff on the bill)",
+      'id="pkMineBill"' not in _pk16)
+check("16.21 The paused picker chip has no stray '+ +' (it showed NaN)", "+ + " not in _pk16)
+with app.app_context():
+    PickClaim.query.filter(PickClaim.bill_id.in_(
+        [b.id for b in PickBill.query.filter(PickBill.bill_no.like("PSE%")).all()])).delete(synchronize_session=False)
+    PickEvent.query.filter(PickEvent.kind.in_(("paused", "resumed"))).delete(synchronize_session=False)
+    PickBill.query.filter(PickBill.bill_no.like("PSE%")).delete(synchronize_session=False)
     db.session.commit()
 
 # ---- 8. Trial copy: test accounts and banner, never on the live database -----
