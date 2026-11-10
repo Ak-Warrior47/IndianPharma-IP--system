@@ -29,7 +29,7 @@ app.config["TESTING"] = True
 PW = "longpass123"
 PASSED, FAILED = [], []
 SEC = A.PICK_SECONDS_PER_ITEM
-EMAILS = ["pk_asg@x.com", "pk_p1@x.com", "pk_p2@x.com", "pk_p3@x.com", "pk_p4@x.com", "pk_hlp@x.com"]
+EMAILS = ["pk_asg@x.com", "pk_p1@x.com", "pk_p2@x.com", "pk_p3@x.com", "pk_p4@x.com", "pk_hlp@x.com", "pk_pur@x.com"]
 
 
 def check(name, cond, extra=""):
@@ -72,6 +72,7 @@ with app.app_context():
     p1, p2, p3, p4 = (mk(e, "picker") for e in EMAILS[1:5])
     ids = {"p1": p1.id, "p2": p2.id, "p3": p3.id, "p4": p4.id}
     ASG_ID = asg.id
+    PUR_ID = mk("pk_pur@x.com", "purchaser").id
     # other pickers left in the shared test database must not be "busy" here
     others = [e.id for e in Employee.query.filter(Employee.staff_type == "picker").all() if e.id not in ids.values()]
 
@@ -297,11 +298,12 @@ with app.app_context():
     cl = db.session.get(PickClaim, c3c)
     pr = A.pick_bill_progress(db.session.get(PickBill, NB))
     check("9.11 Picked and missing are recorded on the grab", cl.picked == 2 and cl.missing == 2)
-    check("9.12 Picked items in normal time: 1.5 x 2 = 3; missing items wait for the assigner",
+    check("9.12 Picked items in normal time: 1.5 x 2 = 3; missing items wait for the purchaser",
           cl.points == 3.0, str(cl.points))
     check("9.13 The bill shows 2 missing and is not complete", pr["missing"] == 2 and db.session.get(PickBill, NB).status == "open")
-    check("9.14 The assigner is notified about the missing items",
-          Notification.query.filter_by(emp_id=ASG_ID).filter(Notification.title.like("Missing items%")).count() >= 1)
+    check("9.14 The purchaser is notified about the missing items (not the assigner)",
+          Notification.query.filter_by(emp_id=PUR_ID).filter(Notification.title.like("Missing items%")).count() >= 1
+          and Notification.query.filter_by(emp_id=ASG_ID).filter(Notification.title.like("Missing items%")).count() == 0)
 sa = ca.get("/pick/state.json").get_json()
 brow = next(b for b in sa["bills"] if b["id"] == NB)
 check("9.15 The assigner sees which items, who reported them and when",
@@ -309,22 +311,29 @@ check("9.15 The assigner sees which items, who reported them and when",
 check("9.16 'Taken by' shows each picker and their items", any(t["name"] == "PK P3" and t["items"] == 2 for t in brow["taken"]))
 check("9.17 The day's late report lists the missing items", any(e["kind"] == "missing" and "Dolo 650" in e["detail"] for e in sa["events"]))
 mids = [m["id"] for m in brow["missing_rows"]]
-code, j = jpost(c1, "/pick/missing/%d/reassign" % mids[0])
-check("9.18 Only the assigner can handle missing items", code == 403)
-jpost(ca, "/pick/missing/%d/reassign" % mids[0])
+cpur = login("pk_pur@x.com")
+op = cpur.get("/pick/missing/open.json").get_json()
+check("9.17b The purchaser's list shows both items with bill, picker and time",
+      {m["id"] for m in op["items"]} >= set(mids) and all(m["bill_no"] and m["by"] and m["at"] for m in op["items"]))
+check("9.17c A picker and the assigner cannot see the purchaser's list",
+      c1.get("/pick/missing/open.json").status_code == 403 and ca.get("/pick/missing/open.json").status_code == 403)
+code, j = jpost(c1, "/pick/missing/%d/done" % mids[0])
+code2, j2 = jpost(ca, "/pick/missing/%d/done" % mids[0])
+check("9.18 Only the purchaser (or admin) can finish missing items: picker and assigner refused", code == 403 and code2 == 403)
+code, j = jpost(cpur, "/pick/missing/%d/done" % mids[0])
 with app.app_context():
     pr = A.pick_bill_progress(db.session.get(PickBill, NB))
-    check("9.19 Reassign puts the item back on the bill for another picker", pr["left"] == 1 and pr["missing"] == 1, str(pr))
-jpost(ca, "/pick/missing/%d/unavailable" % mids[1])
-code, j = jpost(c4, "/pick/claim", {"bill_id": NB, "items": 1})
+    check("9.19 Purchaser taps Done: the item is sorted, one still missing",
+          code == 200 and A.db.session.get(A.PickMissing, mids[0]).status == "sorted" and pr["missing"] == 1, str(pr))
+code, j = jpost(cpur, "/pick/missing/%d/unavailable" % mids[1])
+check("9.19b The reply carries the fresh list", code == 200 and all(m["id"] not in mids for m in j["items"]))
 with app.app_context():
-    c4c = PickClaim.query.filter_by(picker_id=ids["p4"], status="active").first().id
-jpost(c4, "/pick/done", {"claim_id": c4c})
+    check("9.20 Once the purchaser has finished both, the bill completes", db.session.get(PickBill, NB).status == "done")
+    check("9.20b Both reported items pay the reporter (3 + 1.5 + 1.5 = 6)",
+          db.session.get(PickClaim, c3c).points == 6.0, str(db.session.get(PickClaim, c3c).points))
+code, j = jpost(cpur, "/pick/missing/%d/done" % mids[0])
+check("9.20c Finishing it twice is refused", code == 400)
 with app.app_context():
-    check("9.20 Once the reassigned item is picked and the other marked not available, the bill completes",
-          db.session.get(PickBill, NB).status == "done")
-    check("9.20b The confirmed-missing item pays its reporter (3 + 1.5 = 4.5); the reassigned one does not",
-          db.session.get(PickClaim, c3c).points == 4.5, str(db.session.get(PickClaim, c3c).points))
     # report-only window: Done without reporting is refused
     db.session.add(PickBill(bill_no="RW1", items=2))
     db.session.commit()
@@ -394,7 +403,7 @@ check("10.3b Bill details are hidden from pickers: no 'taken by', no missing row
 check("10.3c A picker cannot open a bill's timeline", c1.get("/pick/bill/%d.json" % NB).status_code == 403)
 tl = ca.get("/pick/bill/%d.json" % NB).get_json()
 check("10.4 A bill's timeline lists every grab with who, items, times and outcome",
-      tl["bill_no"].endswith("5001") and len(tl["grabs"]) >= 2 and all(g["took"] and g["picker"] for g in tl["grabs"]))
+      tl["bill_no"].endswith("5001") and len(tl["grabs"]) >= 1 and all(g["took"] and g["picker"] for g in tl["grabs"]))
 check("10.5 ...and the missing items with who reported them", any(m["item"] == "Dolo 650" for m in tl["missing"]))
 check("10.6 ...and when it was added and completed, in 12-hour time", tl["added"].endswith(("AM", "PM")) and tl["completed"])
 code, j = jpost(ca, "/pick/bill", {"bill_no": "6001", "items": 3})

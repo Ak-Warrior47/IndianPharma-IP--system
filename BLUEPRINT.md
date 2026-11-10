@@ -45,7 +45,13 @@ Staff emails are `name@pharmaip.com`. Only the admin sets someone's role.
    - Free pickers get a phone alert.
 2. **Picker takes items**: types how many items they take from a bill and
    taps Pick. Several pickers can share one bill.
-   - Urgent bills must be picked first.
+   - Urgent bills must be picked first. A pick already started is never
+     cut by an urgent bill: if the urgent bill arrived a moment before the
+     picker's screen showed it (up to 60 s), their normal pick goes ahead.
+   - A search box above the open bills: type part of a bill number to see
+     only those bills.
+   - Every bill shows its date with the time, e.g. "added 10 Nov, 2:05 PM"
+     (picker, assigner, admin, bill details).
    - You can never take more than the items still left on the bill: if a
      bill has 10 and 5 are taken, you can take at most 5. Typing more shows
      "Only 5 items left" at once and nothing starts. Missing items can't add
@@ -80,9 +86,13 @@ Staff emails are `name@pharmaip.com`. Only the admin sets someone's role.
 | Report time | 0.5 |
 | Late | −1 per started minute late, never more than −5 |
 
-- Missing items are paid only when the assigner marks them **Not available**
-  (at the rate of when they were reported). **Reassign** puts them back on
-  the bill for someone else.
+- **Item not found**: the picker writes the item and quantity and taps
+  Done; their part is finished. The **Purchaser** gets a phone alert and a
+  "Missing items to sort" box on their dashboard (the admin sees it on the
+  Today tab too). Only the purchaser (or admin) finishes it: **Done** (sorted)
+  or **Not available**. Either way the picker is paid for it at the rate of
+  when they reported it, and the bill completes. The assigner sees "with
+  purchaser" and has no buttons for it.
 - Urgent bill bonus: 10 points per urgent bill, shared by items picked.
 - After a bill is added, free pickers have **5 minutes** to take it (they may
   finish other work first). A free picker who leaves it waiting longer gets a warning
@@ -180,7 +190,9 @@ month (calendar month). Targets only go up.
 
 - Works on small phones, phones held sideways, tablets and big screens.
 - **One phone per login** (staff): signing in on another phone signs the old
-  one out. Admins can stay signed in on several devices.
+  one out. A **Pick Assigner** login can be open on **3 phones** at once; a
+  4th sign-in signs out the oldest. Admins can stay signed in on several
+  devices.
 - **Alerts**: while the app is open the phone vibrates and beeps for new
   bills, pauses, late and missing items. A "Phone alerts: off — Turn on"
   button turns on alerts that arrive even when the app is closed.

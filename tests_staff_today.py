@@ -10,6 +10,7 @@ extra / report / late N min / picking now) and points.
 Run:  python3.13 tests_staff_today.py
 """
 import os
+import re
 import sys
 from datetime import date, datetime, timedelta
 
@@ -291,6 +292,102 @@ check("9.8 The assigner's search also looks at every date", 'data-bill-search="p
 _bf = open(os.path.join(REPO, "static", "js", "billflow.js")).read()
 check("9.9 Search results open the bill's full detail", "/pick/bills/find.json" in _bf and 'data-bill-flow="\' + b.id' in _bf)
 check("9.10 Free pickers get 5 minutes after a bill is added before waiting counts", A.PICK_IDLE_SECONDS == 300)
+
+# ---- 10. Missing items go to the purchaser ----------------------------------
+with app.app_context():
+    pur = mk("st_pur@x.com", "purchaser", "ST Pur")
+    PUR = pur.id
+    A.Notification.query.filter_by(emp_id=PUR).delete()
+    db.session.commit()
+    mb = A.add_pick_bill("8501", 3, ASG)
+    mc = A.claim_items(RIA, mb.id, 3, now=datetime.utcnow() - timedelta(seconds=40))
+    A.finish_claim(RIA, mc.id, picked=2, missing=[("Volini gel", 1)])
+    MB = mb.id
+    check("10.1 Picker's part ends at Done; the bill waits for the purchaser",
+          db.session.get(PickBill, MB).status == "open" and A.pick_bill_progress(db.session.get(PickBill, MB))["missing"] == 1)
+    n = A.Notification.query.filter_by(emp_id=PUR).filter(A.Notification.title.like("Missing items%")).first()
+    check("10.2 The purchaser is alerted, with the item named", n is not None and "Volini gel" in (n.body or ""))
+c_pur = login("st_pur@x.com")
+dash = c_pur.get("/dashboard").get_data(as_text=True)
+check("10.3 The purchaser's dashboard has the 'Missing items to sort' box", 'id="purMissing"' in dash)
+check("10.4 Staff who are not purchasers do not get the box", 'id="purMissing"' not in c_ria.get("/dashboard").get_data(as_text=True))
+adm = c_adm.get("/admin_dashboard").get_data(as_text=True)
+check("10.5 The admin sees the box on the Today tab", re.search(r'id="purMissing" data-pane="today"', adm) is not None)
+asg_page = c_asg2.get("/dashboard").get_data(as_text=True)
+check("10.6 The assigner has no Reassign / Not available buttons, just 'with purchaser'",
+      'data-act="reassign"' not in asg_page and "with purchaser" in asg_page)
+mid = [m for m in c_pur.get("/pick/missing/open.json").get_json()["items"] if m["bill_id"] == MB][0]["id"]
+r = c_pur.post("/pick/missing/%d/done" % mid, json={}, headers={"X-Requested-With": "fetch"})
+with app.app_context():
+    check("10.7 Purchaser taps Done: item sorted, bill complete, picker paid",
+          r.status_code == 200 and db.session.get(PickBill, MB).status == "done"
+          and db.session.get(PickClaim, mc.id).points == round(3 * A.PICK_ONTIME_RATE, 1), str(db.session.get(PickClaim, mc.id).points))
+with app.app_context():
+    check("10.8 Purchasers are on the alert list",
+          PUR in [e.id for e in A._purchasers()])
+
+# ---- 11. An urgent bill never cuts a pick already started ---------------------
+with app.app_context():
+    PickClaim.query.filter_by(status="active").update({"status": "cancelled"})
+    PickBill.query.filter_by(status="open").update({"status": "cancelled"})
+    db.session.commit()
+    nb = A.add_pick_bill("8601", 6, ASG).id
+    a1 = A.claim_items(OM, nb, 2)                       # Om is picking a normal bill
+    seen_before = int((datetime.utcnow() - datetime(1970, 1, 1)).total_seconds() * 1000) - 2000
+    ub = A.add_pick_bill("8602U", 2, ASG)
+    UB = ub.id
+    check("11.1 Adding an urgent bill leaves a running normal pick alone",
+          db.session.get(PickClaim, a1.id).status == "active")
+    # Ria tapped Pick on the normal bill from a screen that had not shown the urgent bill yet
+    r1 = A.claim_items(RIA, nb, 2, seen_ver=seen_before)
+    check("11.2 A pick tapped before the urgent bill reached the screen goes ahead (not cut)", r1.status == "active")
+    A.finish_claim(RIA, r1.id)
+    try:
+        A.claim_items(RIA, nb, 1, seen_ver=int((datetime.utcnow() - datetime(1970, 1, 1)).total_seconds() * 1000) + 1000)
+        ok_ = False
+    except A.PickError as e:
+        ok_ = "Urgent" in str(e)
+    check("11.3 Once the picker has seen the urgent bill, it still comes first", ok_)
+    ub.created_at = datetime.utcnow() - timedelta(seconds=A.PICK_URGENT_UNSEEN + 5)
+    db.session.commit()
+    try:
+        A.claim_items(RIA, nb, 1, seen_ver=seen_before - 600000)
+        ok_ = False
+    except A.PickError:
+        ok_ = True
+    check("11.4 A very old screen cannot skip an urgent bill (only 60 s of grace)", ok_)
+    u1 = A.claim_items(RIA, UB, 2)                      # someone picks the urgent bill
+    check("11.5 Someone picking the urgent bill does not cut other pickers' normal picks",
+          db.session.get(PickClaim, a1.id).status == "active" and u1.status == "active")
+    A.finish_claim(RIA, u1.id)
+    A.finish_claim(OM, a1.id)
+    check("11.6 The normal pick finishes with its points", db.session.get(PickClaim, a1.id).status == "done"
+          and db.session.get(PickClaim, a1.id).points > 0)
+_pkt = open(os.path.join(REPO, "templates", "_picking.html")).read()
+check("11.7 The phone sends the screen version with Pick, and ignores refreshes older than the last tap",
+      "seen_ver: (lastState && lastState.ver)" in _pkt and "asked < lastAct" in _pkt)
+
+# ---- 12. Pick Assigner: up to 3 phones at once --------------------------------
+phones = [login("st_asg@x.com") for _ in range(4)]
+codes = [ph.get("/pick/state.json").status_code for ph in phones]
+check("12.1 Three assigner phones stay signed in; the 4th sign-in signs out the oldest",
+      codes == [401, 200, 200, 200], str(codes))
+check("12.2 The signed-out phone is told why", "other phones" in (phones[0].get("/pick/state.json").get_json() or {}).get("message", "")
+      or phones[0].get("/pick/state.json").status_code in (302, 401))
+p1, p2 = login("st_om@x.com"), login("st_om@x.com")
+check("12.3 Other staff still: one phone at a time", p1.get("/pick/state.json").status_code == 401
+      and p2.get("/pick/state.json").status_code == 200)
+
+# ---- 13. Dates on bills, search for pickers ------------------------------------
+st = phones[3].get("/pick/state.json").get_json()
+bl = [b for b in st["bills"] if b["bill_no"].endswith("8601")]
+check("13.1 Bills show their date with the time", bl and re.match(r"^\d{2} \w{3}, \d{1,2}:\d{2} [AP]M$", bl[0]["added"]), bl and bl[0]["added"])
+with app.app_context():
+    tl = A.bill_timeline(bl[0]["id"])
+    check("13.2 A bill's detail shows the date too", re.match(r"^\d{2} \w{3}, ", tl["added"]) is not None, tl["added"])
+pp = p2.get("/dashboard").get_data(as_text=True)
+check("13.3 Pickers have a search box for open bills", 'id="pkFindP"' in pp)
+check("13.4 ...that only filters their open bills (no bill details for staff)", 'data-bill-search' not in pp.split('id="pkFindP"')[1][:200])
 
 print("\n" + "=" * 62)
 print("PASSED %d    FAILED %d" % (len(PASSED), len(FAILED)))

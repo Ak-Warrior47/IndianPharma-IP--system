@@ -1,0 +1,63 @@
+{# Missing items from picking, for the purchaser (and admin). The picker only
+   reports them and taps Done; the purchaser sorts each item and finishes it.
+   Data: /pick/missing/open.json; actions: POST /pick/missing/<id>/done|unavailable. #}
+<style>
+.pm-box{border:1px solid var(--line);border-left:4px solid var(--bad,#b91c1c);border-radius:14px;background:var(--surface,#fff);padding:14px 16px;margin:0 0 16px}
+.pm-box h2{font-size:16px;margin:0 0 4px;display:flex;align-items:center;gap:8px}
+.pm-n{background:var(--bad,#b91c1c);color:#fff;border-radius:999px;font-size:12px;padding:1px 9px}
+.pm-n[hidden]{display:none}
+.pm-sub{font-size:13px;color:var(--ink-3);margin:0 0 10px}
+.pm-row{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:8px 12px;border-top:1px solid var(--line);padding:10px 0}
+.pm-row:first-child{border-top:0}
+.pm-item{font-weight:700;font-size:15.5px}
+.pm-meta{font-size:12.5px;color:var(--ink-3)}
+.pm-u{background:#b91c1c;color:#fff;font-size:10.5px;font-weight:800;padding:1px 6px;border-radius:6px;margin-left:6px}
+.pm-act{display:flex;gap:6px}
+.pm-act button{min-height:40px;border-radius:10px;padding:8px 14px;font:700 14px system-ui,sans-serif;cursor:pointer;border:1.5px solid var(--line);background:transparent;color:var(--ink)}
+.pm-act button.ok{background:var(--brand,#1e40af);border-color:var(--brand,#1e40af);color:#fff}
+.pm-act button:disabled{opacity:.5}
+.pm-empty{color:var(--ink-3);padding:4px 0}
+.pm-msg{font-size:13px;color:var(--ok-ink,#0f5132);min-height:1em}
+</style>
+<section class="pm-box" id="purMissing"{% if pm_pane %} data-pane="{{ pm_pane }}" data-ord="0"{% endif %}>
+  <h2>Missing items to sort <span class="pm-n" id="pmN" hidden>0</span></h2>
+  <p class="pm-sub">Pickers could not find these. Sort each one, then tap <b>Done</b> (or <b>Not available</b>). Only the purchaser finishes them.</p>
+  <div class="pm-msg" id="pmMsg" role="status"></div>
+  <div id="pmList"><div class="pm-empty">Loading…</div></div>
+</section>
+<script>
+(function () {
+  var list = document.getElementById("pmList"), cnt = document.getElementById("pmN"), msg = document.getElementById("pmMsg");
+  if (!list) return;
+  function esc(s) { return String(s == null ? "" : s).replace(/[&<>"]/g, function (c) { return {"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;"}[c]; }); }
+  function draw(items) {
+    cnt.hidden = !items.length; cnt.textContent = items.length;
+    list.innerHTML = items.length ? items.map(function (m) {
+      return '<div class="pm-row" data-id="' + m.id + '"><div><div class="pm-item">' + esc(m.item) + " ×" + m.qty + "</div>" +
+        '<div class="pm-meta">Bill <b>' + esc(m.bill_no) + "</b>" + (m.urgent ? '<span class="pm-u">URGENT</span>' : "") +
+        " · reported by " + esc(m.by) + " · " + esc(m.day) + ", " + esc(m.at) + "</div></div>" +
+        '<div class="pm-act"><button type="button" class="ok" data-pm="done">Done</button>' +
+        '<button type="button" data-pm="unavailable">Not available</button></div></div>';
+    }).join("") : '<div class="pm-empty">Nothing missing. Well done.</div>';
+  }
+  function load() {
+    if (document.hidden) return;
+    fetch("/pick/missing/open.json", {credentials: "same-origin"}).then(function (r) { return r.json(); })
+      .then(function (d) { if (d && d.items) draw(d.items); }).catch(function () {});
+  }
+  list.addEventListener("click", function (e) {
+    var b = e.target.closest("[data-pm]"); if (!b) return;
+    var row = b.closest(".pm-row"), id = row.getAttribute("data-id");
+    row.querySelectorAll("button").forEach(function (x) { x.disabled = true; });
+    var tok = document.querySelector('meta[name="csrf-token"]');
+    fetch("/pick/missing/" + id + "/" + b.getAttribute("data-pm"), {method: "POST", credentials: "same-origin",
+      headers: {"X-Requested-With": "fetch", "Content-Type": "application/json", "X-CSRFToken": tok ? tok.content : ""}, body: "{}"})
+      .then(function (r) { return r.json(); }).then(function (d) {
+        msg.textContent = d.message || ""; msg.style.color = d.ok ? "" : "var(--bad-ink,#991b1b)";
+        if (d.items) draw(d.items); else load();
+      }).catch(function () { msg.textContent = "No connection. Try again."; row.querySelectorAll("button").forEach(function (x) { x.disabled = false; }); });
+  });
+  load(); setInterval(load, 20000);
+  document.addEventListener("visibilitychange", load);
+})();
+</script>

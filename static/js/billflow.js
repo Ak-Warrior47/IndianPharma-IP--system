@@ -80,7 +80,7 @@
         (g.done ? " · " + (g.points > 0 ? "+" : "") + g.points + " pts" : "") + "</div>";
     }).join("") + b.missing.map(function (m) {
       return '<div class="miss">' + esc(m.by) + " could not find <b>" + esc(m.item) + " ×" + m.qty + "</b> at " + esc(m.at) + " · " +
-        ({open: "waiting for the assigner", reassigned: "reassigned", unavailable: "not available"}[m.status] || esc(m.status)) + "</div>";
+        ({open: "waiting for the purchaser", sorted: "done by purchaser", reassigned: "reassigned", unavailable: "not available"}[m.status] || esc(m.status)) + "</div>";
     }).join("") + (b.completed ? '<div class="end">Completed at <b>' + esc(b.completed) + "</b> · total " + b.minutes + " min</div>" : "") + "</div>";
     return sum + chart + list;
   }

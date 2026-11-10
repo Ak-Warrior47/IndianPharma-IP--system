@@ -72,7 +72,10 @@ eventlet worker); the database is Supabase PostgreSQL.
   stored in `app_keys`); defaults 35 s normal, 30 s urgent.
 - Points per item: normal time 1.5, extra time 1, report time 0.5 (still
   allowed), late −1 per started minute, capped at −5. Missing items pay only
-  when the assigner marks them Not available. Urgent pool 10 points.
+  when the purchaser finishes them. Urgent pool 10 points.
+- Missing items go to the PURCHASER (`_purchasers`, `_pur_missing.html`,
+  `/pick/missing/open.json`): the picker only reports and taps Done; only the
+  purchaser or admin finishes them (Done = `sorted`, or Not available).
 - The assigner can Pause / Resume a bill (timers stop, time given back) and
   Pause all / Resume all / Close all. Close today fixes the checker day total.
 - Bills show urgent first in their own box, then ascending bill number.
@@ -96,7 +99,14 @@ eventlet worker); the database is Supabase PostgreSQL.
 - Free pickers get 5 minutes after a bill is added before waiting counts
   (`PICK_IDLE_SECONDS`). No pause time is shown anywhere.
 - One phone per staff login (`Employee.session_key`): a new sign-in signs the
-  old phone out. Admins are exempt.
+  old phone out. Pick Assigner: up to 3 phones (`session_keys`,
+  `ASSIGNER_DEVICES`); a 4th signs out the oldest. Admins are exempt.
+- An urgent bill never cuts a pick already started: Pick sends `seen_ver`
+  (the screen's version); an urgent bill newer than that, and under 60 s old
+  (`PICK_URGENT_UNSEEN`), does not block it. The phone ignores refreshes
+  asked before its last action's reply (`lastAct`).
+- Bills show date and time everywhere (`ist_dt`: "10 Nov, 2:05 PM").
+  Pickers have a search box (`#pkFindP`) that only filters their open bills.
 - No internet: picking taps queue and send when back; Done counts from the
   tap (at most 2 minutes back). Admin and assigner can pick via `/pick/me`.
 - While picking, the picker sees only that bill, full screen: light green

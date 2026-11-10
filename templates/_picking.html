@@ -302,6 +302,7 @@ body.pk-full .pk-msg.on{position:sticky;top:0;z-index:2}
     </div>
   </div>
   <div class="section-label pk-sec" style="margin-top:4px" data-collapse="pkBills"><span>Open bills</span></div>
+  <div class="pk-find"><input type="search" id="pkFindP" placeholder="Search bill number" inputmode="numeric" aria-label="Search open bills by number" autocomplete="off"><span id="pkFindPN" class="pk-sub"></span></div>
   <div id="pkBills"><div class="pk-empty">Loading bills…</div></div>
   </section>
   <section data-panel="board" hidden><div id="pkBoard"></div></section>
@@ -409,7 +410,9 @@ body.pk-full .pk-msg.on{position:sticky;top:0;z-index:2}
         });
       }, function () { clearTimeout(timer); return { ok: false, offline: true }; });
   }
+  var lastAct = 0;   // when an action's reply last redrew the screen
   function landed(j) {
+    lastAct = Date.now();
     say(j.message || (j.ok ? "Done." : "Could not do that."), j.ok);
     if (j.state && j.state.bills) { lastState = j.state; lastAt = Date.now(); fullAt = Date.now(); draw(j.state); } else { load(); }
   }
@@ -547,7 +550,7 @@ body.pk-full .pk-msg.on{position:sticky;top:0;z-index:2}
       "<li><b>Extra time to find:</b> " + h + " s more. Done now: <b>1 point per item</b>, no cut.</li>" +
       "<li><b>Report time:</b> " + h + " s more. You can still press Done or report items you could not find, but it is worth less: <b>0.5 point per item</b>.</li>" +
       "<li><b>Late</b> after that: −1 point per minute, at most −" + s.late_cap + ". The Pick Assigner is alerted.</li>" +
-      "<li><b>Item not found:</b> report it with the name and quantity. It is paid once the assigner confirms it is not available.</li>" +
+      "<li><b>Item not found:</b> report it with the name and quantity, then tap Done: your part is finished. The purchaser sorts it; you are paid for it once the purchaser finishes it.</li>" +
       "<li><b>Paused bill:</b> when the assigner pauses a bill, your timer stops and you lose nothing. It starts again from where it stopped when the bill is resumed.</li>" +
       "<li><b>Urgent bills</b> (U) come first. 10 bonus points per urgent bill, shared by items picked.</li>" +
       "<li><b>Waiting bills:</b> after a bill is added you have 5 minutes to take it; if you are free and leave it waiting longer, you get a warning. This will lead to point deductions.</li>" +
@@ -591,8 +594,13 @@ body.pk-full .pk-msg.on{position:sticky;top:0;z-index:2}
     // Bills with nothing left to take (others are finishing them) drop off the list.
     var allOpen = s.bills.filter(function (b) { return b.status === "open"; }).sort(byNo);
     var open = allOpen.filter(function (b) { return b.left > 0; });
-    var finishing = allOpen.length - open.length;
-    var urgentLeft = open.some(function (b) { return b.urgent && b.left > 0 && !b.paused; });
+    // Search: only open bills whose number contains what is typed.
+    var qp = (($("pkFindP") || {}).value || "").replace(/\s+/g, "").toUpperCase();
+    var openAll = open;
+    if (qp) open = open.filter(function (b) { return String(b.bill_no).toUpperCase().indexOf(qp) >= 0; });
+    if ($("pkFindPN")) $("pkFindPN").textContent = qp ? plural(open.length, "bill") + " match" : "";
+    var finishing = allOpen.length - openAll.length;
+    var urgentLeft = openAll.some(function (b) { return b.urgent && b.left > 0 && !b.paused; });   // all, not just matches
     // While picking, show only that bill: hide the list until Done.
     if (!mine || !mine.paused) browseOther = false;
     var focus = !!mine && !browseOther;
@@ -600,7 +608,8 @@ body.pk-full .pk-msg.on{position:sticky;top:0;z-index:2}
     if (focus && !document.body.classList.contains("pk-full")) { showTab("live"); window.scrollTo(0, 0); }
     document.body.classList.toggle("pk-full", focus);
     var finNote = finishing ? '<div class="pk-note">' + plural(finishing, "bill") + " fully taken, being finished by others.</div>" : "";
-    if (!open.length) { $("pkBills").innerHTML = '<div class="pk-empty">No open bills right now. You will get a notification when one is added.</div>' + finNote; }
+    if (!open.length) { $("pkBills").innerHTML = (qp ? '<div class="pk-empty">No open bill with ' + esc(qp) + " in its number.</div>"
+      : '<div class="pk-empty">No open bills right now. You will get a notification when one is added.</div>') + finNote; }
     else {
       var keep = {};
       Array.prototype.forEach.call(document.querySelectorAll("#pkBills .pk-in"), function (i) { if (i.value) keep[i.id] = i.value; });
@@ -662,10 +671,9 @@ body.pk-full .pk-msg.on{position:sticky;top:0;z-index:2}
     function asgRow(b) {
       var st = b.status === "done" ? "Complete in " + b.minutes + " min" : b.status === "cancelled" ? "Cancelled" : b.paused ? "paused" :
         (b.missing ? b.missing + " missing · " : "") + (b.left ? b.left + " left" : b.active ? "being picked" : "waiting for you");
-      var miss = b.missing_rows.length ? '<div class="pk-miss"><b>Not found:</b> ' + b.missing_rows.map(function (m) {
+      var miss = b.missing_rows.length ? '<div class="pk-miss"><b>Not found (sent to purchaser):</b> ' + b.missing_rows.map(function (m) {
         return '<div class="pk-row" style="margin-top:4px">' + esc(m.item) + " ×" + m.qty + " · by " + esc(m.by) + " at " + esc(m.at) +
-          ' <button type="button" class="pk-btn sm" data-miss="' + m.id + '" data-act="reassign">Reassign</button>' +
-          ' <button type="button" class="pk-btn ghost sm" data-miss="' + m.id + '" data-act="unavailable">Not available</button></div>';
+          ' <span class="pk-sub" style="font-weight:700">· with purchaser</span></div>';
       }).join("") + "</div>" : "";
       return '<div class="pk-bill' + (b.urgent ? " urgent" : "") + (b.paused ? " paused" : "") + '"' + (b.missing ? ' style="border-left:4px solid var(--bad);padding-left:8px"' : "") + '><div><div class="no">' + billBtn(b) + (b.urgent ? '<span class="pk-u">URGENT</span>' : "") + (b.paused ? '<span class="pk-p">PAUSED</span>' : "") +
         '</div><div class="sub">added ' + esc(b.added) + " · " + plural(b.items, "item") + (b.score ? '<span class="pk-score">' + b.score + " pts</span>" : "") + "</div>" +
@@ -870,6 +878,7 @@ body.pk-full .pk-msg.on{position:sticky;top:0;z-index:2}
     // Ask "anything new since version N?"; a full copy at least once a minute.
     var same = lastState && lastState.ver && Date.now() - fullAt < 60000;
     loading = true;
+    var asked = Date.now();
     fetch("/pick/state.json?" + (asPicker ? "as=picker&" : "") + (same ? "v=" + lastState.ver : ""), { credentials: "same-origin" })
       .then(function (r) {
         if (r.status === 401) { r.json().then(function (j) { if (j.logged_out) { alert(j.message); location.href = "/login"; } }); throw new Error("out"); }
@@ -877,7 +886,7 @@ body.pk-full .pk-msg.on{position:sticky;top:0;z-index:2}
       }).then(function (s) {
         loading = false;
         if (outbox.length) flush();
-        if (!s || inFlight) return;
+        if (!s || inFlight || asked < lastAct) return;   // older than the last action: ignore
         checkBuild(s);
         if (s.same) return;                  // nothing changed: timers keep running here
         if (!s.bills) return;
@@ -975,7 +984,9 @@ body.pk-full .pk-msg.on{position:sticky;top:0;z-index:2}
         $("take" + id).focus(); return;
       }
       b.disabled = true; b.classList.add("saving"); b.textContent = "Starting…";
-      post("/pick/claim", { bill_id: +id, items: v }, function (c) {
+      // seen_ver: the version of the screen the picker tapped on, so an urgent
+      // bill they had not seen yet does not cut their pick.
+      post("/pick/claim", { bill_id: +id, items: v, seen_ver: (lastState && lastState.ver) || 0 }, function (c) {
         var bl = billIn(c, id); if (!bl) return;
         var per = bl.urgent ? c.urgent_seconds : c.seconds_per_item, half = Math.round(c.extra_seconds / 2), n = v * per;
         bl.active += v; bl.left = Math.max(0, bl.left - v);
@@ -1063,6 +1074,7 @@ body.pk-full .pk-msg.on{position:sticky;top:0;z-index:2}
   }
   app.addEventListener("input", function (e) {
     if (e.target.id === "pkFind" && lastState) renderAssigner(aged(lastState));
+    if (e.target.id === "pkFindP" && lastState) renderPicker(aged(lastState));
     // typing more than is left on the bill: red box and the reason, right away
     if (e.target.id && e.target.id.indexOf("take") === 0 && lastState) {
       var bl = billIn(lastState, e.target.id.slice(4)), v = +e.target.value || 0, over = bl && v > bl.left;

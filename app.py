@@ -219,7 +219,17 @@ def csrf_exempt(view):
     return view
 
 
-_SESSION_KEYS = {}   # emp id -> (session key, when read); one worker, so a login here is seen at once
+_SESSION_KEYS = {}   # emp id -> (allowed keys, when read); one worker, so a login here is seen at once
+ASSIGNER_DEVICES = 3  # a Pick Assigner login may be open on this many phones; a 4th signs out the oldest
+
+
+def _allowed_keys(emp):
+    """The session keys that may use this account right now (empty: no limit)."""
+    if not emp:
+        return ()
+    if emp.staff_type == "pick_assigner":
+        return tuple((emp.session_keys or "").split())
+    return (emp.session_key,) if emp.session_key else ()
 
 
 @app.before_request
@@ -232,14 +242,15 @@ def _one_phone():
         cached = _SESSION_KEYS.get(uid)
         if not cached or time.time() - cached[1] > 20:
             emp = db.session.get(Employee, uid)
-            cached = ((emp.session_key if emp else None), time.time())
+            cached = (_allowed_keys(emp), time.time())
             _SESSION_KEYS[uid] = cached
-        key = cached[0]
+        keys = cached[0]
     except Exception:
         return None
-    if key and session.get("sk") != key:
+    if keys and session.get("sk") not in keys:
         session.clear()
-        msg = "You were signed out because your account signed in on another phone."
+        msg = ("You were signed out because your account signed in on another phone." if len(keys) < 2
+               else "You were signed out: this account is already open on %d other phones." % len(keys))
         if request.is_json or request.headers.get("X-Requested-With") == "fetch" or request.path.endswith(".json"):
             return jsonify({"ok": False, "logged_out": True, "message": msg}), 401
         flash(msg, "warning")
@@ -311,6 +322,7 @@ class Employee(db.Model):
     admin_adjustment_note = db.Column(db.String(200), default="")  # Reason/notes
     last_seen_at  = db.Column(db.DateTime, nullable=True)   # last time on the picking screen
     session_key   = db.Column(db.String(32), nullable=True)  # the one phone this account is signed in on
+    session_keys  = db.Column(db.String(80), nullable=True)  # Pick Assigner: up to 3 phones at once (space-separated)
     custom_hourly_target = db.Column(db.Float, nullable=True)  # Override default role target (Phase 1 auto-raise)
     phone         = db.Column(db.String(20), nullable=True)   # Feature 15: phone for OTP reset
     secondary_staff_type = db.Column(db.String(20), nullable=True)  # optional 2nd role for multitasking (kept for compat)
@@ -918,7 +930,7 @@ class PickMissing(db.Model):
     item_name   = db.Column(db.String(120), nullable=False)
     qty         = db.Column(db.Integer, default=1)
     reported_at = db.Column(db.DateTime, default=datetime.utcnow)
-    status      = db.Column(db.String(12), default="open", index=True)  # open / reassigned / unavailable
+    status      = db.Column(db.String(12), default="open", index=True)  # open / sorted (by purchaser) / unavailable / reassigned
     handled_at  = db.Column(db.DateTime, nullable=True)
 
 
@@ -2043,6 +2055,14 @@ def ist12(dt):
     return (dt + IST).strftime("%I:%M %p").lstrip("0")
 
 
+def ist_dt(dt):
+    """A UTC time as Indian date and time, e.g. 10 Nov, 2:05 PM (bills show their date everywhere)."""
+    if not dt:
+        return ""
+    t = dt + IST
+    return "%s, %s" % (t.strftime("%d %b"), t.strftime("%I:%M %p").lstrip("0"))
+
+
 @app.template_filter("t12")
 def _t12_filter(dt):
     """Jinja: a UTC time as Indian 12-hour time, e.g. 2:05 PM."""
@@ -2172,7 +2192,7 @@ def pick_bill_progress(bill, claims=None, miss=None):
     done = sum((c.picked if c.picked is not None else c.items) for c in claims if c.status == "done")
     active = sum(c.items for c in claims if c.status == "active")
     m_open = sum(m.qty for m in miss if m.status == "open")
-    m_gone = sum(m.qty for m in miss if m.status == "unavailable")
+    m_gone = sum(m.qty for m in miss if m.status in ("unavailable", "sorted"))   # finished by the purchaser
     by = {}
     for c in claims:
         r = by.setdefault(c.picker_id, {"items": 0, "active": 0, "late": False})
@@ -2265,6 +2285,24 @@ def _assigners():
     return Employee.query.filter(Employee.staff_type == "pick_assigner").all()
 
 
+def _purchasers():
+    """Who sorts missing items: purchasers, and anyone whose extra role today is purchaser."""
+    ids = {m.emp_id for m in MultitaskEntry.query.filter_by(entry_date=date.today(), secondary_type="purchaser").all()}
+    return [e for e in Employee.query.filter(db.or_(Employee.staff_type == "purchaser", Employee.id.in_(ids or {0}))).all()
+            if not e.is_admin]
+
+
+def open_missing_items():
+    """Missing items waiting for the purchaser, oldest first (two queries)."""
+    rows = PickMissing.query.filter_by(status="open").order_by(PickMissing.reported_at).all()
+    bills = {b.id: b for b in PickBill.query.filter(PickBill.id.in_({m.bill_id for m in rows})).all()} if rows else {}
+    names = {e.id: e.name for e in Employee.query.filter(Employee.id.in_({m.picker_id for m in rows if m.picker_id})).all()} if rows else {}
+    return [{"id": m.id, "bill_no": bills[m.bill_id].bill_no if m.bill_id in bills else "", "bill_id": m.bill_id,
+             "urgent": bool(m.bill_id in bills and bills[m.bill_id].is_urgent), "item": m.item_name, "qty": m.qty,
+             "by": names.get(m.picker_id, ""), "at": ist12(m.reported_at),
+             "day": (m.reported_at + IST).strftime("%d %b") if m.reported_at else ""} for m in rows]
+
+
 PICK_VER = [int(time.time() * 1000)]   # goes up whenever picking data changes
 # This running copy of the app. A new deploy restarts it with a new value;
 # open phones see the change and reload, so nobody keeps an old screen.
@@ -2355,9 +2393,14 @@ def add_pick_bill(bill_no, items, created_by):
     return bill
 
 
-def claim_items(picker_id, bill_id, n, now=None):
+PICK_URGENT_UNSEEN = 60   # s: an urgent bill this new may not have reached the picker's screen yet
+
+
+def claim_items(picker_id, bill_id, n, now=None, seen_ver=None):
     """Picker types how many items they are taking. One grab at a time;
-    urgent bills come first."""
+    urgent bills come first -- except an urgent bill added after the picker's
+    screen last updated (seen_ver), which they could not have seen: their
+    normal pick goes ahead instead of being cut."""
     now = now or datetime.utcnow()
     try:
         n = int(n)
@@ -2387,6 +2430,11 @@ def claim_items(picker_id, bill_id, n, now=None):
         for u in PickBill.query.filter(PickBill.status == "open", PickBill.is_urgent.is_(True),
                                        PickBill.paused_at.is_(None)).all():
             if pick_bill_progress(u)["left"] > 0:
+                added_ms = int((u.created_at - datetime(1970, 1, 1)).total_seconds() * 1000) if u.created_at else 0
+                unseen = (seen_ver and int(seen_ver) < added_ms
+                          and (now - u.created_at).total_seconds() <= PICK_URGENT_UNSEEN)
+                if unseen:
+                    continue            # added after the picker tapped from a screen without it
                 db.session.rollback()
                 raise PickError("Urgent bill %s comes first." % u.bill_no)
     left = pick_bill_progress(bill)["left"]
@@ -2456,24 +2504,29 @@ def finish_claim(picker_id, claim_id, now=None, day=None, picked=None, missing=N
     completed = _close_bill_if_done(bill, now)
     db.session.commit()
     if missing:
+        # The picker's part ends at Done; the purchaser sorts the missing
+        # items and is the only one who can finish them.
         who = db.session.get(Employee, picker_id)
-        notify_many([x.id for x in _assigners()], "Missing items on bill %s" % (bill.bill_no if bill else "?"),
-                    "%s could not find: %s" % (who.name if who else "A picker", ", ".join("%s x%d" % mq for mq in missing)))
+        notify_many([x.id for x in _purchasers()], "Missing items on bill %s" % (bill.bill_no if bill else "?"),
+                    "%s could not find: %s. Sort them and tap Done." % (who.name if who else "A picker",
+                                                                       ", ".join("%s x%d" % mq for mq in missing)),
+                    link="/dashboard#purMissing")
     sync_picker_day_later(picker_id, c.work_date)
     return c, completed
 
 
-def handle_missing(missing_id, action, now=None):
-    """Assigner deals with a missing-item report: put the items back on the
-    bill for another picker (reassign), or mark them not available."""
+def handle_missing(missing_id, action, now=None, by=None):
+    """The purchaser finishes a missing-item report: sorted (they arranged
+    the item, 'done') or not available. Either way the reporter is paid, at
+    the rate of when they reported it. (reassign: back on the bill.)"""
     now = now or datetime.utcnow()
     m = db.session.get(PickMissing, missing_id)
     if not m or m.status != "open":
         raise PickError("That report has already been handled.")
-    if action not in ("reassign", "unavailable"):
-        raise PickError("Choose reassign or not available.")
-    m.status, m.handled_at = ("reassigned" if action == "reassign" else "unavailable"), now
-    if action == "unavailable" and m.claim_id:
+    if action not in ("done", "unavailable", "reassign"):
+        raise PickError("Choose Done or Not available.")
+    m.status, m.handled_at = {"done": "sorted", "unavailable": "unavailable", "reassign": "reassigned"}[action], now
+    if action in ("done", "unavailable") and m.claim_id:
         # Confirmed missing: the reporter is paid for it as if picked, at the
         # rate of when they reported it (normal time 1.5, extra time 1).
         rc = db.session.get(PickClaim, m.claim_id)
@@ -2716,7 +2769,7 @@ def bill_timeline(bill_id):
             for m in PickMissing.query.filter_by(bill_id=b.id).order_by(PickMissing.reported_at).all()]
     return {"t_added": _ms(b.created_at), "t_done": _ms(b.completed_at), "t_now": _ms(datetime.utcnow()),
             "bill_no": b.bill_no, "items": b.items, "urgent": bool(b.is_urgent), "status": b.status,
-            "added": ist12(b.created_at), "completed": ist12(b.completed_at),
+            "added": ist_dt(b.created_at), "completed": ist_dt(b.completed_at),
             "minutes": bill_minutes(b), "paused": bool(b.paused_at), "paused_min": round((b.paused_secs or 0) / 60.0, 1),
             "pauses": [{"kind": e.kind, "at": ist12(e.at), "t": _ms(e.at), "detail": e.detail or ""}
                        for e in PickEvent.query.filter(PickEvent.bill_id == b.id, PickEvent.kind.in_(("paused", "resumed")))
@@ -2745,8 +2798,8 @@ def urgent_bills(day=None, picker_id=None, names=None):
                  "minutes": round(((c.done_at or now) - c.started_at).total_seconds() / 60.0, 1),
                  "outcome": c.outcome or "", "points": round(float(c.points or 0), 1), "bonus": round(float(c.bonus or 0), 1)}
                 for c in claims]
-        out.append({"id": b.id, "bill_no": b.bill_no, "items": b.items, "status": b.status, "added": ist12(b.created_at),
-                    "completed": ist12(b.completed_at),
+        out.append({"id": b.id, "bill_no": b.bill_no, "items": b.items, "status": b.status, "added": ist_dt(b.created_at),
+                    "completed": ist_dt(b.completed_at),
                     "minutes": bill_minutes(b),
                     "pool": PICK_URGENT_POOL, "grabs": rows,
                     "score": round(sum(r["points"] + r["bonus"] for r in rows), 1)})
@@ -2900,7 +2953,8 @@ def pick_report(day_from, day_to=None, picker_id=None):
     bno = lambda i: bill_map[i].bill_no if i in bill_map else ""
     missing = [{"bill_no": bno(m.bill_id), "item": m.item_name, "qty": m.qty, "by": names.get(m.picker_id, ""),
                 "date": (m.reported_at + IST).strftime("%d %b"), "at": ist12(m.reported_at),
-                "status": {"open": "Waiting for assigner", "reassigned": "Reassigned", "unavailable": "Not available"}.get(m.status, m.status)}
+                "status": {"open": "Waiting for purchaser", "sorted": "Done by purchaser", "reassigned": "Reassigned",
+                           "unavailable": "Not available"}.get(m.status, m.status)}
                for m in mrows]
     events = [{"kind": e.kind, "label": {"late": "Late", "idle": "Waiting", "missing": "Missing"}.get(e.kind, e.kind),
                "who": names.get(e.picker_id, ""), "bill": bno(e.bill_id) if e.bill_id else "", "date": e.day.strftime("%d %b") if e.day else "",
@@ -3401,7 +3455,7 @@ def picking_state(emp, staff_type, alerts=True):
                 "elapsed": bill_seconds(b, now), "paused": bool(b.paused_at),
                 "paused_for": max(0, int((now - b.paused_at).total_seconds())) if b.paused_at else 0,
                 "pause_in": max(0, int((b.paused_at - now).total_seconds())) if b.paused_at else 0,
-                "minutes": mins, "added": ist12(b.created_at), "completed": ist12(b.completed_at)}
+                "minutes": mins, "added": ist_dt(b.created_at), "completed": ist_dt(b.completed_at)}
 
     out = {"board": pick_board(today, stats, pickers), "me": emp.id if emp else None,
            "day_closed": pick_day_total(today),
@@ -5488,10 +5542,15 @@ def login():
                 # One phone per staff login: signing in here signs the old phone out.
                 import secrets as _sk
                 key = _sk.token_hex(8)
-                user.session_key = key
+                if user.staff_type == "pick_assigner":
+                    # Pick Assigner: up to 3 phones at once; a 4th signs out the oldest.
+                    keys = [k for k in (user.session_keys or "").split() if k][-(ASSIGNER_DEVICES - 1):] + [key]
+                    user.session_keys = " ".join(keys)
+                else:
+                    user.session_key = key
                 db.session.commit()
                 session["sk"] = key
-                _SESSION_KEYS[user.id] = (key, time.time())
+                _SESSION_KEYS[user.id] = (_allowed_keys(user), time.time())
 
             log_staff_login(user, "login")
             logger.info(f"User login successful: {redact_email(email)}")
@@ -9696,7 +9755,11 @@ def pick_claim():
         return _pick_reply(False, "Only pickers can take items.", 403)
     data = request.get_json(silent=True) or request.form
     try:
-        c = claim_items(session.get("user_id"), int(data.get("bill_id") or 0), data.get("items"))
+        try:
+            seen = int(data.get("seen_ver") or 0) or None
+        except (TypeError, ValueError):
+            seen = None
+        c = claim_items(session.get("user_id"), int(data.get("bill_id") or 0), data.get("items"), seen_ver=seen)
     except (PickError, ValueError) as exc:
         return _pick_reply(False, str(exc) if isinstance(exc, PickError) else "Choose a bill.", 400)
     secs = int(round((c.due_at - c.started_at).total_seconds())) if c.due_at and c.started_at \
@@ -9739,7 +9802,7 @@ def pick_done():
     else:
         msg = "Late: %s points." % pts
     if c.missing:
-        msg += " %d missing item%s reported to the assigner." % (c.missing, "" if c.missing == 1 else "s")
+        msg += " %d missing item%s sent to the purchaser. Your part is done." % (c.missing, "" if c.missing == 1 else "s")
     if completed:
         msg += " Bill complete."
     return _pick_reply(True, msg)
@@ -9804,15 +9867,30 @@ def pick_bills_bulk(action):
 @app.route("/pick/missing/<int:missing_id>/<action>", methods=["POST"])
 @login_required
 def pick_missing_action(missing_id, action):
-    role, is_admin = _pick_role()
-    if role != "pick_assigner" and not is_admin:
-        return _pick_reply(False, "Only the Pick Assigner can handle missing items.", 403)
+    if not _is_purchaser():
+        return jsonify({"ok": False, "message": "Only the purchaser can finish missing items."}), 403
     try:
-        handle_missing(missing_id, action)
+        m = handle_missing(missing_id, action, by=session.get("user_id"))
     except PickError as exc:
-        return _pick_reply(False, str(exc), 400)
-    return _pick_reply(True, "Items put back on the bill for another picker." if action == "reassign"
-                       else "Marked as not available.")
+        return jsonify({"ok": False, "message": str(exc)}), 400
+    return jsonify({"ok": True, "message": {"sorted": "Done: %s sorted.", "unavailable": "%s marked not available.",
+                                            "reassigned": "%s put back on the bill."}[m.status] % m.item_name,
+                    "items": open_missing_items()})
+
+
+def _is_purchaser():
+    """Purchaser (main role, or working as purchaser now) or the admin."""
+    if session.get("is_admin"):
+        return True
+    return "purchaser" in (session.get("staff_type"), session.get("primary_staff_type"))
+
+
+@app.route("/pick/missing/open.json")
+@login_required
+def pick_missing_open():
+    if not _is_purchaser():
+        return jsonify({"ok": False, "message": "Only the purchaser sees missing items."}), 403
+    return jsonify({"ok": True, "items": open_missing_items()})
 
 
 def _report_access(pid):

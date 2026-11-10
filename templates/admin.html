@@ -636,6 +636,9 @@ var NOTES_BY_EMP = {
     {% endif %}
   </div>
 
+  <!-- Missing items from picking: the purchaser finishes them (admin can too) -->
+  {% set pm_pane = 'today' %}{% include '_pur_missing.html' %}
+
   <!-- FEATURE 4: PENDING PAST ENTRY REQUESTS -->
   {% if pending_past_requests %}
   <div data-pane="today" data-ord="1" class="card" style="margin-bottom:20px;border-left:4px solid var(--warn);">
