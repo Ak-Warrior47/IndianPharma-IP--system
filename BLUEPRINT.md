@@ -4,7 +4,7 @@ The whole software in plain words. This file is rewritten (not added to) at
 the end of each working day, so it always describes the software as it is
 today. Old descriptions are replaced, not kept.
 
-Last checked: 9 November 2026
+Last checked: 10 November 2026
 
 ---
 
@@ -25,10 +25,10 @@ leaderboards, deliveries and staff profiles.
 | Role | What they do in the app |
 |---|---|
 | Admin (owner) | Sees and controls everything. Sets item time. Adds/edits staff. |
-| Pick Assigner | Adds bills to pick, watches pickers live, pauses / closes bills, deals with missing items. |
+| Pick Assigner | Adds bills to pick, watches pickers live, pauses / closes bills, sees missing items (the purchaser finishes them). |
 | Picker | Takes items from bills, a timer runs, presses Done. Scored bill by bill. |
 | Checker | Types the day's checking figures. Pending is a team figure. |
-| Purchaser | Types purchase-order figures. |
+| Purchaser | Types purchase-order figures. Sorts items pickers could not find (Done / Not available). |
 | Delivery | Gets delivery jobs with a map, starts/ends trips (GPS). |
 | Assigner (biller) | Assigns deliveries, writes daily notes. |
 | Packer | Writes daily notes / quantity. |
@@ -258,7 +258,7 @@ month (calendar month). Targets only go up.
 | `webpush.py` | Sends phone alerts. |
 | `render.yaml` | How Render runs the site and which settings exist. |
 | `requirements.txt` | The Python packages the site needs. |
-| `tests_*.py`, `run_tests.sh` | About 1,010 automatic checks, run on every push. |
+| `tests_*.py`, `run_tests.sh` | About 1,050 automatic checks, run on every push. |
 | `CLAUDE.md` | Working rules for the AI that maintains the code. |
 | `BLUEPRINT.md` | This file. |
 | `tools_recommend_targets.py` | Optional helper to suggest hourly targets from history. |
