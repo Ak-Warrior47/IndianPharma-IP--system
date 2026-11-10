@@ -106,7 +106,9 @@ eventlet worker); the database is Supabase PostgreSQL.
   (`PICK_URGENT_UNSEEN`), does not block it. The phone ignores refreshes
   asked before its last action's reply (`lastAct`).
 - Bills show date and time everywhere (`ist_dt`: "10 Nov, 2:05 PM").
-  Pickers have a search box (`#pkFindP`) that only filters their open bills.
+  Find a bill: assigner/admin get tappable full detail; pickers (`#pkFindP`,
+  also filters their open bills), checkers and purchasers (`_bill_find.html`)
+  get a summary only (`detail: false`, no names).
 - No internet: picking taps queue and send when back; Done counts from the
   tap (at most 2 minutes back). Admin and assigner can pick via `/pick/me`.
 - While picking, the picker sees only that bill, full screen: light green

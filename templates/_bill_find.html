@@ -1,0 +1,13 @@
+{# Find a bill (any date) for checkers and purchasers: a summary of each match
+   (date, items, status). Results come from /pick/bills/find.json via billflow.js. #}
+<section class="bfind" id="billFind">
+  <label for="bfQ">Find a bill</label>
+  <input type="search" id="bfQ" data-bill-search="bfOut" inputmode="numeric" autocomplete="off" placeholder="Type the bill number, e.g. 4521">
+  <div id="bfOut" aria-live="polite"></div>
+</section>
+<style>
+.bfind{border:1px solid var(--line);border-radius:14px;background:var(--surface,#fff);padding:12px 14px;margin:0 0 16px}
+.bfind label{display:block;font-size:11px;font-weight:700;color:var(--ink-3);text-transform:uppercase;letter-spacing:.4px;margin:0 0 5px}
+.bfind input{width:100%;padding:11px 13px;border:1.5px solid var(--line);border-radius:10px;font:inherit;font-size:16px;background:var(--surface,#fff);color:var(--ink)}
+.bfind #bfOut:not(:empty){margin-top:8px;max-height:320px;overflow:auto}
+</style>

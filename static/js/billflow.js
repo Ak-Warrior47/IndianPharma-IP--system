@@ -28,7 +28,7 @@
     ".bf-list div{position:relative;padding:5px 0}.bf-list div::before{content:'';position:absolute;left:-21px;top:10px;width:11px;height:11px;border-radius:50%;background:#1e40af}" +
     ".bf-list div.late::before{background:#b91c1c}.bf-list div.miss::before{background:#7c3aed}.bf-list div.end::before{background:#15803d}" +
     ".bf-hit{display:flex;flex-wrap:wrap;align-items:baseline;gap:4px 10px;width:100%;text-align:left;border:1px solid var(--line,#dfe4ec);background:var(--surface,#fff);color:inherit;border-radius:10px;padding:9px 12px;margin:0 0 6px;cursor:pointer;font:inherit}" +
-    ".bf-hit:hover{border-color:var(--brand,#1e40af)}.bf-hit b{font-size:15px}.bf-hit span{font-size:12.5px;color:var(--ink-3,#64748b)}" +
+    ".bf-hit--ro{cursor:default}.bf-hit:not(.bf-hit--ro):hover{border-color:var(--brand,#1e40af)}.bf-hit b{font-size:15px}.bf-hit span{font-size:12.5px;color:var(--ink-3,#64748b)}.bf-hit span.bf-u{color:#fff;font-size:11px}" +
     "@media(max-width:560px){.bf-sum{grid-template-columns:repeat(2,minmax(0,1fr))}.bf-row,.bf-axis{grid-template-columns:74px 1fr}}";
   function esc(s) { return String(s == null ? "" : s).replace(/[&<>"]/g, function (c) { return {"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;"}[c]; }); }
   // Indian time whatever the device clock says, to match the rest of the app
@@ -115,10 +115,13 @@
           var bl = (d && d.bills) || [];
           out.innerHTML = bl.length ? bl.map(function (b) {
             var st = b.status === "done" ? "complete" : b.status === "cancelled" ? "cancelled" :
-              b.status === "scheduled" ? "rescheduled" : b.left + " left";
-            return '<button type="button" class="bf-hit" data-bill-flow="' + b.id + '"><b>' + esc(b.bill_no) + "</b>" +
-              (b.urgent ? '<span class="bf-u">URGENT</span>' : "") + "<span>" + esc(b.date) + " · " + esc(b.added) + " · " +
-              plural(b.items, "item") + " · " + st + "</span></button>";
+              b.status === "scheduled" ? "rescheduled" : (b.left ? b.left + " left" : "being picked") +
+              (b.missing ? " · " + b.missing + " missing (with purchaser)" : "");
+            var inner = "<b>" + esc(b.bill_no) + "</b>" + (b.urgent ? '<span class="bf-u">URGENT</span>' : "") +
+              "<span>" + esc(b.date) + " · " + esc(b.added) + " · " + plural(b.items, "item") + " · " + st + "</span>";
+            // assigner / admin: tap for everything; staff: summary only
+            return d.detail ? '<button type="button" class="bf-hit" data-bill-flow="' + b.id + '">' + inner + "</button>"
+              : '<div class="bf-hit bf-hit--ro">' + inner + "</div>";
           }).join("") : '<div class="bf-sub" style="padding:6px 2px">No bill with ' + esc(q) + " in its number.</div>";
         }).catch(function () { out.innerHTML = '<div class="bf-sub">No connection. Try again.</div>'; });
     }, 220);

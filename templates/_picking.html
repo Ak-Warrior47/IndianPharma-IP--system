@@ -302,7 +302,8 @@ body.pk-full .pk-msg.on{position:sticky;top:0;z-index:2}
     </div>
   </div>
   <div class="section-label pk-sec" style="margin-top:4px" data-collapse="pkBills"><span>Open bills</span></div>
-  <div class="pk-find"><input type="search" id="pkFindP" placeholder="Search bill number" inputmode="numeric" aria-label="Search open bills by number" autocomplete="off"><span id="pkFindPN" class="pk-sub"></span></div>
+  <div class="pk-find"><input type="search" id="pkFindP" placeholder="Search bill number" inputmode="numeric" aria-label="Search bills by number" autocomplete="off" data-bill-search="pkFindPAll"><span id="pkFindPN" class="pk-sub"></span></div>
+  <div id="pkFindPAllWrap" hidden><div class="pk-sub" style="font-weight:700;margin:4px 0">Any date</div><div id="pkFindPAll"></div></div>
   <div id="pkBills"><div class="pk-empty">Loading bills…</div></div>
   </section>
   <section data-panel="board" hidden><div id="pkBoard"></div></section>
@@ -598,7 +599,8 @@ body.pk-full .pk-msg.on{position:sticky;top:0;z-index:2}
     var qp = (($("pkFindP") || {}).value || "").replace(/\s+/g, "").toUpperCase();
     var openAll = open;
     if (qp) open = open.filter(function (b) { return String(b.bill_no).toUpperCase().indexOf(qp) >= 0; });
-    if ($("pkFindPN")) $("pkFindPN").textContent = qp ? plural(open.length, "bill") + " match" : "";
+    if ($("pkFindPN")) $("pkFindPN").textContent = qp ? plural(open.length, "open bill") + " match" : "";
+    if ($("pkFindPAllWrap")) $("pkFindPAllWrap").hidden = !qp;
     var finishing = allOpen.length - openAll.length;
     var urgentLeft = openAll.some(function (b) { return b.urgent && b.left > 0 && !b.paused; });   // all, not just matches
     // While picking, show only that bill: hide the list until Done.

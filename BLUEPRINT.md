@@ -48,8 +48,12 @@ Staff emails are `name@pharmaip.com`. Only the admin sets someone's role.
    - Urgent bills must be picked first. A pick already started is never
      cut by an urgent bill: if the urgent bill arrived a moment before the
      picker's screen showed it (up to 60 s), their normal pick goes ahead.
-   - A search box above the open bills: type part of a bill number to see
-     only those bills.
+   - **Find a bill** for pickers, checkers and purchasers: type part of a
+     bill number. Pickers see their matching open bills to pick, and every
+     role sees matching bills of any date as a short summary (date, time,
+     items, how many left / complete / missing with purchaser). Who picked
+     what stays with the assigner and admin, who can tap a bill for its full
+     detail.
    - Every bill shows its date with the time, e.g. "added 10 Nov, 2:05 PM"
      (picker, assigner, admin, bill details).
    - You can never take more than the items still left on the bill: if a

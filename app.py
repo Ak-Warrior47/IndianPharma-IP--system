@@ -10040,7 +10040,7 @@ def find_bills(q, limit=30):
     for b in rows:
         pr = pick_bill_progress(b, cb.get(b.id, []), mb.get(b.id, []))
         out.append({"id": b.id, "bill_no": b.bill_no, "items": b.items, "urgent": bool(b.is_urgent),
-                    "status": b.status, "done": pr["done"], "left": pr["left"],
+                    "status": b.status, "done": pr["done"], "left": pr["left"], "missing": pr["missing"],
                     "date": (b.created_at + IST).strftime("%d %b %Y") if b.created_at else "",
                     "added": ist12(b.created_at)})
     return out
@@ -10049,10 +10049,14 @@ def find_bills(q, limit=30):
 @app.route("/pick/bills/find.json")
 @login_required
 def pick_bills_find():
-    """Bill search for the Pick Assigner and admin (bill details are theirs only)."""
-    if _pick_view() != "assigner":
+    """Bill search. Pick Assigner and admin: tap a result for its full detail.
+    Pickers, checkers and purchasers: the same list as a summary (date, items,
+    status) -- who picked what stays with the assigner and admin."""
+    full = _pick_view() == "assigner"
+    roles = {session.get("staff_type"), session.get("primary_staff_type")}
+    if not full and not roles & {"picker", "checker", "purchaser"} and _pick_view() != "picker":
         return jsonify({"ok": False, "message": "Not available for your role."}), 403
-    return jsonify({"ok": True, "bills": find_bills(request.args.get("q", ""))})
+    return jsonify({"ok": True, "detail": full, "bills": find_bills(request.args.get("q", ""))})
 
 
 @app.route("/pick/bill/<int:bill_id>.json")

@@ -281,7 +281,9 @@ check("9.2 Result has date, items and how much is left", hit and hit[0]["items"]
 c_asg2 = login("st_asg@x.com")
 check("9.3 The Pick Assigner can search too", any(b["id"] == OLD for b in c_asg2.get("/pick/bills/find.json?q=945612").get_json()["bills"]))
 c_ria2 = login("st_ria@x.com")
-check("9.4 A picker cannot search bills (bill details are not for staff)", c_ria2.get("/pick/bills/find.json?q=945612").status_code == 403)
+check("9.4 A picker's search gives a summary only, never the full detail",
+      c_ria2.get("/pick/bills/find.json?q=945612").get_json()["detail"] is False
+      and c_ria2.get("/pick/bill/%d.json" % OLD).status_code == 403)
 check("9.5 Letters only finds nothing", c_adm.get("/pick/bills/find.json?q=abc").get_json()["bills"] == [])
 tl = c_adm.get("/pick/bill/%d.json" % OLD).get_json()
 check("9.6 Tapping it opens everything: staff, items, times", tl["grabs"] and tl["grabs"][0]["picker"] == "ST Ria"
@@ -387,7 +389,28 @@ with app.app_context():
     check("13.2 A bill's detail shows the date too", re.match(r"^\d{2} \w{3}, ", tl["added"]) is not None, tl["added"])
 pp = p2.get("/dashboard").get_data(as_text=True)
 check("13.3 Pickers have a search box for open bills", 'id="pkFindP"' in pp)
-check("13.4 ...that only filters their open bills (no bill details for staff)", 'data-bill-search' not in pp.split('id="pkFindP"')[1][:200])
+check("13.4 ...that also finds bills of any date", 'data-bill-search="pkFindPAll"' in pp)
+
+# ---- 14. Find a bill for picker, checker and purchaser (summary only) ---------
+with app.app_context():
+    chk = mk("st_chk2@x.com", "checker", "ST Chk2")
+c_chk = login("st_chk2@x.com")
+c_pur2 = login("st_pur@x.com")
+c_om = login("st_om@x.com")
+for who, cl in (("picker", c_om), ("checker", c_chk), ("purchaser", c_pur2)):
+    j = cl.get("/pick/bills/find.json?q=945612").get_json() or {}
+    check("14.%s %s can search bills of any date" % (who[0], who), j.get("ok") and any(b["bill_no"].endswith("945612") for b in j["bills"])
+          and j.get("detail") is False, str(j)[:160])
+j = c_om.get("/pick/bills/find.json?q=945612").get_json()
+check("14.1 Staff results carry no names (who picked stays with assigner and admin)",
+      all("by" not in b and "picker" not in b for b in j["bills"]))
+check("14.2 Staff still cannot open a bill's full detail", c_chk.get("/pick/bill/%d.json" % OLD).status_code == 403)
+check("14.3 The assigner and admin get results they can tap", c_adm.get("/pick/bills/find.json?q=945612").get_json()["detail"] is True)
+for who, cl in (("checker", c_chk), ("purchaser", c_pur2)):
+    check("14.4 %s dashboard has the Find a bill bar" % who, 'id="billFind"' in cl.get("/dashboard").get_data(as_text=True))
+_bf2 = open(os.path.join(REPO, "static", "js", "billflow.js")).read()
+check("14.5 Staff results are plain rows, not tappable", "bf-hit--ro" in _bf2 and "d.detail ?" in _bf2)
+check("14.6 /pick/me loads the bill search too", "js/billflow.js" in open(os.path.join(REPO, "templates", "pick_me.html")).read())
 
 print("\n" + "=" * 62)
 print("PASSED %d    FAILED %d" % (len(PASSED), len(FAILED)))

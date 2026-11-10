@@ -506,6 +506,7 @@ button[disabled] { opacity: .45; cursor: not-allowed; transform: none; }
   {% endif %}{# end: sections pickers no longer use #}
 
   {% if 'purchaser' in (staff_type, session.get('primary_staff_type')) %}{% set pm_pane = None %}{% include '_pur_missing.html' %}{% endif %}
+  {% if staff_type in ('checker', 'purchaser') %}{% include '_bill_find.html' %}{% endif %}
   {% if staff_type in ('picker', 'pick_assigner') %}
   {% include '_picking.html' %}
   {% else %}
