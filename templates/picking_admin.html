@@ -28,7 +28,11 @@
 .pa-dl{display:inline-flex;align-items:center;gap:6px}
 .pa-period{font-size:13.5px;color:var(--ink-3);margin:-6px 0 14px}
 .pa-sum{display:grid;grid-template-columns:repeat(auto-fit,minmax(132px,1fr));gap:10px;margin:0 0 16px}
-.pa-sum div{border:1px solid var(--line);border-radius:12px;padding:11px 13px;background:var(--surface,#fff)}
+.pa-sum div,.pa-sum a{border:1px solid var(--line);border-radius:12px;padding:11px 13px;background:var(--surface,#fff);color:inherit;text-decoration:none;display:block}
+.pa-sum a:hover,.pa-sum a:focus-visible{border-color:var(--brand)}
+.pa-sum a::after{content:"Open report ›";display:block;font-size:11px;color:var(--brand);margin-top:2px}
+.pa-sum a.warn b{color:var(--bad-ink,#991b1b)}
+.pa-box{scroll-margin-top:12px}.pa-t{scroll-margin-top:60px}
 .pa-sum span{display:block;font-size:10.5px;font-weight:700;color:var(--ink-3);text-transform:uppercase;letter-spacing:.5px}
 .pa-sum b{display:block;font-size:24px;font-variant-numeric:tabular-nums;margin-top:2px}
 .pa-sum div.warn b{color:var(--bad-ink,#991b1b)}
@@ -125,24 +129,27 @@ details.pa-pk[open] summary::after{content:"Hide"}
   </form>
   <p class="pa-period">{{ rep.day_from.strftime('%d %b %Y') }}{% if not rep.single_day %} – {{ rep.day_to.strftime('%d %b %Y') }}{% endif %} · {{ rep.picker_name or 'All pickers' }}{% if rep.closed is not none %} · Day closed by the Pick Assigner: {{ rep.closed }} bills (the checkers' day total){% endif %}</p>
   {% set T = rep.totals %}
-  <div class="pa-sum">
-    <div><span>Bills</span><b>{{ T.bills }}</b></div>
-    <div><span>Items</span><b>{{ T['items'] }}</b></div>
-    <div><span>Picked</span><b>{{ T.picked }}</b></div>
-    <div class="{{ 'warn' if T.missing else '' }}"><span>Missing reported</span><b>{{ T.missing }}</b></div>
-    <div><span>Urgent bills</span><b>{{ T.urgent }}</b></div>
-    <div><span>Avg min / bill</span><b>{{ T.avg_minutes if T.avg_minutes is not none else '—' }}</b></div>
-    <div class="{{ 'warn' if rep.late else '' }}"><span>Late grabs</span><b>{{ rep.late }}</b></div>
-    <div class="{{ 'warn' if rep.idle else '' }}"><span>Left waiting</span><b>{{ rep.idle }}</b></div>
+  {# Each number opens its own report (same dates, same picker). #}
+  {% set R = url_for('picking_admin', tab='reports', **q) %}
+  <div class="pa-sum" id="paSum">
+    <a href="{{ R }}#paBills"><span>Bills</span><b>{{ T.bills }}</b></a>
+    <a href="{{ R }}#paBills"><span>Items</span><b>{{ T['items'] }}</b></a>
+    <a href="{{ R }}#paPickers"><span>Picked</span><b>{{ T.picked }}</b></a>
+    <a href="{{ R }}#paMissing" class="{{ 'warn' if T.missing else '' }}"><span>Missing reported</span><b>{{ T.missing }}</b></a>
+    <a href="{{ R }}&urgent=1#paBills"><span>Urgent bills</span><b>{{ T.urgent }}</b></a>
+    <a href="{{ R }}#paBills"><span>Avg min / bill</span><b>{{ T.avg_minutes if T.avg_minutes is not none else '—' }}</b></a>
+    <a href="{{ R }}#paEvents" class="{{ 'warn' if rep.late else '' }}"><span>Late grabs</span><b>{{ rep.late }}</b></a>
+    <a href="{{ R }}#paEvents" class="{{ 'warn' if rep.idle else '' }}"><span>Left waiting</span><b>{{ rep.idle }}</b></a>
   </div>
   {% endif %}
 
   {% if tab == 'reports' %}
-  <section class="pa-box" id="reports"><h2>Bills <small>{{ rep.bills|length }} · tap Flowchart for the timeline</small></h2>
+  {% set only_u = request.args.get('urgent') == '1' %}
+  <section class="pa-box" id="reports"><h2>{{ 'Urgent bills' if only_u else 'Bills' }} <small>{{ (rep.bills|selectattr('urgent')|list|length) if only_u else rep.bills|length }} · tap Flowchart for the timeline{% if only_u %} · <a href="{{ url_for('picking_admin', tab='reports', **q) }}#paBills">show all bills</a>{% endif %}</small></h2>
     <div class="pa-tw"><table class="pa-t" id="paBills">
       <thead><tr><th>Date</th><th>Bill number</th><th class="n">Items</th><th class="n">Picked</th><th class="n">Missing</th><th>Pickers (items)</th><th>Added</th><th>Completed</th><th class="n">Minutes</th><th>Status</th><th></th></tr></thead>
       <tbody>
-      {% for b in rep.bills %}
+      {% for b in rep.bills if (not only_u or b.urgent) %}
         <tr class="{{ 'bad' if b.late or b.missing else '' }}"><td>{{ b.date }}</td><td><strong>{{ b.bill_no }}</strong>{% if b.urgent %}<span class="pa-u">URGENT</span>{% endif %}</td>
           <td class="n">{{ b['items'] }}</td><td class="n">{{ b.picked }}</td><td class="n">{% if b.missing %}<span class="pa-red">{{ b.missing }}</span>{% else %}0{% endif %}</td>
           <td>{{ b.pickers or '—' }}{% if b.late %} <span class="pa-red">· {{ b.late }} late</span>{% endif %}</td>
@@ -156,12 +163,12 @@ details.pa-pk[open] summary::after{content:"Hide"}
 
   <section class="pa-box"><h2>Missing items <small>{{ rep.missing|length }}</small></h2>
     <div class="pa-tw"><table class="pa-t" id="paMissing">
-      <thead><tr><th>Date</th><th>Bill number</th><th>Item</th><th class="n">Qty</th><th>Reported by</th><th>At</th><th>What happened</th><th>Finished by</th><th>Finished at</th></tr></thead>
+      <thead><tr><th>Date</th><th>Bill number</th><th>Item</th><th class="n">Qty</th><th>Reported by</th><th>At</th><th>What happened</th><th>Finished by</th><th>Finished at</th><th>Purchaser remark</th></tr></thead>
       <tbody>
       {% for m in rep.missing %}
-        <tr><td>{{ m.date }}</td><td>{{ m.bill_no }}</td><td><strong>{{ m.item }}</strong></td><td class="n">{{ m.qty }}</td><td>{{ m.by }}</td><td>{{ m.at }}</td><td>{% if m.open %}<span class="pa-red">{{ m.status }}</span>{% else %}{{ m.status }}{% endif %}</td><td>{{ m.finished_by or '—' }}</td><td>{{ m.finished_at or '—' }}</td></tr>
+        <tr><td>{{ m.date }}</td><td>{{ m.bill_no }}</td><td><strong>{{ m.item }}</strong></td><td class="n">{{ m.qty }}</td><td>{{ m.by }}</td><td>{{ m.at }}</td><td>{% if m.open %}<span class="pa-red">{{ m.status }}</span>{% else %}{{ m.status }}{% endif %}</td><td>{{ m.finished_by or '—' }}</td><td>{{ m.finished_at or '—' }}</td><td>{{ m.remark or '—' }}</td></tr>
       {% else %}
-        <tr><td colspan="9" class="pa-empty">No missing items reported in this period.</td></tr>
+        <tr><td colspan="10" class="pa-empty">No missing items reported in this period.</td></tr>
       {% endfor %}
       </tbody></table></div></section>
 
@@ -179,7 +186,7 @@ details.pa-pk[open] summary::after{content:"Hide"}
     {% else %}<div class="pa-empty">Nobody was late or left a bill waiting.</div>{% endfor %}
     </div></section>
 
-  <section class="pa-box"><h2>Each picker, bill by bill</h2>
+  <section class="pa-box" id="paPickers"><h2>Each picker, bill by bill</h2>
     {% for x in rep.board %}
       <details class="pa-pk" {% if rep.picker_id %}open{% endif %}><summary><span>{{ x.name }} <small style="font-weight:500;color:var(--ink-3)">· {{ x.bills }} bills · {{ x['items'] }} items · {{ (x.on_time_pct|round|int ~ '%') if x.grabs else '—' }} on time · {{ x.points }} pts</small></span></summary>
         {% if x.bill_list %}<div class="pa-tw"><table class="pa-t" style="margin-top:6px">

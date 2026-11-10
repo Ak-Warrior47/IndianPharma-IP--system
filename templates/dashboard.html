@@ -232,7 +232,6 @@ button[disabled] { opacity: .45; cursor: not-allowed; transform: none; }
   .nav-right > * { flex: none; }
   .nav-right .ipk-trigger, .nav-right .nav-role1, .nav-right .nav-user { display: none; }
   .nav-right a, .nav-right .btn-logout { white-space: nowrap; }
-  #notif-dropdown { position: fixed !important; top: 96px !important; left: 12px; right: 12px !important; width: auto !important; }
   .main { padding-top: 12px; }
   .mt-pick:not(.mt-open) > :not(.section-label) { display: none; }
   .mt-pick:not(.mt-open) { padding-bottom: var(--s3); }
@@ -2352,13 +2351,31 @@ document.addEventListener('DOMContentLoaded', function(){
       }
     }).catch(function(){});
   }
-  bell.addEventListener('click', function(){
-    var dd = document.getElementById('notif-dropdown');
+  // The list lives on <body>, not inside the top bar: the bar scrolls sideways
+  // on phones and was clipping the list, so the bell seemed to do nothing.
+  var dd = document.getElementById('notif-dropdown');
+  if(dd){ document.body.appendChild(dd); }
+  function place(){
+    var r = bell.getBoundingClientRect(), w = Math.min(320, window.innerWidth - 16);
+    dd.style.position = 'fixed'; dd.style.width = w + 'px';
+    dd.style.top = Math.round(r.bottom + 8) + 'px';
+    dd.style.left = Math.round(Math.max(8, Math.min(r.right - w, window.innerWidth - w - 8))) + 'px';
+    dd.style.right = 'auto'; dd.style.zIndex = '10050';
+    dd.style.maxHeight = Math.max(160, window.innerHeight - r.bottom - 24) + 'px';
+  }
+  bell.addEventListener('click', function(e){
     if(!dd) return;
+    e.stopPropagation();
     var open = dd.style.display === 'block';
+    if(!open){ place(); }
     dd.style.display = open ? 'none' : 'block';
+    bell.setAttribute('aria-expanded', String(!open));
     if(!open){ fetch('/notifications/read',{method:'POST'}).then(refresh).catch(function(){}); }
   });
+  document.addEventListener('click', function(e){
+    if(dd && dd.style.display === 'block' && !dd.contains(e.target)){ dd.style.display = 'none'; bell.setAttribute('aria-expanded','false'); }
+  });
+  window.addEventListener('resize', function(){ if(dd && dd.style.display === 'block') place(); });
   refresh();
   setInterval(refresh, 60000);
 })();

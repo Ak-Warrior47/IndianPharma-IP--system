@@ -16,12 +16,15 @@
 .pm-act button{min-height:40px;border-radius:10px;padding:8px 14px;font:700 14px system-ui,sans-serif;cursor:pointer;border:1.5px solid var(--line);background:transparent;color:var(--ink)}
 .pm-act button.ok{background:var(--brand,#1e40af);border-color:var(--brand,#1e40af);color:#fff}
 .pm-act button:disabled{opacity:.5}
+.pm-rem{display:flex;gap:6px;flex:1 1 100%}
+.pm-rem input{flex:1;min-width:0;min-height:40px;padding:8px 10px;border:1.5px solid var(--line);border-radius:10px;font:inherit;font-size:15px;background:var(--surface,#fff);color:var(--ink)}
+.pm-rem button{min-height:40px;border-radius:10px;padding:8px 12px;font:650 13.5px system-ui,sans-serif;cursor:pointer;border:1.5px solid var(--line);background:transparent;color:var(--ink);white-space:nowrap}
 .pm-empty{color:var(--ink-3);padding:4px 0}
 .pm-msg{font-size:13px;color:var(--ok-ink,#0f5132);min-height:1em}
 </style>
 <section class="pm-box" id="purMissing"{% if pm_pane %} data-pane="{{ pm_pane }}" data-ord="0"{% endif %}>
   <h2>Missing items to sort <span class="pm-n" id="pmN" hidden>0</span></h2>
-  <p class="pm-sub">Pickers could not find these. Sort each one, then tap <b>Done</b> (or <b>Not available</b>). Only the purchaser finishes them.</p>
+  <p class="pm-sub">Pickers could not find these. Sort each one, then tap <b>Done</b> (or <b>Not available</b>). You can add a remark. Every purchaser sees this list; only a purchaser finishes them.</p>
   <div class="pm-msg" id="pmMsg" role="status"></div>
   <div id="pmList"><div class="pm-empty">Loading…</div></div>
 </section>
@@ -37,21 +40,26 @@
         '<div class="pm-meta">Bill <b>' + esc(m.bill_no) + "</b>" + (m.urgent ? '<span class="pm-u">URGENT</span>' : "") +
         " · reported by " + esc(m.by) + " · " + esc(m.day) + ", " + esc(m.at) + "</div></div>" +
         '<div class="pm-act"><button type="button" class="ok" data-pm="done">Done</button>' +
-        '<button type="button" data-pm="unavailable">Not available</button></div></div>';
+        '<button type="button" data-pm="unavailable">Not available</button></div>' +
+        '<div class="pm-rem"><input type="text" maxlength="300" placeholder="Remark (optional), e.g. ordered, comes tomorrow" aria-label="Remark for ' + esc(m.item) + '" value="' + esc(m.remark || "") + '">' +
+        '<button type="button" data-pm="remark">Save remark</button></div></div>';
     }).join("") : '<div class="pm-empty">Nothing missing. Well done.</div>';
   }
   function load() {
     if (document.hidden) return;
+    if (list.contains(document.activeElement) && document.activeElement.tagName === "INPUT") return;   // typing a remark: do not redraw
     fetch("/pick/missing/open.json", {credentials: "same-origin"}).then(function (r) { return r.json(); })
       .then(function (d) { if (d && d.items) draw(d.items); }).catch(function () {});
   }
   list.addEventListener("click", function (e) {
     var b = e.target.closest("[data-pm]"); if (!b) return;
     var row = b.closest(".pm-row"), id = row.getAttribute("data-id");
+    var rem = row.querySelector(".pm-rem input");
     row.querySelectorAll("button").forEach(function (x) { x.disabled = true; });
     var tok = document.querySelector('meta[name="csrf-token"]');
     fetch("/pick/missing/" + id + "/" + b.getAttribute("data-pm"), {method: "POST", credentials: "same-origin",
-      headers: {"X-Requested-With": "fetch", "Content-Type": "application/json", "X-CSRFToken": tok ? tok.content : ""}, body: "{}"})
+      headers: {"X-Requested-With": "fetch", "Content-Type": "application/json", "X-CSRFToken": tok ? tok.content : ""},
+      body: JSON.stringify({remark: rem ? rem.value : ""})})
       .then(function (r) { return r.json(); }).then(function (d) {
         msg.textContent = d.message || ""; msg.style.color = d.ok ? "" : "var(--bad-ink,#991b1b)";
         if (d.items) draw(d.items); else load();

@@ -375,6 +375,13 @@ input:focus, select:focus, textarea:focus { outline: none; border-color: var(--b
 .qa-find label { display: block; font-size: 11px; font-weight: 700; color: var(--ink-3); text-transform: uppercase; letter-spacing: .4px; margin: 2px 0 4px; }
 .qa-find input { width: 100%; padding: 11px 13px; border: 1.5px solid var(--line); border-radius: 10px; font: inherit; font-size: 16px; background: var(--surface); color: var(--ink); }
 .qa-find #qaFindOut:not(:empty) { margin-top: 8px; max-height: 320px; overflow: auto; }
+.qa-h { grid-column: 1 / -1; font-size: 11px; font-weight: 800; color: var(--ink-3); text-transform: uppercase; letter-spacing: .6px; margin: 4px 2px -4px; }
+.qa-stats a { color: inherit; text-decoration: none; border-bottom: 1px dashed var(--line); }
+.qa-stats a:hover { color: var(--brand); }
+.pt-tile { border: 1px solid var(--line); border-radius: 12px; padding: 9px 11px; display: block; color: inherit; text-decoration: none; }
+.pt-tile:hover, .pt-tile:focus-visible { border-color: var(--brand); }
+.pt-tile span { display: block; font-size: 10.5px; font-weight: 700; color: var(--ink-3); text-transform: uppercase; letter-spacing: .4px; }
+.pt-tile b { display: block; font-size: 22px; font-weight: 750; font-variant-numeric: tabular-nums; }
 .qa-stats { grid-column: 1 / -1; font-size: 13.5px; color: var(--ink-3); padding: 2px 2px 0; }
 .qa-stats b { color: var(--ink); font-size: 15px; }
 .qa-stats i { font-style: normal; margin: 0 6px; }
@@ -569,18 +576,23 @@ var NOTES_BY_EMP = {
   <!-- QUICK ACTIONS: the jobs the owner does every day, one tap each.
        (Replaces four all-time counters nobody acted on.) -->
   <div class="overview-grid qa" id="quick">
+    <div class="qa-h">Do</div>
     <a class="qa-btn qa-main" href="/picking?tab=live" id="qaLive"><b>Live picking</b><span>bills, pickers, item time</span></a>
     <a class="qa-btn" href="/pick/me" id="qaPickSelf"><b>Pick bills yourself</b><span>multitask picking</span></a>
+    <a class="qa-btn" href="#addEmployee" id="qaAdd"><b>Add staff</b><span>new employee login</span></a>
+    <div class="qa-h" id="qaReportsHead">Reports</div>
     <a class="qa-btn" href="/admin/staff-today" id="qaStaffToday"><b>Staff today</b><span>who came in · every pick · PDF</span></a>
     <a class="qa-btn" href="/picking?tab=reports&amp;period=today" id="qaReports"><b>Picking reports</b><span>any date · PDF · CSV</span></a>
+    <a class="qa-btn" href="/picking?tab=reports&amp;period=month#paMissing" id="qaMissing"><b>Missing items report</b><span>who reported · who finished · remarks</span></a>
+    <a class="qa-btn" href="/picking?tab=reports&amp;period=today&amp;urgent=1#paBills" id="qaUrgent"><b>Urgent bills report</b><span>today's urgent bills</span></a>
+    <a class="qa-btn" href="/picking?tab=reports&amp;period=today#paEvents" id="qaLate"><b>Late report</b><span>late and left waiting</span></a>
+    <a class="qa-btn" href="/picking?tab=board&amp;period=today" id="qaBoard"><b>Leaderboard</b><span>bills, items, points</span></a>
     <a class="qa-btn" href="{{ url_for('admin_multitask_report') }}" id="qaMulti"><b>Multitask report</b><span>second roles, any date</span></a>
-    <a class="qa-btn" href="/picking?tab=reports&amp;period=month#paMissing" id="qaMissing"><b>Missing items report</b><span>who reported · who finished</span></a>
     <a class="qa-btn" href="/admin/day" id="qaDay"><b>Day view</b><span>all staff, any date</span></a>
-    <a class="qa-btn" href="#addEmployee" id="qaAdd"><b>Add staff</b><span>new employee login</span></a>
     <div class="qa-find"><label for="qaFind">Find a bill</label>
       <input type="search" id="qaFind" data-bill-search="qaFindOut" inputmode="numeric" autocomplete="off" placeholder="Type the bill number, e.g. 4521">
       <div id="qaFindOut" aria-live="polite"></div></div>
-    <div class="qa-stats">Total Staff <b>{{ emp_count }}</b> <i>·</i> Active Today <b>{{ active_today }}</b> <small>entered figures today</small></div>
+    <div class="qa-stats"><a href="#staff">Total Staff <b>{{ emp_count }}</b></a> <i>·</i> <a href="/admin/staff-today">Active Today <b>{{ active_today }}</b> <small>entered figures today</small></a></div>
   </div>
 
   <!-- ============ TABS ============
@@ -783,12 +795,16 @@ var NOTES_BY_EMP = {
     </div>
     {% if picking_today %}{% set pt = picking_today %}
     <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(110px,1fr));gap:10px;margin-bottom:12px">
-      {% for label, val, warn in [('Bills', pt.totals.bills, false), ('Items', pt.totals['items'], false), ('Picked', pt.totals.picked, false),
-                                  ('Open now', pt.open, false), ('Picking now', pt.active, false), ('Missing', pt.totals.missing, pt.totals.missing > 0),
-                                  ('Late', pt.late, pt.late > 0), ('Left waiting', pt.idle, pt.idle > 0)] %}
-      <div style="border:1px solid var(--line);border-radius:12px;padding:9px 11px">
-        <div style="font-size:10.5px;font-weight:700;color:var(--ink-3);text-transform:uppercase;letter-spacing:.4px">{{ label }}</div>
-        <div style="font-size:22px;font-weight:750;font-variant-numeric:tabular-nums;{{ 'color:#991b1b' if warn else '' }}">{{ val }}</div></div>
+      {# each number opens its own report #}
+      {% set PR = '/picking?tab=reports&period=today' %}
+      {% for label, val, warn, href in [('Bills', pt.totals.bills, false, PR ~ '#paBills'), ('Items', pt.totals['items'], false, PR ~ '#paBills'),
+                                  ('Picked', pt.totals.picked, false, PR ~ '#paPickers'),
+                                  ('Open now', pt.open, false, '/picking?tab=live'), ('Picking now', pt.active, false, '/picking?tab=live'),
+                                  ('Missing', pt.totals.missing, pt.totals.missing > 0, PR ~ '#paMissing'),
+                                  ('Late', pt.late, pt.late > 0, PR ~ '#paEvents'), ('Left waiting', pt.idle, pt.idle > 0, PR ~ '#paEvents')] %}
+      <a class="pt-tile" href="{{ href }}">
+        <span>{{ label }}</span>
+        <b style="{{ 'color:#991b1b' if warn else '' }}">{{ val }}</b></a>
       {% endfor %}
     </div>
     {% if pt.top and pt.top[0].bills %}

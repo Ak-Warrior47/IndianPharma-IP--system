@@ -21,7 +21,10 @@
 .st-day a:last-child{border-right:0}
 .st-sp{flex:1}
 .st-sum{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:10px;margin:0 0 14px}
-.st-sum div{border:1px solid var(--line);border-radius:12px;padding:10px 12px;background:var(--surface,#fff)}
+.st-sum div,.st-sum a{border:1px solid var(--line);border-radius:12px;padding:10px 12px;background:var(--surface,#fff);display:block;color:inherit;text-decoration:none}
+.st-sum a:hover,.st-sum a:focus-visible{border-color:var(--brand)}
+.st-sum a::after{content:"Open ›";display:block;font-size:11px;color:var(--brand);margin-top:2px}
+.st-box,.st-p{scroll-margin-top:12px}
 .st-sum span{display:block;font-size:10.5px;font-weight:700;color:var(--ink-3);text-transform:uppercase;letter-spacing:.5px}
 .st-sum b{display:block;font-size:22px;font-variant-numeric:tabular-nums;margin-top:2px}
 .st-box{border:1px solid var(--line);border-radius:14px;background:var(--surface,#fff);padding:14px 16px;margin-bottom:14px}
@@ -98,15 +101,17 @@
   </form>
 
   <div class="st-sum">
-    <div><span>People in</span><b>{{ T.people }}</b></div>
-    <div><span>Picked</span><b>{{ T.pickers }}</b></div>
-    <div><span>Items picked</span><b>{{ T['items'] }}</b></div>
-    <div><span>Pick points</span><b>{{ T.points }}</b></div>
-    <div><span>Late grabs</span><b>{{ T.late }}</b></div>
-    <div><span>Not found</span><b>{{ T.missing }}</b></div>
+    {# each number opens its own report for this day #}
+    {% set PR = url_for('picking_admin', tab='reports', **{'from': rep.day.isoformat(), 'to': rep.day.isoformat(), 'picker': rep.emp_id or ''}) %}
+    <a href="#stWhoBox"><span>People in</span><b>{{ T.people }}</b></a>
+    <a href="#stPicks"><span>Picked</span><b>{{ T.pickers }}</b></a>
+    <a href="{{ PR }}#paPickers"><span>Items picked</span><b>{{ T['items'] }}</b></a>
+    <a href="{{ url_for('picking_admin', tab='board', **{'from': rep.day.isoformat(), 'to': rep.day.isoformat()}) }}"><span>Pick points</span><b>{{ T.points }}</b></a>
+    <a href="{{ PR }}#paEvents"><span>Late grabs</span><b>{{ T.late }}</b></a>
+    <a href="{{ PR }}#paMissing"><span>Not found</span><b>{{ T.missing }}</b></a>
   </div>
 
-  <section class="st-box"><h2>Who came in ({{ rep.people|length }})</h2>
+  <section class="st-box" id="stWhoBox"><h2>Who came in ({{ rep.people|length }})</h2>
     {% if rep.people %}
     <div class="st-tw"><table class="st-t" id="stWho">
       <thead><tr><th>Name</th><th>Role</th><th>Signed in</th><th>Signed out</th><th>Last seen</th><th>Picking</th></tr></thead>
@@ -122,6 +127,7 @@
     {% else %}<div class="st-empty">Nobody signed in or worked on this day.</div>{% endif %}
   </section>
 
+  <span id="stPicks"></span>
   {% for p in rep.people if p.picks %}
   <article class="st-p" id="p{{ p.id }}">
     <header><h3>{{ p.name }} <small>· {{ p.role }}{% if p.multitask %} + {{ p.multitask|join(', ') }}{% endif %}</small></h3>

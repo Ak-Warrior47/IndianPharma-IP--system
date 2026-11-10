@@ -593,8 +593,8 @@ with app.app_context():
 pdash = c1.get("/dashboard").data.decode()
 check("13.1 The picker's button says Pick", ">Pick</button>" in open(os.path.join(REPO, "templates", "_picking.html")).read() and ">Take<" not in open(os.path.join(REPO, "templates", "_picking.html")).read())
 _pkh = open(os.path.join(REPO, "templates", "_picking.html")).read()
-check("13.2 Free pickers are blue and busy pickers red on the assigner screen",
-      ".pk-chip.free{background:#e8eefc" in _pkh and ".pk-chip.busy{background:#fdecec" in _pkh)
+check("13.2 Free pickers are green and busy pickers red on the assigner screen",
+      ".pk-chip.free{background:#e6f4ec" in _pkh and ".pk-chip.busy{background:#fdecec" in _pkh)
 check("13.3 Sections can be minimised and maximised", 'data-collapse="pkBills"' in _pkh and "function setupCollapse" in _pkh)
 sa13 = ca.get("/pick/state.json").get_json()
 urg = sa13.get("urgent") or []

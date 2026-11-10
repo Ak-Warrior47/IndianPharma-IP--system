@@ -933,6 +933,7 @@ class PickMissing(db.Model):
     status      = db.Column(db.String(12), default="open", index=True)  # open / sorted (by purchaser) / unavailable / reassigned
     handled_at  = db.Column(db.DateTime, nullable=True)
     handled_by  = db.Column(db.Integer, db.ForeignKey("employees.id", ondelete="SET NULL"), nullable=True)  # who finished it
+    remark      = db.Column(db.String(300), nullable=True)   # the purchaser's note (e.g. "ordered, comes tomorrow")
 
 
 class PickDay(db.Model):
@@ -2300,7 +2301,7 @@ def open_missing_items():
     names = {e.id: e.name for e in Employee.query.filter(Employee.id.in_({m.picker_id for m in rows if m.picker_id})).all()} if rows else {}
     return [{"id": m.id, "bill_no": bills[m.bill_id].bill_no if m.bill_id in bills else "", "bill_id": m.bill_id,
              "urgent": bool(m.bill_id in bills and bills[m.bill_id].is_urgent), "item": m.item_name, "qty": m.qty,
-             "by": names.get(m.picker_id, ""), "at": ist12(m.reported_at),
+             "by": names.get(m.picker_id, ""), "at": ist12(m.reported_at), "remark": m.remark or "",
              "day": (m.reported_at + IST).strftime("%d %b") if m.reported_at else ""} for m in rows]
 
 
@@ -2477,7 +2478,9 @@ def finish_claim(picker_id, claim_id, now=None, day=None, picked=None, missing=N
     c = db.session.get(PickClaim, claim_id)
     if not c or c.picker_id != picker_id or c.status != "active":
         raise PickError("Nothing to finish.")
+    # A named item with no quantity counts as 1.
     missing = [(str(n or "").strip()[:120], int(q or 0)) for n, q in (missing or [])]
+    missing = [(n, q if q > 0 else (1 if n else 0)) for n, q in missing]
     missing = [(n, q) for n, q in missing if q > 0]
     if any(not n for n, _ in missing):
         raise PickError("Write the name of each missing item.")
@@ -2491,9 +2494,9 @@ def finish_claim(picker_id, claim_id, now=None, day=None, picked=None, missing=N
     c.done_at, c.status, c.picked, c.missing = now, "done", picked, m_qty
     c.work_date = day or date.today()      # same day boundary as the rest of the app
     c.outcome = {"normal": "ontime", "find": "extra", "report": "report", "late": "late"}[phase]
-    # Points for missing items are held until the assigner confirms them as
-    # not available; otherwise reporting everything missing would pay for
-    # nothing picked.
+    # Points for missing items are held until the purchaser finishes them
+    # (sorted or not available); otherwise reporting everything missing would
+    # pay for nothing picked.
     c.points = pick_points(c.items, c.due_at, tnow, picked=picked, missing=0)
     for name, q in missing:
         db.session.add(PickMissing(bill_id=c.bill_id, claim_id=c.id, picker_id=picker_id,
@@ -2964,7 +2967,8 @@ def pick_report(day_from, day_to=None, picker_id=None):
                 "status": {"open": "Waiting for purchaser", "sorted": "Done by purchaser",
                            "reassigned": "Deleted by picker (back on the bill)" if m.handled_by == m.picker_id else "Reassigned",
                            "unavailable": "Not available"}.get(m.status, m.status),
-                "open": m.status == "open", "finished_by": names.get(m.handled_by, "") if m.handled_by else "",
+                "open": m.status == "open", "remark": m.remark or "",
+                "finished_by": names.get(m.handled_by, "") if m.handled_by else "",
                 "finished_at": ist_dt(m.handled_at)}
                for m in mrows]
     events = [{"kind": e.kind, "label": {"late": "Late", "idle": "Waiting", "missing": "Missing"}.get(e.kind, e.kind),
@@ -9902,8 +9906,19 @@ def pick_bills_bulk(action):
 def pick_missing_action(missing_id, action):
     if not _is_purchaser():
         return jsonify({"ok": False, "message": "Only the purchaser can finish missing items."}), 403
+    data = request.get_json(silent=True) or {}
     try:
+        if action == "remark":            # save the note, the item stays open
+            m = db.session.get(PickMissing, missing_id)
+            if not m or m.status != "open":
+                raise PickError("That report has already been handled.")
+            m.remark = _clean_remark(data.get("remark"))
+            db.session.commit()
+            return jsonify({"ok": True, "message": "Remark saved.", "items": open_missing_items()})
         m = handle_missing(missing_id, action, by=session.get("user_id"))
+        if "remark" in data:
+            m.remark = _clean_remark(data.get("remark"))
+            db.session.commit()
     except PickError as exc:
         return jsonify({"ok": False, "message": str(exc)}), 400
     return jsonify({"ok": True, "message": {"sorted": "Done: %s sorted.", "unavailable": "%s marked not available.",
@@ -9926,6 +9941,10 @@ def pick_missing_delete(missing_id):
         return _pick_reply(False, "The purchaser has already finished this one." if "already" in str(exc) else str(exc), 400)
     return _pick_reply(True, "Report deleted. %s is back on the bill: take it again and report it correctly."
                        % ("%d item" % m.qty if m.qty == 1 else "%d items" % m.qty))
+
+
+def _clean_remark(text):
+    return (str(text or "").strip()[:300]) or None
 
 
 def _is_purchaser():
@@ -10012,9 +10031,10 @@ def picking_report_csv():
                     b["late"], b["pickers"], b["added"], b["completed"], b["minutes"] if b["minutes"] is not None else "", b["status"]])
     w.writerow([])
     w.writerow(["Missing items"])
-    w.writerow(["Date", "Bill number", "Item", "Qty", "Reported by", "At", "Status", "Finished by", "Finished at"])
+    w.writerow(["Date", "Bill number", "Item", "Qty", "Reported by", "At", "Status", "Finished by", "Finished at", "Purchaser remark"])
     for m in r["missing"]:
-        w.writerow([m["date"], m["bill_no"], m["item"], m["qty"], m["by"], m["at"], m["status"], m["finished_by"], m["finished_at"]])
+        w.writerow([m["date"], m["bill_no"], m["item"], m["qty"], m["by"], m["at"], m["status"], m["finished_by"], m["finished_at"],
+                    m["remark"]])
     w.writerow([])
     w.writerow(["Late report"])
     w.writerow(["Date", "Time", "What", "Picker", "Bill", "Minutes", "Detail"])
@@ -10107,6 +10127,22 @@ def pick_bills_find():
     if not full and not roles & {"picker", "checker", "purchaser"} and _pick_view() != "picker":
         return jsonify({"ok": False, "message": "Not available for your role."}), 403
     return jsonify({"ok": True, "detail": full, "bills": find_bills(request.args.get("q", ""))})
+
+
+@app.route("/pick/bills/exists.json")
+@login_required
+def pick_bill_exists():
+    """Was this bill number already entered (any date)? Asked while the
+    assigner types, so the cursor stays on the number instead of moving on."""
+    if _pick_view() != "assigner":
+        return jsonify({"ok": False}), 403
+    m = re.match(r"^(\d{1,6})U?$", (request.args.get("no") or "").strip().upper().replace(" ", ""))
+    if not m or int(m.group(1)) == 0:
+        return jsonify({"ok": True, "exists": False})
+    full = fy_prefix() + m.group(1)
+    b = PickBill.query.filter_by(bill_no=full).first()
+    return jsonify({"ok": True, "exists": bool(b), "bill_no": full,
+                    "when": ist_dt(b.created_at) if b else "", "status": b.status if b else ""})
 
 
 @app.route("/pick/bill/<int:bill_id>.json")

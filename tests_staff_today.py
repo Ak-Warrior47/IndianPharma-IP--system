@@ -427,7 +427,7 @@ with app.app_context():
     BIG = big.id
 _pk2 = open(os.path.join(REPO, "templates", "_picking.html")).read()
 check("15.3 The box is called Item quantity and has no upper limit",
-      "Item quantity (any number except 0)" in _pk2 and 'max="500"' not in _pk2 and 'placeholder="Item qty"' in _pk2)
+      "Item quantity (any number except 0)" in _pk2 and 'max="500"' not in _pk2 and 'placeholder="Quantity"' in _pk2)
 
 # ---- 16. The bill just added, and who added it, shows for a few seconds ---------
 c_a3 = login("st_asg@x.com")
@@ -496,6 +496,73 @@ check("19.2 The main panel of each tab stays open",
 _ux = open(os.path.join(REPO, "static", "js", "ux.js")).read()
 check("19.3 A folded panel opens by tapping its title, and when a button jumps to it",
       'hasAttribute("data-min-default")' in _ux and "_mzOpen" in _ux and "openTarget" in _ux)
+
+# ---- 20. Small fixes: bell, repeat bill number, remarks, quantity, colours -----
+_dash = open(os.path.join(REPO, "templates", "dashboard.html")).read()
+check("20.1 The notification list is moved out of the scrolling top bar, so the bell opens it on phones",
+      "document.body.appendChild(dd)" in _dash and "function place()" in _dash and "#notif-dropdown { position: fixed !important" not in _dash)
+c_a4 = login("st_asg@x.com")
+ex = c_a4.get("/pick/bills/exists.json?no=8704").get_json()
+check("20.2 A bill number already entered is reported as used (with when)", ex["exists"] is True and ex["bill_no"].endswith("8704") and ex["when"])
+check("20.3 ...also with U typed after it", c_a4.get("/pick/bills/exists.json?no=8704u").get_json()["exists"] is True)
+check("20.4 A new number is free", c_a4.get("/pick/bills/exists.json?no=999001").get_json()["exists"] is False)
+check("20.5 Pickers cannot ask", login("st_om@x.com").get("/pick/bills/exists.json?no=8704").status_code == 403)
+_pk3 = open(os.path.join(REPO, "templates", "_picking.html")).read()
+check("20.6 The cursor stays on a repeat bill number: checked on typing, Enter and on tapping quantity",
+      "function dupCheck" in _pk3 and 'addEventListener("focusin"' in _pk3 and "dupShow(d); return;" in _pk3)
+with app.app_context():
+    PickClaim.query.filter_by(status="active").update({"status": "cancelled"})
+    db.session.commit()
+    qb = A.add_pick_bill("8801", 4, ASG)
+    qc = A.claim_items(RIA, qb.id, 4)
+    A.finish_claim(RIA, qc.id, picked=None, missing=[("Betadine", 0), ("Zincovit", None)])
+    rows = PickMissing.query.filter_by(claim_id=qc.id).order_by(PickMissing.id).all()
+    check("20.7 A missing item with no quantity counts as 1", [(m.item_name, m.qty) for m in rows] == [("Betadine", 1), ("Zincovit", 1)]
+          and db.session.get(PickClaim, qc.id).picked == 2, str([(m.item_name, m.qty) for m in rows]))
+    M1, M2 = rows[0].id, rows[1].id
+c_p4 = login("st_pur@x.com")
+H = {"X-Requested-With": "fetch"}
+r = c_p4.post("/pick/missing/%d/remark" % M1, json={"remark": "Ordered, comes tomorrow"}, headers=H).get_json()
+check("20.8 Purchaser saves a remark; the item stays open with the remark shown",
+      r["ok"] and any(m["id"] == M1 and m["remark"] == "Ordered, comes tomorrow" for m in r["items"]), str(r)[:200])
+check("20.9 Only a purchaser (or admin) can add a remark",
+      login("st_ria@x.com").post("/pick/missing/%d/remark" % M1, json={"remark": "x"}, headers=H).status_code == 403
+      and c_a4.post("/pick/missing/%d/remark" % M1, json={"remark": "x"}, headers=H).status_code == 403)
+c_p4.post("/pick/missing/%d/unavailable" % M2, json={"remark": "Company stopped it"}, headers=H)
+with app.app_context():
+    rep_ = A.pick_report(date.today())
+    rm = {m["item"]: m for m in rep_["missing"]}
+    check("20.10 The admin's missing-items report shows the purchaser's remarks",
+          rm["Betadine"]["remark"] == "Ordered, comes tomorrow" and rm["Zincovit"]["remark"] == "Company stopped it"
+          and rm["Zincovit"]["finished_by"] == "ST Pur")
+    check("20.11 Every purchaser is alerted about missing items",
+          {e.id for e in Employee.query.filter_by(staff_type="purchaser").all() if not e.is_admin} <= {e.id for e in A._purchasers()})
+pgm = c_adm.get("/picking?tab=reports").get_data(as_text=True)
+check("20.12 Remarks are on the report page and in the CSV", "Purchaser remark" in pgm and "Ordered, comes tomorrow" in pgm
+      and "Company stopped it" in c_adm.get("/picking/report.csv").get_data(as_text=True))
+_pm = open(os.path.join(REPO, "templates", "_pur_missing.html")).read()
+check("20.13 The purchaser's box has a remark field and says all purchasers see it", 'data-pm="remark"' in _pm and "Every purchaser sees this list" in _pm)
+check("20.14 Quantity box is wide enough for its label; free pickers are green; delete is a bin",
+      'placeholder="Quantity"' in _pk3 and ".pk-chip.free{background:#e6f4ec" in _pk3 and "#3b5bdb" not in _pk3
+      and "var BIN = " in _pk3 and ">×</button>" not in _pk3)
+
+# ---- 21. A number tile opens its own report ------------------------------------
+check("21.1 Picking page: each number links to its section",
+      all(('#%s"' % h) in pgm for h in ("paBills", "paPickers", "paMissing", "paEvents")) and 'id="paPickers"' in pgm and 'id="paSum"' in pgm)
+ur = c_adm.get("/picking?tab=reports&period=today&urgent=1").get_data(as_text=True)
+check("21.2 Urgent bills opens a report of only urgent bills", "<h2>Urgent bills" in ur and "show all bills" in ur)
+adm3 = c_adm.get("/admin_dashboard").get_data(as_text=True)
+check("21.3 Admin: Picking today numbers open their reports", adm3.count('class="pt-tile"') == 8 and "#paMissing" in adm3 and "#paEvents" in adm3)
+check("21.4 Admin: reports are grouped under a Reports heading",
+      'id="qaReportsHead">Reports' in adm3 and all(('id="%s"' % i) in adm3 for i in ("qaUrgent", "qaLate", "qaBoard", "qaMissing", "qaStaffToday", "qaReports", "qaMulti", "qaDay")))
+check("21.5 Admin: Total Staff and Active Today are links", 'href="#staff">Total Staff' in adm3 and 'href="/admin/staff-today">Active Today' in adm3)
+st_pg = c_adm.get("/admin/staff-today").get_data(as_text=True)
+check("21.6 Staff today: each number opens its list", 'href="#stWhoBox"' in st_pg and "#paMissing" in st_pg and 'id="stPicks"' in st_pg)
+check("21.7 Assigner and picker number tiles are buttons that open their list",
+      'data-go-tab="done"' in _pk3 and 'data-go-el="pkBillsWrap"' in _pk3 and _pk3.count('class="pk-stat" data-go-tab="mine"') == 5)
+for u in ("/picking?tab=reports&period=today&urgent=1", "/picking?tab=reports&period=today", "/picking?tab=board&period=today",
+          "/picking?tab=reports&period=month", "/admin/day", "/admin/staff-today", "/pick/me"):
+    check("21.8 %s opens" % u, c_adm.get(u).status_code == 200)
 
 print("\n" + "=" * 62)
 print("PASSED %d    FAILED %d" % (len(PASSED), len(FAILED)))

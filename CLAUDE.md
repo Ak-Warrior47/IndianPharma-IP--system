@@ -16,6 +16,11 @@ eventlet worker); the database is Supabase PostgreSQL.
 - Every change also updates `BLUEPRINT.md` (the owner's plain-language
   blueprint of the whole software). Rewrite the affected section; never
   append history. At the end of the day re-check it against the code.
+- Before every deploy, run the human-style click-through as well as the
+  tests: `python3.13 tools_click_through_seed.py`, start the local server on
+  5077, `node tools_click_through.js`. It signs in as every role on a phone
+  screen and must end with "CLICK-THROUGH: ALL GOOD" (no JS errors, no failed
+  requests, no sideways scroll). Add a step to it for every new button.
 - Render free plan: push to `main` once per finished request, not per small
   step (each deploy uses build minutes). `render.yaml` buildFilter skips
   builds for tests and docs. Keep a single Render service.
@@ -97,6 +102,11 @@ eventlet worker); the database is Supabase PostgreSQL.
   (`/pick/bills/find.json` + `billflow.js` `data-bill-search`), four tabs
   (staff, today, scores, admin), one Go to menu. Don't add a second menu.
   Secondary panels carry `data-min-default` (folded to a title; `ux.js`).
+- A number tile is a button to its own report everywhere (`#paSum`,
+  `.pt-tile`, `.st-sum a`, `data-go-tab` / `data-go-el` on the picking screen).
+- A repeat bill number never moves on to quantity (`dupCheck`,
+  `/pick/bills/exists.json`). A missing item with no quantity is 1. Purchasers
+  can add a remark (`PickMissing.remark`). Free pickers are green.
 - Item quantity on a bill: any number except 0 (`PICK_MAX_ITEMS` only stops
   typing slips). The bill just added shows under the entry box for 10 s with
   who added it (`last_added`, `PICK_JUST_ADDED`).
@@ -165,6 +175,10 @@ eventlet worker); the database is Supabase PostgreSQL.
 - An inline `style="display:grid"` on a tab panel beat the tab's
   `display:none` rule, so Team Health showed on every admin tab. Never put
   `display` inline on a `[data-pane]`.
+- The notification list sat inside the top bar, which scrolls sideways on
+  phones and clipped it: the bell "did nothing". Pop-ups go on `<body>`.
+- A placeholder longer than its box ("Item qty" in 84 px) read as a wrong
+  label. Check placeholders at phone width.
 - Phones on an old page made "slow on one phone, fast on another"; the auto
   reload on a new `APP_BUILD` fixes that, but a deploy still needs one manual
   refresh on pages older than that feature.

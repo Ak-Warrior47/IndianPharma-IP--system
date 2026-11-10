@@ -46,7 +46,7 @@
 .pk-msg.on{display:block} .pk-msg.good{background:#e8f4ee;color:#0f4a32} .pk-msg.warn{background:var(--warn-tint);color:var(--warn-ink)}
 .pk-note{font-size:12px;color:var(--ink-3);margin-top:8px}
 .pk-chip{display:inline-flex;align-items:center;gap:6px;padding:5px 10px;border-radius:999px;font-size:13px;font-weight:600;border:1px solid var(--line)}
-.pk-chip.free{background:#e8eefc;border-color:#bccbf3;color:#1e3a8a}
+.pk-chip.free{background:#e6f4ec;border-color:#a9d6bd;color:#0f5132}
 .pk-chip.busy{background:#fdecec;border-color:#f3c2c2;color:#991b1b}
 .pk-chip.late{background:#b91c1c;border-color:#b91c1c;color:#fff}
 .pk-chip.late .pk-btn{color:#fff;border-color:rgba(255,255,255,.5)}
@@ -73,15 +73,19 @@
 @media(max-width:640px){.pk-urtop{grid-template-columns:1fr}}
 .pk-today,.pk-myday{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;margin:0 0 12px}
 .pk-myday{grid-template-columns:repeat(auto-fit,minmax(110px,1fr))}
+.pk-today button{font:inherit;text-align:left;cursor:pointer;color:inherit;border:1px solid var(--line);border-radius:12px;padding:8px 10px;background:var(--surface,#fff);min-width:0}
+.pk-today button:hover,.pk-today button:focus-visible{border-color:var(--brand)}
+button.pk-stat{font:inherit;cursor:pointer;color:inherit;background:var(--surface,#fff);text-align:left}
 .pk-today div,.pk-myday div{border:1px solid var(--line);border-radius:12px;padding:8px 10px;background:var(--surface,#fff);min-width:0}
 .pk-today span,.pk-myday span{display:block;font-size:10.5px;font-weight:700;color:var(--ink-3);text-transform:uppercase;letter-spacing:.4px}
 .pk-today b,.pk-myday b{display:block;font-size:22px;font-variant-numeric:tabular-nums;line-height:1.2}
 .pk-today small{display:block;font-size:11.5px;color:var(--ink-3)}
 .pk-today .pend b{color:var(--warn-ink,#9a4b00)}
 .pk-today .fix{border-color:var(--brand)}
+.pk-today button.fix{border-color:var(--brand)}
 .pk-plain{cursor:default}
 @media(max-width:560px){.pk-today{grid-template-columns:repeat(2,minmax(0,1fr))}}
-.pk-add{display:grid;grid-template-columns:minmax(0,1fr) 84px auto;gap:6px;align-items:center;max-width:460px}
+.pk-add{display:grid;grid-template-columns:minmax(0,1fr) 104px auto;gap:6px;align-items:center;max-width:460px}
 .pk-sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
 .pk-add input{height:36px;padding:4px 8px!important;font-size:14px!important}
 .pk-add .pk-pre span{height:36px;font-size:12.5px!important;padding:0 6px!important}
@@ -92,7 +96,8 @@
 .pk-mymiss .h{font-size:12px;font-weight:800;color:var(--bad-ink);text-transform:uppercase;letter-spacing:.4px;margin-bottom:4px}
 .pk-mymiss .m{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:4px 0;font-size:14px}
 .pk-rep .r{grid-template-columns:1fr 64px 40px}
-.pk-rep .r .x{border:1.5px solid var(--line);background:transparent;border-radius:8px;font-size:18px;line-height:1;color:var(--bad-ink);cursor:pointer;min-height:36px}
+.pk-rep .r .x{border:1.5px solid var(--line);background:transparent;border-radius:8px;line-height:0;color:var(--bad-ink);cursor:pointer;min-height:36px;display:grid;place-items:center}
+.pk-bin{color:var(--bad-ink);line-height:0;min-width:40px;display:inline-grid;place-items:center}
 .pk-addhint{font-size:11.5px;color:var(--ink-3);margin:3px 0 0}
 .pk-add label{display:block;font-size:12px;font-weight:700;color:var(--ink-3);margin-bottom:4px}
 .pk-add input{width:100%;padding:9px 10px;border:1.5px solid var(--line);border-radius:10px;font-size:15px}
@@ -120,6 +125,7 @@
 .pk-seg button[aria-pressed="true"]{background:var(--brand);color:#fff}
 .pk-seg button[aria-pressed="true"] b{background:rgba(255,255,255,.25);color:#fff}
 #pickApp [hidden]{display:none!important}
+#pkBillNo.pk-bad{color:var(--bad-ink);background:#fff1f1}
 .pk-in.pk-bad,#pkRepRows input.pk-bad{border-color:var(--bad);background:#fff1f1;color:var(--bad-ink)}
 .pk-alerts{margin-left:auto;border:1.5px solid #b45309;background:#fff7ed;color:#7c2d12;border-radius:999px;padding:4px 10px;font:700 12px system-ui,sans-serif;cursor:pointer}
 .pk-net{position:sticky;top:0;z-index:5;margin:0 0 8px;padding:9px 12px;border-radius:10px;background:#1f2937;color:#fff;font-size:13.5px;font-weight:600}
@@ -279,11 +285,11 @@ body.pk-full .pk-msg.on{position:sticky;top:0;z-index:2}
   </div>
   <section data-panel="live">
   <div class="pk-stats">
-    <div class="pk-stat"><span>Bills</span><b id="pkBillsN">0</b></div>
-    <div class="pk-stat"><span>Items</span><b id="pkItems">0</b></div>
-    <div class="pk-stat"><span>On time</span><b id="pkOnTime">—</b></div>
-    <div class="pk-stat"><span>Points</span><b id="pkPoints">0</b></div>
-    <div class="pk-stat"><span>Items / hr</span><b id="pkRate">—</b></div>
+    <button type="button" class="pk-stat" data-go-tab="mine"><span>Bills</span><b id="pkBillsN">0</b></button>
+    <button type="button" class="pk-stat" data-go-tab="mine"><span>Items</span><b id="pkItems">0</b></button>
+    <button type="button" class="pk-stat" data-go-tab="mine"><span>On time</span><b id="pkOnTime">—</b></button>
+    <button type="button" class="pk-stat" data-go-tab="mine"><span>Points</span><b id="pkPoints">0</b></button>
+    <button type="button" class="pk-stat" data-go-tab="mine"><span>Items / hr</span><b id="pkRate">—</b></button>
   </div>
   <div class="pk-mymiss" id="pkMyMiss" hidden></div>
   <div class="pk-mine" id="pkMine" hidden>
@@ -302,7 +308,7 @@ body.pk-full .pk-msg.on{position:sticky;top:0;z-index:2}
       </div>
     </div>
     <div class="pk-rep" id="pkRep" hidden>
-      <div class="pk-sub" style="margin-bottom:6px">Write each item you could not find and how many. The rest count as picked.</div>
+      <div class="pk-sub" style="margin-bottom:6px">Write each item you could not find. Quantity is 1 if you leave it empty. The rest count as picked.</div>
       <div id="pkRepRows"></div>
       <div class="pk-row">
         <button type="button" class="pk-btn ghost sm" id="pkRepAdd">+ Another item</button>
@@ -333,22 +339,22 @@ body.pk-full .pk-msg.on{position:sticky;top:0;z-index:2}
   </div>
   <section data-panel="live">
   <div class="pk-today" id="pkToday" aria-live="polite">
-    <div><span>Bills today</span><b id="pkTdAdded">0</b></div>
-    <div><span>Completed</span><b id="pkTdDone">0</b></div>
-    <div class="pend"><span>Pending</span><b id="pkTdPend">0</b><small id="pkTdLeft"></small></div>
-    <div class="fix"><span>Closed total (checkers)</span><b id="pkTdClosed">—</b><small id="pkTdClosedNote">not closed yet</small></div>
+    <button type="button" data-go-el="pkBillsWrap"><span>Bills today</span><b id="pkTdAdded">0</b></button>
+    <button type="button" data-go-tab="done"><span>Completed</span><b id="pkTdDone">0</b></button>
+    <button type="button" class="pend" data-go-el="pkBillsWrap"><span>Pending</span><b id="pkTdPend">0</b><small id="pkTdLeft"></small></button>
+    <button type="button" class="fix" data-go-el="pkClose"><span>Closed total (checkers)</span><b id="pkTdClosed">—</b><small id="pkTdClosedNote">not closed yet</small></button>
   </div>
   <div class="pk-late" id="pkLate" role="alert" hidden></div>
   <form class="pk-add" id="pkAdd" autocomplete="off" novalidate>
     <div><label for="pkBillNo" class="pk-sr">Bill number (add U for urgent)</label>
       <div class="pk-pre"><span id="pkPrefix">IP----/</span><input id="pkBillNo" name="bill_no" maxlength="7" inputmode="text" placeholder="Bill no." autocapitalize="characters"></div></div>
-    <div><label for="pkBillItems" class="pk-sr">Item quantity (any number except 0)</label><input id="pkBillItems" name="items" type="number" min="1" inputmode="numeric" placeholder="Item qty"></div>
+    <div><label for="pkBillItems" class="pk-sr">Item quantity (any number except 0)</label><input id="pkBillItems" name="items" type="number" min="1" inputmode="numeric" placeholder="Quantity"></div>
     <button class="pk-btn" type="button" id="pkAddBtn">Add</button>
   </form>
   <div class="pk-added" id="pkAdded" role="status" hidden></div>
   <div class="pk-addhint">Put <b>U</b> at the end for an urgent bill.</div>
   <div class="section-label pk-sec" style="margin-top:14px" data-collapse="pkPickWrap"><span>Pickers right now</span></div>
-  <div id="pkPickWrap"><div class="pk-key"><span><i style="background:#3b5bdb"></i>Free (number = bills today)</span><span><i style="background:#e05252"></i>Picking</span><span><i style="background:#b91c1c"></i>Late</span></div>
+  <div id="pkPickWrap"><div class="pk-key"><span><i style="background:#1f8a57"></i>Free (number = bills today)</span><span><i style="background:#e05252"></i>Picking</span><span><i style="background:#b91c1c"></i>Late</span></div>
   <div class="pk-row" id="pkPickers"><span class="pk-empty">Loading…</span></div></div>
   <div class="section-label pk-sec" style="margin-top:14px" data-collapse="pkBillsWrap"><span>Pending bills <b class="pk-n" id="pkPendN">0</b></span></div>
   <div id="pkBillsWrap">
@@ -599,8 +605,8 @@ body.pk-full .pk-msg.on{position:sticky;top:0;z-index:2}
       $("pkMyMiss").hidden = !mm.length;
       $("pkMyMiss").innerHTML = mm.length ? '<div class="h">You reported not found · with the purchaser</div>' + mm.map(function (m) {
         return '<div class="m"><span><b>' + esc(m.item) + " ×" + m.qty + "</b> · bill " + esc(m.bill_no) + " · " + esc(m.at) + "</span>" +
-          '<button type="button" class="pk-btn ghost sm" data-miss-del="' + m.id + '">Delete</button></div>';
-      }).join("") + '<div class="pk-sub">Wrong item or name? Delete it: the item goes back on the bill, then take it and report again.</div>' : "";
+          '<button type="button" class="pk-btn ghost sm pk-bin" data-miss-del="' + m.id + '" aria-label="Delete this report" title="Delete this report">' + BIN + "</button></div>";
+      }).join("") + '<div class="pk-sub">Wrong item or name? Tap the bin: the item goes back on the bill, then take it and report again.</div>' : "";
     }
     var had = mine && mine.id;
     mine = s.mine || null; mineAt = Date.now();
@@ -963,10 +969,11 @@ body.pk-full .pk-msg.on{position:sticky;top:0;z-index:2}
     }
   }
 
+  var BIN = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M6 6l1 14h10l1-14"/><path d="M10 11v5M14 11v5"/></svg>';
   function repRow() {
     var d = document.createElement("div"); d.className = "r";
-    d.innerHTML = '<input placeholder="Item name" aria-label="Missing item name" maxlength="120"><input type="number" min="1" placeholder="0" aria-label="How many" inputmode="numeric">' +
-      '<button type="button" class="x" data-rep-del="1" aria-label="Delete this row" title="Delete this row">×</button>';
+    d.innerHTML = '<input placeholder="Item name" aria-label="Missing item name" maxlength="120"><input type="number" min="1" placeholder="1" aria-label="How many (1 if left empty)" inputmode="numeric">' +
+      '<button type="button" class="x" data-rep-del="1" aria-label="Delete this row" title="Delete this row">' + BIN + "</button>";
     $("pkRepRows").appendChild(d); d.querySelector("input").focus();
   }
 
@@ -993,6 +1000,9 @@ body.pk-full .pk-msg.on{position:sticky;top:0;z-index:2}
       else { b.setAttribute("data-sure", "1"); b.textContent = "Tap again to close today"; }
       return;
     }
+    // a number tile opens its own list / tab
+    if (b.hasAttribute("data-go-tab")) { if (!app.classList.contains("pk-focus")) showTab(b.getAttribute("data-go-tab")); return; }
+    if (b.hasAttribute("data-go-el")) { showTab("live"); var ge = $(b.getAttribute("data-go-el")); if (ge) ge.scrollIntoView({ block: "start" }); return; }
     if (b.hasAttribute("data-take")) {
       var id = b.getAttribute("data-take"), v = +($("take" + id) || {}).value;
       if (!v) { say("Type how many items you are taking.", false); $("take" + id).focus(); return; }
@@ -1039,12 +1049,13 @@ body.pk-full .pk-msg.on{position:sticky;top:0;z-index:2}
     } else if (b.id === "pkRepAdd") { repRow();
     } else if (b.id === "pkRepSend") {
       var rows = Array.prototype.map.call($("pkRepRows").children, function (r) {
-        var i = r.querySelectorAll("input"); return { item: i[0].value.trim(), qty: +i[1].value || 0 };
+        // no quantity typed = 1 of that item
+        var i = r.querySelectorAll("input"), nm = i[0].value.trim(); return { item: nm, qty: +i[1].value || (nm ? 1 : 0) };
       }).filter(function (m) { return m.item || m.qty; });
-      if (!rows.length) { say("Write the missing item and how many.", false); return; }
+      if (!rows.length) { say("Write the name of the missing item.", false); return; }
       var miss = rows.reduce(function (a, m) { return a + (m.qty || 0); }, 0);
       if (mine && miss > mine.items) { say("You took " + plural(mine.items, "item") + "; missing items can't be more than that (you typed " + miss + ").", false); return; }
-      if (rows.some(function (m) { return !m.item || !m.qty; })) { say("Write each missing item's name and how many.", false); return; }
+      if (rows.some(function (m) { return !m.item; })) { say("Write each missing item's name.", false); return; }
       if (!mine || !mine.id) return;
       post("/pick/done", { claim_id: mine.id, missing: rows }, function (c) { c.mine = null; });
     } else if (b.id === "pkAddBtn") { addBill();
@@ -1088,6 +1099,37 @@ body.pk-full .pk-msg.on{position:sticky;top:0;z-index:2}
     });
     (c.pickers || []).forEach(function (r) { if (!r.free && names[r.bill_no]) r.paused = on; });
   }
+  // ---- bill number already entered? checked while typing ---------------------
+  var dupSeen = {}, dupTimer = 0;
+  function dupKey(v) { return String(v || "").replace(/\s+/g, "").toUpperCase().replace(/U$/, ""); }
+  function dupCheck(v, cb) {
+    var k = dupKey(v);
+    if (!/^\d{1,6}$/.test(k)) { cb(null); return; }
+    if (k in dupSeen) { cb(dupSeen[k]); return; }
+    var here = lastState && (lastState.bills || []).filter(function (b) { return b.id > 0 && String(b.bill_no).split("/").pop() === k; })[0];
+    if (here) { dupSeen[k] = { bill_no: here.bill_no, when: here.added }; cb(dupSeen[k]); return; }
+    fetch("/pick/bills/exists.json?no=" + encodeURIComponent(k), { credentials: "same-origin" })
+      .then(function (r) { return r.json(); })
+      .then(function (d) { var hit = d && d.exists ? { bill_no: d.bill_no, when: d.when } : null; if (d && d.ok) dupSeen[k] = hit; cb(hit); })
+      .catch(function () { cb(null); });      // offline: the server still refuses a repeat
+  }
+  function dupShow(d) {
+    $("pkBillNo").classList.add("pk-bad");
+    say("Bill " + d.bill_no + " was already entered" + (d.when ? " (" + d.when + ")" : "") + ". A bill number can be used only once.", false);
+    $("pkBillNo").focus(); $("pkBillNo").select();
+  }
+  app.addEventListener("input", function (e) {
+    if (e.target.id !== "pkBillNo") return;
+    e.target.classList.remove("pk-bad");
+    clearTimeout(dupTimer);
+    var v = e.target.value;
+    dupTimer = setTimeout(function () { dupCheck(v, function (d) { if (d && $("pkBillNo").value === v) dupShow(d); }); }, 300);
+  });
+  app.addEventListener("focusin", function (e) {      // tapping into quantity with a repeat number: back to the number
+    if (e.target.id !== "pkBillItems") return;
+    var d = dupSeen[dupKey($("pkBillNo").value)];
+    if (d) dupShow(d);
+  });
   // The bill just added, and who added it, under the entry box for a few seconds.
   var addedTimer = 0, addedKey = "";
   function showAdded(a) {
@@ -1103,6 +1145,7 @@ body.pk-full .pk-msg.on{position:sticky;top:0;z-index:2}
   function addBill() {
     var no = $("pkBillNo").value.trim(), it = $("pkBillItems").value;
     if (!no) { say("Type the bill number.", false); $("pkBillNo").focus(); return; }
+    if (dupSeen[dupKey(no)]) { dupShow(dupSeen[dupKey(no)]); return; }
     if (!(+it > 0)) { say("Type the item quantity: any number except 0.", false); $("pkBillItems").focus(); return; }
     // Clear the boxes at once for the next bill; put them back if it fails.
     $("pkBillNo").value = ""; $("pkBillItems").value = ""; $("pkBillNo").focus();
@@ -1113,6 +1156,9 @@ body.pk-full .pk-msg.on{position:sticky;top:0;z-index:2}
         score: 0, done: 0, active: 0, left: n, missing: 0, taken: [], pickers: [], missing_rows: [], elapsed: 0,
         paused: false, paused_for: 0, minutes: null, added: "now", completed: "" });
     }).then(function (j) {
+      // remember it as used; if the server refused for another reason, forget it
+      if (j.ok) dupSeen[dupKey(no)] = { bill_no: ((lastState && lastState.prefix) || "") + dupKey(no), when: "just now" };
+      else if (!/already entered/.test(j.message || "")) delete dupSeen[dupKey(no)];
       if (!j.ok && !$("pkBillNo").value && !$("pkBillItems").value) { $("pkBillNo").value = no; $("pkBillItems").value = it; }
     });
   }
@@ -1139,7 +1185,13 @@ body.pk-full .pk-msg.on{position:sticky;top:0;z-index:2}
   app.addEventListener("keydown", function (e) {
     if (e.key !== "Enter" || !e.target.matches("input")) return;
     e.preventDefault();
-    if (e.target.id === "pkBillNo") { $("pkBillItems").value ? addBill() : $("pkBillItems").focus(); }
+    if (e.target.id === "pkBillNo") {
+      // an already-entered bill number stays here: no moving on to quantity
+      dupCheck($("pkBillNo").value, function (d) {
+        if (d) { dupShow(d); return; }
+        $("pkBillItems").value ? addBill() : $("pkBillItems").focus();
+      });
+    }
     else if (e.target.id === "pkBillItems") { $("pkBillNo").value ? addBill() : $("pkBillNo").focus(); }
     else if (e.target.id && e.target.id.indexOf("take") === 0) { var btn = app.querySelector('[data-take="' + e.target.id.slice(4) + '"]'); if (btn) btn.click(); }
   });

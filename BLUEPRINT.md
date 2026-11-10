@@ -43,6 +43,9 @@ Staff emails are `name@pharmaip.com`. Only the admin sets someone's role.
    - For about 10 seconds a line under the entry box shows the bill just
      added, its quantity and who added it ("Added IP2627/4521 · quantity 10 ·
      by Ravi"), on every assigner and admin screen.
+   - A bill number that was already entered stops at once: the number box
+     turns red with "Bill … was already entered", and the cursor stays on the
+     number instead of moving to quantity.
    - The prefix is added by itself: IP2627/ (it becomes IP2728/ on 1 April).
    - Up to 6 digits. A number can never be used twice.
    - Put **U** at the end for an urgent bill (e.g. 4521U).
@@ -94,20 +97,22 @@ Staff emails are `name@pharmaip.com`. Only the admin sets someone's role.
 | Report time | 0.5 |
 | Late | −1 per started minute late, never more than −5 |
 
-- **Item not found**: the picker writes the item and quantity and taps
-  Done; their part is finished. The **Purchaser** gets a phone alert and a
-  "Missing items to sort" box on their dashboard (the admin sees it on the
-  Today tab too). Only the purchaser (or admin) finishes it: **Done** (sorted)
-  or **Not available**. Either way the picker is paid for it at the rate of
-  when they reported it, and the bill completes. The assigner sees "with
-  purchaser" and has no buttons for it.
-- **Wrong report?** While typing, each row has a × to delete it. After
-  sending, the picker sees "You reported not found" with a **Delete** button
+- **Item not found**: the picker writes the item (quantity is 1 if left
+  empty) and taps Done; their part is finished. **Every purchaser** gets a
+  phone alert and sees it in the "Missing items to sort" box on their
+  dashboard (the admin sees it on the Today tab too). Only a purchaser (or
+  admin) finishes it: **Done** (sorted) or **Not available**, and they can
+  write a **remark** (e.g. "ordered, comes tomorrow"). Either way the picker
+  is paid for it at the rate of when they reported it, and the bill
+  completes. The assigner sees "with purchaser" and has no buttons for it.
+- **Wrong report?** While typing, each row has a bin button to delete it. After
+  sending, the picker sees "You reported not found" with a bin button
   (until the purchaser finishes it): the item goes back on the bill, and they
   take it again and report it correctly.
 - **Missing items report** (admin: big button on the dashboard, or Picking >
   Reports): every item, bill, who reported it and when, what happened, who
-  finished it and when. Also in the PDF and CSV.
+  finished it and when, and the purchaser's remark. Also in the PDF and CSV.
+- On the assigner screen free pickers are green, picking red, late dark red.
 - Urgent bill bonus: 10 points per urgent bill, shared by items picked.
 - After a bill is added, free pickers have **5 minutes** to take it (they may
   finish other work first). A free picker who leaves it waiting longer gets a warning
@@ -174,9 +179,15 @@ month (calendar month). Targets only go up.
 ## 6. What the admin sees
 
 - **Admin dashboard**, kept simple:
-  - Big buttons at the top for the daily jobs: Live picking, Pick bills
-    yourself, Staff today, Picking reports, Multitask report, Missing items
-    report, Day view, Add staff.
+  - Big buttons at the top in two groups. **Do**: Live picking, Pick bills
+    yourself, Add staff. **Reports**: Staff today, Picking reports, Missing
+    items report, Urgent bills report, Late report, Leaderboard, Multitask
+    report, Day view.
+  - **A number is a button**: tapping a number tile opens its own report.
+    Missing opens the missing-items report, Urgent bills the urgent-bills
+    report, Late the late report, Total Staff the staff list, and so on.
+    The same on the Picking page, Staff today, the assigner's Today strip
+    (Completed, Pending) and the picker's own numbers (My day).
   - **Find a bill**: type a bill number, matching bills of any date appear;
     tap one for all its details (staff, items, times).
   - Four tabs: Staff · Today (picking today, multitask reports, notes) ·
@@ -210,6 +221,8 @@ month (calendar month). Targets only go up.
   one out. A **Pick Assigner** login can be open on **3 phones** at once; a
   4th sign-in signs out the oldest. Admins can stay signed in on several
   devices.
+- **Bell**: the bell in the top bar opens the notification list on top of
+  the page (on phones too) and closes when you tap elsewhere.
 - **Alerts**: while the app is open the phone vibrates and beeps for new
   bills, pauses, late and missing items. A "Phone alerts: off — Turn on"
   button turns on alerts that arrive even when the app is closed.
@@ -275,6 +288,7 @@ month (calendar month). Targets only go up.
 | `CLAUDE.md` | Working rules for the AI that maintains the code. |
 | `BLUEPRINT.md` | This file. |
 | `tools_recommend_targets.py` | Optional helper to suggest hourly targets from history. |
+| `tools_click_through.js`, `tools_click_through_seed.py` | The before-deploy check: signs in as every role on a phone-size screen, taps the real buttons, and reports errors. |
 
 ## 12. Settings (names only; values are in Render, never in code)
 
