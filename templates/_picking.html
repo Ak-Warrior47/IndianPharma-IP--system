@@ -86,6 +86,13 @@
 .pk-add input{height:36px;padding:4px 8px!important;font-size:14px!important}
 .pk-add .pk-pre span{height:36px;font-size:12.5px!important;padding:0 6px!important}
 .pk-add .pk-btn{min-height:36px;height:36px;padding:0 14px}
+.pk-added{margin:6px 0 0;padding:7px 10px;border-radius:10px;background:#e8f4ee;color:#0f4a32;font-size:14px;font-weight:600;max-width:460px}
+.pk-added b{font-weight:800}
+.pk-mymiss{margin:0 0 10px;padding:8px 10px;border:1px solid #f3b4b4;border-radius:12px;background:#fff7f7}
+.pk-mymiss .h{font-size:12px;font-weight:800;color:var(--bad-ink);text-transform:uppercase;letter-spacing:.4px;margin-bottom:4px}
+.pk-mymiss .m{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:4px 0;font-size:14px}
+.pk-rep .r{grid-template-columns:1fr 64px 40px}
+.pk-rep .r .x{border:1.5px solid var(--line);background:transparent;border-radius:8px;font-size:18px;line-height:1;color:var(--bad-ink);cursor:pointer;min-height:36px}
 .pk-addhint{font-size:11.5px;color:var(--ink-3);margin:3px 0 0}
 .pk-add label{display:block;font-size:12px;font-weight:700;color:var(--ink-3);margin-bottom:4px}
 .pk-add input{width:100%;padding:9px 10px;border:1.5px solid var(--line);border-radius:10px;font-size:15px}
@@ -105,6 +112,7 @@
 .pk-empty{padding:12px 0;color:var(--ink-3);font-size:14px}
 #pickApp.pk-focus [data-collapse="pkBills"],#pickApp.pk-focus #pkBills{display:none}
 #pickApp.pk-focus .pk-tabs{display:none}
+#pickApp.pk-focus #pkMyMiss,#pickApp.pk-focus .pk-find,#pickApp.pk-focus #pkFindPAllWrap{display:none}
 .pk-btn.saving{opacity:.7;pointer-events:none}
 .pk-seg{display:inline-flex;border:1.5px solid var(--line);border-radius:10px;overflow:hidden;margin:0 0 8px}
 .pk-seg button{border:0;background:transparent;padding:7px 14px;font:650 13.5px system-ui,sans-serif;color:var(--ink-2);cursor:pointer}
@@ -257,7 +265,7 @@ body.pk-full .pk-msg.on{position:sticky;top:0;z-index:2}
 
 {% set _pk_role = pick_as if pick_as is defined and pick_as else ('picker' if staff_type == 'picker' else 'assigner') %}
 {% set _pk_day = today if today is defined and today else pick_today() %}
-<div class="card pk-card{% if pick_as is defined and pick_as %} pk-helper{% endif %}" id="pickApp" data-role="{{ _pk_role }}" data-build="{{ app_build }}"{% if pick_as is defined and pick_as %} data-helper="1"{% endif %}>
+<div class="card pk-card{% if pick_as is defined and pick_as %} pk-helper{% endif %}" id="pickApp" data-role="{{ _pk_role }}" data-name="{{ session.get('user_name', '') }}" data-build="{{ app_build }}"{% if pick_as is defined and pick_as %} data-helper="1"{% endif %}>
   {% set _pk_name = session.get('user_name') or (user_name if user_name is defined else '') %}
   <div class="pk-who"><b>{{ _pk_name }}</b><span class="pk-whorole">{{ 'Picker' if _pk_role == 'picker' else ('Admin' if session.get('is_admin') else 'Pick Assigner') }}</span><span class="pk-whoday">{{ _pk_day.strftime('%a, %d %b') }}</span><button type="button" class="pk-alerts" id="pkAlerts" hidden>Phone alerts: off — Turn on</button></div>
   {% if _pk_role == 'picker' %}
@@ -277,6 +285,7 @@ body.pk-full .pk-msg.on{position:sticky;top:0;z-index:2}
     <div class="pk-stat"><span>Points</span><b id="pkPoints">0</b></div>
     <div class="pk-stat"><span>Items / hr</span><b id="pkRate">—</b></div>
   </div>
+  <div class="pk-mymiss" id="pkMyMiss" hidden></div>
   <div class="pk-mine" id="pkMine" hidden>
     <div class="pk-pausebar" id="pkPauseBar" role="alert" hidden></div>
     <div class="pk-row pk-mtop" style="justify-content:space-between">
@@ -333,9 +342,10 @@ body.pk-full .pk-msg.on{position:sticky;top:0;z-index:2}
   <form class="pk-add" id="pkAdd" autocomplete="off" novalidate>
     <div><label for="pkBillNo" class="pk-sr">Bill number (add U for urgent)</label>
       <div class="pk-pre"><span id="pkPrefix">IP----/</span><input id="pkBillNo" name="bill_no" maxlength="7" inputmode="text" placeholder="Bill no." autocapitalize="characters"></div></div>
-    <div><label for="pkBillItems" class="pk-sr">Items</label><input id="pkBillItems" name="items" type="number" min="1" max="500" inputmode="numeric" placeholder="Items"></div>
+    <div><label for="pkBillItems" class="pk-sr">Item quantity (any number except 0)</label><input id="pkBillItems" name="items" type="number" min="1" inputmode="numeric" placeholder="Item qty"></div>
     <button class="pk-btn" type="button" id="pkAddBtn">Add</button>
   </form>
+  <div class="pk-added" id="pkAdded" role="status" hidden></div>
   <div class="pk-addhint">Put <b>U</b> at the end for an urgent bill.</div>
   <div class="section-label pk-sec" style="margin-top:14px" data-collapse="pkPickWrap"><span>Pickers right now</span></div>
   <div id="pkPickWrap"><div class="pk-key"><span><i style="background:#3b5bdb"></i>Free (number = bills today)</span><span><i style="background:#e05252"></i>Picking</span><span><i style="background:#b91c1c"></i>Late</span></div>
@@ -584,6 +594,14 @@ body.pk-full .pk-msg.on{position:sticky;top:0;z-index:2}
     $("pkOnTime").textContent = t.on_time_pct == null ? "—" : Math.round(t.on_time_pct) + "%";
     $("pkPoints").textContent = (t.points > 0 ? "+" : "") + (t.points || 0);
     $("pkRate").textContent = t.rate == null ? "—" : t.rate;
+    var mm = s.my_missing || [];
+    if ($("pkMyMiss")) {
+      $("pkMyMiss").hidden = !mm.length;
+      $("pkMyMiss").innerHTML = mm.length ? '<div class="h">You reported not found · with the purchaser</div>' + mm.map(function (m) {
+        return '<div class="m"><span><b>' + esc(m.item) + " ×" + m.qty + "</b> · bill " + esc(m.bill_no) + " · " + esc(m.at) + "</span>" +
+          '<button type="button" class="pk-btn ghost sm" data-miss-del="' + m.id + '">Delete</button></div>';
+      }).join("") + '<div class="pk-sub">Wrong item or name? Delete it: the item goes back on the bill, then take it and report again.</div>' : "";
+    }
     var had = mine && mine.id;
     mine = s.mine || null; mineAt = Date.now();
     $("pkMine").hidden = !mine;
@@ -704,6 +722,7 @@ body.pk-full .pk-msg.on{position:sticky;top:0;z-index:2}
         '</div><div class="sub">' + plural(b.left, "item") + " left</div></div><div class=\"sub\">Comes back " + esc(b.when_day) + ", <b>" + esc(b.when) + "</b></div>" +
         '<div><button type="button" class="pk-btn sm" data-back="' + b.id + '">Bring back now</button></div></div>';
     }).join("") : '<div class="pk-empty">No rescheduled bills.</div>';
+    showAdded(s.last_added);
     var dy = s.day || {};
     if ($("pkToday")) {
       $("pkTdAdded").textContent = dy.added || 0; $("pkTdDone").textContent = dy.done || 0;
@@ -946,7 +965,8 @@ body.pk-full .pk-msg.on{position:sticky;top:0;z-index:2}
 
   function repRow() {
     var d = document.createElement("div"); d.className = "r";
-    d.innerHTML = '<input placeholder="Item name" aria-label="Missing item name" maxlength="120"><input type="number" min="1" placeholder="0" aria-label="How many" inputmode="numeric">';
+    d.innerHTML = '<input placeholder="Item name" aria-label="Missing item name" maxlength="120"><input type="number" min="1" placeholder="0" aria-label="How many" inputmode="numeric">' +
+      '<button type="button" class="x" data-rep-del="1" aria-label="Delete this row" title="Delete this row">×</button>';
     $("pkRepRows").appendChild(d); d.querySelector("input").focus();
   }
 
@@ -1007,6 +1027,15 @@ body.pk-full .pk-msg.on{position:sticky;top:0;z-index:2}
       say("Pick another bill. Your items on the paused bill go back on it when you start the new one.", true);
     } else if (b.id === "pkRepBtn") {
       $("pkRep").hidden = !$("pkRep").hidden; if (!$("pkRep").hidden && !$("pkRepRows").children.length) repRow();
+    } else if (b.hasAttribute("data-rep-del")) {
+      b.closest(".r").remove();
+      if (!$("pkRepRows").children.length) repRow();       // always one row to type in
+    } else if (b.hasAttribute("data-miss-del")) {
+      var md = +b.getAttribute("data-miss-del");
+      b.disabled = true;
+      post("/pick/missing/" + md + "/delete", null, function (c) {
+        c.my_missing = (c.my_missing || []).filter(function (m) { return m.id !== md; });
+      });
     } else if (b.id === "pkRepAdd") { repRow();
     } else if (b.id === "pkRepSend") {
       var rows = Array.prototype.map.call($("pkRepRows").children, function (r) {
@@ -1059,14 +1088,27 @@ body.pk-full .pk-msg.on{position:sticky;top:0;z-index:2}
     });
     (c.pickers || []).forEach(function (r) { if (!r.free && names[r.bill_no]) r.paused = on; });
   }
+  // The bill just added, and who added it, under the entry box for a few seconds.
+  var addedTimer = 0, addedKey = "";
+  function showAdded(a) {
+    var el = $("pkAdded"); if (!el || !a) return;
+    var key = a.bill_no + "|" + a.items; if (key === addedKey) return;
+    addedKey = key;
+    el.innerHTML = "Added <b>" + esc(a.bill_no) + "</b>" + (a.urgent ? " (urgent)" : "") + " · quantity <b>" + a.items + "</b>" +
+      (a.by ? " · by <b>" + esc(a.by) + "</b>" : "");
+    el.hidden = false;
+    clearTimeout(addedTimer);
+    addedTimer = setTimeout(function () { el.hidden = true; }, Math.max(2, (a.show || 10) - (a.ago || 0)) * 1000);
+  }
   function addBill() {
     var no = $("pkBillNo").value.trim(), it = $("pkBillItems").value;
     if (!no) { say("Type the bill number.", false); $("pkBillNo").focus(); return; }
-    if (!+it) { say("Type how many items.", false); $("pkBillItems").focus(); return; }
+    if (!(+it > 0)) { say("Type the item quantity: any number except 0.", false); $("pkBillItems").focus(); return; }
     // Clear the boxes at once for the next bill; put them back if it fails.
     $("pkBillNo").value = ""; $("pkBillItems").value = ""; $("pkBillNo").focus();
     post("/pick/bill", { bill_no: no, items: +it }, function (c) {
       var u = /u$/i.test(no), n = +it;
+      c.last_added = { bill_no: (c.prefix || "") + no.replace(/u$/i, ""), items: n, urgent: u, by: app.getAttribute("data-name") || "", ago: 0, show: 10 };
       c.bills.push({ id: -Date.now(), bill_no: (c.prefix || "") + no.replace(/u$/i, ""), items: n, status: "open", urgent: u,
         score: 0, done: 0, active: 0, left: n, missing: 0, taken: [], pickers: [], missing_rows: [], elapsed: 0,
         paused: false, paused_for: 0, minutes: null, added: "now", completed: "" });

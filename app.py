@@ -932,6 +932,7 @@ class PickMissing(db.Model):
     reported_at = db.Column(db.DateTime, default=datetime.utcnow)
     status      = db.Column(db.String(12), default="open", index=True)  # open / sorted (by purchaser) / unavailable / reassigned
     handled_at  = db.Column(db.DateTime, nullable=True)
+    handled_by  = db.Column(db.Integer, db.ForeignKey("employees.id", ondelete="SET NULL"), nullable=True)  # who finished it
 
 
 class PickDay(db.Model):
@@ -2367,6 +2368,10 @@ def _pick_event(kind, picker_id, bill_id, minutes=None, detail=""):
                              detail=(detail or "")[:200], day=date.today()))
 
 
+PICK_MAX_ITEMS = 99999    # only so a typing slip (an extra few digits) cannot break the page
+PICK_JUST_ADDED = 10      # s: the assigner's screen shows the bill just added, and by whom
+
+
 def add_pick_bill(bill_no, items, created_by):
     """bill_no is what the assigner types: up to 6 digits, U on the end for
     urgent. The financial-year prefix is added here; a number is never reused."""
@@ -2378,8 +2383,10 @@ def add_pick_bill(bill_no, items, created_by):
         items = int(items)
     except (TypeError, ValueError):
         items = 0
-    if items < 1 or items > 500:
-        raise PickError("Items must be between 1 and 500.")
+    if items < 1:
+        raise PickError("Item quantity can be any number except 0.")
+    if items > PICK_MAX_ITEMS:
+        raise PickError("Item quantity is too large (at most %d)." % PICK_MAX_ITEMS)
     if int(m.group(1)) == 0:
         raise PickError("Bill number cannot be 0.")
     full = fy_prefix() + m.group(1)
@@ -2526,6 +2533,7 @@ def handle_missing(missing_id, action, now=None, by=None):
     if action not in ("done", "unavailable", "reassign"):
         raise PickError("Choose Done or Not available.")
     m.status, m.handled_at = {"done": "sorted", "unavailable": "unavailable", "reassign": "reassigned"}[action], now
+    m.handled_by = by
     if action in ("done", "unavailable") and m.claim_id:
         # Confirmed missing: the reporter is paid for it as if picked, at the
         # rate of when they reported it (normal time 1.5, extra time 1).
@@ -2953,8 +2961,11 @@ def pick_report(day_from, day_to=None, picker_id=None):
     bno = lambda i: bill_map[i].bill_no if i in bill_map else ""
     missing = [{"bill_no": bno(m.bill_id), "item": m.item_name, "qty": m.qty, "by": names.get(m.picker_id, ""),
                 "date": (m.reported_at + IST).strftime("%d %b"), "at": ist12(m.reported_at),
-                "status": {"open": "Waiting for purchaser", "sorted": "Done by purchaser", "reassigned": "Reassigned",
-                           "unavailable": "Not available"}.get(m.status, m.status)}
+                "status": {"open": "Waiting for purchaser", "sorted": "Done by purchaser",
+                           "reassigned": "Deleted by picker (back on the bill)" if m.handled_by == m.picker_id else "Reassigned",
+                           "unavailable": "Not available"}.get(m.status, m.status),
+                "open": m.status == "open", "finished_by": names.get(m.handled_by, "") if m.handled_by else "",
+                "finished_at": ist_dt(m.handled_at)}
                for m in mrows]
     events = [{"kind": e.kind, "label": {"late": "Late", "idle": "Waiting", "missing": "Missing"}.get(e.kind, e.kind),
                "who": names.get(e.picker_id, ""), "bill": bno(e.bill_id) if e.bill_id else "", "date": e.day.strftime("%d %b") if e.day else "",
@@ -3401,6 +3412,18 @@ def run_late_pick_alerts():
         alert_late_picks()
 
 
+def _last_added(bills, names, now):
+    """The bill added most recently, and by whom, while it is still fresh
+    (shown under the entry box for a few seconds on every assigner screen)."""
+    fresh = [b for b in bills if b.created_at and 0 <= (now - b.created_at).total_seconds() <= PICK_JUST_ADDED]
+    if not fresh:
+        return None
+    b = max(fresh, key=lambda x: x.created_at)
+    return {"id": b.id, "bill_no": b.bill_no, "items": b.items, "urgent": bool(b.is_urgent),
+            "by": names.get(b.created_by, ""), "ago": int((now - b.created_at).total_seconds()),
+            "show": PICK_JUST_ADDED}
+
+
 def _assigner_day(bills, cb, mb, day_start):
     """Today's bill count for the Pick Assigner: added, completed, pending
     (every open bill, older ones too) and items still to pick."""
@@ -3460,6 +3483,7 @@ def picking_state(emp, staff_type, alerts=True):
     out = {"board": pick_board(today, stats, pickers), "me": emp.id if emp else None,
            "day_closed": pick_day_total(today),
            "day": _assigner_day(bills, cb, mb, day_start),
+           "last_added": _last_added(bills, names, now),
            "scheduled": [{"id": b.id, "bill_no": b.bill_no, "items": b.items, "urgent": bool(b.is_urgent),
                           "left": pick_bill_progress(b, cb.get(b.id, []), mb.get(b.id, []))["left"], "when": ist12(b.scheduled_for),
                           "when_day": (b.scheduled_for + IST).strftime("%d %b") if b.scheduled_for else ""} for b in sched],
@@ -3482,6 +3506,14 @@ def picking_state(emp, staff_type, alerts=True):
         # are for the Pick Assigner and admin only: a picker sees each open
         # bill's number, items and how many are left, and their own totals.
         out["my_bills"] = []
+        # their own reports still with the purchaser: they may delete one to redo it
+        mine_miss = PickMissing.query.filter_by(picker_id=emp.id, status="open").order_by(PickMissing.reported_at).all()
+        older = {m.bill_id for m in mine_miss} - set(bill_by_id)
+        bno = {i: b.bill_no for i, b in bill_by_id.items()}
+        if older:
+            bno.update({b.id: b.bill_no for b in PickBill.query.filter(PickBill.id.in_(older)).all()})
+        out["my_missing"] = [{"id": m.id, "item": m.item_name, "qty": m.qty, "at": ist12(m.reported_at),
+                              "bill_no": bno.get(m.bill_id, "")} for m in mine_miss]
         for r in out["bills"]:
             r["taken"], r["pickers"], r["missing_rows"] = [], [], []
         st = stats.get(emp.id) or _stats_from([])
@@ -6938,6 +6970,7 @@ def admin_delete_user(emp_id):
             LevelEvent.query.filter_by(emp_id=emp_id).delete(synchronize_session=False)
             Notification.query.filter_by(emp_id=emp_id).delete(synchronize_session=False)
             PickMissing.query.filter_by(picker_id=emp_id).delete(synchronize_session=False)
+            PickMissing.query.filter_by(handled_by=emp_id).update({"handled_by": None}, synchronize_session=False)
             PickEvent.query.filter_by(picker_id=emp_id).delete(synchronize_session=False)
             PushSub.query.filter_by(emp_id=emp_id).delete(synchronize_session=False)
             StaffLogin.query.filter_by(emp_id=emp_id).delete(synchronize_session=False)
@@ -9878,6 +9911,23 @@ def pick_missing_action(missing_id, action):
                     "items": open_missing_items()})
 
 
+@app.route("/pick/missing/<int:missing_id>/delete", methods=["POST"])
+@login_required
+def pick_missing_delete(missing_id):
+    """A picker deletes their own report (wrong item or name) while the
+    purchaser has not finished it. The items go back on the bill, so they can
+    take them again and report correctly."""
+    m = db.session.get(PickMissing, missing_id)
+    if not m or m.picker_id != session.get("user_id"):
+        return _pick_reply(False, "You can delete only your own report.", 403)
+    try:
+        handle_missing(missing_id, "reassign", by=session.get("user_id"))
+    except PickError as exc:
+        return _pick_reply(False, "The purchaser has already finished this one." if "already" in str(exc) else str(exc), 400)
+    return _pick_reply(True, "Report deleted. %s is back on the bill: take it again and report it correctly."
+                       % ("%d item" % m.qty if m.qty == 1 else "%d items" % m.qty))
+
+
 def _is_purchaser():
     """Purchaser (main role, or working as purchaser now) or the admin."""
     if session.get("is_admin"):
@@ -9962,9 +10012,9 @@ def picking_report_csv():
                     b["late"], b["pickers"], b["added"], b["completed"], b["minutes"] if b["minutes"] is not None else "", b["status"]])
     w.writerow([])
     w.writerow(["Missing items"])
-    w.writerow(["Date", "Bill number", "Item", "Qty", "Reported by", "At", "Status"])
+    w.writerow(["Date", "Bill number", "Item", "Qty", "Reported by", "At", "Status", "Finished by", "Finished at"])
     for m in r["missing"]:
-        w.writerow([m["date"], m["bill_no"], m["item"], m["qty"], m["by"], m["at"], m["status"]])
+        w.writerow([m["date"], m["bill_no"], m["item"], m["qty"], m["by"], m["at"], m["status"], m["finished_by"], m["finished_at"]])
     w.writerow([])
     w.writerow(["Late report"])
     w.writerow(["Date", "Time", "What", "Picker", "Bill", "Minutes", "Detail"])

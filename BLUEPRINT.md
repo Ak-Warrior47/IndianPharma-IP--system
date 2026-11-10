@@ -38,7 +38,11 @@ Staff emails are `name@pharmaip.com`. Only the admin sets someone's role.
 
 ## 3. Picking (the main daily flow)
 
-1. **Pick Assigner adds a bill**: bill number + number of items.
+1. **Pick Assigner adds a bill**: bill number + **item quantity** (any
+   number except 0).
+   - For about 10 seconds a line under the entry box shows the bill just
+     added, its quantity and who added it ("Added IP2627/4521 · quantity 10 ·
+     by Ravi"), on every assigner and admin screen.
    - The prefix is added by itself: IP2627/ (it becomes IP2728/ on 1 April).
    - Up to 6 digits. A number can never be used twice.
    - Put **U** at the end for an urgent bill (e.g. 4521U).
@@ -97,6 +101,13 @@ Staff emails are `name@pharmaip.com`. Only the admin sets someone's role.
   or **Not available**. Either way the picker is paid for it at the rate of
   when they reported it, and the bill completes. The assigner sees "with
   purchaser" and has no buttons for it.
+- **Wrong report?** While typing, each row has a × to delete it. After
+  sending, the picker sees "You reported not found" with a **Delete** button
+  (until the purchaser finishes it): the item goes back on the bill, and they
+  take it again and report it correctly.
+- **Missing items report** (admin: big button on the dashboard, or Picking >
+  Reports): every item, bill, who reported it and when, what happened, who
+  finished it and when. Also in the PDF and CSV.
 - Urgent bill bonus: 10 points per urgent bill, shared by items picked.
 - After a bill is added, free pickers have **5 minutes** to take it (they may
   finish other work first). A free picker who leaves it waiting longer gets a warning
@@ -164,11 +175,13 @@ month (calendar month). Targets only go up.
 
 - **Admin dashboard**, kept simple:
   - Big buttons at the top for the daily jobs: Live picking, Pick bills
-    yourself, Staff today, Picking reports, Multitask report, Add staff.
+    yourself, Staff today, Picking reports, Multitask report, Missing items
+    report, Day view, Add staff.
   - **Find a bill**: type a bill number, matching bills of any date appear;
     tap one for all its details (staff, items, times).
   - Four tabs: Staff · Today (picking today, multitask reports, notes) ·
-    Scores · Setup.
+    Scores · Setup. In each tab only the main panel is open; the others are
+    folded to a title row. Tap a title to open it (the choice is remembered).
   - **Go to** menu (top bar): every other admin page, in one place.
   - On phones the staff list is cards, no sideways scrolling.
 - **Staff today** (/admin/staff-today; Today tab and Go to menu): everyone

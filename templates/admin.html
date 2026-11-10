@@ -63,6 +63,10 @@
 .main[data-tab="today"]  > [data-pane="today"],
 .main[data-tab="scores"] > [data-pane="scores"],
 .main[data-tab="admin"]  > [data-pane="admin"] { display: block; }
+/* An inline display:grid here once beat the rule above and showed this block
+   on every tab; the grid is set only while its own tab is open. */
+.main[data-tab="scores"] > .th-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 20px; align-items: start; }
+@media (max-width: 700px) { .main[data-tab="scores"] > .th-grid { grid-template-columns: 1fr; } }
 [data-ord="1"] { order: 1; } [data-ord="2"] { order: 2; }
 [data-ord="3"] { order: 3; } [data-ord="4"] { order: 4; }
 [data-ord="5"] { order: 5; } [data-ord="6"] { order: 6; }
@@ -354,7 +358,10 @@ input:focus, select:focus, textarea:focus { outline: none; border-color: var(--b
 [data-theme="dark"] .lv-not_measured{background:#2A2D33;color:#B7BDC8}
 
 /* ---- Quick actions: the daily jobs, one tap each ---- */
-.qa { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.qa { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+/* folded panels read as a tidy list of titles */
+.card.is-min { padding-top: 12px; padding-bottom: 12px; margin-bottom: 10px !important; cursor: pointer; }
+.card.is-min .card-title { font-size: 15px; }
 .qa-btn { display: flex; flex-direction: column; justify-content: center; gap: 2px; min-height: 64px;
           padding: 12px 14px; border: 1px solid var(--line); border-radius: var(--r); background: var(--surface);
           color: var(--ink); text-decoration: none; box-shadow: var(--sh-0); }
@@ -373,8 +380,9 @@ input:focus, select:focus, textarea:focus { outline: none; border-color: var(--b
 .qa-stats i { font-style: normal; margin: 0 6px; }
 @media (max-width: 700px) {
   .qa { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
-  .qa-btn { min-height: 58px; padding: 10px 12px; }
+  .qa-btn { min-height: 48px; padding: 9px 12px; }
   .qa-btn b { font-size: 14.5px; }
+  .qa-btn span { display: none; }            /* phone: just the names, one screen */
   .tab { min-width: 0; padding: 10px 6px; }
   .nav .ipk-trigger kbd { display: none; }
   /* Staff list as cards: no sideways scrolling on a phone */
@@ -566,6 +574,8 @@ var NOTES_BY_EMP = {
     <a class="qa-btn" href="/admin/staff-today" id="qaStaffToday"><b>Staff today</b><span>who came in · every pick · PDF</span></a>
     <a class="qa-btn" href="/picking?tab=reports&amp;period=today" id="qaReports"><b>Picking reports</b><span>any date · PDF · CSV</span></a>
     <a class="qa-btn" href="{{ url_for('admin_multitask_report') }}" id="qaMulti"><b>Multitask report</b><span>second roles, any date</span></a>
+    <a class="qa-btn" href="/picking?tab=reports&amp;period=month#paMissing" id="qaMissing"><b>Missing items report</b><span>who reported · who finished</span></a>
+    <a class="qa-btn" href="/admin/day" id="qaDay"><b>Day view</b><span>all staff, any date</span></a>
     <a class="qa-btn" href="#addEmployee" id="qaAdd"><b>Add staff</b><span>new employee login</span></a>
     <div class="qa-find"><label for="qaFind">Find a bill</label>
       <input type="search" id="qaFind" data-bill-search="qaFindOut" inputmode="numeric" autocomplete="off" placeholder="Type the bill number, e.g. 4521">
@@ -589,7 +599,7 @@ var NOTES_BY_EMP = {
   </nav>
 
   <!-- FEATURE 2: ANNOUNCEMENT / NOTICE BOARD -->
-  <div data-pane="admin" data-ord="2" class="card" style="margin-bottom:20px;border-left:4px solid var(--brand);">
+  <div data-pane="admin" data-ord="2" data-min-default class="card" style="margin-bottom:20px;border-left:4px solid var(--brand);">
     <div class="card-header">
       <div class="card-title">Announcements / Notice Board
         {% if all_announcements %}<span class="cnt">{{ all_announcements|length }} notices</span>{% endif %}
@@ -677,7 +687,7 @@ var NOTES_BY_EMP = {
 
   <!-- DELIVERY / BILLER NOTES PANEL -->
   {% if recent_db_notes %}
-  <div data-pane="today" data-ord="2" class="card anim-fade-in" style="margin-bottom:20px;border-left:4px solid var(--accent);">
+  <div data-pane="today" data-ord="2" data-min-default class="card anim-fade-in" style="margin-bottom:20px;border-left:4px solid var(--accent);">
     <div class="card-header">
       <div class="card-title">Delivery &amp; Biller Daily Notes
         <span class="cnt" style="background:#f5f3ff;color:var(--accent);border-color:var(--accent-line);">{{ recent_db_notes|length }} (30 days)</span>
@@ -702,7 +712,7 @@ var NOTES_BY_EMP = {
   {% endif %}
 
   <!-- MULTITASK (ROLE 2) REPORTS PANEL — always visible -->
-  <div data-pane="today" data-ord="6" class="card anim-fade-in" style="margin-bottom:20px;border-left:4px solid var(--accent);">
+  <div data-pane="today" data-ord="6" data-min-default class="card anim-fade-in" style="margin-bottom:20px;border-left:4px solid var(--accent);">
     <div class="card-header">
       <div class="card-title">Multitask (Role 2) Reports
         <span class="cnt" style="background:#f5f3ff;color:var(--accent);border-color:var(--accent-line);">{{ recent_multitask|length }} (30 days)</span>
@@ -789,7 +799,7 @@ var NOTES_BY_EMP = {
     {% else %}<div style="font-size:13.5px;color:var(--ink-3)">Picking data could not load. See Diagnostics.</div>{% endif %}
   </div>
 
-  <div data-pane="today" data-ord="4" class="card" style="margin-bottom:20px;">
+  <div data-pane="today" data-ord="4" data-min-default class="card" style="margin-bottom:20px;">
     <div class="card-header">
       <div class="card-title">Recent Level-ups <span class="cnt">{{ recent_levelups|length }} (7 days)</span></div>
     </div>
@@ -848,7 +858,7 @@ var NOTES_BY_EMP = {
   </div>
 
   <!-- FEATURE 5: BADGE MANAGEMENT -->
-  <div data-pane="admin" data-ord="4" class="card" style="margin-bottom:20px;">
+  <div data-pane="admin" data-ord="4" data-min-default class="card" style="margin-bottom:20px;">
     <div class="card-header">
       <div class="card-title">Badge Management
         {% if all_badges %}<span class="cnt">{{ all_badges|length }} badges</span>{% endif %}
@@ -917,7 +927,7 @@ var NOTES_BY_EMP = {
   </div>
 
   <!-- ADD EMPLOYEE -->
-  <div data-pane="staff" data-ord="2" class="card" id="addEmployee">
+  <div data-pane="staff" data-ord="2" data-min-default class="card" id="addEmployee">
     <div class="card-header">
       <div class="card-title">Add New Employee</div>
     </div>
@@ -959,7 +969,7 @@ var NOTES_BY_EMP = {
   </div>
 
   <!-- PAST DATE ENTRY WINDOW -->
-  <div data-pane="admin" data-ord="1" class="card past-window-section">
+  <div data-pane="admin" data-ord="1" data-min-default class="card past-window-section">
     <div class="card-header">
       <div class="card-title">Open Past Date Entry</div>
     </div>
@@ -1143,7 +1153,7 @@ var NOTES_BY_EMP = {
 
 
   <!-- COMPLAINT / MINUS MARKING SECTION -->
-  <div data-pane="admin" data-ord="3" class="card" style="margin-bottom:20px;border-left:4px solid var(--bad);">
+  <div data-pane="admin" data-ord="3" data-min-default class="card" style="margin-bottom:20px;border-left:4px solid var(--bad);">
     <div class="card-header">
       <div class="card-title">Post-Delivery Complaint — Minus Marking</div>
     </div>
@@ -1460,7 +1470,7 @@ var NOTES_BY_EMP = {
   <!-- ANALYTICS -->
 <!-- PERFORMANCE SUMMARY -->
   {% if rows %}
-  <div data-pane="scores" data-ord="2" class="card">
+  <div data-pane="scores" data-ord="2" data-min-default class="card">
     <div class="card-header">
       <div class="card-title">Performance Summary — {{ current_month }}</div>
     </div>
@@ -1512,8 +1522,8 @@ var NOTES_BY_EMP = {
 
   <!-- TEAM ANALYTICS -->
   {% if grade_counts %}
-  <div data-pane="scores" data-ord="3" style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:20px;">
-    <div class="card">
+  <div data-pane="scores" data-ord="3" class="th-grid">
+    <div data-min-default class="card">
       <div class="card-header"><div class="card-title">Team Health</div></div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px;">
         <div style="background:rgba(238,244,255,0.7);border:1px solid var(--line);border-radius:10px;padding:12px;text-align:center;">
@@ -1539,7 +1549,7 @@ var NOTES_BY_EMP = {
       </div>
       {% endfor %}
     </div>
-    <div class="card">
+    <div data-min-default class="card">
       <div class="card-header"><div class="card-title">Recommendations</div></div>
       {% if needs_attention %}
       <div style="margin-bottom:12px;">

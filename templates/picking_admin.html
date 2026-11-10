@@ -156,12 +156,12 @@ details.pa-pk[open] summary::after{content:"Hide"}
 
   <section class="pa-box"><h2>Missing items <small>{{ rep.missing|length }}</small></h2>
     <div class="pa-tw"><table class="pa-t" id="paMissing">
-      <thead><tr><th>Date</th><th>Bill number</th><th>Item</th><th class="n">Qty</th><th>Reported by</th><th>At</th><th>What happened</th></tr></thead>
+      <thead><tr><th>Date</th><th>Bill number</th><th>Item</th><th class="n">Qty</th><th>Reported by</th><th>At</th><th>What happened</th><th>Finished by</th><th>Finished at</th></tr></thead>
       <tbody>
       {% for m in rep.missing %}
-        <tr><td>{{ m.date }}</td><td>{{ m.bill_no }}</td><td><strong>{{ m.item }}</strong></td><td class="n">{{ m.qty }}</td><td>{{ m.by }}</td><td>{{ m.at }}</td><td>{{ m.status }}</td></tr>
+        <tr><td>{{ m.date }}</td><td>{{ m.bill_no }}</td><td><strong>{{ m.item }}</strong></td><td class="n">{{ m.qty }}</td><td>{{ m.by }}</td><td>{{ m.at }}</td><td>{% if m.open %}<span class="pa-red">{{ m.status }}</span>{% else %}{{ m.status }}{% endif %}</td><td>{{ m.finished_by or '—' }}</td><td>{{ m.finished_at or '—' }}</td></tr>
       {% else %}
-        <tr><td colspan="7" class="pa-empty">No missing items reported in this period.</td></tr>
+        <tr><td colspan="9" class="pa-empty">No missing items reported in this period.</td></tr>
       {% endfor %}
       </tbody></table></div></section>
 

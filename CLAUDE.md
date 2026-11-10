@@ -96,6 +96,13 @@ eventlet worker); the database is Supabase PostgreSQL.
 - Admin dashboard stays simple: quick-action buttons (`#quick`), Find a bill
   (`/pick/bills/find.json` + `billflow.js` `data-bill-search`), four tabs
   (staff, today, scores, admin), one Go to menu. Don't add a second menu.
+  Secondary panels carry `data-min-default` (folded to a title; `ux.js`).
+- Item quantity on a bill: any number except 0 (`PICK_MAX_ITEMS` only stops
+  typing slips). The bill just added shows under the entry box for 10 s with
+  who added it (`last_added`, `PICK_JUST_ADDED`).
+- A picker may delete their own open missing report (`/pick/missing/<id>/delete`,
+  item back on the bill) and each report row has a × before sending.
+  `PickMissing.handled_by` records who finished it (shown in reports).
 - Free pickers get 5 minutes after a bill is added before waiting counts
   (`PICK_IDLE_SECONDS`). No pause time is shown anywhere.
 - One phone per staff login (`Employee.session_key`): a new sign-in signs the
@@ -155,6 +162,9 @@ eventlet worker); the database is Supabase PostgreSQL.
 - A redesign renamed the modal show-class (`open` -> `active`) but the Edit
   button still added `open`, so Staff Edit silently stopped opening. When
   renaming a CSS class, grep the JS that toggles it.
+- An inline `style="display:grid"` on a tab panel beat the tab's
+  `display:none` rule, so Team Health showed on every admin tab. Never put
+  `display` inline on a `[data-pane]`.
 - Phones on an old page made "slow on one phone, fast on another"; the auto
   reload on a new `APP_BUILD` fixes that, but a deploy still needs one manual
   refresh on pages older than that feature.

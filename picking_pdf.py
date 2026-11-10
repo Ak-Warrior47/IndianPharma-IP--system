@@ -161,9 +161,11 @@ def build_picking_pdf(r):
 
     story.append(Paragraph("Missing items (%d)" % len(r["missing"]), H2))
     if r["missing"]:
-        story.append(_table(["Date", "Bill number", "Item", "Qty", "Reported by", "At", "What happened"],
-                            [[m["date"], m["bill_no"], m["item"], m["qty"], m["by"], m["at"], m["status"]] for m in r["missing"]],
-                            [16 * mm, 32 * mm, W - 164 * mm, 12 * mm, 40 * mm, 22 * mm, 42 * mm]))
+        story.append(_table(["Date", "Bill number", "Item", "Qty", "Reported by", "At", "What happened", "Finished by", "Finished at"],
+                            [[m["date"], m["bill_no"], m["item"], m["qty"], m["by"], m["at"], m["status"],
+                              m.get("finished_by") or "—", m.get("finished_at") or "—"] for m in r["missing"]],
+                            [16 * mm, 30 * mm, W - 226 * mm, 12 * mm, 34 * mm, 20 * mm, 44 * mm, 34 * mm, 36 * mm],
+                            red_rows=[i for i, m in enumerate(r["missing"]) if m.get("open")]))
     else:
         story.append(Paragraph("No missing items reported.", SUB))
 

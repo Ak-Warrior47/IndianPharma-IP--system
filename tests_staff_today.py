@@ -412,6 +412,91 @@ _bf2 = open(os.path.join(REPO, "static", "js", "billflow.js")).read()
 check("14.5 Staff results are plain rows, not tappable", "bf-hit--ro" in _bf2 and "d.detail ?" in _bf2)
 check("14.6 /pick/me loads the bill search too", "js/billflow.js" in open(os.path.join(REPO, "templates", "pick_me.html")).read())
 
+# ---- 15. Item quantity: any number except 0 -----------------------------------
+with app.app_context():
+    PickClaim.query.filter_by(status="active").update({"status": "cancelled"})
+    PickBill.query.filter_by(status="open").update({"status": "cancelled"})
+    db.session.commit()
+    try:
+        A.add_pick_bill("8701", 0, ASG); ok_ = False
+    except A.PickError as e:
+        ok_ = "except 0" in str(e)
+    check("15.1 Item quantity 0 is refused, with the reason", ok_)
+    big = A.add_pick_bill("8702", 1250, ASG)
+    check("15.2 A quantity above 500 is accepted now", big.items == 1250)
+    BIG = big.id
+_pk2 = open(os.path.join(REPO, "templates", "_picking.html")).read()
+check("15.3 The box is called Item quantity and has no upper limit",
+      "Item quantity (any number except 0)" in _pk2 and 'max="500"' not in _pk2 and 'placeholder="Item qty"' in _pk2)
+
+# ---- 16. The bill just added, and who added it, shows for a few seconds ---------
+c_a3 = login("st_asg@x.com")
+r = c_a3.post("/pick/bill", json={"bill_no": "8703", "items": 7}, headers={"X-Requested-With": "fetch"}).get_json()
+la = (r.get("state") or {}).get("last_added") or {}
+check("16.1 After Add, the reply names the bill, its quantity and who added it",
+      la.get("bill_no", "").endswith("8703") and la.get("items") == 7 and la.get("by") == "ST Asg", str(la))
+la2 = c_adm.get("/pick/state.json").get_json().get("last_added") or {}
+check("16.2 Other assigner / admin screens see it too", la2.get("bill_no", "").endswith("8703"))
+with app.app_context():
+    b3 = PickBill.query.filter(PickBill.bill_no.like("%8703")).first()
+    b3.created_at = datetime.utcnow() - timedelta(seconds=A.PICK_JUST_ADDED + 3)
+    db.session.commit()
+check("16.3 It goes away after about 10 seconds",
+      not ((c_adm.get("/pick/state.json").get_json().get("last_added") or {}).get("bill_no", "")).endswith("8703"))
+check("16.4 The screen has the line under the entry box", 'id="pkAdded"' in _pk2 and "function showAdded" in _pk2)
+
+# ---- 17. A picker can delete a wrong report and redo it -----------------------
+with app.app_context():
+    w = A.add_pick_bill("8704", 4, ASG)
+    WB = w.id
+    wc = A.claim_items(RIA, WB, 4)
+    A.finish_claim(RIA, wc.id, picked=3, missing=[("Wrong name", 1)])
+    WM = PickMissing.query.filter_by(claim_id=wc.id).first().id
+c_r3, c_o3 = login("st_ria@x.com"), login("st_om@x.com")
+mm = c_r3.get("/pick/state.json").get_json().get("my_missing") or []
+check("17.1 The picker sees their own report waiting with the purchaser", any(m["id"] == WM and m["item"] == "Wrong name" for m in mm), str(mm))
+check("17.2 Another picker cannot delete it",
+      c_o3.post("/pick/missing/%d/delete" % WM, json={}, headers={"X-Requested-With": "fetch"}).status_code == 403)
+r = c_r3.post("/pick/missing/%d/delete" % WM, json={}, headers={"X-Requested-With": "fetch"})
+with app.app_context():
+    pr = A.pick_bill_progress(db.session.get(PickBill, WB))
+    check("17.3 Delete puts the item back on the bill to take and report again",
+          r.status_code == 200 and pr["left"] == 1 and pr["missing"] == 0, str(pr))
+    check("17.4 The purchaser's list no longer shows it", all(m["id"] != WM for m in A.open_missing_items()))
+    rc = A.claim_items(RIA, WB, 1)
+    A.finish_claim(RIA, rc.id, picked=0, missing=[("Right name", 1)])
+    RM = PickMissing.query.filter_by(claim_id=rc.id).first().id
+c_p3 = login("st_pur@x.com")
+c_p3.post("/pick/missing/%d/done" % RM, json={}, headers={"X-Requested-With": "fetch"})
+check("17.5 Once the purchaser has finished it, it cannot be deleted",
+      c_r3.post("/pick/missing/%d/delete" % RM, json={}, headers={"X-Requested-With": "fetch"}).status_code == 400)
+check("17.6 The report form has a delete button on every row", 'data-rep-del="1"' in _pk2 and "data-miss-del" in _pk2)
+
+# ---- 18. Admin: the missing-items report says who finished each item ------------
+with app.app_context():
+    rep_ = A.pick_report(date.today())
+    row = [m for m in rep_["missing"] if m["item"] == "Right name"][0]
+    check("18.1 Report: who reported, what happened, who finished and when",
+          row["by"] == "ST Ria" and row["status"] == "Done by purchaser" and row["finished_by"] == "ST Pur" and row["finished_at"], str(row))
+    row2 = [m for m in rep_["missing"] if m["item"] == "Wrong name"][0]
+    check("18.2 A report the picker deleted says so", "Deleted by picker" in row2["status"], row2["status"])
+pg = c_adm.get("/picking?tab=reports").get_data(as_text=True)
+check("18.3 Picking > Reports shows the Finished by column", "Finished by" in pg and "ST Pur" in pg)
+check("18.4 The PDF and CSV carry it too", c_adm.get("/picking/report.pdf").data[:4] == b"%PDF"
+      and "Finished by" in c_adm.get("/picking/report.csv").get_data(as_text=True))
+adm2 = c_adm.get("/admin_dashboard").get_data(as_text=True)
+check("18.5 Admin dashboard: a Missing items report button, and Day view",
+      re.search(r'href="/picking\?tab=reports[^"]*#paMissing" id="qaMissing"', adm2) is not None and 'id="qaDay"' in adm2)
+
+# ---- 19. Minimal admin: secondary panels are folded to a title row ---------------
+check("19.1 Eleven secondary panels start folded", adm2.count("data-min-default") == 11, str(adm2.count("data-min-default")))
+check("19.2 The main panel of each tab stays open",
+      not re.search(r'data-min-default[^>]*>\s*<div class="card-header">\s*<div class="card-title">\s*Staff Management', adm2)
+      and not re.search(r'data-min-default[^>]*id="pickingToday"', adm2))
+_ux = open(os.path.join(REPO, "static", "js", "ux.js")).read()
+check("19.3 A folded panel opens by tapping its title, and when a button jumps to it",
+      'hasAttribute("data-min-default")' in _ux and "_mzOpen" in _ux and "openTarget" in _ux)
+
 print("\n" + "=" * 62)
 print("PASSED %d    FAILED %d" % (len(PASSED), len(FAILED)))
 if FAILED:

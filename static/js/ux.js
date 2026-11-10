@@ -213,8 +213,31 @@
         try { localStorage.setItem(KEY, JSON.stringify(saved)); } catch (e) {}
       });
       head.appendChild(b);
-      set(!!saved[title]);
+      // data-min-default: folded until the person opens it (their choice is then remembered)
+      set(title in saved ? !!saved[title] : card.hasAttribute("data-min-default"));
+      // a folded card opens by tapping anywhere on its title row
+      head.addEventListener("click", function (ev) {
+        if (!card.classList.contains("is-min") || ev.target.closest("a, button, input, select, form")) return;
+        set(false); saved[title] = false;
+        try { localStorage.setItem(KEY, JSON.stringify(saved)); } catch (e) {}
+      });
+      card._mzOpen = function () { set(false); };
     });
+    // jumping to a folded card (e.g. "Add staff") opens it
+    function openTarget() {
+      var el = location.hash.length > 1 && document.getElementById(location.hash.slice(1));
+      var card = el && (el.matches(".card, .ip-card") ? el : el.closest(".card, .ip-card"));
+      if (card && card._mzOpen) card._mzOpen();
+    }
+    window.addEventListener("hashchange", openTarget);
+    document.addEventListener("click", function (e) {
+      var a = e.target.closest && e.target.closest('a[href^="#"]');
+      if (!a) return;
+      var el = document.getElementById(a.getAttribute("href").slice(1));
+      var card = el && (el.matches(".card, .ip-card") ? el : el.closest(".card, .ip-card"));
+      if (card && card._mzOpen) card._mzOpen();
+    });
+    openTarget();
   }
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", boot);
   else boot();
