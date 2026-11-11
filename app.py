@@ -934,6 +934,7 @@ class PickMissing(db.Model):
     handled_at  = db.Column(db.DateTime, nullable=True)
     handled_by  = db.Column(db.Integer, db.ForeignKey("employees.id", ondelete="SET NULL"), nullable=True)  # who finished it
     remark      = db.Column(db.String(300), nullable=True)   # the purchaser's note (e.g. "ordered, comes tomorrow")
+    note        = db.Column(db.String(300), nullable=True)   # the picker's remark when reporting (e.g. "rack empty")
 
 
 class PickDay(db.Model):
@@ -2301,7 +2302,7 @@ def open_missing_items():
     names = {e.id: e.name for e in Employee.query.filter(Employee.id.in_({m.picker_id for m in rows if m.picker_id})).all()} if rows else {}
     return [{"id": m.id, "bill_no": bills[m.bill_id].bill_no if m.bill_id in bills else "", "bill_id": m.bill_id,
              "urgent": bool(m.bill_id in bills and bills[m.bill_id].is_urgent), "item": m.item_name, "qty": m.qty,
-             "by": names.get(m.picker_id, ""), "at": ist12(m.reported_at), "remark": m.remark or "",
+             "by": names.get(m.picker_id, ""), "at": ist12(m.reported_at), "remark": m.remark or "", "note": m.note or "",
              "day": (m.reported_at + IST).strftime("%d %b") if m.reported_at else ""} for m in rows]
 
 
@@ -2401,6 +2402,17 @@ def add_pick_bill(bill_no, items, created_by):
     return bill
 
 
+PICK_REDO_MINUTES = 60    # a picker who deleted their own report may take that item back within this time
+
+
+def _my_redo_qty(picker_id, bill_id, now):
+    """Items this picker put back on this bill by deleting their own report."""
+    rows = PickMissing.query.filter(PickMissing.bill_id == bill_id, PickMissing.picker_id == picker_id,
+                                    PickMissing.status == "reassigned", PickMissing.handled_by == picker_id,
+                                    PickMissing.handled_at >= now - timedelta(minutes=PICK_REDO_MINUTES)).all()
+    return sum(m.qty for m in rows)
+
+
 PICK_URGENT_UNSEEN = 60   # s: an urgent bill this new may not have reached the picker's screen yet
 
 
@@ -2434,7 +2446,8 @@ def claim_items(picker_id, bill_id, n, now=None, seen_ver=None):
     if bill.paused_at:
         db.session.rollback()
         raise PickError("Bill %s is paused by the assigner. Wait until it is resumed." % bill.bill_no)
-    if not bill.is_urgent:
+    redo = _my_redo_qty(picker_id, bill.id, now)
+    if not bill.is_urgent and not redo:      # finishing your own redo is never blocked by an urgent bill
         for u in PickBill.query.filter(PickBill.status == "open", PickBill.is_urgent.is_(True),
                                        PickBill.paused_at.is_(None)).all():
             if pick_bill_progress(u)["left"] > 0:
@@ -2478,10 +2491,18 @@ def finish_claim(picker_id, claim_id, now=None, day=None, picked=None, missing=N
     c = db.session.get(PickClaim, claim_id)
     if not c or c.picker_id != picker_id or c.status != "active":
         raise PickError("Nothing to finish.")
-    # A named item with no quantity counts as 1.
-    missing = [(str(n or "").strip()[:120], int(q or 0)) for n, q in (missing or [])]
-    missing = [(n, q if q > 0 else (1 if n else 0)) for n, q in missing]
-    missing = [(n, q) for n, q in missing if q > 0]
+    # A named item with no quantity counts as 1. Each row: (name, qty) or
+    # (name, qty, picker's remark).
+    rows3 = [(tuple(r) + (None,))[:3] for r in (missing or [])]
+    notes = {}
+    missing = []
+    for n, q, note in rows3:
+        n, q = str(n or "").strip()[:120], int(q or 0)
+        q = q if q > 0 else (1 if n else 0)
+        if q > 0:
+            missing.append((n, q))
+            if note:
+                notes[len(missing) - 1] = str(note).strip()[:300]
     if any(not n for n, _ in missing):
         raise PickError("Write the name of each missing item.")
     m_qty = sum(q for _, q in missing)
@@ -2498,9 +2519,9 @@ def finish_claim(picker_id, claim_id, now=None, day=None, picked=None, missing=N
     # (sorted or not available); otherwise reporting everything missing would
     # pay for nothing picked.
     c.points = pick_points(c.items, c.due_at, tnow, picked=picked, missing=0)
-    for name, q in missing:
+    for i, (name, q) in enumerate(missing):
         db.session.add(PickMissing(bill_id=c.bill_id, claim_id=c.id, picker_id=picker_id,
-                                   item_name=name, qty=q, reported_at=now))
+                                   item_name=name, qty=q, reported_at=now, note=notes.get(i)))
         _pick_event("missing", picker_id, c.bill_id, detail="%s x%d" % (name, q))
     if phase == "late":
         mins = round((tnow - pick_windows(c)[2]).total_seconds() / 60.0, 1)
@@ -2547,16 +2568,22 @@ def handle_missing(missing_id, action, now=None, by=None):
     if action == "reassign":
         # the items go back on the bill as ordinary items to pick
         bill = db.session.get(PickBill, m.bill_id)
-        if bill and bill.status == "done":
-            bill.status, bill.completed_at = "open", None
+        if bill and bill.status in ("done", "scheduled"):
+            # also a bill moved to Rescheduled (e.g. by Close today): the redo
+            # must be pickable now, not tomorrow morning
+            bill.status, bill.completed_at, bill.scheduled_for = "open", None, None
     db.session.flush()
     _close_bill_if_done(db.session.get(PickBill, m.bill_id), now)
     db.session.commit()
     if action == "reassign":
         bill = db.session.get(PickBill, m.bill_id)
-        for p in free_pickers():
-            notify_employee(p.id, "Bill %s: %d item%s to pick again" % (bill.bill_no, m.qty, "" if m.qty == 1 else "s"),
-                            m.item_name, link="/dashboard", sms=False)
+        notify_many([p.id for p in free_pickers()],
+                    "Bill %s: %d item%s to pick again" % (bill.bill_no, m.qty, "" if m.qty == 1 else "s"), m.item_name)
+        if by and by == m.picker_id:       # the picker deleted their own report: purchasers need not chase it
+            who = db.session.get(Employee, by)
+            notify_many([x.id for x in _purchasers()], "Report deleted on bill %s" % bill.bill_no,
+                        "%s deleted \"%s x%d\" and is redoing it. Nothing to sort for it now."
+                        % (who.name if who else "The picker", m.item_name, m.qty), link="/dashboard#purMissing")
     return m
 
 
@@ -2967,7 +2994,9 @@ def pick_report(day_from, day_to=None, picker_id=None):
                 "status": {"open": "Waiting for purchaser", "sorted": "Done by purchaser",
                            "reassigned": "Deleted by picker (back on the bill)" if m.handled_by == m.picker_id else "Reassigned",
                            "unavailable": "Not available"}.get(m.status, m.status),
-                "open": m.status == "open", "remark": m.remark or "",
+                "open": m.status == "open", "remark": m.remark or "", "note": m.note or "", "id": m.id, "bill_id": m.bill_id,
+                "state": m.status if not (m.status == "reassigned" and m.handled_by == m.picker_id) else "deleted",
+                "sort_min": round((m.handled_at - m.reported_at).total_seconds() / 60.0, 1) if m.handled_at and m.reported_at else None,
                 "finished_by": names.get(m.handled_by, "") if m.handled_by else "",
                 "finished_at": ist_dt(m.handled_at)}
                for m in mrows]
@@ -3518,6 +3547,17 @@ def picking_state(emp, staff_type, alerts=True):
             bno.update({b.id: b.bill_no for b in PickBill.query.filter(PickBill.id.in_(older)).all()})
         out["my_missing"] = [{"id": m.id, "item": m.item_name, "qty": m.qty, "at": ist12(m.reported_at),
                               "bill_no": bno.get(m.bill_id, "")} for m in mine_miss]
+        # reports they deleted: the item is back on the bill for them to take again
+        left_of = {r["id"]: r["left"] for r in out["bills"] if r["status"] == "open" and not r["paused"]}
+        redo = {}
+        for m in PickMissing.query.filter(PickMissing.picker_id == emp.id, PickMissing.status == "reassigned",
+                                          PickMissing.handled_by == emp.id,
+                                          PickMissing.handled_at >= now - timedelta(minutes=PICK_REDO_MINUTES)).all():
+            if left_of.get(m.bill_id):
+                r = redo.setdefault(m.bill_id, {"bill_id": m.bill_id, "bill_no": bill_by_id[m.bill_id].bill_no, "qty": 0, "items": []})
+                r["qty"] += m.qty
+                r["items"].append(m.item_name)
+        out["my_redo"] = [dict(r, qty=min(r["qty"], left_of[r["bill_id"]]), items=", ".join(r["items"])) for r in redo.values()]
         for r in out["bills"]:
             r["taken"], r["pickers"], r["missing_rows"] = [], [], []
         st = stats.get(emp.id) or _stats_from([])
@@ -9816,7 +9856,11 @@ def pick_done():
     if not isinstance(missing, list):
         missing = []
     try:
-        missing = [(m.get("item"), int(m.get("qty") or 0)) for m in missing if isinstance(m, dict)]
+        missing = [(m.get("item"), int(m.get("qty") or 0), (str(m.get("remark") or "").strip() or None))
+                   for m in missing if isinstance(m, dict)]
+        # A report cannot be sent without a remark on every item.
+        if any((str(n or "").strip() or q) and not note for n, q, note in missing):
+            return _pick_reply(False, "Write a remark for each missing item (e.g. rack empty, expired, damaged).", 400)
         # Done counts from the moment it was tapped: a phone that lost the
         # internet sends it when it is back, with how long ago the tap was
         # (at most 2 minutes, never before the grab started).
@@ -9915,8 +9959,13 @@ def pick_missing_action(missing_id, action):
             m.remark = _clean_remark(data.get("remark"))
             db.session.commit()
             return jsonify({"ok": True, "message": "Remark saved.", "items": open_missing_items()})
+        if action in ("done", "unavailable") and not _clean_remark(data.get("remark")):
+            # the purchaser may have saved the remark earlier with Save remark
+            m0 = db.session.get(PickMissing, missing_id)
+            if not (m0 and m0.remark):
+                raise PickError("Write a remark first: what you did, or why it is not available.")
         m = handle_missing(missing_id, action, by=session.get("user_id"))
-        if "remark" in data:
+        if _clean_remark(data.get("remark")):
             m.remark = _clean_remark(data.get("remark"))
             db.session.commit()
     except PickError as exc:
@@ -9943,6 +9992,20 @@ def pick_missing_delete(missing_id):
                        % ("%d item" % m.qty if m.qty == 1 else "%d items" % m.qty))
 
 
+def redo_missing_items():
+    """Reports a picker deleted in the last hour (they are redoing the item),
+    so the purchaser knows why one left their list."""
+    since = datetime.utcnow() - timedelta(minutes=PICK_REDO_MINUTES)
+    rows = [m for m in PickMissing.query.filter(PickMissing.status == "reassigned", PickMissing.handled_at >= since).all()
+            if m.handled_by and m.handled_by == m.picker_id]
+    if not rows:
+        return []
+    bills = {b.id: b.bill_no for b in PickBill.query.filter(PickBill.id.in_({m.bill_id for m in rows})).all()}
+    names = {e.id: e.name for e in Employee.query.filter(Employee.id.in_({m.picker_id for m in rows})).all()}
+    return [{"item": m.item_name, "qty": m.qty, "bill_no": bills.get(m.bill_id, ""), "by": names.get(m.picker_id, ""),
+             "at": ist12(m.handled_at)} for m in rows]
+
+
 def _clean_remark(text):
     return (str(text or "").strip()[:300]) or None
 
@@ -9959,7 +10022,7 @@ def _is_purchaser():
 def pick_missing_open():
     if not _is_purchaser():
         return jsonify({"ok": False, "message": "Only the purchaser sees missing items."}), 403
-    return jsonify({"ok": True, "items": open_missing_items()})
+    return jsonify({"ok": True, "items": open_missing_items(), "redo": redo_missing_items()})
 
 
 def _report_access(pid):
@@ -10031,10 +10094,11 @@ def picking_report_csv():
                     b["late"], b["pickers"], b["added"], b["completed"], b["minutes"] if b["minutes"] is not None else "", b["status"]])
     w.writerow([])
     w.writerow(["Missing items"])
-    w.writerow(["Date", "Bill number", "Item", "Qty", "Reported by", "At", "Status", "Finished by", "Finished at", "Purchaser remark"])
+    w.writerow(["Date", "Bill number", "Item", "Qty", "Reported by", "At", "Picker remark", "Status", "Finished by", "Finished at",
+                "Purchaser remark", "Minutes to sort"])
     for m in r["missing"]:
-        w.writerow([m["date"], m["bill_no"], m["item"], m["qty"], m["by"], m["at"], m["status"], m["finished_by"], m["finished_at"],
-                    m["remark"]])
+        w.writerow([m["date"], m["bill_no"], m["item"], m["qty"], m["by"], m["at"], m["note"], m["status"], m["finished_by"],
+                    m["finished_at"], m["remark"], m["sort_min"] if m["sort_min"] is not None else ""])
     w.writerow([])
     w.writerow(["Late report"])
     w.writerow(["Date", "Time", "What", "Picker", "Bill", "Minutes", "Detail"])
@@ -10084,6 +10148,28 @@ def admin_staff_today():
     staff = [e for e in Employee.query.order_by(Employee.name).all() if not e.is_admin]
     return render_template("staff_today.html", rep=staff_day_report(d, eid), staff=staff, today=date.today(),
                            timedelta=timedelta)
+
+
+@app.route("/admin/missing")
+@admin_required
+def admin_missing():
+    """Admin: every missing item for any dates -- who reported it and why,
+    what the purchaser did, their remark and how long it took. Filter by
+    what happened (?state=open|sorted|unavailable|deleted)."""
+    f, t, _ = report_period(request.args)
+    rows = pick_report(f, t)["missing"]
+    counts = {"all": len(rows)}
+    for k in ("open", "sorted", "unavailable", "deleted", "reassigned"):
+        counts[k] = sum(1 for m in rows if m["state"] == k)
+    state = request.args.get("state", "")
+    if state in counts and state != "all":
+        rows = [m for m in rows if m["state"] == state]
+    else:
+        state = ""
+    done = [m["sort_min"] for m in rows if m["sort_min"] is not None and m["state"] in ("sorted", "unavailable")]
+    return render_template("admin_missing.html", rows=rows, counts=counts, state=state, day_from=f, day_to=t,
+                           today=date.today(), timedelta=timedelta,
+                           avg_min=round(sum(done) / len(done), 1) if done else None)
 
 
 @app.route("/admin/staff-today.pdf")

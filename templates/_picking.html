@@ -96,6 +96,9 @@ button.pk-stat{font:inherit;cursor:pointer;color:inherit;background:var(--surfac
 .pk-mymiss .h{font-size:12px;font-weight:800;color:var(--bad-ink);text-transform:uppercase;letter-spacing:.4px;margin-bottom:4px}
 .pk-mymiss .m{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:4px 0;font-size:14px}
 .pk-rep .r{grid-template-columns:1fr 64px 40px}
+.pk-rep .r .rm{grid-column:1 / -1}
+.pk-redo{margin:0 0 10px;padding:10px 12px;border:1.5px solid var(--brand);border-radius:12px;background:var(--surface,#fff)}
+.pk-redo .m{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;font-size:14.5px}
 .pk-rep .r .x{border:1.5px solid var(--line);background:transparent;border-radius:8px;line-height:0;color:var(--bad-ink);cursor:pointer;min-height:36px;display:grid;place-items:center}
 .pk-bin{color:var(--bad-ink);line-height:0;min-width:40px;display:inline-grid;place-items:center}
 .pk-addhint{font-size:11.5px;color:var(--ink-3);margin:3px 0 0}
@@ -117,7 +120,7 @@ button.pk-stat{font:inherit;cursor:pointer;color:inherit;background:var(--surfac
 .pk-empty{padding:12px 0;color:var(--ink-3);font-size:14px}
 #pickApp.pk-focus [data-collapse="pkBills"],#pickApp.pk-focus #pkBills{display:none}
 #pickApp.pk-focus .pk-tabs{display:none}
-#pickApp.pk-focus #pkMyMiss,#pickApp.pk-focus .pk-find,#pickApp.pk-focus #pkFindPAllWrap{display:none}
+#pickApp.pk-focus #pkRedo,#pickApp.pk-focus #pkMyMiss,#pickApp.pk-focus .pk-find,#pickApp.pk-focus #pkFindPAllWrap{display:none}
 .pk-btn.saving{opacity:.7;pointer-events:none}
 .pk-seg{display:inline-flex;border:1.5px solid var(--line);border-radius:10px;overflow:hidden;margin:0 0 8px}
 .pk-seg button{border:0;background:transparent;padding:7px 14px;font:650 13.5px system-ui,sans-serif;color:var(--ink-2);cursor:pointer}
@@ -291,6 +294,7 @@ body.pk-full .pk-msg.on{position:sticky;top:0;z-index:2}
     <button type="button" class="pk-stat" data-go-tab="mine"><span>Points</span><b id="pkPoints">0</b></button>
     <button type="button" class="pk-stat" data-go-tab="mine"><span>Items / hr</span><b id="pkRate">—</b></button>
   </div>
+  <div class="pk-redo" id="pkRedo" hidden></div>
   <div class="pk-mymiss" id="pkMyMiss" hidden></div>
   <div class="pk-mine" id="pkMine" hidden>
     <div class="pk-pausebar" id="pkPauseBar" role="alert" hidden></div>
@@ -308,7 +312,7 @@ body.pk-full .pk-msg.on{position:sticky;top:0;z-index:2}
       </div>
     </div>
     <div class="pk-rep" id="pkRep" hidden>
-      <div class="pk-sub" style="margin-bottom:6px">Write each item you could not find. Quantity is 1 if you leave it empty. The rest count as picked.</div>
+      <div class="pk-sub" style="margin-bottom:6px">Write each item you could not find and a remark (why). Quantity is 1 if you leave it empty. The rest count as picked.</div>
       <div id="pkRepRows"></div>
       <div class="pk-row">
         <button type="button" class="pk-btn ghost sm" id="pkRepAdd">+ Another item</button>
@@ -608,6 +612,15 @@ body.pk-full .pk-msg.on{position:sticky;top:0;z-index:2}
           '<button type="button" class="pk-btn ghost sm pk-bin" data-miss-del="' + m.id + '" aria-label="Delete this report" title="Delete this report">' + BIN + "</button></div>";
       }).join("") + '<div class="pk-sub">Wrong item or name? Tap the bin: the item goes back on the bill, then take it and report again.</div>' : "";
     }
+    var rd = s.my_redo || [];
+    if ($("pkRedo")) {
+      $("pkRedo").hidden = !rd.length || !!s.mine;
+      $("pkRedo").innerHTML = rd.map(function (r) {
+        return '<div class="m"><span>You deleted a report on bill <b>' + esc(r.bill_no) + "</b> (" + esc(r.items) + "). " +
+          plural(r.qty, "item") + " " + (r.qty === 1 ? "is" : "are") + " back on it for you.</span>" +
+          '<button type="button" class="pk-btn" data-redo="' + r.bill_id + '" data-qty="' + r.qty + '">Take ' + r.qty + " now</button></div>";
+      }).join("");
+    }
     var had = mine && mine.id;
     mine = s.mine || null; mineAt = Date.now();
     $("pkMine").hidden = !mine;
@@ -641,7 +654,8 @@ body.pk-full .pk-msg.on{position:sticky;top:0;z-index:2}
       Array.prototype.forEach.call(document.querySelectorAll("#pkBills .pk-in"), function (i) { if (i.value) keep[i.id] = i.value; });
       var focused = document.activeElement && document.activeElement.id;
       $("pkBills").innerHTML = grouped(open, function (b) {
-        var can = (!mine || browseOther) && !b.paused && b.left > 0 && (b.urgent || !urgentLeft);
+        var isRedo = (s.my_redo || []).some(function (r) { return r.bill_id === b.id; });
+        var can = (!mine || browseOther) && !b.paused && b.left > 0 && (b.urgent || !urgentLeft || isRedo);
         return '<div class="pk-bill' + (b.urgent ? " urgent" : "") + (b.paused ? " paused" : "") + '"><div><div class="no">' + billBtn(b) + (b.urgent ? '<span class="pk-u">URGENT</span>' : "") + (b.paused ? '<span class="pk-p">PAUSED</span>' : "") +
           '</div><div class="sub">added ' + esc(b.added) + " · " + plural(b.items, "item") + (b.score ? '<span class="pk-score">' + b.score + " pts</span>" : "") + "</div></div>" +
           '<div><div class="pk-row">' + prog(b) + '<span class="sub">' + b.done + " / " + b.items + " picked · <b>" + b.left + " left</b></span></div>" + taken(b) + "</div>" +
@@ -973,7 +987,8 @@ body.pk-full .pk-msg.on{position:sticky;top:0;z-index:2}
   function repRow() {
     var d = document.createElement("div"); d.className = "r";
     d.innerHTML = '<input placeholder="Item name" aria-label="Missing item name" maxlength="120"><input type="number" min="1" placeholder="1" aria-label="How many (1 if left empty)" inputmode="numeric">' +
-      '<button type="button" class="x" data-rep-del="1" aria-label="Delete this row" title="Delete this row">' + BIN + "</button>";
+      '<button type="button" class="x" data-rep-del="1" aria-label="Delete this row" title="Delete this row">' + BIN + "</button>" +
+      '<input class="rm" placeholder="Remark (needed): rack empty, expired, damaged…" aria-label="Remark for this item (needed)" maxlength="300">';
     $("pkRepRows").appendChild(d); d.querySelector("input").focus();
   }
 
@@ -1037,6 +1052,17 @@ body.pk-full .pk-msg.on{position:sticky;top:0;z-index:2}
       say("Pick another bill. Your items on the paused bill go back on it when you start the new one.", true);
     } else if (b.id === "pkRepBtn") {
       $("pkRep").hidden = !$("pkRep").hidden; if (!$("pkRep").hidden && !$("pkRepRows").children.length) repRow();
+    } else if (b.hasAttribute("data-redo")) {
+      // take your deleted item back in one tap (allowed even while an urgent bill waits)
+      var rb = b.getAttribute("data-redo"), rq = +b.getAttribute("data-qty");
+      b.disabled = true; b.textContent = "Starting…";
+      post("/pick/claim", { bill_id: +rb, items: rq, seen_ver: (lastState && lastState.ver) || 0 }, function (c) {
+        var bl = billIn(c, rb); if (!bl) return;
+        var per = bl.urgent ? c.urgent_seconds : c.seconds_per_item, half = Math.round(c.extra_seconds / 2), n = rq * per;
+        bl.active += rq; bl.left = Math.max(0, bl.left - rq); c.my_redo = [];
+        c.mine = { id: 0, bill_id: bl.id, bill_no: bl.bill_no, items: rq, urgent: bl.urgent, paused: false,
+                   normal_left: n, find_left: n + half, report_left: n + 2 * half, seconds_total: n };
+      });
     } else if (b.hasAttribute("data-rep-del")) {
       b.closest(".r").remove();
       if (!$("pkRepRows").children.length) repRow();       // always one row to type in
@@ -1050,12 +1076,19 @@ body.pk-full .pk-msg.on{position:sticky;top:0;z-index:2}
     } else if (b.id === "pkRepSend") {
       var rows = Array.prototype.map.call($("pkRepRows").children, function (r) {
         // no quantity typed = 1 of that item
-        var i = r.querySelectorAll("input"), nm = i[0].value.trim(); return { item: nm, qty: +i[1].value || (nm ? 1 : 0) };
+        var i = r.querySelectorAll("input"), nm = i[0].value.trim();
+        return { item: nm, qty: +i[1].value || (nm ? 1 : 0), remark: i[2] ? i[2].value.trim() : "", row: r };
       }).filter(function (m) { return m.item || m.qty; });
       if (!rows.length) { say("Write the name of the missing item.", false); return; }
       var miss = rows.reduce(function (a, m) { return a + (m.qty || 0); }, 0);
       if (mine && miss > mine.items) { say("You took " + plural(mine.items, "item") + "; missing items can't be more than that (you typed " + miss + ").", false); return; }
       if (rows.some(function (m) { return !m.item; })) { say("Write each missing item's name.", false); return; }
+      var noRem = rows.filter(function (m) { return !m.remark; })[0];
+      if (noRem) {       // a report cannot be sent without a remark
+        var ri = noRem.row.querySelector(".rm"); ri.classList.add("pk-bad"); ri.focus();
+        say("Write a remark for each missing item (e.g. rack empty, expired, damaged).", false); return;
+      }
+      rows.forEach(function (m) { delete m.row; });
       if (!mine || !mine.id) return;
       post("/pick/done", { claim_id: mine.id, missing: rows }, function (c) { c.mine = null; });
     } else if (b.id === "pkAddBtn") { addBill();
@@ -1174,6 +1207,7 @@ body.pk-full .pk-msg.on{position:sticky;top:0;z-index:2}
       if (over) say("Only " + plural(bl.left, "item") + " left on bill " + bl.bill_no + ". You typed " + v + ".", false);
     }
     // item-not-found quantities can't add up to more than the items taken
+    if (e.target.classList && e.target.classList.contains("rm")) e.target.classList.remove("pk-bad");
     if (e.target.closest && e.target.closest("#pkRepRows") && mine) {
       var tot = 0; Array.prototype.forEach.call($("pkRepRows").querySelectorAll('input[type="number"]'), function (i) { tot += +i.value || 0; });
       var bad = tot > mine.items;

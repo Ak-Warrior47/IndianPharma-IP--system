@@ -44,13 +44,27 @@ const {chromium,devices}=require('playwright'); const B='http://127.0.0.1:5077';
  await l.click('#pkRepBtn'); await l.waitForTimeout(200);
  L.binIcon=await l.evaluate(()=>!!document.querySelector('#pkRepRows [data-rep-del] svg'));
  await (await l.$$('#pkRepRows input'))[0].fill('Volini gel');          // no quantity typed
+ await l.click('#pkRepSend'); await l.waitForTimeout(400);
+ L.needsRemark=sq(await l.textContent('#pkMsg')).indexOf('remark')>=0 && await l.evaluate(()=>document.body.classList.contains('pk-full'));
+ await l.fill('#pkRepRows .rm','rack empty');
  await l.click('#pkRepSend'); await l.waitForTimeout(1500);
  L.msg=sq(await l.textContent('#pkMsg')); L.myMiss=sq(await l.textContent('#pkMyMiss')).slice(0,70);
  L.myMissBin=await l.evaluate(()=>!!document.querySelector('#pkMyMiss [data-miss-del] svg')); L.hscroll=await hs(l);
  await (await l.$('#pkMyMiss')).screenshot({path:require('os').tmpdir()+'/ip_qa_mymiss.png'});
+ // delete the report, then take the item back with one tap
+ await l.click('#pkMyMiss [data-miss-del]'); await l.waitForTimeout(1500);
+ L.redoBanner=sq(await l.textContent('#pkRedo')).slice(0,60);
+ await l.click('#pkRedo [data-redo]'); await l.waitForTimeout(1200);
+ L.redoStarted=await l.evaluate(()=>document.body.classList.contains('pk-full'));
+ await l.click('#pkRepBtn'); await l.waitForTimeout(200);
+ await (await l.$$('#pkRepRows input'))[0].fill('Volini gel 30g'); await l.fill('#pkRepRows .rm','not in rack B4');
+ await l.click('#pkRepSend'); await l.waitForTimeout(1500);
  // ---------- purchaser
  const p=await as('pur@x.com'); await p.waitForTimeout(1500); const P={}; out.purchaser=P;
- P.list=sq(await p.textContent('#pmList')).slice(0,80);
+ P.list=sq(await p.textContent('#pmList')).slice(0,110);
+ P.redoNote=sq(await p.textContent('#pmRedo')).slice(0,60);
+ await p.click('#pmList [data-pm="done"]'); await p.waitForTimeout(400);
+ P.doneNeedsRemark=sq(await p.textContent('#pmMsg')).indexOf('remark')>=0 && (await p.$$('#pmList .pm-row')).length===1;
  await p.fill('#pmList .pm-rem input','Ordered, comes tomorrow'); await p.click('#pmList [data-pm="remark"]'); await p.waitForTimeout(900);
  P.remarkMsg=sq(await p.textContent('#pmMsg')); P.remarkKept=await p.inputValue('#pmList .pm-rem input');
  await (await p.$('#purMissing')).screenshot({path:require('os').tmpdir()+'/ip_qa_pur.png'});
@@ -63,12 +77,23 @@ const {chromium,devices}=require('playwright'); const B='http://127.0.0.1:5077';
  D.links={}; for (const h of await d.$$eval('#quick a.qa-btn',x=>x.map(e=>e.getAttribute('href')).filter(h=>h[0]==='/'))) { D.links[h]=(await d.request.get(B+h.split('#')[0])).status(); }
  await d.click('.tab[data-tab="today"]'); await d.waitForTimeout(300);
  await d.click('.pt-tile:has-text("Missing")'); await d.waitForLoadState('networkidle');
- D.missingTile=d.url().replace(B,''); D.remarkInReport=(await d.textContent('#paMissing')).indexOf('Ordered, comes tomorrow')>=0;
- D.finishedBy=sq(await d.textContent('#paMissing')).indexOf('Deepak')>=0;
+ D.missingTile=d.url().replace(B,''); const mt=sq(await d.textContent('#miList'));
+ D.remarkInReport=mt.indexOf('Ordered, comes tomorrow')>=0; D.pickerRemark=mt.indexOf('not in rack B4')>=0; D.finishedBy=mt.indexOf('Deepak')>=0;
+ await d.click('#miTiles a:has-text("Deleted by picker")'); await d.waitForLoadState('networkidle'); D.deletedFilter=sq(await d.textContent('#miList h2'));
+ await d.screenshot({path:require('os').tmpdir()+'/ip_qa_missing.png',fullPage:true});
+ await d.click('#miList .fd-btn'); D.foldWorks=await d.evaluate(()=>document.getElementById('miList').classList.contains('is-fold'));
+ await d.click('#miList .fd-btn');
+ await d.goto(B+'/picking?tab=reports&period=today'); await d.waitForLoadState('networkidle'); D.pickingFoldButtons=await d.$$eval('.pa-box .fd-btn',x=>x.length);
  await d.click('#paSum a:has-text("Urgent bills")'); await d.waitForLoadState('networkidle'); D.urgentTile=sq(await d.textContent('#reports h2')).slice(0,40);
  await d.goto(B+'/admin/staff-today'); await d.click('.st-sum a:has-text("Not found")'); await d.waitForLoadState('networkidle'); D.staffTodayTile=d.url().replace(B,'').slice(0,60);
  D.hscroll=await hs(d);
  // ---------- checker
+ // ---------- admin on a PC: buttons in a row, table buttons on one line
+ const pc=await as('adm@x.com','Desktop Chrome'); await pc.goto(B+'/admin_dashboard#staff'); await pc.waitForLoadState('networkidle');
+ out.adminPC={rows:await pc.evaluate(()=>[...new Set([...document.querySelectorAll('#quick .qa-btn')].map(e=>Math.round(e.getBoundingClientRect().top)))].length),
+   actionsOneLine:await pc.evaluate(()=>{const a=document.querySelector('#staffTable .actions');const t=[...a.querySelectorAll('.btn-sm')].map(e=>Math.round(e.getBoundingClientRect().top));return Math.max(...t)-Math.min(...t)<6;}),
+   hscroll:await hs(pc)};
+ await pc.screenshot({path:require('os').tmpdir()+'/ip_qa_pc.png'});
  const c=await as('chk@x.com'); await c.waitForTimeout(600); out.checker={findBar:await c.isVisible('#bfQ'),hscroll:await hs(c)};
  console.log(JSON.stringify(out,null,1)); console.log('JS errors:',errs); console.log('Failed requests:',bad);
  const flat=JSON.stringify(out); const wrong=errs.length||bad.length||/"hscroll":true/.test(flat)||/"bellOnTop":false/.test(flat);

@@ -108,7 +108,7 @@
     <a href="{{ PR }}#paPickers"><span>Items picked</span><b>{{ T['items'] }}</b></a>
     <a href="{{ url_for('picking_admin', tab='board', **{'from': rep.day.isoformat(), 'to': rep.day.isoformat()}) }}"><span>Pick points</span><b>{{ T.points }}</b></a>
     <a href="{{ PR }}#paEvents"><span>Late grabs</span><b>{{ T.late }}</b></a>
-    <a href="{{ PR }}#paMissing"><span>Not found</span><b>{{ T.missing }}</b></a>
+    <a href="{{ url_for('admin_missing', **{'from': rep.day.isoformat(), 'to': rep.day.isoformat()}) }}"><span>Not found</span><b>{{ T.missing }}</b></a>
   </div>
 
   <section class="st-box" id="stWhoBox"><h2>Who came in ({{ rep.people|length }})</h2>
@@ -179,5 +179,6 @@
   {% endfor %}
 </main>
 <script src="{{ url_for('static', filename='js/enter-next.js') }}" defer></script>
+<script src="{{ url_for('static', filename='js/fold.js') }}" defer></script>
 </body>
 </html>

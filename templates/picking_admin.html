@@ -135,7 +135,7 @@ details.pa-pk[open] summary::after{content:"Hide"}
     <a href="{{ R }}#paBills"><span>Bills</span><b>{{ T.bills }}</b></a>
     <a href="{{ R }}#paBills"><span>Items</span><b>{{ T['items'] }}</b></a>
     <a href="{{ R }}#paPickers"><span>Picked</span><b>{{ T.picked }}</b></a>
-    <a href="{{ R }}#paMissing" class="{{ 'warn' if T.missing else '' }}"><span>Missing reported</span><b>{{ T.missing }}</b></a>
+    <a href="{{ url_for('admin_missing', **{'from': rep.day_from.isoformat(), 'to': rep.day_to.isoformat()}) }}" class="{{ 'warn' if T.missing else '' }}"><span>Missing reported</span><b>{{ T.missing }}</b></a>
     <a href="{{ R }}&urgent=1#paBills"><span>Urgent bills</span><b>{{ T.urgent }}</b></a>
     <a href="{{ R }}#paBills"><span>Avg min / bill</span><b>{{ T.avg_minutes if T.avg_minutes is not none else '—' }}</b></a>
     <a href="{{ R }}#paEvents" class="{{ 'warn' if rep.late else '' }}"><span>Late grabs</span><b>{{ rep.late }}</b></a>
@@ -161,14 +161,14 @@ details.pa-pk[open] summary::after{content:"Hide"}
       {% endfor %}
       </tbody></table></div></section>
 
-  <section class="pa-box"><h2>Missing items <small>{{ rep.missing|length }}</small></h2>
+  <section class="pa-box"><h2>Missing items <small>{{ rep.missing|length }} · <a href="{{ url_for('admin_missing', **{'from': rep.day_from.isoformat(), 'to': rep.day_to.isoformat()}) }}">open the full missing-items page</a></small></h2>
     <div class="pa-tw"><table class="pa-t" id="paMissing">
-      <thead><tr><th>Date</th><th>Bill number</th><th>Item</th><th class="n">Qty</th><th>Reported by</th><th>At</th><th>What happened</th><th>Finished by</th><th>Finished at</th><th>Purchaser remark</th></tr></thead>
+      <thead><tr><th>Date</th><th>Bill number</th><th>Item</th><th class="n">Qty</th><th>Reported by</th><th>At</th><th>Picker's remark</th><th>What happened</th><th>Finished by</th><th>Finished at</th><th>Purchaser remark</th></tr></thead>
       <tbody>
       {% for m in rep.missing %}
-        <tr><td>{{ m.date }}</td><td>{{ m.bill_no }}</td><td><strong>{{ m.item }}</strong></td><td class="n">{{ m.qty }}</td><td>{{ m.by }}</td><td>{{ m.at }}</td><td>{% if m.open %}<span class="pa-red">{{ m.status }}</span>{% else %}{{ m.status }}{% endif %}</td><td>{{ m.finished_by or '—' }}</td><td>{{ m.finished_at or '—' }}</td><td>{{ m.remark or '—' }}</td></tr>
+        <tr><td>{{ m.date }}</td><td>{{ m.bill_no }}</td><td><strong>{{ m.item }}</strong></td><td class="n">{{ m.qty }}</td><td>{{ m.by }}</td><td>{{ m.at }}</td><td>{{ m.note or '—' }}</td><td>{% if m.open %}<span class="pa-red">{{ m.status }}</span>{% else %}{{ m.status }}{% endif %}</td><td>{{ m.finished_by or '—' }}</td><td>{{ m.finished_at or '—' }}</td><td>{{ m.remark or '—' }}</td></tr>
       {% else %}
-        <tr><td colspan="10" class="pa-empty">No missing items reported in this period.</td></tr>
+        <tr><td colspan="11" class="pa-empty">No missing items reported in this period.</td></tr>
       {% endfor %}
       </tbody></table></div></section>
 
@@ -247,5 +247,6 @@ details.pa-pk[open] summary::after{content:"Hide"}
 <script src="{{ url_for('static', filename='js/push.js') }}" defer></script>
 <script src="{{ url_for('static', filename='js/enter-next.js') }}" defer></script>
 <script src="{{ url_for('static', filename='js/billflow.js') }}" defer></script>
+<script src="{{ url_for('static', filename='js/fold.js') }}" defer></script>
 </body>
 </html>

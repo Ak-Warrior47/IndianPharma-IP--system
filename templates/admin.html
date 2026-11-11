@@ -375,6 +375,28 @@ input:focus, select:focus, textarea:focus { outline: none; border-color: var(--b
 .qa-find label { display: block; font-size: 11px; font-weight: 700; color: var(--ink-3); text-transform: uppercase; letter-spacing: .4px; margin: 2px 0 4px; }
 .qa-find input { width: 100%; padding: 11px 13px; border: 1.5px solid var(--line); border-radius: 10px; font: inherit; font-size: 16px; background: var(--surface); color: var(--ink); }
 .qa-find #qaFindOut:not(:empty) { margin-top: 8px; max-height: 320px; overflow: auto; }
+/* PC and laptop: the buttons sit in a row like a toolbar (name only; the
+   detail shows on hover). Phones keep the two-column grid. */
+@media (min-width: 1000px) {
+  .qa { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+  .qa .qa-h { flex: 0 0 76px; margin: 0; }
+  .qa .qa-btn { flex: 0 0 auto; min-height: 40px; padding: 8px 14px; flex-direction: row; align-items: center; border-radius: 10px; }
+  .qa .qa-btn b { font-size: 14px; white-space: nowrap; }
+  .qa .qa-btn span { display: none; }
+  .qa .qa-row-break { flex-basis: 100%; height: 0; }
+  .qa .qa-find { flex: 1 1 320px; display: flex; align-items: center; gap: 10px; position: relative; }
+  .qa .qa-find label { margin: 0; flex: none; }
+  .qa .qa-find input { padding: 8px 12px; font-size: 14.5px; }
+  .qa .qa-find #qaFindOut:not(:empty) { position: absolute; top: 46px; left: 76px; right: 0; z-index: 50; background: var(--surface); border: 1px solid var(--line);
+                                        border-radius: 12px; padding: 8px; box-shadow: 0 12px 32px rgba(15,23,42,.18); margin: 0; }
+  .qa .qa-stats { flex: 0 0 auto; padding: 0; }
+  /* staff table: the row's buttons stay on one line */
+  #staffTable .actions { display: flex; flex-wrap: nowrap; gap: 6px; }
+  #staffTable .actions form { display: inline-flex; }
+  #staffTable .actions .btn-sm { white-space: nowrap; }
+}
+.qa-row-break { display: none; }
+@media (min-width: 1000px) { .qa .qa-row-break { display: block; } }
 .qa-h { grid-column: 1 / -1; font-size: 11px; font-weight: 800; color: var(--ink-3); text-transform: uppercase; letter-spacing: .6px; margin: 4px 2px -4px; }
 .qa-stats a { color: inherit; text-decoration: none; border-bottom: 1px dashed var(--line); }
 .qa-stats a:hover { color: var(--brand); }
@@ -534,6 +556,7 @@ var NOTES_BY_EMP = {
         <a href="/picking?tab=live">Live floor and item time</a>
         <a href="/picking?tab=reports&amp;period=today">Picking reports (PDF, CSV)</a>
         <a href="/picking?tab=board&amp;period=today">Picking leaderboard</a>
+        <a href="/admin/missing?period=month">Missing items (remarks, how sorted)</a>
         <a href="/pick/me" id="navPickSelf">Pick bills yourself (multitask)</a>
         <div class="nav-goto__h">Staff work</div>
         <a href="/admin/staff-today" id="navStaffToday">Staff today (sign-in, work, times)</a>
@@ -577,18 +600,20 @@ var NOTES_BY_EMP = {
        (Replaces four all-time counters nobody acted on.) -->
   <div class="overview-grid qa" id="quick">
     <div class="qa-h">Do</div>
-    <a class="qa-btn qa-main" href="/picking?tab=live" id="qaLive"><b>Live picking</b><span>bills, pickers, item time</span></a>
-    <a class="qa-btn" href="/pick/me" id="qaPickSelf"><b>Pick bills yourself</b><span>multitask picking</span></a>
-    <a class="qa-btn" href="#addEmployee" id="qaAdd"><b>Add staff</b><span>new employee login</span></a>
+    <a class="qa-btn qa-main" href="/picking?tab=live" id="qaLive" title="bills, pickers, item time"><b>Live picking</b><span>bills, pickers, item time</span></a>
+    <a class="qa-btn" href="/pick/me" id="qaPickSelf" title="multitask picking"><b>Pick bills yourself</b><span>multitask picking</span></a>
+    <a class="qa-btn" href="#addEmployee" id="qaAdd" title="new employee login"><b>Add staff</b><span>new employee login</span></a>
+    <span class="qa-row-break" aria-hidden="true"></span>
     <div class="qa-h" id="qaReportsHead">Reports</div>
-    <a class="qa-btn" href="/admin/staff-today" id="qaStaffToday"><b>Staff today</b><span>who came in · every pick · PDF</span></a>
-    <a class="qa-btn" href="/picking?tab=reports&amp;period=today" id="qaReports"><b>Picking reports</b><span>any date · PDF · CSV</span></a>
-    <a class="qa-btn" href="/picking?tab=reports&amp;period=month#paMissing" id="qaMissing"><b>Missing items report</b><span>who reported · who finished · remarks</span></a>
-    <a class="qa-btn" href="/picking?tab=reports&amp;period=today&amp;urgent=1#paBills" id="qaUrgent"><b>Urgent bills report</b><span>today's urgent bills</span></a>
-    <a class="qa-btn" href="/picking?tab=reports&amp;period=today#paEvents" id="qaLate"><b>Late report</b><span>late and left waiting</span></a>
-    <a class="qa-btn" href="/picking?tab=board&amp;period=today" id="qaBoard"><b>Leaderboard</b><span>bills, items, points</span></a>
-    <a class="qa-btn" href="{{ url_for('admin_multitask_report') }}" id="qaMulti"><b>Multitask report</b><span>second roles, any date</span></a>
-    <a class="qa-btn" href="/admin/day" id="qaDay"><b>Day view</b><span>all staff, any date</span></a>
+    <a class="qa-btn" href="/admin/staff-today" id="qaStaffToday" title="who came in · every pick · PDF"><b>Staff today</b><span>who came in · every pick · PDF</span></a>
+    <a class="qa-btn" href="/picking?tab=reports&amp;period=today" id="qaReports" title="any date · PDF · CSV"><b>Picking reports</b><span>any date · PDF · CSV</span></a>
+    <a class="qa-btn" href="/admin/missing?period=month" id="qaMissing" title="who reported · how it was sorted · remarks"><b>Missing items report</b><span>who reported · how it was sorted · remarks</span></a>
+    <a class="qa-btn" href="/picking?tab=reports&amp;period=today&amp;urgent=1#paBills" id="qaUrgent" title="today's urgent bills"><b>Urgent bills report</b><span>today's urgent bills</span></a>
+    <a class="qa-btn" href="/picking?tab=reports&amp;period=today#paEvents" id="qaLate" title="late and left waiting"><b>Late report</b><span>late and left waiting</span></a>
+    <a class="qa-btn" href="/picking?tab=board&amp;period=today" id="qaBoard" title="bills, items, points"><b>Leaderboard</b><span>bills, items, points</span></a>
+    <a class="qa-btn" href="{{ url_for('admin_multitask_report') }}" id="qaMulti" title="second roles, any date"><b>Multitask report</b><span>second roles, any date</span></a>
+    <a class="qa-btn" href="/admin/day" id="qaDay" title="all staff, any date"><b>Day view</b><span>all staff, any date</span></a>
+    <span class="qa-row-break" aria-hidden="true"></span>
     <div class="qa-find"><label for="qaFind">Find a bill</label>
       <input type="search" id="qaFind" data-bill-search="qaFindOut" inputmode="numeric" autocomplete="off" placeholder="Type the bill number, e.g. 4521">
       <div id="qaFindOut" aria-live="polite"></div></div>
@@ -800,7 +825,7 @@ var NOTES_BY_EMP = {
       {% for label, val, warn, href in [('Bills', pt.totals.bills, false, PR ~ '#paBills'), ('Items', pt.totals['items'], false, PR ~ '#paBills'),
                                   ('Picked', pt.totals.picked, false, PR ~ '#paPickers'),
                                   ('Open now', pt.open, false, '/picking?tab=live'), ('Picking now', pt.active, false, '/picking?tab=live'),
-                                  ('Missing', pt.totals.missing, pt.totals.missing > 0, PR ~ '#paMissing'),
+                                  ('Missing', pt.totals.missing, pt.totals.missing > 0, '/admin/missing'),
                                   ('Late', pt.late, pt.late > 0, PR ~ '#paEvents'), ('Left waiting', pt.idle, pt.idle > 0, PR ~ '#paEvents')] %}
       <a class="pt-tile" href="{{ href }}">
         <span>{{ label }}</span>

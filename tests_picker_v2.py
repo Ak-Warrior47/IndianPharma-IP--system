@@ -292,7 +292,10 @@ check("9.9 Times are shown in 12-hour form", row["added"].endswith(("AM", "PM"))
 code, j = jpost(c3, "/pick/claim", {"bill_id": NB, "items": 4})
 with app.app_context():
     c3c = PickClaim.query.filter_by(picker_id=ids["p3"], status="active").first().id
-code, j = jpost(c3, "/pick/done", {"claim_id": c3c, "missing": [{"item": "Dolo 650", "qty": 1}, {"item": "Pan 40", "qty": 1}]})
+code0, j0 = jpost(c3, "/pick/done", {"claim_id": c3c, "missing": [{"item": "Dolo 650", "qty": 1}, {"item": "Pan 40", "qty": 1}]})
+check("9.9b A missing-item report without a remark is refused", code0 == 400 and "remark" in j0.get("message", "").lower(), str(j0))
+code, j = jpost(c3, "/pick/done", {"claim_id": c3c, "missing": [{"item": "Dolo 650", "qty": 1, "remark": "rack empty"},
+                                                                 {"item": "Pan 40", "qty": 1, "remark": "expired strip"}]})
 check("9.10 A picker can report missing items: 2 picked, 2 not found", code == 200 and "2 missing" in j.get("message", ""), str(j))
 with app.app_context():
     cl = db.session.get(PickClaim, c3c)
@@ -320,12 +323,14 @@ check("9.17c A picker and the assigner cannot see the purchaser's list",
 code, j = jpost(c1, "/pick/missing/%d/done" % mids[0])
 code2, j2 = jpost(ca, "/pick/missing/%d/done" % mids[0])
 check("9.18 Only the purchaser (or admin) can finish missing items: picker and assigner refused", code == 403 and code2 == 403)
-code, j = jpost(cpur, "/pick/missing/%d/done" % mids[0])
+code0, j0 = jpost(cpur, "/pick/missing/%d/done" % mids[0])
+check("9.18b The purchaser cannot finish without a remark", code0 == 400 and "remark" in j0.get("message", "").lower(), str(j0))
+code, j = jpost(cpur, "/pick/missing/%d/done" % mids[0], {"remark": "brought from store room"})
 with app.app_context():
     pr = A.pick_bill_progress(db.session.get(PickBill, NB))
     check("9.19 Purchaser taps Done: the item is sorted, one still missing",
           code == 200 and A.db.session.get(A.PickMissing, mids[0]).status == "sorted" and pr["missing"] == 1, str(pr))
-code, j = jpost(cpur, "/pick/missing/%d/unavailable" % mids[1])
+code, j = jpost(cpur, "/pick/missing/%d/unavailable" % mids[1], {"remark": "company stopped it"})
 check("9.19b The reply carries the fresh list", code == 200 and all(m["id"] not in mids for m in j["items"]))
 with app.app_context():
     check("9.20 Once the purchaser has finished both, the bill completes", db.session.get(PickBill, NB).status == "done")

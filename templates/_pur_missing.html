@@ -19,29 +19,42 @@
 .pm-rem{display:flex;gap:6px;flex:1 1 100%}
 .pm-rem input{flex:1;min-width:0;min-height:40px;padding:8px 10px;border:1.5px solid var(--line);border-radius:10px;font:inherit;font-size:15px;background:var(--surface,#fff);color:var(--ink)}
 .pm-rem button{min-height:40px;border-radius:10px;padding:8px 12px;font:650 13.5px system-ui,sans-serif;cursor:pointer;border:1.5px solid var(--line);background:transparent;color:var(--ink);white-space:nowrap}
+.pm-note{font-size:13px;color:var(--ink-2);margin-top:3px}
+.pm-rem input.pm-bad{border-color:var(--bad,#b91c1c);background:#fff1f1}
+.pm-redo{margin-top:10px;padding-top:8px;border-top:1px dashed var(--line);font-size:13px;color:var(--ink-3)}
+.pm-redo b{color:var(--ink-2)}
 .pm-empty{color:var(--ink-3);padding:4px 0}
 .pm-msg{font-size:13px;color:var(--ok-ink,#0f5132);min-height:1em}
 </style>
 <section class="pm-box" id="purMissing"{% if pm_pane %} data-pane="{{ pm_pane }}" data-ord="0"{% endif %}>
   <h2>Missing items to sort <span class="pm-n" id="pmN" hidden>0</span></h2>
-  <p class="pm-sub">Pickers could not find these. Sort each one, then tap <b>Done</b> (or <b>Not available</b>). You can add a remark. Every purchaser sees this list; only a purchaser finishes them.</p>
+  <p class="pm-sub">Pickers could not find these. Sort each one, write a remark, then tap <b>Done</b> or <b>Not available</b>. Every purchaser sees this list; only a purchaser finishes them.</p>
   <div class="pm-msg" id="pmMsg" role="status"></div>
   <div id="pmList"><div class="pm-empty">Loading…</div></div>
+  <div class="pm-redo" id="pmRedo" hidden></div>
 </section>
 <script>
 (function () {
   var list = document.getElementById("pmList"), cnt = document.getElementById("pmN"), msg = document.getElementById("pmMsg");
   if (!list) return;
   function esc(s) { return String(s == null ? "" : s).replace(/[&<>"]/g, function (c) { return {"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;"}[c]; }); }
+  function drawRedo(redo) {
+    var el = document.getElementById("pmRedo"); if (!el) return;
+    el.hidden = !(redo && redo.length);
+    el.innerHTML = redo && redo.length ? "Deleted by the picker, being redone (nothing to sort): " + redo.map(function (m) {
+      return "<b>" + esc(m.item) + " ×" + m.qty + "</b> · bill " + esc(m.bill_no) + " · " + esc(m.by) + " · " + esc(m.at);
+    }).join("; ") : "";
+  }
   function draw(items) {
     cnt.hidden = !items.length; cnt.textContent = items.length;
     list.innerHTML = items.length ? items.map(function (m) {
       return '<div class="pm-row" data-id="' + m.id + '"><div><div class="pm-item">' + esc(m.item) + " ×" + m.qty + "</div>" +
         '<div class="pm-meta">Bill <b>' + esc(m.bill_no) + "</b>" + (m.urgent ? '<span class="pm-u">URGENT</span>' : "") +
-        " · reported by " + esc(m.by) + " · " + esc(m.day) + ", " + esc(m.at) + "</div></div>" +
+        " · reported by " + esc(m.by) + " · " + esc(m.day) + ", " + esc(m.at) + "</div>" +
+        (m.note ? '<div class="pm-note">Picker\'s remark: <b>' + esc(m.note) + "</b></div>" : "") + "</div>" +
         '<div class="pm-act"><button type="button" class="ok" data-pm="done">Done</button>' +
         '<button type="button" data-pm="unavailable">Not available</button></div>' +
-        '<div class="pm-rem"><input type="text" maxlength="300" placeholder="Remark (optional), e.g. ordered, comes tomorrow" aria-label="Remark for ' + esc(m.item) + '" value="' + esc(m.remark || "") + '">' +
+        '<div class="pm-rem"><input type="text" maxlength="300" placeholder="Remark (needed to finish), e.g. brought from store, ordered" aria-label="Remark for ' + esc(m.item) + '" value="' + esc(m.remark || "") + '">' +
         '<button type="button" data-pm="remark">Save remark</button></div></div>';
     }).join("") : '<div class="pm-empty">Nothing missing. Well done.</div>';
   }
@@ -49,13 +62,19 @@
     if (document.hidden) return;
     if (list.contains(document.activeElement) && document.activeElement.tagName === "INPUT") return;   // typing a remark: do not redraw
     fetch("/pick/missing/open.json", {credentials: "same-origin"}).then(function (r) { return r.json(); })
-      .then(function (d) { if (d && d.items) draw(d.items); }).catch(function () {});
+      .then(function (d) { if (d && d.items) { draw(d.items); drawRedo(d.redo); } }).catch(function () {});
   }
   list.addEventListener("click", function (e) {
     var b = e.target.closest("[data-pm]"); if (!b) return;
     var row = b.closest(".pm-row"), id = row.getAttribute("data-id");
-    var rem = row.querySelector(".pm-rem input");
+    var rem = row.querySelector(".pm-rem input"), act = b.getAttribute("data-pm");
+    if (!rem.value.trim()) {                      // nothing is finished or saved without a remark
+      rem.classList.add("pm-bad"); rem.focus();
+      msg.textContent = act === "remark" ? "Type the remark first." : "Write a remark first: what you did, or why it is not available.";
+      msg.style.color = "var(--bad-ink,#991b1b)"; return;
+    }
     row.querySelectorAll("button").forEach(function (x) { x.disabled = true; });
+    if (act !== "remark") { row.style.opacity = ".45"; }        // shows at once; the reply confirms
     var tok = document.querySelector('meta[name="csrf-token"]');
     fetch("/pick/missing/" + id + "/" + b.getAttribute("data-pm"), {method: "POST", credentials: "same-origin",
       headers: {"X-Requested-With": "fetch", "Content-Type": "application/json", "X-CSRFToken": tok ? tok.content : ""},
@@ -63,9 +82,11 @@
       .then(function (r) { return r.json(); }).then(function (d) {
         msg.textContent = d.message || ""; msg.style.color = d.ok ? "" : "var(--bad-ink,#991b1b)";
         if (d.items) draw(d.items); else load();
-      }).catch(function () { msg.textContent = "No connection. Try again."; row.querySelectorAll("button").forEach(function (x) { x.disabled = false; }); });
+        if (!d.ok) { row.style.opacity = ""; }
+      }).catch(function () { msg.textContent = "No connection. Try again."; row.style.opacity = ""; row.querySelectorAll("button").forEach(function (x) { x.disabled = false; }); });
   });
   load(); setInterval(load, 20000);
   document.addEventListener("visibilitychange", load);
 })();
 </script>
+<script src="{{ url_for('static', filename='js/fold.js') }}" defer></script>

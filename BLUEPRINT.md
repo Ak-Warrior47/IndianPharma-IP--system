@@ -4,7 +4,7 @@ The whole software in plain words. This file is rewritten (not added to) at
 the end of each working day, so it always describes the software as it is
 today. Old descriptions are replaced, not kept.
 
-Last checked: 10 November 2026
+Last checked: 11 November 2026
 
 ---
 
@@ -98,20 +98,31 @@ Staff emails are `name@pharmaip.com`. Only the admin sets someone's role.
 | Late | −1 per started minute late, never more than −5 |
 
 - **Item not found**: the picker writes the item (quantity is 1 if left
-  empty) and taps Done; their part is finished. **Every purchaser** gets a
+  empty) and a **remark** saying why (rack empty, expired, damaged…), then
+  taps Done; their part is finished. A report cannot be sent without a
+  remark on every item. **Every purchaser** gets a
   phone alert and sees it in the "Missing items to sort" box on their
   dashboard (the admin sees it on the Today tab too). Only a purchaser (or
-  admin) finishes it: **Done** (sorted) or **Not available**, and they can
-  write a **remark** (e.g. "ordered, comes tomorrow"). Either way the picker
+  admin) finishes it: **Done** (sorted) or **Not available**. They must
+  write a **remark** first (what they did, or why it is not available); the
+  purchaser also sees the picker's remark. Either way the picker
   is paid for it at the rate of when they reported it, and the bill
   completes. The assigner sees "with purchaser" and has no buttons for it.
 - **Wrong report?** While typing, each row has a bin button to delete it. After
   sending, the picker sees "You reported not found" with a bin button
-  (until the purchaser finishes it): the item goes back on the bill, and they
-  take it again and report it correctly.
-- **Missing items report** (admin: big button on the dashboard, or Picking >
-  Reports): every item, bill, who reported it and when, what happened, who
-  finished it and when, and the purchaser's remark. Also in the PDF and CSV.
+  (until the purchaser finishes it): the item goes back on the bill, and a
+  "Take 1 now" button lets them take it again in one tap and report it
+  correctly. The redo always works: the bill reopens even if it had been
+  moved to Rescheduled, and an urgent bill waiting does not block the
+  picker's own redo. Other pickers can take it too. Purchasers are told the
+  report was deleted and see it under "being redone".
+- **Missing items page** (admin: the Missing items report button, any
+  Missing number, or the Go to menu): for any dates, every item with its
+  bill, who reported it and when, the picker's remark, what happened, who
+  finished it and when, the purchaser's remark and the minutes it took to
+  sort. Number tiles on top filter the list: Waiting for purchaser, Done by
+  purchaser, Not available, Deleted by picker. Tap a bill number for its full
+  detail. PDF and CSV carry the same columns.
 - On the assigner screen free pickers are green, picking red, late dark red.
 - Urgent bill bonus: 10 points per urgent bill, shared by items picked.
 - After a bill is added, free pickers have **5 minutes** to take it (they may
@@ -188,6 +199,12 @@ month (calendar month). Targets only go up.
     report, Late the late report, Total Staff the staff list, and so on.
     The same on the Picking page, Staff today, the assigner's Today strip
     (Completed, Pending) and the picker's own numbers (My day).
+  - **On a PC or laptop** the buttons sit in rows like a toolbar (Do,
+    Reports, Find a bill) and each staff row's buttons stay on one line.
+    Phones keep the two-column buttons and the staff cards.
+  - **Minimise / maximise**: every report section (Picking reports, Staff
+    today, Missing items, the purchaser's box) has a − / + button on its
+    title; the choice is remembered on that device.
   - **Find a bill**: type a bill number, matching bills of any date appear;
     tap one for all its details (staff, items, times).
   - Four tabs: Staff · Today (picking today, multitask reports, notes) ·
@@ -284,7 +301,7 @@ month (calendar month). Targets only go up.
 | `webpush.py` | Sends phone alerts. |
 | `render.yaml` | How Render runs the site and which settings exist. |
 | `requirements.txt` | The Python packages the site needs. |
-| `tests_*.py`, `run_tests.sh` | About 1,050 automatic checks, run on every push. |
+| `tests_*.py`, `run_tests.sh` | About 1,130 automatic checks, run on every push. |
 | `CLAUDE.md` | Working rules for the AI that maintains the code. |
 | `BLUEPRINT.md` | This file. |
 | `tools_recommend_targets.py` | Optional helper to suggest hourly targets from history. |

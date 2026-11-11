@@ -319,7 +319,7 @@ asg_page = c_asg2.get("/dashboard").get_data(as_text=True)
 check("10.6 The assigner has no Reassign / Not available buttons, just 'with purchaser'",
       'data-act="reassign"' not in asg_page and "with purchaser" in asg_page)
 mid = [m for m in c_pur.get("/pick/missing/open.json").get_json()["items"] if m["bill_id"] == MB][0]["id"]
-r = c_pur.post("/pick/missing/%d/done" % mid, json={}, headers={"X-Requested-With": "fetch"})
+r = c_pur.post("/pick/missing/%d/done" % mid, json={"remark": "found in store"}, headers={"X-Requested-With": "fetch"})
 with app.app_context():
     check("10.7 Purchaser taps Done: item sorted, bill complete, picker paid",
           r.status_code == 200 and db.session.get(PickBill, MB).status == "done"
@@ -467,7 +467,7 @@ with app.app_context():
     A.finish_claim(RIA, rc.id, picked=0, missing=[("Right name", 1)])
     RM = PickMissing.query.filter_by(claim_id=rc.id).first().id
 c_p3 = login("st_pur@x.com")
-c_p3.post("/pick/missing/%d/done" % RM, json={}, headers={"X-Requested-With": "fetch"})
+c_p3.post("/pick/missing/%d/done" % RM, json={"remark": "arranged"}, headers={"X-Requested-With": "fetch"})
 check("17.5 Once the purchaser has finished it, it cannot be deleted",
       c_r3.post("/pick/missing/%d/delete" % RM, json={}, headers={"X-Requested-With": "fetch"}).status_code == 400)
 check("17.6 The report form has a delete button on every row", 'data-rep-del="1"' in _pk2 and "data-miss-del" in _pk2)
@@ -486,7 +486,7 @@ check("18.4 The PDF and CSV carry it too", c_adm.get("/picking/report.pdf").data
       and "Finished by" in c_adm.get("/picking/report.csv").get_data(as_text=True))
 adm2 = c_adm.get("/admin_dashboard").get_data(as_text=True)
 check("18.5 Admin dashboard: a Missing items report button, and Day view",
-      re.search(r'href="/picking\?tab=reports[^"]*#paMissing" id="qaMissing"', adm2) is not None and 'id="qaDay"' in adm2)
+      re.search(r'href="/admin/missing[^"]*" id="qaMissing"', adm2) is not None and 'id="qaDay"' in adm2)
 
 # ---- 19. Minimal admin: secondary panels are folded to a title row ---------------
 check("19.1 Eleven secondary panels start folded", adm2.count("data-min-default") == 11, str(adm2.count("data-min-default")))
@@ -548,21 +548,100 @@ check("20.14 Quantity box is wide enough for its label; free pickers are green; 
 
 # ---- 21. A number tile opens its own report ------------------------------------
 check("21.1 Picking page: each number links to its section",
-      all(('#%s"' % h) in pgm for h in ("paBills", "paPickers", "paMissing", "paEvents")) and 'id="paPickers"' in pgm and 'id="paSum"' in pgm)
+      all(('#%s"' % h) in pgm for h in ("paBills", "paPickers", "paEvents")) and "/admin/missing?" in pgm
+      and 'id="paPickers"' in pgm and 'id="paSum"' in pgm)
 ur = c_adm.get("/picking?tab=reports&period=today&urgent=1").get_data(as_text=True)
 check("21.2 Urgent bills opens a report of only urgent bills", "<h2>Urgent bills" in ur and "show all bills" in ur)
 adm3 = c_adm.get("/admin_dashboard").get_data(as_text=True)
-check("21.3 Admin: Picking today numbers open their reports", adm3.count('class="pt-tile"') == 8 and "#paMissing" in adm3 and "#paEvents" in adm3)
+check("21.3 Admin: Picking today numbers open their reports", adm3.count('class="pt-tile"') == 8 and 'href="/admin/missing"' in adm3 and "#paEvents" in adm3)
 check("21.4 Admin: reports are grouped under a Reports heading",
       'id="qaReportsHead">Reports' in adm3 and all(('id="%s"' % i) in adm3 for i in ("qaUrgent", "qaLate", "qaBoard", "qaMissing", "qaStaffToday", "qaReports", "qaMulti", "qaDay")))
 check("21.5 Admin: Total Staff and Active Today are links", 'href="#staff">Total Staff' in adm3 and 'href="/admin/staff-today">Active Today' in adm3)
 st_pg = c_adm.get("/admin/staff-today").get_data(as_text=True)
-check("21.6 Staff today: each number opens its list", 'href="#stWhoBox"' in st_pg and "#paMissing" in st_pg and 'id="stPicks"' in st_pg)
+check("21.6 Staff today: each number opens its list", 'href="#stWhoBox"' in st_pg and "/admin/missing?" in st_pg and 'id="stPicks"' in st_pg)
 check("21.7 Assigner and picker number tiles are buttons that open their list",
       'data-go-tab="done"' in _pk3 and 'data-go-el="pkBillsWrap"' in _pk3 and _pk3.count('class="pk-stat" data-go-tab="mine"') == 5)
 for u in ("/picking?tab=reports&period=today&urgent=1", "/picking?tab=reports&period=today", "/picking?tab=board&period=today",
           "/picking?tab=reports&period=month", "/admin/day", "/admin/staff-today", "/pick/me"):
     check("21.8 %s opens" % u, c_adm.get(u).status_code == 200)
+
+# ---- 22. Deleting a report: the redo is always pickable -------------------------
+H = {"X-Requested-With": "fetch"}
+with app.app_context():
+    PickClaim.query.filter_by(status="active").update({"status": "cancelled"})
+    PickBill.query.filter_by(status="open").update({"status": "cancelled"})
+    A.PickDay.query.filter_by(day=date.today()).delete()
+    A.Notification.query.filter_by(emp_id=PUR).delete()
+    db.session.commit()
+    rb = A.add_pick_bill("8901", 3, ASG)
+    RB = rb.id
+    rc = A.claim_items(RIA, RB, 3)
+    A.finish_claim(RIA, rc.id, picked=2, missing=[("Wrng", 1, "rack empty")])
+    RMID = PickMissing.query.filter_by(claim_id=rc.id).first().id
+    check("22.0 The picker's remark is stored with the report", db.session.get(PickMissing, RMID).note == "rack empty")
+    A.add_pick_bill("8902U", 2, ASG)                      # an urgent bill is waiting
+    A.close_pick_day(ASG)                                 # ...and the day was closed: the bill went to Rescheduled
+    check("22.1 (setup) the bill was moved to Rescheduled by Close today", db.session.get(PickBill, RB).status == "scheduled")
+c_r5 = login("st_ria@x.com")
+r = c_r5.post("/pick/missing/%d/delete" % RMID, json={}, headers=H)
+with app.app_context():
+    check("22.2 Deleting the report reopens the bill at once, with the item back on it",
+          r.status_code == 200 and db.session.get(PickBill, RB).status == "open" and A.pick_bill_progress(db.session.get(PickBill, RB))["left"] == 1)
+    n = A.Notification.query.filter_by(emp_id=PUR).filter(A.Notification.title.like("Report deleted%")).first()
+    check("22.3 The purchaser is told it was deleted and is being redone", n is not None and "Wrng" in (n.body or ""))
+st5 = c_r5.get("/pick/state.json").get_json()
+check("22.4 The picker sees 'take it again' for that bill", [x["bill_id"] for x in st5.get("my_redo") or []] == [RB] and st5["my_redo"][0]["qty"] == 1, str(st5.get("my_redo")))
+with app.app_context():
+    A.add_pick_bill("8904U", 2, ASG)                      # a fresh urgent bill, open now
+rr = c_r5.post("/pick/claim", json={"bill_id": RB, "items": 1}, headers=H)
+check("22.5 ...and can take it even while an urgent bill waits", rr.status_code == 200, str(rr.get_json())[:160])
+c_o5 = login("st_om@x.com")
+with app.app_context():
+    A.add_pick_bill("8903", 2, ASG)
+    NB3 = PickBill.query.filter(PickBill.bill_no.like("%8903")).first().id
+check("22.6 Other pickers still pick the urgent bill first", c_o5.post("/pick/claim", json={"bill_id": NB3, "items": 1}, headers=H).status_code == 400)
+check("22.7 The purchaser's list shows it as being redone", any(m["item"] == "Wrng" for m in login("st_pur@x.com").get("/pick/missing/open.json").get_json().get("redo", [])))
+_pk4 = open(os.path.join(REPO, "templates", "_picking.html")).read()
+check("22.8 The screen has the redo banner and a remark box on every report row",
+      'id="pkRedo"' in _pk4 and "data-redo=" in _pk4 and 'class="rm"' in _pk4 and "Write a remark for each missing item" in _pk4)
+
+# ---- 23. Remarks are needed everywhere a report is made --------------------------
+with app.app_context():
+    cl5 = PickClaim.query.filter_by(picker_id=RIA, status="active").first().id
+r = c_r5.post("/pick/done", json={"claim_id": cl5, "missing": [{"item": "Rite name", "qty": 1}]}, headers=H)
+check("23.1 A picker's report without a remark is refused", r.status_code == 400 and "remark" in r.get_json()["message"].lower())
+r = c_r5.post("/pick/done", json={"claim_id": cl5, "missing": [{"item": "Rite name", "qty": 1, "remark": "expired"}]}, headers=H)
+check("23.2 With a remark it is accepted", r.status_code == 200, str(r.get_json())[:160])
+c_p5 = login("st_pur@x.com")
+it = [m for m in c_p5.get("/pick/missing/open.json").get_json()["items"] if m["item"] == "Rite name"][0]
+check("23.3 The purchaser sees the picker's remark", it["note"] == "expired")
+check("23.4 The purchaser cannot finish without a remark",
+      c_p5.post("/pick/missing/%d/unavailable" % it["id"], json={}, headers=H).status_code == 400)
+check("23.5 A remark saved earlier counts", c_p5.post("/pick/missing/%d/remark" % it["id"], json={"remark": "no stock at supplier"}, headers=H).status_code == 200
+      and c_p5.post("/pick/missing/%d/unavailable" % it["id"], json={}, headers=H).status_code == 200)
+
+# ---- 24. Admin: the Missing items page -----------------------------------------
+mp = c_adm.get("/admin/missing").get_data(as_text=True)
+check("24.1 The page opens with every item, both remarks and who finished it",
+      'id="missingPage"' in mp and "Rite name" in mp and "expired" in mp and "no stock at supplier" in mp and "ST Pur" in mp)
+check("24.2 Number tiles filter the list", all(('state=%s' % k) in mp for k in ("open", "sorted", "unavailable", "deleted")) and 'id="miTiles"' in mp)
+only = c_adm.get("/admin/missing?state=deleted").get_data(as_text=True)
+check("24.3 'Deleted by picker' shows only those", "Wrng" in only and "Rite name" not in only)
+check("24.4 Minutes to sort are shown", "Minutes to sort" in mp)
+check("24.5 Staff cannot open it", c_r5.get("/admin/missing").status_code in (302, 403))
+check("24.6 PDF and CSV carry the picker's remark", "Picker remark" in c_adm.get("/picking/report.csv").get_data(as_text=True)
+      and c_adm.get("/picking/report.pdf").data[:4] == b"%PDF")
+adm5 = c_adm.get("/admin_dashboard").get_data(as_text=True)
+check("24.7 It is on the dashboard buttons, the Missing tile and the Go to menu", adm5.count("/admin/missing") >= 3)
+
+# ---- 25. Minimise / maximise on report sections; PC toolbar ----------------------
+_fold = open(os.path.join(REPO, "static", "js", "fold.js")).read()
+check("25.1 Report sections can be minimised and maximised", ".pa-box, .st-box, .st-p, .mi-box, .pm-box" in _fold and "Maximise" in _fold)
+for name, html_ in (("Picking", c_adm.get("/picking?tab=reports").get_data(as_text=True)), ("Staff today", c_adm.get("/admin/staff-today").get_data(as_text=True)),
+                    ("Missing items", mp), ("Purchaser box", adm5)):
+    check("25.2 %s loads the fold buttons" % name, "js/fold.js" in html_)
+check("25.3 PC: buttons in one row like a toolbar; staff table buttons on one line",
+      "@media (min-width: 1000px)" in adm5 and ".qa { display: flex; flex-wrap: wrap;" in adm5 and "#staffTable .actions { display: flex; flex-wrap: nowrap;" in adm5)
 
 print("\n" + "=" * 62)
 print("PASSED %d    FAILED %d" % (len(PASSED), len(FAILED)))

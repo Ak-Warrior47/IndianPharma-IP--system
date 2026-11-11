@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="csrf-token" content="{{ csrf_token() }}">
+<script>(function(){try{var t=localStorage.getItem('ip-theme');if(t)document.documentElement.setAttribute('data-theme',t);}catch(e){}})();</script>
+<title>Missing items — Indian Pharma</title>
+<link rel="stylesheet" href="{{ url_for('static', filename='css/ip.css') }}">
+<link rel="manifest" href="{{ url_for('static', filename='manifest.json') }}">
+<style>
+/* Missing items: what was not found, why, and how the purchaser sorted it. */
+.mi-wrap{max-width:1240px;margin:0 auto;padding:16px}
+.mi-head{display:flex;flex-wrap:wrap;align-items:baseline;justify-content:space-between;gap:8px;margin:4px 0 12px}
+.mi-head h1{font-size:22px;margin:0}.mi-head p{margin:0;color:var(--ink-3);font-size:14px}
+.mi-filter{display:flex;flex-wrap:wrap;gap:10px;align-items:flex-end;padding:12px 14px;border:1px solid var(--line);border-radius:14px;background:var(--surface,#fff);margin-bottom:14px}
+.mi-filter label{display:block;font-size:11px;font-weight:700;color:var(--ink-3);text-transform:uppercase;letter-spacing:.4px;margin-bottom:4px}
+.mi-filter input{padding:8px 10px;border:1.5px solid var(--line);border-radius:10px;font:inherit;background:var(--surface,#fff);color:var(--ink);min-height:40px}
+.mi-quick{display:inline-flex;border:1.5px solid var(--line);border-radius:10px;overflow:hidden}
+.mi-quick a{padding:9px 12px;font-weight:600;font-size:13.5px;color:var(--ink-2);text-decoration:none;border-right:1px solid var(--line)}
+.mi-quick a:last-child{border-right:0}.mi-quick a[aria-current="true"]{background:var(--brand);color:#fff}
+.mi-sp{flex:1}
+.mi-tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;margin:0 0 14px}
+.mi-tiles a{border:1px solid var(--line);border-radius:12px;padding:10px 12px;background:var(--surface,#fff);display:block;color:inherit;text-decoration:none}
+.mi-tiles a:hover,.mi-tiles a:focus-visible{border-color:var(--brand)}
+.mi-tiles a[aria-current="true"]{border-color:var(--brand);box-shadow:0 0 0 2px color-mix(in srgb,var(--brand) 25%,transparent)}
+.mi-tiles span{display:block;font-size:10.5px;font-weight:700;color:var(--ink-3);text-transform:uppercase;letter-spacing:.5px}
+.mi-tiles b{display:block;font-size:22px;font-variant-numeric:tabular-nums;margin-top:2px}
+.mi-tiles a.warn b{color:var(--bad-ink,#991b1b)}
+.mi-box{border:1px solid var(--line);border-radius:14px;background:var(--surface,#fff);padding:14px 16px;margin-bottom:14px}
+.mi-box h2{font-size:16px;margin:0 0 10px}
+.mi-tw{overflow-x:auto}
+.mi-t{width:100%;border-collapse:collapse;font-size:14px}
+.mi-t th{text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.4px;color:var(--ink-3);padding:8px;border-bottom:1px solid var(--line);white-space:nowrap}
+.mi-t td{padding:9px 8px;border-bottom:1px solid var(--line);vertical-align:top}
+.mi-t td.n{text-align:right;font-variant-numeric:tabular-nums}
+.mi-st{font-weight:700;white-space:nowrap}
+.mi-st.open{color:var(--bad-ink,#991b1b)}.mi-st.sorted{color:var(--good-ink,#0f5132)}.mi-st.unavailable{color:#9a4b00}.mi-st.deleted,.mi-st.reassigned{color:var(--ink-3)}
+.mi-bill{border:0;background:transparent;font:inherit;font-weight:700;color:var(--brand);cursor:pointer;padding:0;text-align:left}
+.mi-empty{color:var(--ink-3);padding:6px 0}
+.mi-none{color:var(--ink-3)}
+/* Phones: each item is a card */
+@media (max-width:820px){
+  .mi-wrap{padding:12px}.mi-sp{display:none}
+  .mi-t thead{display:none}
+  .mi-t,.mi-t tbody,.mi-t tr,.mi-t td{display:block;width:100%}
+  .mi-t tr{border:1px solid var(--line);border-radius:12px;margin:0 0 10px;padding:8px 10px}
+  .mi-t td{display:flex;justify-content:space-between;gap:12px;border:0;padding:4px 0;text-align:right}
+  .mi-t td::before{content:attr(data-l);font-size:12px;font-weight:650;color:var(--ink-3);text-align:left;flex:none}
+  .mi-t td.mi-main{display:block;text-align:left;font-size:16px;font-weight:700;border-bottom:1px solid var(--line);padding-bottom:6px;margin-bottom:2px}
+  .mi-t td.mi-main::before{content:none}
+  .mi-st{white-space:normal}
+}
+</style>
+</head>
+<body>
+<header class="ip-topbar">
+  <div class="ip-brand"><span class="ip-brand__mark">IP</span> Pharma IP System</div>
+  <nav class="ip-navlinks">
+    <a href="{{ url_for('admin_dashboard') }}" class="ip-btn ip-btn--ghost">Dashboard</a>
+    <a href="/picking" class="ip-btn ip-btn--ghost">Picking</a>
+    <a href="{{ url_for('logout') }}" class="ip-btn">Log out</a>
+  </nav>
+</header>
+<main class="mi-wrap" id="missingPage">
+  {% set dq = {'from': day_from.isoformat(), 'to': day_to.isoformat()} %}
+  {% set wk = today - timedelta(days=today.weekday()) %}
+  <div class="mi-head">
+    <h1>Missing items</h1>
+    <p>{{ day_from.strftime('%d %b %Y') }}{% if day_from != day_to %} – {{ day_to.strftime('%d %b %Y') }}{% endif %} · what was not found, why, and how the purchaser sorted it</p>
+  </div>
+
+  <form class="mi-filter" method="get" action="{{ url_for('admin_missing') }}">
+    <span class="mi-quick">
+      <a href="{{ url_for('admin_missing', state=state, **{'from': today.isoformat(), 'to': today.isoformat()}) }}" aria-current="{{ 'true' if day_from == today and day_to == today else 'false' }}">Today</a>
+      <a href="{{ url_for('admin_missing', state=state, **{'from': wk.isoformat(), 'to': today.isoformat()}) }}" aria-current="{{ 'true' if day_from == wk and day_to == today and wk != today else 'false' }}">This week</a>
+      <a href="{{ url_for('admin_missing', state=state, **{'from': today.replace(day=1).isoformat(), 'to': today.isoformat()}) }}" aria-current="{{ 'true' if day_from == today.replace(day=1) and day_to == today and today.day != 1 and today.replace(day=1) != wk else 'false' }}">This month</a>
+    </span>
+    <div><label for="miFrom">From</label><input type="date" id="miFrom" name="from" value="{{ day_from.isoformat() }}" max="{{ today.isoformat() }}"></div>
+    <div><label for="miTo">To</label><input type="date" id="miTo" name="to" value="{{ day_to.isoformat() }}" max="{{ today.isoformat() }}"></div>
+    {% if state %}<input type="hidden" name="state" value="{{ state }}">{% endif %}
+    <button class="ip-btn" type="submit">Show</button>
+    <span class="mi-sp"></span>
+    <a class="ip-btn ip-btn--ghost" id="miCsv" href="{{ url_for('picking_report_csv', **dq) }}">CSV</a>
+    <a class="ip-btn" id="miPdf" href="{{ url_for('picking_report_pdf', **dq) }}">PDF</a>
+  </form>
+
+  {# Each number filters the list below. #}
+  <div class="mi-tiles" id="miTiles">
+    {% for key, label, warn in [('', 'All reported', false), ('open', 'Waiting for purchaser', counts.open > 0), ('sorted', 'Done by purchaser', false),
+                                ('unavailable', 'Not available', false), ('deleted', 'Deleted by picker (redo)', false)] %}
+    <a href="{{ url_for('admin_missing', state=key, **dq) }}#miList" class="{{ 'warn' if warn else '' }}" aria-current="{{ 'true' if state == key else 'false' }}">
+      <span>{{ label }}</span><b>{{ counts[key or 'all'] }}</b></a>
+    {% endfor %}
+    <a href="#miList"><span>Avg minutes to sort</span><b>{{ avg_min if avg_min is not none else '—' }}</b></a>
+  </div>
+
+  <section class="mi-box" id="miList">
+    <h2>{{ {'': 'All missing items', 'open': 'Waiting for the purchaser', 'sorted': 'Done by the purchaser', 'unavailable': 'Not available', 'deleted': 'Deleted by the picker (redone)'}[state] }} ({{ rows|length }})</h2>
+    {% if rows %}
+    <div class="mi-tw"><table class="mi-t" id="miTable">
+      <thead><tr><th>Item</th><th>Bill</th><th>Reported by</th><th>Picker's remark</th><th>What happened</th><th>Finished by</th><th>Purchaser's remark</th><th class="n">Minutes to sort</th></tr></thead>
+      <tbody>
+      {% for m in rows %}
+        <tr>
+          <td class="mi-main">{{ m.item }} ×{{ m.qty }}</td>
+          <td data-l="Bill"><button type="button" class="mi-bill" data-bill-flow="{{ m.bill_id }}" title="Open this bill">{{ m.bill_no }}</button></td>
+          <td data-l="Reported by">{{ m.by }}<br><small class="mi-none">{{ m.date }}, {{ m.at }}</small></td>
+          <td data-l="Picker's remark">{% if m.note %}{{ m.note }}{% else %}<span class="mi-none">—</span>{% endif %}</td>
+          <td data-l="What happened"><span class="mi-st {{ m.state }}">{{ m.status }}</span></td>
+          <td data-l="Finished by">{% if m.finished_by %}{{ m.finished_by }}<br><small class="mi-none">{{ m.finished_at }}</small>{% else %}<span class="mi-none">—</span>{% endif %}</td>
+          <td data-l="Purchaser's remark">{% if m.remark %}{{ m.remark }}{% else %}<span class="mi-none">—</span>{% endif %}</td>
+          <td class="n" data-l="Minutes to sort">{{ m.sort_min if m.sort_min is not none and m.state in ('sorted', 'unavailable') else '—' }}</td>
+        </tr>
+      {% endfor %}
+      </tbody></table></div>
+    {% else %}<div class="mi-empty">No missing items here for these dates.</div>{% endif %}
+  </section>
+</main>
+<script src="{{ url_for('static', filename='js/billflow.js') }}" defer></script>
+<script src="{{ url_for('static', filename='js/fold.js') }}" defer></script>
+<script src="{{ url_for('static', filename='js/enter-next.js') }}" defer></script>
+</body>
+</html>

@@ -28,7 +28,7 @@ eventlet worker); the database is Supabase PostgreSQL.
 ## Commands
 - Python is `python3.13`. Unset `DATABASE_URL` for local work: the app falls
   back to SQLite (`instance/pharma_final.db`, untracked).
-- Full suite: `./run_tests.sh` (about 1,050 checks). One suite:
+- Full suite: `./run_tests.sh` (about 1,130 checks). One suite:
   `python3.13 tests_picker_v2.py`. CI runs the same on every push
   (`.github/workflows/tests.yml`).
 - The suite wipes local test accounts; re-create any you use for browser
@@ -111,8 +111,19 @@ eventlet worker); the database is Supabase PostgreSQL.
   typing slips). The bill just added shows under the entry box for 10 s with
   who added it (`last_added`, `PICK_JUST_ADDED`).
 - A picker may delete their own open missing report (`/pick/missing/<id>/delete`,
-  item back on the bill) and each report row has a × before sending.
+  item back on the bill) and each report row has a bin before sending.
+  The redo must always be pickable: the bill reopens from done/scheduled, the
+  picker's own redo skips urgent-first (`_my_redo_qty`, 60 min), a "Take N
+  now" banner (`my_redo`) starts it, and purchasers are notified.
   `PickMissing.handled_by` records who finished it (shown in reports).
+- Remarks are required: every missing item needs the picker's remark
+  (`PickMissing.note`, enforced in `/pick/done`), and the purchaser must
+  write one before Done / Not available (`PickMissing.remark`).
+- `/admin/missing` (`admin_missing.html`) is the admin's missing-items page:
+  filter tiles, both remarks, who finished, minutes to sort.
+- Report sections fold with `static/js/fold.js` (.pa-box, .st-box, .st-p,
+  .mi-box, .pm-box). Admin dashboard at 1000 px and wider is a toolbar
+  (`.qa` flex rows); staff-table action buttons never wrap on a PC.
 - Free pickers get 5 minutes after a bill is added before waiting counts
   (`PICK_IDLE_SECONDS`). No pause time is shown anywhere.
 - One phone per staff login (`Employee.session_key`): a new sign-in signs the
