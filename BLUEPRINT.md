@@ -4,7 +4,7 @@ The whole software in plain words. This file is rewritten (not added to) at
 the end of each working day, so it always describes the software as it is
 today. Old descriptions are replaced, not kept.
 
-Last checked: 11 November 2026
+Last checked: 13 November 2026
 
 ---
 
